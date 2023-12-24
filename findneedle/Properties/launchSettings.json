@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "findneedle": {
+      "commandName": "Project",
+      "commandLineArgs": "location=localeventlog searchfilter=ago(5d)"
+    }
+  }
+}

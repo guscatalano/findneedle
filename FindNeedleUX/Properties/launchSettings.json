@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "FindNeedleUX (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "FindNeedleUX (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
