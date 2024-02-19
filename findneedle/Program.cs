@@ -4,8 +4,10 @@ using findneedle.Implementations;
 using findneedle.Implementations.Outputs;
 using findneedle.Implementations.ResultProcessors;
 using findneedle.Interfaces;
+using findneedle.WDK;
 using System.Diagnostics;
 
+WDKFinder.GetPathOfWDK();
 
 var arguments = new Dictionary<string, string>();
 

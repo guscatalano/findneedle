@@ -34,6 +34,10 @@ namespace findneedle
         {
             return this.depth;
         }
+
+        public abstract string GetDescription();
+        public abstract string GetName();
+
     }
 
 

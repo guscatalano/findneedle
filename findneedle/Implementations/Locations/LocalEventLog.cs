@@ -98,6 +98,15 @@ namespace findneedle.Implementations
         {
         }
 
+        public override string GetDescription()
+        {
+            return "LocalEventLog";
+        }
+        public override string GetName()
+        {
+            return eventLogName;
+        }
+
         public override void LoadInMemory(bool prefilter = false)
         {
           

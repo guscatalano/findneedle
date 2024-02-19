@@ -29,7 +29,7 @@ namespace findneedletests
         public void TestLocalFolderLog()
         {
             Dictionary<string, string> input = new Dictionary<string, string>();
-            input.Add("location", "C:\\windows");
+            input.Add("location", "path#C:\\windows");
             SearchQuery q = new SearchQuery(input);
             Assert.IsTrue(q.GetLocations().Count == 1);
             Assert.IsTrue(q.GetLocations()[0].GetType() == typeof(FolderLocation));
@@ -39,12 +39,12 @@ namespace findneedletests
         public void TestBadLocalFolderLog()
         {
             Dictionary<string, string> input = new Dictionary<string, string>();
-            input.Add("location", "C;windows");
+            input.Add("location", "path#C;windows");
             try
             {
                 SearchQuery q = new SearchQuery(input);
 
-            } catch(Exception ex)
+            } catch(Exception)
             {
                 Assert.IsTrue(true); //We expect to throw
                 return;
@@ -57,7 +57,7 @@ namespace findneedletests
         public void TestRealFileLog()
         {
             Dictionary<string, string> input = new Dictionary<string, string>();
-            input.Add("location", @"C:\\windows\\explorer.exe");
+            input.Add("location", @"path#C:\\windows\\explorer.exe");
             
             SearchQuery q = new SearchQuery(input);
             Assert.IsTrue(q.GetLocations().Count == 1);
@@ -67,15 +67,17 @@ namespace findneedletests
         [TestMethod]
         public void TestAddMultiplelFileLog()
         {
-            Dictionary<string, string> input = new Dictionary<string, string>();
-            input.Add("location1", @"C:\\windows\\explorer.exe");
-            input.Add("location2", @"C:\\windows\\system32");
-            input.Add("location3", @"C:\\windows\\system32\\");
+            Dictionary<string, string> input = new Dictionary<string, string>
+            {
+                { "location1", @"path#C:\\windows\\explorer.exe" },
+                { "location2", @"path#C:\\windows\\system32" },
+                { "location3", @"path#C:\\windows\\system32\\" }
+            };
           
             SearchQuery q = new SearchQuery(input);
 
             
-            Assert.IsTrue(q.GetLocations().Count == 3);
+            Assert.AreEqual(3, q.GetLocations().Count);
 
         }
 

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace findneedle
@@ -104,6 +105,7 @@ namespace findneedle
                 }
 
 
+                const string PATH_PREPEND = "path#";
                 //location=localmachine
                 //location=C:\
                 if (pair.Key.StartsWith("location", StringComparison.OrdinalIgnoreCase))
@@ -118,13 +120,14 @@ namespace findneedle
                         locations.Add(new LocalEventLogQueryLocation());
                         continue;
                     }
-                    if (pair.Value.Equals("folder", StringComparison.OrdinalIgnoreCase))
+                    if (pair.Value.StartsWith(PATH_PREPEND, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (!Path.Exists(pair.Value) && !File.Exists(pair.Value))
+                        var path = pair.Value.Substring(PATH_PREPEND.Length);
+                        if (!Path.Exists(path) && !File.Exists(path))
                         {
-                            throw new Exception("Path: " + pair.Value + " does not exist");
+                            throw new Exception("Path: " + path + " does not exist");
                         }
-                        locations.Add(new FolderLocation(pair.Value));
+                        locations.Add(new FolderLocation(path));
                         continue;
                     }
                 }
@@ -164,6 +167,12 @@ namespace findneedle
         public void GetSearchStatsOutput()
         {
             stats.ReportToConsole();
+        }
+
+        public string GetQueryJSON()
+        {
+            return JsonSerializer.Serialize(this);
+            
         }
     }
 }
