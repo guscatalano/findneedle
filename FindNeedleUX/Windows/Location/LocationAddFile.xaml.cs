@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
+using FindNeedleUX.Services.WizardDef;
 using FindNeedleUX.ViewObjects;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;

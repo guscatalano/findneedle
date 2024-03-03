@@ -64,7 +64,7 @@ public class IWizard
         {
             throw new Exception("Undefined action");
         }
-        string newPageStr = pages[pageName][action];
+        var newPageStr = pages[pageName][action];
         newPageStr = FindPageWithShortName(newPageStr);
         Type newPage = Type.GetType(newPageStr);
         MiddleLayerService.PageChanged(this, this.currentPage);

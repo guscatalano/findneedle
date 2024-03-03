@@ -10,6 +10,9 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
+            <SolidColorBrush x:Key="SystemAccentColorBrush"
+                 Color="{StaticResource SystemAccentColor}"
+                 Opacity=".33" />
             <!-- Other app resources here -->
         </ResourceDictionary>
     </Application.Resources>

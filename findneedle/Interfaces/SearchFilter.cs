@@ -9,6 +9,9 @@ namespace findneedle
     public interface SearchFilter
     {
         public bool Filter(SearchResult entry);
+        public abstract string GetDescription();
+        public abstract string GetName();
+
     }
 
 

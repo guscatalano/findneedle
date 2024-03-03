@@ -26,6 +26,15 @@ namespace findneedle.Implementations
             }
             return false;
         }
+
+        public string GetDescription()
+        {
+            return "SimpleKeyword";
+        }
+        public string GetName()
+        {
+            return term;
+        }
     }
 
 }

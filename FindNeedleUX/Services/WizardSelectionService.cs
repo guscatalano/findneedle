@@ -38,10 +38,10 @@ public class WizardSelectionService
         
         loc.AddPage("LocationStart", new Dictionary<string, string>()
         {
-            {"AddFile", "LocationAddFile" },
-            {"AddEventLog", "LocationAddEventLog" },
-            {"AddRegistry", "LocationAddRegistry" },
-            {"AddVSO", "LocationAddVSO" }
+            {"Folder", "LocationAddFile" },
+            {"EventLog", "LocationAddEventLog" },
+            {"Registry", "LocationAddRegistry" },
+            {"VSO", "LocationAddVSO" }
         });
         wizards.Add("Location", loc);
 

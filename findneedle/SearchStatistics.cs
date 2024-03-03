@@ -68,6 +68,14 @@ namespace findneedle
         
     }
 
+    public enum SearchStatisticStep
+    {
+        AtLoad,
+        AtSearch,
+        AtLaunch,
+        Total
+    }
+
     public class SearchStatistics
     {
         SearchQuery q;
@@ -111,17 +119,67 @@ namespace findneedle
             atSearch.Snap();
         }
 
+        public int GetRecordsAtStep(SearchStatisticStep step)
+        {
+            switch (step)
+            {
+                case SearchStatisticStep.AtLoad:
+                    return totalRecordsLoaded;
+                case SearchStatisticStep.AtSearch:
+                    return totalRecordsSearch;
+                default:
+                    throw new Exception("bad input");
+            }
+        }
+
+        public TimeSpan GetTimeTaken(SearchStatisticStep step)
+        {
+            switch (step)
+            {
+                case SearchStatisticStep.AtLoad:
+                    return atLoad.GetSnapTime() - atLaunch.GetSnapTime();
+                case SearchStatisticStep.AtSearch:
+                    return atSearch.GetSnapTime() - atLoad.GetSnapTime();
+                case SearchStatisticStep.Total:
+                    return atSearch.GetSnapTime() - atLaunch.GetSnapTime();
+                default:
+                    throw new Exception("not valid step for time");
+            }
+            
+        }
+
+
+        public string GetMemoryUsage(SearchStatisticStep step)
+        {
+            switch (step)
+            {
+                case SearchStatisticStep.AtLaunch:
+                    return atLaunch.GetMemoryUsage();
+                case SearchStatisticStep.AtLoad:
+                    return atLoad.GetMemoryUsage();
+                case SearchStatisticStep.AtSearch:
+                    return atSearch.GetMemoryUsage();
+                default:
+                    throw new Exception("invalid param");
+            }
+        }
+
+        public string GetSummaryReport()
+        {
+            var summary = string.Empty;
+            summary += ("Memory at launch: " + GetMemoryUsage(SearchStatisticStep.AtLaunch) + Environment.NewLine);
+            summary += ("Total records when loaded (" + GetRecordsAtStep(SearchStatisticStep.AtLoad) + ") with" + GetMemoryUsage(SearchStatisticStep.AtLoad) + Environment.NewLine);
+            summary += ("Total records after search (" + GetRecordsAtStep(SearchStatisticStep.AtSearch) + ") with" + GetMemoryUsage(SearchStatisticStep.AtSearch) + Environment.NewLine);
+            summary += ("Took " + GetTimeTaken(SearchStatisticStep.AtLoad).TotalSeconds + " second(s) to load." + Environment.NewLine);
+            summary += ("Took " + GetTimeTaken(SearchStatisticStep.AtSearch).TotalSeconds + " second(s) to search." + Environment.NewLine);
+            summary += ("Took " + GetTimeTaken(SearchStatisticStep.Total).TotalSeconds + " second(s) total." + Environment.NewLine);
+            return summary;
+        }
+
         public void ReportToConsole()
         {
-            TimeSpan timeToLoad = atLoad.GetSnapTime() - atLaunch.GetSnapTime();
-            TimeSpan timeToSearch = atSearch.GetSnapTime() - atLoad.GetSnapTime();
-            TimeSpan totalTime = atSearch.GetSnapTime() - atLaunch.GetSnapTime();
-            Console.WriteLine("Memory at launch: " + atLoad.GetMemoryUsage());
-            Console.WriteLine("Total records when loaded (" + totalRecordsLoaded + ") with" + atLoad.GetMemoryUsage());
-            Console.WriteLine("Total records after search (" + totalRecordsSearch + ") with" + atSearch.GetMemoryUsage());
-            Console.WriteLine("Took " + timeToLoad.TotalSeconds + " second(s) to load.");
-            Console.WriteLine("Took " + timeToSearch.TotalSeconds + " second(s) to search.");
-            Console.WriteLine("Took " + totalTime.TotalSeconds + " second(s) total.");
+            Console.WriteLine(GetSummaryReport());
+           
         }
     }
 }

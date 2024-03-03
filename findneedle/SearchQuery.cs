@@ -16,9 +16,20 @@ namespace findneedle
     public class SearchQuery
     {
 
-        private List<SearchFilter> filters = new List<SearchFilter>();
-        private List<SearchLocation> locations = new List<SearchLocation>();
+        private List<SearchFilter> filters = new();
+        private List<SearchLocation> locations = new();
 
+
+        public void SetLocations(List<SearchLocation> loc)
+        {
+        
+            this.locations = loc;
+        }
+        public void SetFilters(List<SearchFilter> fil)
+        {
+
+            this.filters = fil;
+        }
 
 
 
@@ -60,9 +71,15 @@ namespace findneedle
         private SearchStatistics stats;
         private SearchLocationDepth depth = SearchLocationDepth.Intermediate;
 
-        public SearchQuery(Dictionary<string, string> arguments)
+        //Created from UX probably
+        public SearchQuery()
         {
             stats = new SearchStatistics(this);
+        }
+
+        public SearchQuery(Dictionary<string, string> arguments) : base()
+        {
+            
             foreach (KeyValuePair<string, string> pair in arguments)
             {
                 if (pair.Key.StartsWith("keyword", StringComparison.OrdinalIgnoreCase))
@@ -162,6 +179,11 @@ namespace findneedle
             }
             stats.Searched();
             return results;
+        }
+
+        public SearchStatistics GetSearchStatistics()
+        {
+            return stats;
         }
 
         public void GetSearchStatsOutput()

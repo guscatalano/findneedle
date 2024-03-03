@@ -9,9 +9,9 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid>
-        <TextBox Header="Enter keyword to filter:" PlaceholderText="keyword" />
+    <StackPanel>
+        <TextBox Name="keywordtxt" Header="Enter keyword to filter:" PlaceholderText="keyword" />
         <Button x:Name="DoneButton" Content="Done selecting"
      Click="DoneButton_Click" Margin="0,0,0,10"/>
-    </Grid>
+    </StackPanel>
 </Page>

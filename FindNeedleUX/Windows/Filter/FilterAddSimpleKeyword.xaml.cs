@@ -31,7 +31,7 @@ public sealed partial class FilterAddSimpleKeyword : Page
     private void DoneButton_Click(object sender, RoutedEventArgs e)
     {
 
-        //MiddleLayerService.AddFolderLocation(m_FileList.FirstOrDefault());
+        MiddleLayerService.AddKeywordFilter(keywordtxt.Text);
         WizardSelectionService.GetCurrentWizard().NavigateNextOne("Quit");
     }
 }

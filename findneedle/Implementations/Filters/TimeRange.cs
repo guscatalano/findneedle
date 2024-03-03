@@ -20,5 +20,14 @@ namespace findneedle.Implementations
         {
             return true;
         }
+
+        public string GetDescription()
+        {
+            return "TimeRange";
+        }
+        public string GetName()
+        {
+            return ":(";
+        }
     }
 }

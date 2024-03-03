@@ -56,5 +56,14 @@ namespace findneedle.Implementations
             }
             return false;
         }
+
+        public string GetDescription()
+        {
+            return "TimeAgo";
+        }
+        public string GetName()
+        {
+            return ":(";
+        }
     }
 }

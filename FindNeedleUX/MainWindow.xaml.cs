@@ -56,4 +56,18 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void MenuFlyoutItem_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedFlyoutItem = sender as MenuFlyoutItem;
+        switch (selectedFlyoutItem.Name.ToLower())
+        {
+            case "newworkspace":
+
+            break;
+            default:
+                throw new Exception("bad code");
+        }
+           
+        
+    }
 }

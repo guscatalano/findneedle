@@ -8,15 +8,25 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local1="using:FindNeedleUX.ViewObjects"
     mc:Ignorable="d">
 
+    <StackPanel>
+    <MenuBar>
+        <MenuBarItem Title="Workspace">
+            <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
+                <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
+                <MenuFlyoutItem Text="Save" Click="MenuFlyoutItem_Click" Name="SaveWorkspace"/>
+            </MenuBarItem>
 
+       
+    </MenuBar>
     <NavigationView x:Name="nvSample"  SelectionChanged="NavigationView_SelectionChanged">
         <NavigationView.MenuItems>
             <NavigationViewItem Icon="Folder" Content="Locations" Tag="SearchLocationsPage" />
             <NavigationViewItem Icon="Filter" Content="Filters" Tag="SearchFiltersPage" />
             <NavigationViewItem Content="Processors" Tag="SearchProcessorsPage" />
             <NavigationViewItem  Content="Run" Tag="RunSearchPage" />
+            <NavigationViewItem  Content="Results" Tag="SearchResultPage" />
         </NavigationView.MenuItems>
         <Frame x:Name="contentFrame"/>
     </NavigationView>
-    
+    </StackPanel>
 </Window>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -25,5 +26,11 @@ public sealed partial class RunSearchPage : Page
     public RunSearchPage()
     {
         this.InitializeComponent();
+    }
+
+    private void Button_Click(object sender, RoutedEventArgs e)
+    {
+
+        summary.Text = MiddleLayerService.RunSearch();
     }
 }

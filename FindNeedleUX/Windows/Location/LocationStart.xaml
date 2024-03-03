@@ -11,10 +11,10 @@
 
     <Grid>
         <RadioButtons Header="Location Type">
-            <RadioButton Content="Folder(s)/File(s)" Checked="RadioButton_Checked"/>
-            <RadioButton Content="Local Machine's EventLog" Checked="RadioButton_Checked"/>
-            <RadioButton Content="Local Machine's Registry" Checked="RadioButton_Checked"/>
-            <RadioButton Content="Visual Studio Online Work Item" Checked="RadioButton_Checked"/>
+            <RadioButton Content="Folder(s)/File(s)" Checked="RadioButton_Checked" Name="Folder" />
+            <RadioButton Content="Local Machine's EventLog" Checked="RadioButton_Checked" Name="EventLog"/>
+            <RadioButton Content="Local Machine's Registry" Checked="RadioButton_Checked" Name="Registry"/>
+            <RadioButton Content="Visual Studio Online Work Item" Checked="RadioButton_Checked" Name="VSO"/>
         </RadioButtons>
         <Button Click="Button_Click" >Next</Button>
     </Grid>

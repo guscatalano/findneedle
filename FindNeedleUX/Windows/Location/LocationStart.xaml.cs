@@ -24,6 +24,7 @@ namespace FindNeedleUX.Windows.Location;
 /// </summary>
 public sealed partial class LocationStart : Page
 {
+    private string selectedItem = "";
     public LocationStart()
     {
         this.InitializeComponent();
@@ -31,11 +32,11 @@ public sealed partial class LocationStart : Page
     }
     private void Button_Click(object sender, RoutedEventArgs e)
     {
-        WizardSelectionService.GetCurrentWizard().NavigateNextOne("AddFile");
+        WizardSelectionService.GetCurrentWizard().NavigateNextOne(selectedItem);
     }
 
     private void RadioButton_Checked(object sender, RoutedEventArgs e)
     {
-        //Control1Output.Text = string.Format("You selected {0}", (sender as RadioButton).Content.ToString());
+        selectedItem = (sender as RadioButton).Name.ToString();
     }
 }

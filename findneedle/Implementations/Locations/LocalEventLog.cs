@@ -91,11 +91,17 @@ namespace findneedle.Implementations
 
     public class LocalEventLogLocation : SearchLocation
     {
-        EventLog eventLog = new EventLog();
+      
+        EventLog eventLog = new();
         string eventLogName = "Application";
-        List<SearchResult> searchResults = new List<SearchResult>();
+        List<SearchResult> searchResults = new();
         public LocalEventLogLocation()
         {
+        }
+
+        public LocalEventLogLocation(string name)
+        {
+            eventLogName = name;
         }
 
         public override string GetDescription()

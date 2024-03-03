@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -25,13 +26,11 @@ namespace FindNeedleUX.Pages;
 /// </summary>
 public sealed partial class SearchFiltersPage : Page
 {
-    List<FilterListItem> RecipeList = new List<FilterListItem>();
+    ObservableCollection<FilterListItem> RecipeList = new();
     public SearchFiltersPage()
     {
         this.InitializeComponent();
-       // RecipeList.Add(new FilterListItem() {  Name = RandomData.GetRandomFilterName(), Description= RandomData.GetName() });
-      //  RecipeList.Add(new FilterListItem() { Name = RandomData.GetRandomFilterName(), Description = RandomData.GetName() });
-       // RecipeList.Add(new FilterListItem() { Name = RandomData.GetRandomFilterName(), Description = RandomData.GetName() });
+     
         VariedImageSizeRepeater.ItemsSource = RecipeList;
         
     }
@@ -57,7 +56,7 @@ public sealed partial class SearchFiltersPage : Page
 
     private void Callback(string test)
     {
-        //RecipeList = MiddleLayerService.GetLocationListItems();
-        //VariedImageSizeRepeater.ItemsSource = RecipeList;
+        RecipeList = MiddleLayerService.GetFilterListItems();
+        VariedImageSizeRepeater.ItemsSource = RecipeList;
     }
 }

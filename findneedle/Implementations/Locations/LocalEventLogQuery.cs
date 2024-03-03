@@ -133,6 +133,11 @@ public class LocalEventLogQueryLocation : SearchLocation
 
     }
 
+    public LocalEventLogQueryLocation(string name)
+    {
+        eventLogName = name;
+    }
+
     public override string GetDescription()
     {
         return "LocalEventLogQuery";
