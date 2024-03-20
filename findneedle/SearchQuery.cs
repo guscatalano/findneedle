@@ -79,7 +79,7 @@ namespace findneedle
 
         public SearchQuery(Dictionary<string, string> arguments) : base()
         {
-            
+            stats = new SearchStatistics(this);
             foreach (KeyValuePair<string, string> pair in arguments)
             {
                 if (pair.Key.StartsWith("keyword", StringComparison.OrdinalIgnoreCase))
