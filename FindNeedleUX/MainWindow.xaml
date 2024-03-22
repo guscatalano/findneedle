@@ -25,7 +25,8 @@
             <NavigationViewItem Content="Processors" Tag="SearchProcessorsPage" />
             <NavigationViewItem  Content="Run" Tag="RunSearchPage" />
             <NavigationViewItem  Content="Results" Tag="SearchResultPage" />
-        </NavigationView.MenuItems>
+             <NavigationViewItem  Content="Info" Tag="SystemInfoPage" />
+            </NavigationView.MenuItems>
         <Frame x:Name="contentFrame"/>
     </NavigationView>
     </StackPanel>

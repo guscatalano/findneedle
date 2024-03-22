@@ -33,6 +33,7 @@
     <None Remove="Pages\SearchFiltersPage.xaml" />
     <None Remove="Pages\SearchLocationsPage.xaml" />
     <None Remove="Pages\SearchProcessorsPage.xaml" />
+    <None Remove="Pages\SystemInfoPage.xaml" />
     <None Remove="SearchResultPage.xaml" />
     <None Remove="Services\WizardDef\BasicWizard.xaml" />
     <None Remove="Windows\Filter\FilterAddSimpleKeyword.xaml" />
