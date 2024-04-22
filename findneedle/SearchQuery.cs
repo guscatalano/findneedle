@@ -1,34 +1,55 @@
 ﻿using findneedle.Implementations;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace findneedle
 {
-
-    
-
 
 
     public class SearchQuery
     {
 
-        private List<SearchFilter> filters = new();
-        private List<SearchLocation> locations = new();
+
+        private SearchLocationDepth Depth;
+
+        private SearchStatistics _stats;
+        public SearchStatistics stats
+        {
+            get
+            {
+                _stats ??= new SearchStatistics(this);
+                return _stats;
+            }
+            set => _stats = value;
+        }
+
+        private List<SearchFilter> _filters;
+        public List<SearchFilter> filters
+        {
+            get
+            {
+                _filters ??= new List<SearchFilter>();
+                return _filters;
+            }
+            set => _filters = value;
+        }
+
+        private List<SearchLocation> _locations;
+        public List<SearchLocation> locations
+        {
+            get
+            {
+                _locations ??= new List<SearchLocation>();
+                return _locations;
+            }
+            set => _locations = value;
+        }
+
+
 
 
         public void SetLocations(List<SearchLocation> loc)
         {
-        
-            this.locations = loc;
-        }
-        public void SetFilters(List<SearchFilter> fil)
-        {
 
-            this.filters = fil;
+            this.locations = loc;
         }
 
 
@@ -47,7 +68,7 @@ namespace findneedle
         {
             text = text.Replace(",", "");
             text = text.Replace("(", "");
-            text =  text.Replace(")", "");
+            text = text.Replace(")", "");
             text = text.Trim();
             return text;
         }
@@ -55,8 +76,8 @@ namespace findneedle
         private List<string> SplitApart(string text)
         {
             List<string> ret = new List<string>();
-            string[] results = text.Split(",");
-            foreach(string i in results)
+            var results = text.Split(",");
+            foreach (var i in results)
             {
                 string ix = ReplaceInvalidChars(i);
                 if (string.IsNullOrEmpty(ix))
@@ -68,14 +89,13 @@ namespace findneedle
             return ret;
         }
 
-        private SearchStatistics stats;
-        private SearchLocationDepth depth = SearchLocationDepth.Intermediate;
 
-        //Created from UX probably
         public SearchQuery()
         {
             stats = new SearchStatistics(this);
         }
+
+
 
         public SearchQuery(Dictionary<string, string> arguments) : base()
         {
@@ -88,8 +108,8 @@ namespace findneedle
                     continue;
                 }
 
-                    //searchfilter=time(start,end)
-                    //searchfilter=ago(2h)
+                //searchfilter=time(start,end)
+                //searchfilter=ago(2h)
                 if (pair.Key.StartsWith("searchfilter", StringComparison.OrdinalIgnoreCase))
                 {
                     if (pair.Value.StartsWith("time"))
@@ -117,7 +137,7 @@ namespace findneedle
                     {
                         throw new Exception("Failed to parse depth");
                     }
-                    this.depth = depth;
+                    this.Depth = depth;
 
                 }
 
@@ -149,7 +169,7 @@ namespace findneedle
                     }
                 }
             }
-            
+
         }
 
         public void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations)
@@ -162,7 +182,7 @@ namespace findneedle
 
         public void LoadAllLocationsInMemory()
         {
-            SetDepthForAllLocations(depth);
+            SetDepthForAllLocations(Depth);
             foreach (var loc in locations)
             {
                 loc.LoadInMemory(false);
@@ -172,7 +192,7 @@ namespace findneedle
 
         public List<SearchResult> GetFilteredResults()
         {
-            List <SearchResult> results = new List<SearchResult>();
+            List<SearchResult> results = new List<SearchResult>();
             foreach (var loc in locations)
             {
                 results.AddRange(loc.Search(this));
@@ -191,10 +211,9 @@ namespace findneedle
             stats.ReportToConsole();
         }
 
-        public string GetQueryJSON()
+        public string? Name
         {
-            return JsonSerializer.Serialize(this);
-            
+            get; set;
         }
     }
 }

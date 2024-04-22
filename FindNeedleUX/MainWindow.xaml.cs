@@ -1,22 +1,9 @@
-using findneedle;
-using FindNeedleUX.ViewObjects;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices.WindowsRuntime;
-using System.Xml.Linq;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
+using FindNeedleUX.Services;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Windows.Storage.Pickers;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -28,7 +15,7 @@ namespace FindNeedleUX;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    
+
 
     public MainWindow()
     {
@@ -40,7 +27,7 @@ public sealed partial class MainWindow : Window
     {
         if (args.IsSettingsSelected)
         {
-           // contentFrame.Navigate(typeof(SampleSettingsPage));
+            // contentFrame.Navigate(typeof(SampleSettingsPage));
         }
         else
         {
@@ -63,11 +50,81 @@ public sealed partial class MainWindow : Window
         {
             case "newworkspace":
 
-            break;
+                break;
+            case "saveworkspace":
+                SaveCommand();
+                break;
+            case "openworkspace":
+                LoadCommand();
+                break;
             default:
                 throw new Exception("bad code");
         }
-           
-        
+
+
+    }
+
+    private async void LoadCommand()
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+
+
+        var picker = new FileOpenPicker()
+        {
+            ViewMode = PickerViewMode.List,
+            FileTypeFilter = { ".json" },
+        };
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+        var file = await picker.PickSingleFileAsync();
+        // var files = await picker.PickMultipleFilesAsync();
+
+        // Initialize the file picker with the window handle (HWND).
+        // WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
+
+        // Set options for your file picker
+        // openPicker.ViewMode = PickerViewMode.Thumbnail;
+        //  openPicker.FileTypeFilter.Add("*");
+
+        // Open the picker for the user to pick a file
+        //  var file = await openPicker.PickSingleFileAsync();
+        if (file != null)
+        {
+            MiddleLayerService.OpenWorkspace(file.Path);
+        }
+    }
+
+    private async void SaveCommand()
+    {
+
+
+        // Retrieve the window handle (HWND) of the current WinUI 3 window.
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+
+
+        var picker = new FileSavePicker();
+        picker.SuggestedStartLocation = PickerLocationId.Desktop;
+        picker.SuggestedFileName = "SearchQuery";
+        picker.FileTypeChoices.Add("ComplexJson", new List<string>() { ".json" });
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+        var file = await picker.PickSaveFileAsync();
+        // var files = await picker.PickMultipleFilesAsync();
+
+        // Initialize the file picker with the window handle (HWND).
+        // WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
+
+        // Set options for your file picker
+        // openPicker.ViewMode = PickerViewMode.Thumbnail;
+        //  openPicker.FileTypeFilter.Add("*");
+
+        // Open the picker for the user to pick a file
+        //  var file = await openPicker.PickSingleFileAsync();
+        if (file != null)
+        {
+            MiddleLayerService.SaveWorkspace(file.Path);
+        }
     }
 }

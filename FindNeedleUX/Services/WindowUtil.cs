@@ -1,14 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml;
 using Microsoft.UI;
-using Windows.Storage;
-using WinRT.Interop;
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
+using WinRT.Interop;
 
 namespace FindNeedleUX;
 // Helper class to allow the app to find the Window that contains an
@@ -30,7 +26,8 @@ public class WindowUtil
 
     static public void TrackWindow(Window window)
     {
-        window.Closed += (sender, args) => {
+        window.Closed += (sender, args) =>
+        {
             _activeWindows.Remove(window);
         };
         _activeWindows.Add(window);
@@ -43,7 +40,7 @@ public class WindowUtil
         return AppWindow.GetFromWindowId(wndId);
     }
 
-    
+
 
     static public Window GetWindowForElement(UIElement element)
     {
@@ -85,5 +82,5 @@ public class WindowUtil
 
     static private List<Window> _activeWindows = new List<Window>();
 
-    
+
 }

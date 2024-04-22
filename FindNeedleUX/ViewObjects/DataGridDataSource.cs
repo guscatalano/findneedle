@@ -2,18 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using findneedle;
-using FindNeedleUX.Services;
-using Microsoft.UI.Xaml.Data;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Windows.Storage;
-using Windows.Storage.Streams;
+using findneedle;
+using FindNeedleUX.Services;
+using Microsoft.UI.Xaml.Data;
 
 namespace Microsoft.Toolkit.Uwp.SampleApp.Data
 {
@@ -28,7 +24,7 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
         // Loading data
         public async Task<IEnumerable<SearchSourceDataItem>> GetDataAsync()
         {
-            
+
             _items = new ObservableCollection<SearchSourceDataItem>();
 
 
@@ -39,8 +35,8 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
                 _items.Add(
                     new SearchSourceDataItem(result));
             }
-                
-           
+
+
 
             return _items;
         }
@@ -81,70 +77,70 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
                     if (ascending)
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Rank ascending
-                                                                          select item);
+                                                                              orderby item.Rank ascending
+                                                                              select item);
                     }
                     else
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Rank descending
-                                                                          select item);
+                                                                              orderby item.Rank descending
+                                                                              select item);
                     }
 
                 case "Parent_mountain":
                     if (ascending)
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Parent_mountain ascending
-                                                                          select item);
+                                                                              orderby item.Parent_mountain ascending
+                                                                              select item);
                     }
                     else
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Parent_mountain descending
-                                                                          select item);
+                                                                              orderby item.Parent_mountain descending
+                                                                              select item);
                     }
 
                 case "Mountain":
                     if (ascending)
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Mountain ascending
-                                                                          select item);
+                                                                              orderby item.Mountain ascending
+                                                                              select item);
                     }
                     else
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Mountain descending
-                                                                          select item);
+                                                                              orderby item.Mountain descending
+                                                                              select item);
                     }
 
                 case "Height_m":
                     if (ascending)
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Height_m ascending
-                                                                          select item);
+                                                                              orderby item.Height_m ascending
+                                                                              select item);
                     }
                     else
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Height_m descending
-                                                                          select item);
+                                                                              orderby item.Height_m descending
+                                                                              select item);
                     }
 
                 case "Range":
                     if (ascending)
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Message ascending
-                                                                          select item);
+                                                                              orderby item.Message ascending
+                                                                              select item);
                     }
                     else
                     {
                         return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                          orderby item.Message descending
-                                                                          select item);
+                                                                              orderby item.Message descending
+                                                                              select item);
                     }
             }
 
@@ -158,13 +154,21 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
             var query = from item in _items
                         orderby item
                         group item by item.Message into g
-                        select new { GroupName = g.Key, Items = g };
+                        select new
+                        {
+                            GroupName = g.Key,
+                            Items = g
+                        };
             if (groupBy == "Parent_Mountain")
             {
                 query = from item in _items
                         orderby item
                         group item by item.Parent_mountain into g
-                        select new { GroupName = g.Key, Items = g };
+                        select new
+                        {
+                            GroupName = g.Key,
+                            Items = g
+                        };
             }
             foreach (var g in query)
             {
@@ -187,7 +191,10 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
 
         public class GroupInfoCollection<T> : ObservableCollection<T>
         {
-            public object Key { get; set; }
+            public object Key
+            {
+                get; set;
+            }
 
             public new IEnumerator<T> GetEnumerator()
             {
@@ -214,23 +221,23 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
 
                 case FilterOptions.Rank_Low:
                     return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                      where item.Rank < 50
-                                                                      select item);
+                                                                          where item.Rank < 50
+                                                                          select item);
 
                 case FilterOptions.Rank_High:
                     return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                      where item.Rank > 50
-                                                                      select item);
+                                                                          where item.Rank > 50
+                                                                          select item);
 
                 case FilterOptions.Height_High:
                     return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                      where item.Height_m > 8000
-                                                                      select item);
+                                                                          where item.Height_m > 8000
+                                                                          select item);
 
                 case FilterOptions.Height_Low:
                     return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                                      where item.Height_m < 8000
-                                                                      select item);
+                                                                          where item.Height_m < 8000
+                                                                          select item);
             }
 
             return _items;
@@ -239,8 +246,8 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
         public ObservableCollection<SearchSourceDataItem> SearchData(string queryText)
         {
             return new ObservableCollection<SearchSourceDataItem>(from item in _items
-                                                              where item.Mountain.Contains(queryText, StringComparison.InvariantCultureIgnoreCase)
-                                                              select item);
+                                                                  where item.Mountain.Contains(queryText, StringComparison.InvariantCultureIgnoreCase)
+                                                                  select item);
         }
     }
 }

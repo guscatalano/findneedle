@@ -1,10 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using FindNeedleUX.Pages;
-using FindNeedleUX.Windows;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -25,9 +21,9 @@ public class IWizard
         var types = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(s => s.GetTypes())
             .Where(p => type.IsAssignableFrom(p));
-        foreach(var page in types)
+        foreach (var page in types)
         {
-            if(page.ToString().Contains(name))
+            if (page.ToString().Contains(name))
             {
                 return page.ToString(); ;
             }
@@ -37,7 +33,7 @@ public class IWizard
 
     public IWizard(string initialPageName)
     {
-        
+
         w_initialPageName = initialPageName;
         w_initialPageType = Type.GetType(FindPageWithShortName(w_initialPageName));
     }
@@ -55,7 +51,7 @@ public class IWizard
             return;
         }
         var pageName = currentPage.GetType().ToString();
-        if(!pages.ContainsKey(pageName))
+        if (!pages.ContainsKey(pageName))
         {
             throw new Exception("Could not find current page!");
         }
@@ -81,14 +77,14 @@ public class IWizard
         this.callback = callback;
         starterElement = sender;
         BasicWizard newWizard = new BasicWizard();
-        
+
         WindowUtil.TrackWindow(newWizard);
         var y = WindowUtil.GetWindowForElement(sender);
         var z = y.AppWindow;
         z.Hide();
         wizFrame = newWizard.GetFrame();
         wizFrame.Navigate(w_initialPageType);
-        
+
         newWizard.Activate();
         newWizard.Closed += X_Closed;
     }

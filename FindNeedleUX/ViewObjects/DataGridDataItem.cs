@@ -6,9 +6,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using findneedle;
 
 namespace Microsoft.Toolkit.Uwp.SampleApp.Data
@@ -55,7 +52,7 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
 
             set
             {
-               
+
             }
         }
 
@@ -68,7 +65,7 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
 
             set
             {
-               
+
             }
         }
 
@@ -115,13 +112,25 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
             }
         }
 
-        public string Coordinates { get; set; }
+        public string Coordinates
+        {
+            get; set;
+        }
 
-        public uint Prominence { get; set; }
+        public uint Prominence
+        {
+            get; set;
+        }
 
-        public uint First_ascent { get; set; }
+        public uint First_ascent
+        {
+            get; set;
+        }
 
-        public string Ascents { get; set; }
+        public string Ascents
+        {
+            get; set;
+        }
 
         bool INotifyDataErrorInfo.HasErrors
         {

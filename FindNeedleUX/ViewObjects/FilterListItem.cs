@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace FindNeedleUX.ViewObjects;
-public  class FilterListItem
+﻿namespace FindNeedleUX.ViewObjects;
+public class FilterListItem
 {
     public string Name
     {
@@ -14,8 +8,9 @@ public  class FilterListItem
 
     public string Description
     {
-    get; set; } 
+        get; set;
+    }
 
 
-    
+
 }

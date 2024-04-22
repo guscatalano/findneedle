@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Diagnostics.Eventing.Reader;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Diagnostics;
 
 namespace findneedle.Implementations
 {
@@ -77,7 +70,7 @@ namespace findneedle.Implementations
         //This is usually the message, but it can be more. This is likely not readable
         public string GetSearchableData()
         {
-  
+
             return string.Join(' ', entry.Message, entry.UserName, entry.MachineName, entry.Category, entry.CategoryNumber, entry.InstanceId, entry.Source);
         }
 
@@ -91,7 +84,7 @@ namespace findneedle.Implementations
 
     public class LocalEventLogLocation : SearchLocation
     {
-      
+
         EventLog eventLog = new();
         string eventLogName = "Application";
         List<SearchResult> searchResults = new();
@@ -115,7 +108,7 @@ namespace findneedle.Implementations
 
         public override void LoadInMemory(bool prefilter = false)
         {
-          
+
             eventLog.Log = eventLogName;
 
             foreach (EventLogEntry log in eventLog.Entries)

@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace findneedle.Implementations
+﻿namespace findneedle.Implementations
 {
     public class TimeRangeFilter : SearchFilter
     {
@@ -15,6 +9,8 @@ namespace findneedle.Implementations
             this.start = start;
             this.end = end;
         }
+
+        public string SearchFilterType => throw new NotImplementedException();
 
         public bool Filter(SearchResult entry)
         {
@@ -29,5 +25,7 @@ namespace findneedle.Implementations
         {
             return ":(";
         }
+
+        public string GetSerializedJson() => throw new NotImplementedException();
     }
 }

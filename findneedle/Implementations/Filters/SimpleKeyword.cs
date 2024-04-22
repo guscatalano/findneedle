@@ -1,14 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text.Json.Serialization;
 
 namespace findneedle.Implementations
 {
     public class SimpleKeywordFilter : SearchFilter
     {
-        string term = "";
+
+        public string term 
+        {
+            get; set;
+        }
+
+        [JsonConstructorAttribute]
         public SimpleKeywordFilter(string term)
         {
             this.term = term.Trim();
@@ -17,6 +19,8 @@ namespace findneedle.Implementations
                 throw new Exception("Can't search for empty terms");
             }
         }
+
+
 
         public bool Filter(SearchResult entry)
         {
@@ -35,6 +39,8 @@ namespace findneedle.Implementations
         {
             return term;
         }
+
+
     }
 
 }

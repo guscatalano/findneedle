@@ -5,7 +5,6 @@ using findneedle.Implementations.Outputs;
 using findneedle.Implementations.ResultProcessors;
 using findneedle.Interfaces;
 using findneedle.WDK;
-using System.Diagnostics;
 
 WDKFinder.GetPathOfWDK();
 
@@ -18,7 +17,7 @@ foreach (string argument in Environment.GetCommandLineArgs())
 
     if (splitted.Length == 2)
     {
-        arguments[splitted[0]+count] = splitted[1];
+        arguments[splitted[0] + count] = splitted[1];
     }
 }
 

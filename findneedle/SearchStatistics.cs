@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Diagnostics;
 
 namespace findneedle
 {
@@ -58,14 +53,14 @@ namespace findneedle
 
         public string GetMemoryUsage()
         {
-            return " PrivateMemory (" + SizeSuffix(privatememory) + ") / GC Memory (" + SizeSuffix(gcmemory) + ")."; 
+            return " PrivateMemory (" + SizeSuffix(privatememory) + ") / GC Memory (" + SizeSuffix(gcmemory) + ").";
         }
 
         public DateTime GetSnapTime()
         {
             return when;
         }
-        
+
     }
 
     public enum SearchStatisticStep
@@ -80,8 +75,8 @@ namespace findneedle
     {
         SearchQuery q;
         Process proc;
-        public SearchStatistics(SearchQuery query) 
-        { 
+        public SearchStatistics(SearchQuery query)
+        {
             q = query;
             proc = Process.GetCurrentProcess();
             atLoad = new MemorySnapshot(proc);
@@ -96,7 +91,7 @@ namespace findneedle
         MemorySnapshot atLoad;
         MemorySnapshot atSearch;
 
-        
+
 
         public void LoadedAll()
         {
@@ -145,7 +140,7 @@ namespace findneedle
                 default:
                     throw new Exception("not valid step for time");
             }
-            
+
         }
 
 
@@ -179,7 +174,7 @@ namespace findneedle
         public void ReportToConsole()
         {
             Console.WriteLine(GetSummaryReport());
-           
+
         }
     }
 }

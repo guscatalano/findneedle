@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using findneedle.Interfaces;
+﻿using findneedle.Interfaces;
 
 namespace findneedle.Implementations.ResultProcessors;
 public class WatsonCrashProcessor : ResultProcessor
@@ -18,9 +13,9 @@ public class WatsonCrashProcessor : ResultProcessor
     public void ProcessResults(List<SearchResult> results)
     {
         List<SearchResult> resultList = new List<SearchResult>();
-        foreach(SearchResult result in results)
+        foreach (SearchResult result in results)
         {
-            if(result.GetSearchableData().Contains("A .NET application failed."))
+            if (result.GetSearchableData().Contains("A .NET application failed."))
             {
                 resultList.Add(result);
             }

@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.Eventing.Reader;
-using System.Linq;
+﻿using System.Diagnostics.Eventing.Reader;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace findneedle.Implementations.Discovery;
 public class EventLogDiscovery
@@ -17,7 +13,7 @@ public class EventLogDiscovery
         foreach (var name in session.GetLogNames())
         {
             //ret.Add(name, GetDisplayName(session, name));
-            ret.Add(GetDisplayName(session,name));
+            ret.Add(GetDisplayName(session, name));
         }
         ret.Sort();
         return ret;

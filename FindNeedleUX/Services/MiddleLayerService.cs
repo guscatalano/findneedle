@@ -1,9 +1,7 @@
-﻿using System;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 using findneedle;
 using findneedle.Implementations;
 using FindNeedleUX.Services.WizardDef;
@@ -15,6 +13,7 @@ public class MiddleLayerService
 {
     public static List<SearchLocation> Locations = new();
     public static List<SearchFilter> Filters = new();
+    public static SearchQuery Query = new SearchQuery();
 
     public static void AddFolderLocation(string location)
     {
@@ -26,7 +25,8 @@ public class MiddleLayerService
         if (useQueryAPI)
         {
             Locations.Add(new LocalEventLogQueryLocation(eventlogname));
-        } else
+        }
+        else
         {
             Locations.Add(new LocalEventLogLocation(eventlogname));
         }
@@ -49,17 +49,43 @@ public class MiddleLayerService
 
     private static List<SearchResult> SearchResults = new();
 
+    public static void UpdateSearchQuery()
+    {
+        Query = new SearchQuery();
+        Query.filters = Filters;
+        Query.locations = Locations;
+    }
+
     public static string RunSearch()
     {
-        SearchQuery q = new SearchQuery();
-        q.SetFilters(Filters);
-        q.SetLocations(Locations);
-        q.LoadAllLocationsInMemory();
-        SearchResults = q.GetFilteredResults();
-        SearchStatistics x = q.GetSearchStatistics();
+
+        UpdateSearchQuery();
+        Query.LoadAllLocationsInMemory();
+        SearchResults = Query.GetFilteredResults();
+        SearchStatistics x = Query.GetSearchStatistics();
         return x.GetSummaryReport();
 
-        
+
+    }
+
+
+
+    public static void OpenWorkspace(string filename)
+    {
+        var o = SearchQueryJsonReader.LoadSearchQuery(File.ReadAllText(filename));
+        SearchQuery r = SearchQueryJsonReader.GetSearchQueryObject(o);
+        Query = r;
+        Filters = Query.filters;
+        Locations = Query.locations;
+    }
+
+
+    public static void SaveWorkspace(string filename)
+    {
+        UpdateSearchQuery();
+        SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(Query);
+        string json = r.GetQueryJson();
+        File.WriteAllText(filename, json);
     }
 
     public static ObservableCollection<LocationListItem> GetLocationListItems()
@@ -67,7 +93,7 @@ public class MiddleLayerService
         ObservableCollection<LocationListItem> test = new ObservableCollection<LocationListItem>();
         foreach (SearchLocation loc in Locations)
         {
-             test.Add(new LocationListItem() { Name = loc.GetName(), Description= loc.GetDescription() });
+            test.Add(new LocationListItem() { Name = loc.GetName(), Description = loc.GetDescription() });
         }
         return test;
     }

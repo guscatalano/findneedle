@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using FindNeedleUX.Services.WizardDef;
 using Microsoft.UI.Xaml;
 
@@ -35,7 +32,7 @@ public class WizardSelectionService
     public WizardSelectionService()
     {
         IWizard loc = new IWizard("FindNeedleUX.Windows.Location.LocationStart");
-        
+
         loc.AddPage("LocationStart", new Dictionary<string, string>()
         {
             {"Folder", "LocationAddFile" },

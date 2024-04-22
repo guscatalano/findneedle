@@ -44,13 +44,14 @@ namespace findneedletests
             {
                 SearchQuery q = new SearchQuery(input);
 
-            } catch(Exception)
+            }
+            catch (Exception)
             {
                 Assert.IsTrue(true); //We expect to throw
                 return;
             }
             Assert.IsFalse(true);
-            
+
         }
 
         [TestMethod]
@@ -58,7 +59,7 @@ namespace findneedletests
         {
             Dictionary<string, string> input = new Dictionary<string, string>();
             input.Add("location", @"path#C:\\windows\\explorer.exe");
-            
+
             SearchQuery q = new SearchQuery(input);
             Assert.IsTrue(q.GetLocations().Count == 1);
             Assert.IsTrue(q.GetLocations()[0].GetType() == typeof(FolderLocation));
@@ -73,10 +74,10 @@ namespace findneedletests
                 { "location2", @"path#C:\\windows\\system32" },
                 { "location3", @"path#C:\\windows\\system32\\" }
             };
-          
+
             SearchQuery q = new SearchQuery(input);
 
-            
+
             Assert.AreEqual(3, q.GetLocations().Count);
 
         }
@@ -86,7 +87,7 @@ namespace findneedletests
         {
             Dictionary<string, string> input = new Dictionary<string, string>();
             input.Add("searchfilter", "time(2022-01-01 05:00:00Z, 2023-01-01 05:00:00Z)");
-            
+
             SearchQuery q = new SearchQuery(input);
             Assert.IsTrue(q.GetFilters().Count == 1);
         }
