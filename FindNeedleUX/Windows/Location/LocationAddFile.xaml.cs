@@ -65,8 +65,8 @@ public sealed partial class LocationAddFile : Page
         //  var file = await openPicker.PickSingleFileAsync();
         if (file != null)
         {
-            OutputTextBlock.Text = "Picked file: " + file.DisplayName;
-            m_FileList.Add(file.DisplayName);
+            OutputTextBlock.Text = "Picked file: " + file.Path;
+            m_FileList.Add(file.Path);
         }
         else
         {

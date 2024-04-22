@@ -1,4 +1,10 @@
-﻿using System.Diagnostics.Eventing.Reader;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.Eventing.Reader;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace findneedle.Implementations;
 
@@ -120,7 +126,9 @@ public class LocalEventLogRecord : SearchResult
 
 public class LocalEventLogQueryLocation : SearchLocation
 {
-    readonly string eventLogName = "Application";
+    public string eventLogName
+    { get; set;
+    }
     readonly List<SearchResult> searchResults = new();
     public LocalEventLogQueryLocation()
     {
@@ -157,7 +165,7 @@ public class LocalEventLogQueryLocation : SearchLocation
             searchResults.Add(result);
             numRecordsInMemory++;
         }
-
+       
     }
 
     public override List<SearchResult> Search(SearchQuery searchQuery)

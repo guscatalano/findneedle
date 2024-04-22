@@ -1,5 +1,9 @@
-﻿using System.Text;
-using findneedle.Interfaces;
+﻿using findneedle.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace findneedle.Implementations
 {
@@ -24,7 +28,7 @@ namespace findneedle.Implementations
         }
         public void WriteAllOutput(List<SearchResult> result)
         {
-            foreach (SearchResult item in result)
+            foreach(SearchResult item in result)
             {
                 WriteOutput(item);
             }

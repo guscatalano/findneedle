@@ -104,6 +104,7 @@ public class SearchQueryJsonReader
 
         destination.Name = source.Name;
         destination.FilterJson = new List<string>();
+        destination.LocationJson = new List<string>();
 
         //Serialize all the filters
         foreach (SearchFilter filter in source.filters)
@@ -113,7 +114,15 @@ public class SearchQueryJsonReader
             destination.FilterJson.Add(outher);
         }
 
-        
+        //Serialize all the filters
+        foreach (SearchLocation loc in source.locations)
+        {
+
+            string outher = SerializeImplementedType(loc);
+            destination.LocationJson.Add(outher);
+        }
+
+
 
         return destination;
     }
@@ -123,11 +132,19 @@ public class SearchQueryJsonReader
         SearchQuery destination = new();
         destination.Name = source.Name;
         destination.filters = new();
+        destination.locations = new();
         foreach (string filter in source.FilterJson)
         {
 
             SearchFilter outher = (SearchFilter)DeserializeJson(filter);
             destination.filters.Add(outher);
+        }
+
+        foreach (string loc in source.LocationJson)
+        {
+
+            SearchLocation outher = (SearchLocation)DeserializeJson(loc);
+            destination.locations.Add(outher);
         }
         return destination;
     }
@@ -139,23 +156,7 @@ public class SearchQueryJsonReader
 
 public class SerializableSearchQuery
 {
-    /*
-    public override bool Equals(object? obj)
-    {
-        if (obj == null) { return false; }
-        if (obj.GetType() != typeof(SerializableSearchQuery))
-        {
-            return false;
-        }
 
-        SerializableSearchQuery other = (SerializableSearchQuery)obj;
-        if (!this.Name.Equals(other.Name))
-        {
-            return false;
-        }
-
-        return true;
-    }*/
 
     public string GetQueryJson()
     {
@@ -177,6 +178,11 @@ public class SerializableSearchQuery
     }
 
     public List<string> FilterJson
+    {
+        get; set;
+    }
+
+    public List<string> LocationJson
     {
         get; set;
     }

@@ -1,4 +1,11 @@
-﻿namespace findneedle
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace findneedle
 {
     //Defines how deep to search a given location. Deepest might imply pre-loading data that may not matter
     public enum SearchLocationDepth
@@ -11,11 +18,21 @@
 
     public abstract class SearchLocation
     {
-        public int numRecordsInLastResult = 0;
-        public int numRecordsInMemory = 0;
-        private SearchLocationDepth depth = SearchLocationDepth.Intermediate;
+        public int numRecordsInLastResult
+        { get;
+            set;
+        }
+        public int numRecordsInMemory
+        {
+            get; set;
+        }
 
-        public abstract void LoadInMemory(bool prefilter = false);
+        public SearchLocationDepth depth
+        {
+        get; set; }
+
+
+        public abstract void LoadInMemory(bool prefilter= false);
 
         public abstract List<SearchResult> Search(SearchQuery searchQuery);
 

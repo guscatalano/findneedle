@@ -86,7 +86,10 @@ namespace findneedle.Implementations
     {
 
         EventLog eventLog = new();
-        string eventLogName = "Application";
+        public string eventLogName
+        {
+            get; set;
+        }
         List<SearchResult> searchResults = new();
         public LocalEventLogLocation()
         {
