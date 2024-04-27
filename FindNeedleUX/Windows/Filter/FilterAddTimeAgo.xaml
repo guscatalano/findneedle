@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FindNeedleUX.Windows.Filter.FilterAddTimeAgo"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FindNeedleUX.Windows.Filter"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <RelativePanel>
+        <TextBox Name="UnitCount"
+        Header="Enter an how many units away:"
+         Text="1"
+        
+                  />
+
+        <ComboBox  Header="Unit" PlaceholderText="Pick a unit" Width="200" Name="Unit" SelectedItem="Minutes"  RelativePanel.RightOf="UnitCount">
+            <x:String>Seconds</x:String>
+            <x:String>Minutes</x:String>
+            <x:String>Hours</x:String>
+            <x:String>Days</x:String>
+        </ComboBox>
+        <Button x:Name="DoneButton" Content="Done selecting" RelativePanel.Below="UnitCount"
+    Click="DoneButton_Click" Margin="0,0,0,10"/>
+    </RelativePanel>
+</Page>

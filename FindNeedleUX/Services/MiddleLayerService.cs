@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -18,6 +19,16 @@ public class MiddleLayerService
     public static void AddFolderLocation(string location)
     {
         Locations.Add(new FolderLocation(location));
+    }
+
+    public static void AddTimeAgoFilter(TimeAgoUnit unit, int count)
+    {
+        Filters.Add(new TimeAgoFilter(unit, count));
+    }
+
+    public static void AddTimeRangeFilter(DateTime start, DateTime end)
+    {
+        Filters.Add(new TimeRangeFilter(start, end));
     }
     public static void AddEventLog(string eventlogname, bool useQueryAPI)
     {

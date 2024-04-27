@@ -29,9 +29,9 @@ namespace findneedle.Implementations
         }
         public string GetName()
         {
-            return ":(";
+            return "Start: " + start.ToString() + " and End: " + end.ToString();
         }
 
-        public string GetSerializedJson() => throw new NotImplementedException();
+       
     }
 }

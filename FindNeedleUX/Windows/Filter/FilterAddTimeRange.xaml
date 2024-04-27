@@ -9,7 +9,14 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid>
-
+    <Grid   ColumnDefinitions="Auto, Auto, *" RowDefinitions ="100, 100, 100,100, *">
+        <TextBlock Name="StartHeader"  Grid.Column="0" Grid.Row="0" >Start</TextBlock>
+        <DatePicker Header="Pick start date"  Name="StartDate"  Grid.Column="0" Grid.Row="1" />
+        <TimePicker ClockIdentifier="24HourClock" Header="Start Time"  Grid.Column="1" Grid.Row="1" Name="StartTime"/>
+        <TextBlock Name="EndHeader"  Grid.Column="0" Grid.Row="2" >End</TextBlock>
+        <DatePicker Header="Pick end date"  Grid.Column="0" Grid.Row="3"  Name="EndDate"/>
+        <TimePicker ClockIdentifier="24HourClock" Header="End Time"  Grid.Column="1" Grid.Row="3" Name="EndTime" />
+        <Button x:Name="DoneButton" Content="Done selecting"  Grid.Column="0" Grid.Row="4" 
+    Click="DoneButton_Click" Margin="0,0,0,10"/>
     </Grid>
 </Page>

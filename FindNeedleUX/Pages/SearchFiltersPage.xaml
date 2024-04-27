@@ -12,7 +12,7 @@
     <Page.Resources>
 
         <DataTemplate x:DataType="l:FilterListItem" x:Key="FilterTemplate">
-            <StackPanel BorderThickness="1" Background="DarkBlue" Margin="5">
+            <StackPanel BorderThickness="1" Background="AliceBlue" Margin="5">
                
 
                         <Grid ColumnDefinitions="100, Auto, Auto, Auto, *" RowDefinitions ="*">
