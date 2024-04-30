@@ -101,7 +101,7 @@ namespace findneedle
 
 
 
-        Dictionary<SearchStatisticStep, List<ReportFromComponent>> componentReports = new Dictionary<SearchStatisticStep, List<ReportFromComponent>>();
+        public Dictionary<SearchStatisticStep, List<ReportFromComponent>> componentReports = new Dictionary<SearchStatisticStep, List<ReportFromComponent>>();
         
 
         public void ReportFromComponent(ReportFromComponent data)

@@ -89,6 +89,12 @@ public class MiddleLayerService
 
     }
 
+    public static SearchStatistics GetStats()
+    {
+        SearchStatistics x = Query.GetSearchStatistics();
+        return x;
+    }
+
 
 
     public static void OpenWorkspace(string filename)
