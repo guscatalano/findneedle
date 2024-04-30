@@ -13,10 +13,8 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
     public class SearchSourceDataItem : INotifyDataErrorInfo, IComparable
     {
         private Dictionary<string, List<string>> _errors = new Dictionary<string, List<string>>();
-        private uint _rank;
-        private string _mountain;
-        private uint _height;
-        private string _range;
+
+       
         private string _parentMountain;
         private SearchResult _ret;
 
@@ -27,27 +25,24 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
         }
         public event EventHandler<DataErrorsChangedEventArgs> ErrorsChanged;
 
-        public uint Rank
+        public string Provider
         {
             get
             {
-                return _rank;
+                return _ret.GetSource();
             }
 
             set
             {
-                if (_rank != value)
-                {
-                    _rank = value;
-                }
+               
             }
         }
 
-        public string Mountain
+        public string Time
         {
             get
             {
-                return _mountain;
+                return _ret.GetLogTime().ToString();
             }
 
             set
@@ -56,11 +51,11 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
             }
         }
 
-        public uint Height_m
+        public string TaskName
         {
             get
             {
-                return 1;
+                return _ret.GetTaskName();
             }
 
             set

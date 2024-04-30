@@ -15,7 +15,7 @@
             <StackPanel BorderThickness="1" Background="AliceBlue" Margin="5">
 
 
-                <Grid ColumnDefinitions="100, Auto, Auto, Auto, *" RowDefinitions ="*">
+                <Grid ColumnDefinitions="Auto, Auto, Auto, Auto, *" RowDefinitions ="*">
                     <TextBlock Text="{x:Bind Name.ToString()}" FontSize="12" TextAlignment="Left" Padding="12" 
                                        Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" Grid.Column="0" Grid.Row="0"/>
                     <TextBlock Text="{x:Bind Description.ToString()}" FontSize="14" TextAlignment="Center"

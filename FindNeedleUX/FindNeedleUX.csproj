@@ -33,6 +33,7 @@
     <None Remove="Pages\SearchFiltersPage.xaml" />
     <None Remove="Pages\SearchLocationsPage.xaml" />
     <None Remove="Pages\SearchProcessorsPage.xaml" />
+    <None Remove="Pages\SearchStatisticsPage.xaml" />
     <None Remove="Pages\SystemInfoPage.xaml" />
     <None Remove="SearchResultPage.xaml" />
     <None Remove="Services\WizardDef\BasicWizard.xaml" />
@@ -78,6 +79,9 @@
     <None Update="Assets\mtns.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Page Update="Pages\SearchStatisticsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Update="Windows\Filter\FilterAddTimeAgo.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>

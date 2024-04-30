@@ -185,7 +185,7 @@ namespace findneedle
             SetDepthForAllLocations(Depth);
             foreach (var loc in locations)
             {
-                loc.LoadInMemory(false);
+                loc.LoadInMemory(false, this);
             }
             stats.LoadedAll();
         }

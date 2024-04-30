@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
 using FindNeedleUX.Services.WizardDef;
@@ -67,12 +68,21 @@ public class MiddleLayerService
         Query.locations = Locations;
     }
 
-    public static string RunSearch()
+    public async static Task<string> RunSearch(bool surfacescan = false)
     {
 
         UpdateSearchQuery();
+        if (surfacescan)
+        {
+            Query.SetDepthForAllLocations(SearchLocationDepth.Shallow);
+        } else
+        {
+            Query.SetDepthForAllLocations(SearchLocationDepth.Intermediate);
+        }
         Query.LoadAllLocationsInMemory();
+       
         SearchResults = Query.GetFilteredResults();
+        
         SearchStatistics x = Query.GetSearchStatistics();
         return x.GetSummaryReport();
 

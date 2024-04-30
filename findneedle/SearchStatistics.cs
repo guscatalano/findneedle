@@ -71,6 +71,14 @@ namespace findneedle
         Total
     }
 
+    public class ReportFromComponent
+    {
+        public string component = string.Empty;
+        public SearchStatisticStep step = SearchStatisticStep.Total;
+        public string summary = string.Empty;
+        public Dictionary<string, dynamic> metric = new Dictionary<string, dynamic>();
+    }
+
     public class SearchStatistics
     {
         SearchQuery q;
@@ -92,6 +100,20 @@ namespace findneedle
         MemorySnapshot atSearch;
 
 
+
+        Dictionary<SearchStatisticStep, List<ReportFromComponent>> componentReports = new Dictionary<SearchStatisticStep, List<ReportFromComponent>>();
+        
+
+        public void ReportFromComponent(ReportFromComponent data)
+        {
+            if (!componentReports.ContainsKey(data.step))
+            {
+                componentReports.Add(data.step, new List<ReportFromComponent>());
+            } else
+            {
+                componentReports[data.step].Add(data);
+            }
+        }
 
         public void LoadedAll()
         {

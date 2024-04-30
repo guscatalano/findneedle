@@ -151,7 +151,7 @@ public class LocalEventLogQueryLocation : SearchLocation
 
 
 
-    public override void LoadInMemory(bool prefilter = false)
+    public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
     {
 
         //This can be useful to pre-filter

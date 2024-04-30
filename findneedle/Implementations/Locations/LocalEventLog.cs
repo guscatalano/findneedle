@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using findneedle.Implementations.Discovery;
 
 namespace findneedle.Implementations
 {
@@ -109,11 +110,32 @@ namespace findneedle.Implementations
             return eventLogName;
         }
 
-        public override void LoadInMemory(bool prefilter = false)
+        public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
         {
+            if(eventLogName.Equals("everything", StringComparison.OrdinalIgnoreCase))
+            {
+                List<string> providers = EventLogDiscovery.GetAllEventLogs();
+                foreach (var provider in providers)
+                {
+                    try
+                    {
+                        eventLog.Log = provider;
 
+                        foreach (EventLogEntry log in eventLog.Entries)
+                        {
+                            SearchResult result = new LocalEventLogEntry(log, this);
+                            searchResults.Add(result);
+                            numRecordsInMemory++;
+                        }
+                    } catch (Exception ex)
+                    {
+                        //skip for now
+                    }
+                }
+                return;
+            }
             eventLog.Log = eventLogName;
-
+            
             foreach (EventLogEntry log in eventLog.Entries)
             {
                 SearchResult result = new LocalEventLogEntry(log, this);

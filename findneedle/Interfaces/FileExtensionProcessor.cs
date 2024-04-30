@@ -12,4 +12,7 @@ public interface FileExtensionProcessor
     public void DoPreProcessing();
 
     public List<SearchResult> GetResults();
+
+    public string GetFileName();
+    public Dictionary<string, int> GetProviderCount();
 }

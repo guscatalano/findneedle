@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,9 +17,20 @@ public sealed partial class RunSearchPage : Page
         this.InitializeComponent();
     }
 
-    private void Button_Click(object sender, RoutedEventArgs e)
+    private async void Button_Click(object sender, RoutedEventArgs e)
+    {
+        busybar.ShowPaused = false;
+        string r = await Task.Run(() => MiddleLayerService.RunSearch());
+        summary.Text = r;
+        busybar.ShowPaused = true;
+    }
+
+    private async void Button2_Click(object sender, RoutedEventArgs e)
     {
 
-        summary.Text = MiddleLayerService.RunSearch();
+        busybar.ShowPaused = false;
+        string r = await Task.Run(() => MiddleLayerService.RunSearch(true));
+        summary.Text = r;
+        busybar.ShowPaused = true;
     }
 }

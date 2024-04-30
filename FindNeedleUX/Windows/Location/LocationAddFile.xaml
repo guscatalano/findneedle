@@ -12,10 +12,15 @@
     <StackPanel>
         <Button x:Name="PickAFileButton" Content="Pick a file"
             Click="PickAFileButton_Click" Margin="0,0,0,10"/>
-
+        <Button x:Name="PickAFolderButton" Content="Pick a folder"
+     Click="PickAFolderButton_Click" Margin="0,0,0,10"/>
+        <ComboBox  Header="Select common folders" PlaceholderText="Select common folders" Width="200" Name="CommonList" SelectedItem="None"  SelectionChanged="CommonList_SelectionChanged" >
+            <x:String>None</x:String>
+            <x:String>WMI Logs</x:String>
+            <x:String>Desktop</x:String>
+            <x:String>Downloads</x:String>
+        </ComboBox>
         <TextBlock x:Name="OutputTextBlock" TextWrapping="Wrap" Padding="20,5,0,0"/>
-        <ListBox x:Name="FilesList" Width="200">
-        </ListBox>
         <Button x:Name="DoneButton" Content="Done selecting"
             Click="DoneButton_Click" Margin="0,0,0,10"/>
     </StackPanel>

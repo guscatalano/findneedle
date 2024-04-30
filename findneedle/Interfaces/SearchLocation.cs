@@ -32,7 +32,7 @@ namespace findneedle
         get; set; }
 
 
-        public abstract void LoadInMemory(bool prefilter= false);
+        public abstract void LoadInMemory(bool prefilter, SearchQuery searchQuery);
 
         public abstract List<SearchResult> Search(SearchQuery searchQuery);
 

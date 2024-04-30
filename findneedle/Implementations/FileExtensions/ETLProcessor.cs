@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using findneedle.Interfaces;
 using findneedle.Utils;
 using findneedle.WDK;
+using Newtonsoft.Json;
 
 namespace findneedle.Implementations.FileExtensions;
 public class ETLProcessor : FileExtensionProcessor
@@ -18,6 +20,8 @@ public class ETLProcessor : FileExtensionProcessor
 
     public Dictionary<string, int> providers = new();
 
+    public bool LoadEarly = true; 
+
     public string inputfile = "";
     public ETLProcessor(string file)
     {
@@ -25,10 +29,20 @@ public class ETLProcessor : FileExtensionProcessor
 
     }
 
+    public Dictionary<string, int> GetProviderCount()
+    {
+        return providers;
+    }
+
+    public string GetFileName()
+    {
+        return inputfile; 
+    }
+
    
     public void DoPreProcessing()
     {
-        int getLock = 10;
+        int getLock = 50;
         currentResult = TraceFmt.ParseSimpleETL(inputfile, TempStorage.GetNewTempPath("etl"));
         while (getLock > 0)
         {
@@ -41,9 +55,21 @@ public class ETLProcessor : FileExtensionProcessor
                     {
 
                         String line;
+                        
                         while ((line = streamReader.ReadLine()) != null)
                         {
-                            ETLLogLine etlline = new ETLLogLine(line);
+                            int failsafe = 10;
+                            while (!ETLLogLine.DoesHeaderLookRight(line) && failsafe > 0)
+                            {
+                                //line is not complete!
+                                failsafe--;
+                                line = line + streamReader.ReadLine();
+                            }
+                            if(failsafe == 0)
+                            {
+                                throw new Exception("can't parse!");
+                            }
+                            ETLLogLine etlline = new ETLLogLine(line, inputfile, (char)streamReader.Peek());
                             if (providers.ContainsKey(etlline.GetSource()))
                             {
                                 providers[etlline.GetSource()]++;
@@ -61,7 +87,7 @@ public class ETLProcessor : FileExtensionProcessor
             catch (Exception ex)
             {
                 Thread.Sleep(100);
-                getLock--; // Sometimes tracefmt can hold the lock
+                getLock--; // Sometimes tracefmt can hold the lock, wait until file is ready
             }
         }
 
@@ -70,7 +96,13 @@ public class ETLProcessor : FileExtensionProcessor
     List<SearchResult> results = new List<SearchResult>();
     public void LoadInMemory() 
     {
-
+        if (LoadEarly)
+        {
+            foreach(ETLLogLine result in results)
+            {
+                result.PreLoad();
+            }
+        }
         
     }
 
@@ -82,6 +114,10 @@ public class ETLProcessor : FileExtensionProcessor
 
 public class ETLLogLine : SearchResult
 {
+    public string eventtxt = String.Empty;
+    public string tasktxt = String.Empty;
+    public DateTime metadatetime = DateTime.MinValue;
+    public string metaprovider = string.Empty; //comes from json, not header
     public string provider = String.Empty;
     public string tempBuffer = String.Empty;
     public string firstSomething = String.Empty; //dont know what this is
@@ -90,9 +126,76 @@ public class ETLLogLine : SearchResult
     public string datetime = String.Empty;
     public DateTime parsedTime = DateTime.MinValue;
     public string json = String.Empty;
-    public ETLLogLine(string textline)
-    {
+    public Dictionary<string, dynamic> keyjson = new();
+    public string filename = String.Empty;
 
+    public string originalLine = string.Empty;
+
+    public static bool DoesHeaderLookRight(string textline)
+    {
+        var step = 0;
+        var seenColon = false;
+        foreach (var c in textline)
+        {
+            //we do it this way cause it's more performant than split
+            switch (step)
+            {
+                //first part is [x]
+                case 0:
+                    if (c == ']')
+                    {
+                        step++;
+                    }
+                    break;
+                case 1:
+                    if (c == '.')
+                    {
+                        step++;
+                    }
+                    break;
+                case 2:
+                    if (c != ':')
+                    {
+                        break;
+                    }
+                    if (c == ':')
+                    {
+                        //We do this because there are two :: and next sequence expects :
+                        if (seenColon)
+                        {
+                            step++;
+                        }
+                        else
+                        {
+                            seenColon = true;
+                        }
+                    }
+                    break;
+                case 3:
+                    if (c == ' ')
+                    {
+                        step++;
+                    }
+                    break;
+                case 4:
+                    if (c == ']')
+                    {
+                        return true;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        return false;           
+    }
+
+    private string nextline = string.Empty;
+    public ETLLogLine(string textline, string filename, char nextline)
+    {
+        originalLine = textline;
+        this.nextline = nextline + ""; ;
+        this.filename = filename;
 
         int step = 0;
 
@@ -180,34 +283,94 @@ public class ETLLogLine : SearchResult
                 case 5:
                     //this is a json blob, just grab it for now, it's expensive to process
                     tempBuffer += c;
-                    if (c == '}')
-                    {
-                        step++;
-                    }
+                    
+                      
+                    
                     break;
                 default:
                     //nothing yet, finish it out
                     break;
-            }
-
+            } 
         }
+        //finish it out
+        json = tempBuffer;
+        tempBuffer = String.Empty;
+        step++;
     }
     public Level GetLevel() => throw new NotImplementedException();
     public DateTime GetLogTime() {
         if (parsedTime == DateTime.MinValue)
         {
+            datetime = datetime.Replace("-", " ");
             parsedTime = DateTime.Parse(datetime);
+        }
+
+        //If we have the metadata one, return that one.
+        if(metadatetime != DateTime.MinValue)
+        {
+            return metadatetime;
         }
         return parsedTime;
     }
-    public string GetMachineName() => throw new NotImplementedException();
-    public string GetMessage()  { return ":(";}
-    public string GetOpCode() => throw new NotImplementedException();
-    public string GetSearchableData() => throw new NotImplementedException();
-    public string GetSource() {
-        return provider;
+
+    public void PreLoad()
+    {
+        if (!json.StartsWith("{"))
+        {
+            //This is likely not json and just plaintext
+            eventtxt = json;
+            tasktxt = string.Empty;
+            metadatetime = DateTime.MinValue;
+            metaprovider = string.Empty;
+            return;
+        }
+        //Parse the json early
+        try
+        {
+            keyjson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
+       
+            metaprovider = keyjson["meta"]["provider"];
+            metadatetime = DateTime.Parse((string)keyjson["meta"]["time"]);
+            eventtxt = keyjson["meta"]["event"];
+            tasktxt = keyjson["meta"]["task"];
+
+        }
+        catch (Exception e)
+        {
+            eventtxt = json;
+            tasktxt = "Badly formatted event";
+            metadatetime = DateTime.MinValue;
+            metaprovider = string.Empty;
+            return;
+        }
     }
-    public string GetTaskName() => throw new NotImplementedException();
-    public string GetUsername() => throw new NotImplementedException();
+
+    public string GetMachineName()
+    {
+        return filename;
+    }
+    public string GetMessage()  {
+        return eventtxt.ToString();
+    }
+    public string GetOpCode() => throw new NotImplementedException();
+    public string GetSearchableData()
+    {
+        return json;
+    }
+    public string GetSource() {
+        if (metaprovider.Equals(string.Empty))
+        {
+            return provider;
+        } else
+        {
+            return metaprovider;
+        }
+    }
+    public string GetTaskName() {
+        return tasktxt;
+    }
+    public string GetUsername() {
+        return "empty";
+    }
     public void WriteToConsole() => throw new NotImplementedException();
 }

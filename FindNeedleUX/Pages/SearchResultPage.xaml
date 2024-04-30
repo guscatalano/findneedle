@@ -144,14 +144,14 @@
                              Opacity=".5" />
             </ctWinUI:DataGrid.Resources>
             <ctWinUI:DataGrid.Columns>
-                <ctWinUI:DataGridTextColumn Header="Source"
-                                        Binding="{Binding Rank}"
+                <ctWinUI:DataGridTextColumn Header="Provider"
+                                        Binding="{Binding Provider}"
                                         Tag="Source" />
                 <ctWinUI:DataGridComboBoxColumn Header="Time"
-                                            Binding="{Binding Mountain}"
+                                            Binding="{Binding Time}"
                                             Tag="Time" />
                 <ctWinUI:DataGridTextColumn Header="TaskName"
-                                        Binding="{Binding Height_m}"
+                                        Binding="{Binding TaskName}"
                                         Tag="TaskName" />
                 <ctWinUI:DataGridTextColumn Header="Message"
                                         Binding="{Binding Message}"
