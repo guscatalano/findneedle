@@ -55,25 +55,53 @@ public sealed partial class SearchStatisticsPage : Page
 
         // The content of the tab is often a frame that contains a page, though it could be any UIElement.
         Frame frame = new Frame();
+        frame.Height = 500;
         StackPanel x  = new StackPanel();
+        x.Height = 500;
         TextBox y = new TextBox();
         y.AcceptsReturn = true;
         string tet = string.Empty;
         y.Text = "ohono";
+        ScrollViewer scrollViewer = new ScrollViewer();
+        scrollViewer.Height = 500;
+        scrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
+        scrollViewer.VerticalScrollMode = ScrollMode.Enabled;
+        TreeView treeeee = new TreeView();
+        treeeee.AllowDrop = false;
+        TreeViewNode parent = new TreeViewNode();
+        treeeee.RootNodes.Add(parent);
+        
         var z = MiddleLayerService.GetStats().componentReports[findneedle.SearchStatisticStep.AtLoad];
         switch (index % 3)
         {
             case 0:
                 foreach (var i in z)
                 {
+                    TreeViewNode node = new TreeViewNode();
+                    parent.Children.Add(node);
+                    node.Content = i.summary + "-" + i.component;
                     tet += Environment.NewLine + i.summary + "-" + i.component;// + i.metric
                     foreach(var j in i.metric)
                     {
-                        if (i.summary.Equals("ExtensionProviders")) {
-                            tet += Environment.NewLine+ j.Key + "==> " +(string)j.Value;
-                        } else
+
+                        TreeViewNode node2 = new TreeViewNode();
+                        node.Children.Add(node2);
+                        node.Content = i.summary + "-" + i.component;
+                        if (i.summary.Equals("ExtensionProviders"))
+                        {
+                            //tet += Environment.NewLine + j.Key + "==> " + j.Value;
+                            node2.Content = j.Key + "==> " + j.Value;
+                        }
+                        else
                         {
                             tet += Environment.NewLine + j.Key;
+                            node2.Content = j.Key;
+                            foreach (KeyValuePair<string, int> jj in j.Value)
+                            {
+                                TreeViewNode node3 = new TreeViewNode();
+                                node2.Children.Add(node3);
+                                node3.Content = jj.Key + " --> " +jj.Value;
+                            }
                         }
                     }
                 }
@@ -88,8 +116,10 @@ public sealed partial class SearchStatisticsPage : Page
                 break;
         }
 
-       
-        x.Children.Add(y);
+
+        //x.Children.Add(y);
+        scrollViewer.Content = treeeee;
+        x.Children.Add(scrollViewer);
         newItem.Content = x;
 
         //newItem.Content = frame;

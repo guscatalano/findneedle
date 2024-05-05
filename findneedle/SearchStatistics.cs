@@ -109,10 +109,9 @@ namespace findneedle
             if (!componentReports.ContainsKey(data.step))
             {
                 componentReports.Add(data.step, new List<ReportFromComponent>());
-            } else
-            {
-                componentReports[data.step].Add(data);
             }
+            componentReports[data.step].Add(data);
+            
         }
 
         public void LoadedAll()
