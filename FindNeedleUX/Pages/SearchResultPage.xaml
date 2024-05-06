@@ -9,8 +9,8 @@
     xmlns:ctWinUI="using:CommunityToolkit.WinUI.UI.Controls"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-
-    <Grid Margin="0 0 0 80">
+    <ScrollViewer VerticalScrollBarVisibility="Visible" VerticalScrollMode="Enabled">
+        <Grid Margin="0 0 0 80">
         <Grid.RowDefinitions>
             <RowDefinition Height="auto" />
             <RowDefinition Height="*" />
@@ -19,7 +19,7 @@
             <DataTemplate x:Key="RowDetailsTemplate" >
                 <StackPanel>
                     <TextBlock Margin="20"
-                           Text="Here are the details for the selected mountain:" />
+                           Text="Here are the details for the selected event" />
                     <Grid Margin="20,10"
                       Padding="5">
                         <Grid.RowDefinitions>
@@ -49,7 +49,7 @@
                                FontSize="13" />
                         <TextBlock Grid.Column="1"
                                FontSize="13"
-                               Text="{Binding Coordinates}"
+                               Text="{Binding Message}"
                                HorizontalAlignment="Right" />
                         <TextBlock Grid.Row="1"
                                Grid.Column="1"
@@ -71,7 +71,8 @@
             </DataTemplate>
         </Grid.Resources>
         <!-- This cries for a Ribbon control. -->
-        <StackPanel Orientation="Horizontal"
+       
+            <StackPanel Orientation="Horizontal"
                 HorizontalAlignment="Left"
                 Background="{StaticResource SystemAccentColorBrush}"
                 Margin="0 0 0 16"
@@ -131,6 +132,7 @@
                           Click="SearchButton_Click" />
             </CommandBar>
         </StackPanel>
+       
         <ctWinUI:DataGrid x:Name="DataGrid"
                       AutoGenerateColumns="False"
                       CanUserSortColumns="True"
@@ -161,5 +163,7 @@
                                         Tag="Level" />
             </ctWinUI:DataGrid.Columns>
         </ctWinUI:DataGrid>
+      
     </Grid>
+    </ScrollViewer>
 </Page>

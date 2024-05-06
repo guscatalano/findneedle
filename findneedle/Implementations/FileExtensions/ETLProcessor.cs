@@ -61,9 +61,14 @@ public class ETLProcessor : FileExtensionProcessor
                             int failsafe = 10;
                             while (!ETLLogLine.DoesHeaderLookRight(line) && failsafe > 0)
                             {
+                                if (line.StartsWith("Unknown"))
+                                {
+                                    failsafe = 0; //This is corrupted, let's just bail;
+                                    continue;
+                                }
                                 //line is not complete!
                                 failsafe--;
-                                line = line + streamReader.ReadLine();
+                                line += streamReader.ReadLine();
                             }
                             if(failsafe == 0)
                             {
@@ -331,8 +336,38 @@ public class ETLLogLine : SearchResult
        
             metaprovider = keyjson["meta"]["provider"];
             metadatetime = DateTime.Parse((string)keyjson["meta"]["time"]);
-            eventtxt = keyjson["meta"]["event"];
-            tasktxt = keyjson["meta"]["task"];
+            
+            if (!String.IsNullOrEmpty(keyjson["meta"]["task"]))
+            {
+                eventtxt = keyjson["meta"]["event"];
+                tasktxt = keyjson["meta"]["task"];
+            } else
+            {
+                tasktxt = keyjson["meta"]["event"];
+                try
+                {
+                    eventtxt = "{";
+                    foreach (string key in keyjson.Keys)
+                    {
+                        if (key.Equals("meta"))
+                        {
+                            continue; //We dont need it
+                        }
+                        
+                        eventtxt += "\"" + key + "\": \"" + keyjson[key] + "\", ";
+                    }
+                    if (eventtxt.Length > 1)
+                    {
+                        eventtxt = eventtxt.Substring(0, eventtxt.Length - 2); //remove last part
+                    }
+                    eventtxt += "}";
+                    
+                } catch(Exception e)
+                {
+                    //Not all of them have this, throw the rest in there;
+                    eventtxt = "Error?" + json;
+                }
+            }
 
         }
         catch (Exception e)

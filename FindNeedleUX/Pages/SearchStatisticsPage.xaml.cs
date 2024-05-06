@@ -92,15 +92,25 @@ public sealed partial class SearchStatisticsPage : Page
                             //tet += Environment.NewLine + j.Key + "==> " + j.Value;
                             node2.Content = j.Key + "==> " + j.Value;
                         }
-                        else
+                        else if (i.summary.Equals("ProviderByFile"))
                         {
-                            tet += Environment.NewLine + j.Key;
                             node2.Content = j.Key;
                             foreach (KeyValuePair<string, int> jj in j.Value)
                             {
                                 TreeViewNode node3 = new TreeViewNode();
                                 node2.Children.Add(node3);
                                 node3.Content = jj.Key + " --> " +jj.Value;
+                            }
+                        } 
+                        else
+                        {
+
+                            node2.Content = j.Key;
+                            foreach (KeyValuePair<string, string> jj in j.Value)
+                            {
+                                TreeViewNode node3 = new TreeViewNode();
+                                node2.Children.Add(node3);
+                                node3.Content = jj.Key + " --> " + jj.Value;
                             }
                         }
                     }

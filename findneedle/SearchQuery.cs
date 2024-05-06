@@ -182,6 +182,7 @@ namespace findneedle
 
         public void LoadAllLocationsInMemory()
         {
+            stats = new SearchStatistics(this); //reset the stats
             SetDepthForAllLocations(Depth);
             foreach (var loc in locations)
             {

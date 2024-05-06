@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,7 +19,83 @@ public class TraceFmtResult
         get; set;
     }
 
-    
+
+
+    public void ParseSummaryFile()
+    {
+        int maxtries = 10000;
+        List<string> summary = new List<string>();
+        
+        while (maxtries > 0)
+        {
+            try
+            {
+                FileStream x = File.OpenRead(summaryfile);
+                using (var reader = new StreamReader(x))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        summary.Add(line);
+                    }
+                }
+                break;
+            } catch(Exception ex)
+            {
+                Thread.Sleep(100);
+                maxtries--;
+                //tracefmt is still writing, wait
+            }
+        }
+        if(maxtries == 0)
+        {
+            throw new Exception("Couldnt open summary file");
+        }
+
+        ProcessedFile = summary[0].Trim();
+        TotalBuffersProcessed = Int32.Parse(summary[2].Substring(summary[2].LastIndexOf(" ")).Trim());
+        TotalEventsProcessed = Int32.Parse(summary[3].Substring(summary[2].LastIndexOf(" ")).Trim());
+        TotalEventsLost = Int32.Parse(summary[4].Substring(summary[2].LastIndexOf(" ")).Trim());
+        TotalFormatErrors = Int32.Parse(summary[5].Substring(summary[2].LastIndexOf(" ")).Trim());
+        TotalFormatsUnknown = Int32.Parse(summary[6].Substring(summary[2].LastIndexOf(" ")).Trim());
+        TotalElapsedTime = summary[7].Replace("Elapsed", "").Replace("Time", "").Trim();
+    }
+
+    public string ProcessedFile
+    {
+    get; set; 
+    }
+
+    public int TotalBuffersProcessed
+    {
+        get; set;
+    }
+
+    public int TotalEventsProcessed
+    {
+        get; set;
+    }
+
+    public int TotalEventsLost
+    {
+        get; set;
+    }
+
+    public int TotalFormatErrors
+    {
+        get; set;
+    }
+
+    public int TotalFormatsUnknown
+    {
+        get; set;
+    }
+
+    public string TotalElapsedTime
+    {
+        get; set;
+    }
+
 }
 
 public class TraceFmt
@@ -66,8 +143,8 @@ public class TraceFmt
             throw new Exception("FmtSum output was not there!");
         }
 
-       
-
+        //Make this optional?
+        result.ParseSummaryFile();
 
         return result;
     }

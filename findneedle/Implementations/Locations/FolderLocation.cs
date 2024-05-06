@@ -43,7 +43,7 @@ namespace findneedle.Implementations
             return path;
         }
 
-        private IEnumerable<string> GetAllFiles(string path)
+        private IEnumerable<string> GetAllFiles(string path, ReportFromComponent procStats)
         {
             Queue<string> queue = new Queue<string>();
             queue.Enqueue(path);
@@ -59,7 +59,13 @@ namespace findneedle.Implementations
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine(ex);
+
+                    if (!procStats.metric.ContainsKey(path))
+                    {
+                        procStats.metric[path] = new Dictionary<string, string>();
+                        procStats.metric[path]["error"] = "Failed to open / denied";
+                    }
+                    Console.Error.WriteLine(ex.ToString());
                 }
                 string[] files = null;
                 try
@@ -69,6 +75,11 @@ namespace findneedle.Implementations
                 catch (Exception ex)
                 {
                     Console.Error.WriteLine(ex);
+                    if (!procStats.metric.ContainsKey(path))
+                    {
+                        procStats.metric[path] = new Dictionary<string, string>();
+                        procStats.metric[path]["error"] = "Failed to open / denied";
+                    }
                 }
                 if (files != null)
                 {
@@ -80,8 +91,22 @@ namespace findneedle.Implementations
             }
         }
 
+        public void CalculateStats()
+        {
+        
+        }
+
         public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
         {
+            ReportFromComponent procStats = new ReportFromComponent()
+            {
+                component = this.GetType().Name,
+                step = SearchStatisticStep.AtLoad,
+                summary = "statsByFile",
+                metric = new Dictionary<string, dynamic>()
+            };
+
+
             knownProcessors = new List<FileExtensionProcessor>();
             TempStorage.GetMainTempPath();
             if (File.Exists(path))
@@ -99,53 +124,89 @@ namespace findneedle.Implementations
             } else
             {
                 List<Task> tasks = new List<Task>();
-                foreach(string file in GetAllFiles(path))
+                foreach(string file in GetAllFiles(path, procStats))
                 {
                     tasks.Add(Task.Run(() => ProcessFile(file)));
                     //ProcessFile(file);
                 }
                 Task.WhenAll(tasks).Wait();
             }
+            CalculateStats(searchQuery, procStats);
+            
+        }
 
-            ReportFromComponent x = new ReportFromComponent()
+        public void CalculateStats(SearchQuery searchQuery, ReportFromComponent procStats)
+        {
+            //Do reports
+
+            ReportFromComponent extensionProviderReport = new ReportFromComponent()
             {
-                component = "FolderLocation",
+                component = this.GetType().Name,
                 step = SearchStatisticStep.AtLoad,
                 summary = "ExtensionProviders",
                 metric = new Dictionary<string, dynamic>()
             };
 
-            ReportFromComponent y = new ReportFromComponent()
+            ReportFromComponent ProviderByFileReport = new ReportFromComponent()
             {
-                component = "FolderLocation",
+                component = this.GetType().Name,
                 step = SearchStatisticStep.AtLoad,
                 summary = "ProviderByFile",
                 metric = new Dictionary<string, dynamic>()
             };
+
+
             foreach (var p in knownProcessors)
             {
                 string name = p.GetType().ToString();
-                if (!x.metric.ContainsKey(name)) {
-                    x.metric[name] = 1;
-                } else
+                if (!extensionProviderReport.metric.ContainsKey(name))
                 {
-                    x.metric[name] = x.metric[name] + 1;
+                    extensionProviderReport.metric[name] = 1;
+                }
+                else
+                {
+                    extensionProviderReport.metric[name] = extensionProviderReport.metric[name] + 1;
                 }
 
-                foreach(string provider in p.GetProviderCount().Keys)
+                foreach (string provider in p.GetProviderCount().Keys)
                 {
-                    if (!y.metric.ContainsKey(provider))
+                    if (!ProviderByFileReport.metric.ContainsKey(provider))
                     {
-                        y.metric[provider] = new Dictionary<string, int>();
+                        ProviderByFileReport.metric[provider] = new Dictionary<string, int>();
                     }
-                    
-                    y.metric[provider].Add(p.GetFileName(), p.GetProviderCount()[provider]);
-                    
+
+                    ProviderByFileReport.metric[provider].Add(p.GetFileName(), p.GetProviderCount()[provider]);
+
+                }
+
+                if (!procStats.metric.ContainsKey(p.GetFileName()))
+                {
+                    if (name.Contains("ETLProcessor"))
+                    {
+                        ETLProcessor etlproc = (ETLProcessor)p;
+                        procStats.metric[p.GetFileName()] = new Dictionary<string, string>();
+                        procStats.metric[p.GetFileName()]["unknown"] = etlproc.currentResult.TotalFormatsUnknown + "";
+                        procStats.metric[p.GetFileName()]["time"] = etlproc.currentResult.TotalElapsedTime + "";
+                        procStats.metric[p.GetFileName()]["errors"] = etlproc.currentResult.TotalFormatErrors + "";
+                        procStats.metric[p.GetFileName()]["buffers"] = etlproc.currentResult.TotalBuffersProcessed + "";
+                        procStats.metric[p.GetFileName()]["lost"] = etlproc.currentResult.TotalEventsLost + "";
+                        procStats.metric[p.GetFileName()]["events"] = etlproc.currentResult.TotalEventsProcessed + "";
+                    }
+                    else
+                    {
+                        procStats.metric[p.GetFileName()] = new Dictionary<string, string>();
+                    }
+
+                }
+                else
+                {
+                    extensionProviderReport.metric[name] = extensionProviderReport.metric[name] + 1;
                 }
             }
-            
-            searchQuery.GetSearchStatistics().ReportFromComponent(x);
-            searchQuery.GetSearchStatistics().ReportFromComponent(y);
+
+            searchQuery.GetSearchStatistics().ReportFromComponent(extensionProviderReport);
+            searchQuery.GetSearchStatistics().ReportFromComponent(ProviderByFileReport);
+            searchQuery.GetSearchStatistics().ReportFromComponent(procStats);
         }
 
         List<FileExtensionProcessor> knownProcessors = new List<FileExtensionProcessor>();
@@ -163,7 +224,7 @@ namespace findneedle.Implementations
 
         public void ProcessFile(string file)
         {
-            string ext = Path.GetExtension(path).ToLower();
+            string ext = Path.GetExtension(file).ToLower();
 
             if (file.Length > 10)
             {
@@ -185,7 +246,9 @@ namespace findneedle.Implementations
                     ETLProcessor p = new ETLProcessor(file);
                     knownProcessors.Add(p);
                     p.DoPreProcessing();
-                    if (GetSearchDepth() != SearchLocationDepth.Shallow)
+
+                    //this doesn't work :(
+                    if (GetSearchDepth() != SearchLocationDepth.Shallow || true)
                     {
                         p.LoadInMemory();
                     }
