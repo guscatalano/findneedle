@@ -127,7 +127,7 @@ namespace findneedle.Implementations
                             searchResults.Add(result);
                             numRecordsInMemory++;
                         }
-                    } catch (Exception ex)
+                    } catch (Exception)
                     {
                         //skip for now
                     }
@@ -151,7 +151,7 @@ namespace findneedle.Implementations
             List<SearchResult> filteredResults = new List<SearchResult>();
             foreach (SearchResult result in searchResults)
             {
-                bool passAll = true;
+                var passAll = true;
                 foreach (SearchFilter filter in searchQuery.GetFilters())
                 {
                     if (!filter.Filter(result))

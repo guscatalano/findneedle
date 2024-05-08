@@ -63,9 +63,16 @@ public class MiddleLayerService
 
     public static void UpdateSearchQuery()
     {
+        SearchProgressSink x = Query.progressSink;
         Query = new SearchQuery();
         Query.filters = Filters;
         Query.locations = Locations;
+        Query.progressSink = x;
+    }
+
+    public static SearchProgressSink GetProgressEventSink()
+    {
+        return Query.progressSink;
     }
 
     public async static Task<string> RunSearch(bool surfacescan = false)

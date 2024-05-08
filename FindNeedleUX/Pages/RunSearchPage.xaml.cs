@@ -17,20 +17,53 @@ public sealed partial class RunSearchPage : Page
         this.InitializeComponent();
     }
 
+    private void SetControlsTo(bool enable)
+    {
+        busybar.ShowPaused = enable;
+        busybar2.ShowPaused = enable;
+        this.IsEnabled = enable;
+        if (!enable)
+        {
+            MainWindowActions.DisableNavBar();
+        } else {
+            MainWindowActions.EnableNavBar();
+        }
+    }
+
+    private void GetNumberProgress(int count)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            busybar2.Value = count;
+        });
+    }
+
+    private void GetTextProgress(string text)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            progresstext.Text = text;
+        });
+    }
+
     private async void Button_Click(object sender, RoutedEventArgs e)
     {
-        busybar.ShowPaused = false;
+        SetControlsTo(false);
+        MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
+        MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
         string r = await Task.Run(() => MiddleLayerService.RunSearch());
         summary.Text = r;
-        busybar.ShowPaused = true;
+        SetControlsTo(true);
+
     }
 
     private async void Button2_Click(object sender, RoutedEventArgs e)
     {
-
-        busybar.ShowPaused = false;
+        SetControlsTo(false);
+        MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
+        MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
         string r = await Task.Run(() => MiddleLayerService.RunSearch(true));
         summary.Text = r;
-        busybar.ShowPaused = true;
+        SetControlsTo(true);
     }
 }

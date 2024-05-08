@@ -10,6 +10,18 @@ namespace findneedle
 
         private SearchLocationDepth Depth;
 
+        private SearchProgressSink _progressSink;
+
+        public SearchProgressSink progressSink 
+        {
+            get
+            {
+                _progressSink ??= new SearchProgressSink();
+                return _progressSink;
+            }
+            set => _progressSink = value;
+        }
+
         private SearchStatistics _stats;
         public SearchStatistics stats
         {
@@ -183,10 +195,14 @@ namespace findneedle
         public void LoadAllLocationsInMemory()
         {
             stats = new SearchStatistics(this); //reset the stats
+            progressSink.NotifyProgress(0, "starting");
             SetDepthForAllLocations(Depth);
+            int count = 1;
             foreach (var loc in locations)
             {
+                progressSink.NotifyProgress(50*(count/ locations.Count()), "loading location: " + loc.GetName());
                 loc.LoadInMemory(false, this);
+                count++;
             }
             stats.LoadedAll();
         }
@@ -194,9 +210,12 @@ namespace findneedle
         public List<SearchResult> GetFilteredResults()
         {
             List<SearchResult> results = new List<SearchResult>();
+            int count = 1;
             foreach (var loc in locations)
             {
+                progressSink.NotifyProgress(50+(50 * (count / locations.Count())), "loading results: " + loc.GetName());
                 results.AddRange(loc.Search(this));
+                count++;
             }
             stats.Searched();
             return results;

@@ -26,6 +26,7 @@ public class ETLProcessor : FileExtensionProcessor
     public ETLProcessor(string file)
     {
         inputfile = file;
+        currentResult = new TraceFmtResult(); //empty
 
     }
 
@@ -42,54 +43,50 @@ public class ETLProcessor : FileExtensionProcessor
    
     public void DoPreProcessing()
     {
-        int getLock = 50;
+        var getLock = 50;
         currentResult = TraceFmt.ParseSimpleETL(inputfile, TempStorage.GetNewTempPath("etl"));
         while (getLock > 0)
         {
             try
             {
 
-                using (var fileStream = File.OpenRead(currentResult.outputfile))
-                {
-                    using (var streamReader = new StreamReader(fileStream, Encoding.UTF8, false)) //change buffer if there's perf reasons
-                    {
+                using var fileStream = File.OpenRead(currentResult.outputfile);
+                using var streamReader = new StreamReader(fileStream, Encoding.UTF8, false); //change buffer if there's perf reasons
 
-                        String line;
-                        
-                        while ((line = streamReader.ReadLine()) != null)
+                string? line;
+
+                while ((line = streamReader.ReadLine()) != null)
+                {
+                    var failsafe = 10;
+                    while (!ETLLogLine.DoesHeaderLookRight(line) && failsafe > 0)
+                    {
+                        if (line.StartsWith("Unknown"))
                         {
-                            int failsafe = 10;
-                            while (!ETLLogLine.DoesHeaderLookRight(line) && failsafe > 0)
-                            {
-                                if (line.StartsWith("Unknown"))
-                                {
-                                    failsafe = 0; //This is corrupted, let's just bail;
-                                    continue;
-                                }
-                                //line is not complete!
-                                failsafe--;
-                                line += streamReader.ReadLine();
-                            }
-                            if(failsafe == 0)
-                            {
-                                throw new Exception("can't parse!");
-                            }
-                            ETLLogLine etlline = new ETLLogLine(line, inputfile, (char)streamReader.Peek());
-                            if (providers.ContainsKey(etlline.GetSource()))
-                            {
-                                providers[etlline.GetSource()]++;
-                            }
-                            else
-                            {
-                                providers[etlline.GetSource()] = 1;
-                            }
-                            results.Add(etlline);
+                            failsafe = 0; //This is corrupted, let's just bail;
+                            continue;
                         }
+                        //line is not complete!
+                        failsafe--;
+                        line += streamReader.ReadLine();
                     }
+                    if (failsafe == 0)
+                    {
+                        throw new Exception("can't parse!");
+                    }
+                    ETLLogLine etlline = new ETLLogLine(line, inputfile, (char)streamReader.Peek());
+                    if (providers.ContainsKey(etlline.GetSource()))
+                    {
+                        providers[etlline.GetSource()]++;
+                    }
+                    else
+                    {
+                        providers[etlline.GetSource()] = 1;
+                    }
+                    results.Add(etlline);
                 }
                 break;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 Thread.Sleep(100);
                 getLock--; // Sometimes tracefmt can hold the lock, wait until file is ready
@@ -98,7 +95,7 @@ public class ETLProcessor : FileExtensionProcessor
 
     }
 
-    List<SearchResult> results = new List<SearchResult>();
+    List<SearchResult> results = new();
     public void LoadInMemory() 
     {
         if (LoadEarly)
@@ -199,12 +196,12 @@ public class ETLLogLine : SearchResult
     public ETLLogLine(string textline, string filename, char nextline)
     {
         originalLine = textline;
-        this.nextline = nextline + ""; ;
+        this.nextline = nextline + ""; 
         this.filename = filename;
 
-        int step = 0;
+        var step = 0;
 
-        foreach (char c in textline)
+        foreach (var c in textline)
         {
             //we do it this way cause it's more performant than split
             switch (step)
@@ -300,7 +297,7 @@ public class ETLLogLine : SearchResult
         //finish it out
         json = tempBuffer;
         tempBuffer = String.Empty;
-        step++;
+        //step++;
     }
     public Level GetLevel() => throw new NotImplementedException();
     public DateTime GetLogTime() {
@@ -332,6 +329,7 @@ public class ETLLogLine : SearchResult
         //Parse the json early
         try
         {
+
             keyjson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
        
             metaprovider = keyjson["meta"]["provider"];
@@ -347,7 +345,7 @@ public class ETLLogLine : SearchResult
                 try
                 {
                     eventtxt = "{";
-                    foreach (string key in keyjson.Keys)
+                    foreach (var key in keyjson.Keys)
                     {
                         if (key.Equals("meta"))
                         {
@@ -362,7 +360,7 @@ public class ETLLogLine : SearchResult
                     }
                     eventtxt += "}";
                     
-                } catch(Exception e)
+                } catch(Exception)
                 {
                     //Not all of them have this, throw the rest in there;
                     eventtxt = "Error?" + json;
@@ -370,7 +368,7 @@ public class ETLLogLine : SearchResult
             }
 
         }
-        catch (Exception e)
+        catch (Exception)
         {
             eventtxt = json;
             tasktxt = "Badly formatted event";

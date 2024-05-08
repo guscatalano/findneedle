@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -14,6 +15,11 @@ namespace FindNeedleUX;
 // windows.  In the future, we would like to support this in platform APIs.
 public class WindowUtil
 {
+
+    static public Window GetMainWindow()
+    {
+        return _activeWindows.First(); //should be first window to ever register :)
+    }
     static public Window CreateWindow()
     {
         Window newWindow = new Window

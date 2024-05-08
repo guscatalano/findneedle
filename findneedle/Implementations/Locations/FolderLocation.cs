@@ -43,7 +43,9 @@ namespace findneedle.Implementations
             return path;
         }
 
-        private IEnumerable<string> GetAllFiles(string path, ReportFromComponent procStats)
+        ReportFromComponent procStats;
+
+        private IEnumerable<string> GetAllFiles(string path)
         {
             Queue<string> queue = new Queue<string>();
             queue.Enqueue(path);
@@ -52,29 +54,28 @@ namespace findneedle.Implementations
                 path = queue.Dequeue();
                 try
                 {
-                    foreach (string subDir in Directory.GetDirectories(path))
+                    foreach (var subDir in Directory.GetDirectories(path))
                     {
                         queue.Enqueue(subDir);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-
+                    //Report errors right away
                     if (!procStats.metric.ContainsKey(path))
                     {
                         procStats.metric[path] = new Dictionary<string, string>();
                         procStats.metric[path]["error"] = "Failed to open / denied";
                     }
-                    Console.Error.WriteLine(ex.ToString());
                 }
                 string[] files = null;
                 try
                 {
                     files = Directory.GetFiles(path);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    Console.Error.WriteLine(ex);
+                    //Report errors right away
                     if (!procStats.metric.ContainsKey(path))
                     {
                         procStats.metric[path] = new Dictionary<string, string>();
@@ -91,14 +92,11 @@ namespace findneedle.Implementations
             }
         }
 
-        public void CalculateStats()
-        {
-        
-        }
+      
 
         public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
         {
-            ReportFromComponent procStats = new ReportFromComponent()
+            procStats = new ReportFromComponent()
             {
                 component = this.GetType().Name,
                 step = SearchStatisticStep.AtLoad,
@@ -121,15 +119,24 @@ namespace findneedle.Implementations
             {
                 ProcessFile(path);
 
-            } else
-            {
+            } else {
                 List<Task> tasks = new List<Task>();
-                foreach(string file in GetAllFiles(path, procStats))
+                foreach(var file in GetAllFiles(path))
                 {
+                    searchQuery.progressSink.NotifyProgress("queuing up: " + file);
                     tasks.Add(Task.Run(() => ProcessFile(file)));
                     //ProcessFile(file);
                 }
+                searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed");
+                int completed = 0;
+                while (completed < tasks.Count)
+                {
+                    completed = tasks.Where(x => x.IsCompleted).Count();
+                    searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+                    Thread.Yield();
+                }
                 Task.WhenAll(tasks).Wait();
+                searchQuery.progressSink.NotifyProgress("processed " + path);
             }
             CalculateStats(searchQuery, procStats);
             
@@ -158,7 +165,7 @@ namespace findneedle.Implementations
 
             foreach (var p in knownProcessors)
             {
-                string name = p.GetType().ToString();
+                var name = p.GetType().ToString();
                 if (!extensionProviderReport.metric.ContainsKey(name))
                 {
                     extensionProviderReport.metric[name] = 1;
@@ -168,7 +175,7 @@ namespace findneedle.Implementations
                     extensionProviderReport.metric[name] = extensionProviderReport.metric[name] + 1;
                 }
 
-                foreach (string provider in p.GetProviderCount().Keys)
+                foreach (var provider in p.GetProviderCount().Keys)
                 {
                     if (!ProviderByFileReport.metric.ContainsKey(provider))
                     {
@@ -209,11 +216,11 @@ namespace findneedle.Implementations
             searchQuery.GetSearchStatistics().ReportFromComponent(procStats);
         }
 
-        List<FileExtensionProcessor> knownProcessors = new List<FileExtensionProcessor>();
+        List<FileExtensionProcessor> knownProcessors = new();
 
         bool IsDigitsOnly(string str)
         {
-            foreach (char c in str)
+            foreach (var c in str)
             {
                 if (c < '0' || c > '9')
                     return false;
@@ -224,12 +231,12 @@ namespace findneedle.Implementations
 
         public void ProcessFile(string file)
         {
-            string ext = Path.GetExtension(file).ToLower();
+            var ext = Path.GetExtension(file).ToLower();
 
             if (file.Length > 10)
             {
                 //Let's check that they are within the extension
-                string last10 = file.Substring(file.Length - 10); // we pick 10 to get capture things like .etl.001
+                var last10 = file.Substring(file.Length - 10); // we pick 10 to get capture things like .etl.001
                 if (last10.IndexOf('.') != last10.LastIndexOf("."))
                 {
                     if (string.IsNullOrEmpty(ext))
@@ -278,7 +285,7 @@ namespace findneedle.Implementations
             List<SearchResult> filteredResults = new List<SearchResult>();
             foreach (SearchResult result in results)
             {
-                bool passAll = true;
+                var passAll = true;
                 foreach (SearchFilter filter in searchQuery.GetFilters())
                 {
                     if (!filter.Filter(result))
@@ -293,8 +300,6 @@ namespace findneedle.Implementations
                 }
             }
             return filteredResults;
-            numRecordsInLastResult = filteredResults.Count;
-            return results;
         }
     }
 }
