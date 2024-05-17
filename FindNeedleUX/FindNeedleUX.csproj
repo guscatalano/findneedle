@@ -28,6 +28,7 @@
     <Content Remove="Assets\mtns.csv" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Pages\LightResultPage.xaml" />
     <None Remove="Pages\LocationWizard.xaml" />
     <None Remove="Pages\RunSearchPage.xaml" />
     <None Remove="Pages\SearchFiltersPage.xaml" />
@@ -79,6 +80,9 @@
     <None Update="Assets\mtns.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Page Update="Pages\LightResultPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Update="Pages\SearchStatisticsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>

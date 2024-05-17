@@ -71,7 +71,7 @@ public class ETLProcessor : FileExtensionProcessor
                     }
                     if (failsafe == 0)
                     {
-                        throw new Exception("can't parse!");
+                        continue; // Don't throw or we skip too much!
                     }
                     ETLLogLine etlline = new ETLLogLine(line, inputfile, (char)streamReader.Peek());
                     if (providers.ContainsKey(etlline.GetSource()))
