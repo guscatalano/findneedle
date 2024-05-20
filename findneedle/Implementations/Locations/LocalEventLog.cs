@@ -79,6 +79,10 @@ namespace findneedle.Implementations
         {
             Console.WriteLine(entry.TimeGenerated + ": " + entry.Message + " ;; " + entry.EntryType);
         }
+
+        public string GetResultSource() {
+            return "LocalEventLog";
+        }
     }
 
 

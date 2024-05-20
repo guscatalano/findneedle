@@ -70,6 +70,18 @@ public class MiddleLayerService
         Query.progressSink = x;
     }
 
+    public static List<LogLine> GetLogLines()
+    {
+        List<LogLine> lines = new List<LogLine>();
+        int index = 0;
+        foreach(SearchResult r in GetSearchResults())
+        {
+            lines.Add(new LogLine(r, index));
+            index++;
+        }
+        return lines;
+    }
+
     public static SearchProgressSink GetProgressEventSink()
     {
         return Query.progressSink;

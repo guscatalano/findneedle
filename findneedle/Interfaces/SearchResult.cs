@@ -33,6 +33,8 @@ namespace findneedle
 
         public string GetSearchableData();
         public string GetMessage();
+
+        public string GetResultSource();
     }
 
 }

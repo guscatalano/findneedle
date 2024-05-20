@@ -44,18 +44,20 @@
       
         <UniformGridLayout x:Key="UniformGridLayout2" MinItemWidth="108" MinItemHeight="108" MinRowSpacing="12" MinColumnSpacing="12"/>
 
-        <DataTemplate x:DataType="common:Recipe" x:Key="RecipeTemplate">
-            <RelativePanel  Width="500">
-                <TextBlock Text="{x:Bind Num.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
+        <DataTemplate x:DataType="common:LogLine" x:Key="RecipeTemplate">
+            <RelativePanel  Width="Auto">
+                <TextBlock Text="{x:Bind Index.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
              Padding="12"  x:Name="Rectangle1" Foreground="{ThemeResource SystemControlForegroundAltHighBrush}"/>
-                <TextBlock Text="{x:Bind Name.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
+                <TextBlock Text="{x:Bind Time.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
 Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" RelativePanel.RightOf="Rectangle1" x:Name="Rectangle2"/>
-                <TextBlock Text="{x:Bind Name.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
+                <TextBlock Text="{x:Bind Provider.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
 Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" RelativePanel.RightOf="Rectangle2" x:Name="Rectangle3" />
-                <TextBlock Text="{x:Bind Name.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
+                <TextBlock Text="{x:Bind TaskName.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
 Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" RelativePanel.RightOf="Rectangle3" x:Name="Rectangle4" />
-                <TextBlock Text="{x:Bind Name.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
+                <TextBlock Text="{x:Bind Message.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
 Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" RelativePanel.RightOf="Rectangle4" x:Name="Rectangle5" />
+                <TextBlock Text="{x:Bind Source.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="100"
+Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" RelativePanel.RightOf="Rectangle5" x:Name="Rectangle6" />
             </RelativePanel>
         </DataTemplate>
 

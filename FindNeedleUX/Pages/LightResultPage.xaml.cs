@@ -27,6 +27,7 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
+using FindNeedleUX.Services;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -70,6 +71,7 @@ public sealed partial class LightResultPage : Page
     public class MyItemsSource : IList, Microsoft.UI.Xaml.Controls.IKeyIndexMapping, INotifyCollectionChanged
     {
         private List<Recipe> inner = new List<Recipe>();
+        private List<LogLine> innerLines = new List<LogLine>();
 
         public MyItemsSource(IEnumerable<Recipe> collection)
         {
@@ -79,32 +81,31 @@ public sealed partial class LightResultPage : Page
 
         public void InitializeCollection(IEnumerable<Recipe> collection)
         {
-            inner.Clear();
-            if (collection != null)
-            {
-                inner.AddRange(collection);
-            }
+            innerLines.Clear();
+           
+
+            innerLines.AddRange(MiddleLayerService.GetLogLines());
 
             CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
         }
 
         #region IReadOnlyList<T>
-        public int Count => this.inner != null ? this.inner.Count : 0;
+        public int Count => this.innerLines != null ? this.innerLines.Count : 0;
 
         public object this[int index]
         {
             get
             {
-                return inner[index] as Recipe;
+                return innerLines[index] as LogLine;
             }
 
             set
             {
-                inner[index] = (Recipe)value;
+                innerLines[index] = (LogLine)value;
             }
         }
 
-        public IEnumerator<Recipe> GetEnumerator() => this.inner.GetEnumerator();
+        public IEnumerator<LogLine> GetEnumerator() => this.innerLines.GetEnumerator();
 
         #endregion
 
@@ -116,16 +117,16 @@ public sealed partial class LightResultPage : Page
         #region IKeyIndexMapping
         public string KeyFromIndex(int index)
         {
-            return inner[index].Num.ToString();
+            return innerLines[index].Index.ToString();
         }
 
         public int IndexFromKey(string key)
         {
-            foreach (Recipe item in inner)
+            foreach (LogLine item in innerLines)
             {
-                if (item.Num.ToString() == key)
+                if (item.Index.ToString() == key)
                 {
-                    return inner.IndexOf(item);
+                    return innerLines.IndexOf(item);
                 }
             }
             return -1;
@@ -267,15 +268,7 @@ public sealed partial class LightResultPage : Page
         return tempList;
     }
 
-    private void InitializeData()
-    {
-        // Initialize custom MyItemsSource object with new recipe data
-        List<Recipe> RecipeList = GetRecipeList();
-        filteredRecipeData.InitializeCollection(RecipeList);
-        // Save a static copy to compare to while filtering
-        staticRecipeData = RecipeList;
-        VariedImageSizeRepeater.ItemsSource = filteredRecipeData;
-    }
+   
     private void OnEnableAnimationsChanged(object sender, RoutedEventArgs e)
     {
 #if WINUI_PRERELEASE

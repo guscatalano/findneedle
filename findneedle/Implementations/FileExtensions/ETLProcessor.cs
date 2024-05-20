@@ -133,6 +133,11 @@ public class ETLLogLine : SearchResult
 
     public string originalLine = string.Empty;
 
+
+    public string GetResultSource()
+    {
+        return "ETW: " + filename;
+    }
     public static bool DoesHeaderLookRight(string textline)
     {
         var step = 0;

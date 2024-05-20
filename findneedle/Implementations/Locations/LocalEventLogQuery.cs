@@ -60,6 +60,11 @@ public class LocalEventLogRecord : SearchResult
         }
     }
 
+    public string GetResultSource()
+    {
+        return "LocalEventLogRecord";
+    }
+
     public DateTime GetLogTime()
     {
         if (entry.TimeCreated == null)

@@ -6,12 +6,59 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
+using findneedle;
 using Windows.Foundation;
 using VirtualizingLayout = Microsoft.UI.Xaml.Controls.VirtualizingLayout;
 using VirtualizingLayoutContext = Microsoft.UI.Xaml.Controls.VirtualizingLayoutContext;
 
 namespace FindNeedleUX
 {
+
+
+    public class LogLine
+    {
+        public LogLine(SearchResult searchResult, int index)
+        {
+            Index = index;
+            Provider = searchResult.GetSource();
+            TaskName = searchResult.GetTaskName();
+            Time = searchResult.GetLogTime().ToString();
+            Message = searchResult.GetMessage();
+            Source = searchResult.GetResultSource();
+        }
+
+        //This is really a view into SearchResult
+        public int Index
+        {
+            get;set;
+        }
+        public string Time
+        {
+            get;set;
+        }
+        public string Provider
+        {
+            get; set;
+        }
+        public string TaskName
+        {
+            get; set;
+        }
+        public string Message
+        {
+            get; set;
+        }
+        public string Source
+        {
+            get; set;
+        }
+
+        public string Level
+        {
+            get; set;
+        }
+
+    }
 
     public class Recipe
     {
