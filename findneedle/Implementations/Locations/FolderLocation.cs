@@ -251,6 +251,10 @@ namespace findneedle.Implementations
             {
                 case ".etl":
                     ETLProcessor p = new ETLProcessor(file);
+                    if(p == null)
+                    {
+                        return; //failed to rpcoess handle it later.
+                    }
                     knownProcessors.Add(p);
                     p.DoPreProcessing();
 

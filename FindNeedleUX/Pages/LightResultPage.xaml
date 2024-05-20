@@ -65,22 +65,30 @@ Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" R
       
 
         </Page.Resources>
-            <Grid Height="600">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1*"/>
-            <ColumnDefinition Width="1*"/>
-        </Grid.ColumnDefinitions>
-        <ItemsRepeaterScrollHost x:Name="tracker" Grid.Column="0">
-            <ScrollViewer>
+    <Grid MaxHeight="1000">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="1*"/>
+        </Grid.RowDefinitions>
+        <ItemsRepeaterScrollHost x:Name="tracker" Grid.Row="1">
+            <ScrollViewer  >
                 <ItemsRepeater x:Name="VariedImageSizeRepeater" ItemTemplate="{StaticResource RecipeTemplate}">
                     <ItemsRepeater.Layout>
-                        <common:VariedImageSizeLayout Width="500"/>
+                        <common:VariedImageSizeLayout Width="1000"/>
                     </ItemsRepeater.Layout>
                 </ItemsRepeater>
             </ScrollViewer>
         </ItemsRepeaterScrollHost>
 
-        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+        <Expander Grid.Row="0"
+     IsExpanded="False"
+     ExpandDirection="Down">
+            <Expander.Header>
+                <TextBlock>Filter bar</TextBlock>
+            </Expander.Header>
+            <Expander.Content>
+
+                <StackPanel  Margin="0,0,0,0">
             <TextBox x:Name="FilterRecipes" Header="Filter by ingredient..." Width="200"
                              HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,20"
                              TextChanged="FilterRecipes_FilterChanged"/>
@@ -91,5 +99,8 @@ Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" R
             <Button Content="Least to most" Click="OnSortAscClick" Margin="0,0,0,5"/>
             <Button Content="Most to least" Click="OnSortDesClick"/>
         </StackPanel>
+                </Expander.Content>
+
+        </Expander>
     </Grid>
 </Page>
