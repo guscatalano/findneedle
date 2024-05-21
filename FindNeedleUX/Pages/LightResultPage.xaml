@@ -11,52 +11,20 @@
     <Page.Resources>
        
 
-        <DataTemplate x:Key="NormalItemTemplate" x:DataType="x:Int32">
-            <Border Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}">
-                <TextBlock Text="{x:Bind}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-        </DataTemplate>
-
-        <DataTemplate x:Key="AccentItemTemplate" x:DataType="x:Int32">
-            <Border  Background="{ThemeResource SystemControlBackgroundAccentBrush}" >
-                <TextBlock Text="{x:Bind}"  HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundChromeWhiteBrush}"/>
-            </Border>
-        </DataTemplate>
-
-        <DataTemplate x:Key="StringDataTemplate" x:DataType="x:String">
-            <Grid Background="{ThemeResource SystemControlBackgroundAccentBrush}" Margin="10">
-                <TextBlock Padding="10" Text="{x:Bind}" Foreground="{ThemeResource SystemControlForegroundChromeWhiteBrush}" HorizontalAlignment="Center" TextWrapping="Wrap" VerticalAlignment="Center"/>
-            </Grid>
-        </DataTemplate>
-
-        <DataTemplate x:Key="IntDataTemplate" x:DataType="x:Int32">
-            <Grid Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}" Margin="10">
-                <TextBlock Padding="10" Text="{x:Bind}" Style="{StaticResource HeaderTextBlockStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Grid>
-        </DataTemplate>
-
-      
-
-        <StackLayout x:Name="VerticalStackLayout" Orientation="Vertical" Spacing="8"/>
-        <StackLayout x:Name="HorizontalStackLayout" Orientation="Horizontal" Spacing="8"/>
-        <UniformGridLayout x:Name="UniformGridLayout" MinRowSpacing="8" MinColumnSpacing="8"/>
-
-      
-        <UniformGridLayout x:Key="UniformGridLayout2" MinItemWidth="108" MinItemHeight="108" MinRowSpacing="12" MinColumnSpacing="12"/>
 
         <DataTemplate x:DataType="common:LogLine" x:Key="RecipeTemplate">
             <RelativePanel  Width="Auto">
-                <TextBlock Text="{x:Bind Index.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="Auto"
+                <TextBlock Text="{x:Bind Index.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind IndexColumnWidth}"
              Padding="12"  x:Name="Rectangle1" Foreground="{ThemeResource SystemChromeWhiteColor}"/>
-                <TextBlock Text="{x:Bind Time.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="Auto"
+                <TextBlock Text="{x:Bind Time.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind TimeColumnWidth}" 
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle1" x:Name="Rectangle2"/>
-                <TextBlock Text="{x:Bind Provider.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="Auto"
+                <TextBlock Text="{x:Bind Provider.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind ProviderColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle2" x:Name="Rectangle3" />
-                <TextBlock Text="{x:Bind TaskName.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="Auto"
+                <TextBlock Text="{x:Bind TaskName.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind TaskColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle3" x:Name="Rectangle4" />
-                <TextBlock Text="{x:Bind Message.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="Auto"
+                <TextBlock Text="{x:Bind Message.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind MessageColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle4" x:Name="Rectangle5" />
-                <TextBlock Text="{x:Bind Source.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="Auto"
+                <TextBlock Text="{x:Bind Source.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind SourceColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle5" x:Name="Rectangle6" />
             </RelativePanel>
         </DataTemplate>
@@ -71,10 +39,10 @@ Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.
             <RowDefinition Height="1*"/>
         </Grid.RowDefinitions>
         <ItemsRepeaterScrollHost x:Name="tracker" Grid.Row="1">
-            <ScrollViewer  >
+            <ScrollViewer>
                 <ItemsRepeater x:Name="VariedImageSizeRepeater" ItemTemplate="{StaticResource RecipeTemplate}">
                     <ItemsRepeater.Layout>
-                        <common:VariedImageSizeLayout Width="1000"/>
+                        <common:VariedImageSizeLayout Width="2000"/>
                     </ItemsRepeater.Layout>
                 </ItemsRepeater>
             </ScrollViewer>
@@ -96,7 +64,8 @@ Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.
             <CheckBox Content="Enable animations" x:Name="EnableAnimations" Checked="OnEnableAnimationsChanged" 
                               Unchecked="OnEnableAnimationsChanged" Margin="0,0,0,10"/>
             <TextBlock Text="Sort by number of ingredients" Margin="0,0,0,10"/>
-            <Button Content="Least to most" Click="OnSortAscClick" Margin="0,0,0,5"/>
+                    <TextBox Header="Message Column width:" PlaceholderText="100" SelectionChanged="TextBox_SelectionChanged" />
+                    <Button Content="Least to most" Click="OnSortAscClick" Margin="0,0,0,5"/>
             <Button Content="Most to least" Click="OnSortDesClick"/>
         </StackPanel>
                 </Expander.Content>

@@ -17,6 +17,69 @@ namespace FindNeedleUX
 
     public class LogLine
     {
+
+        public static int GlobalIndexColumnWidth
+        {
+
+            get
+            {
+                return 50;
+            }
+        }
+
+        public static int GlobalTimeColumnWidth
+        {
+
+            get
+            {
+                return 50;
+            }
+        }
+
+        public static int GlobalProviderColumnWidth
+        {
+
+            get
+            {
+                return 50;
+            }
+        }
+
+        public static int GlobalTaskColumnWidth
+        {
+
+            get
+            {
+                return 50;
+            }
+        }
+
+        private static int gMessageWidth = 500;
+        public static int GlobalMessageColumnWidth
+        {
+
+            get => gMessageWidth;
+            set => gMessageWidth = value;
+        }
+
+        public static int GlobalSourceColumnWidth
+        {
+
+            get
+            {
+                return 50;
+            }
+        }
+
+        public static int GlobalLevelColumnWidth
+        {
+
+            get
+            {
+                return 50;
+            }
+        }
+
         public LogLine(SearchResult searchResult, int index)
         {
             Index = index;
@@ -25,6 +88,69 @@ namespace FindNeedleUX
             Time = searchResult.GetLogTime().ToString();
             Message = searchResult.GetMessage();
             Source = searchResult.GetResultSource();
+        }
+
+        public int IndexColumnWidth
+        {
+
+            get
+            {
+                return GlobalIndexColumnWidth;
+            }
+        }
+
+        public int TimeColumnWidth
+        {
+
+            get
+            {
+                return GlobalTimeColumnWidth;
+            }
+        }
+
+        public int ProviderColumnWidth
+        {
+
+            get
+            {
+                return GlobalProviderColumnWidth;
+            }
+        }
+
+        public int TaskColumnWidth
+        {
+
+            get
+            {
+                return GlobalTaskColumnWidth;
+            }
+        }
+
+        public int MessageColumnWidth
+        {
+
+            get
+            {
+                return GlobalMessageColumnWidth;
+            }
+        }
+
+        public int SourceColumnWidth
+        {
+
+            get
+            {
+                return GlobalSourceColumnWidth;
+            }
+        }
+
+        public int LevelColumnWidth
+        {
+
+            get
+            {
+                return GlobalLevelColumnWidth;
+            }
         }
 
         //This is really a view into SearchResult

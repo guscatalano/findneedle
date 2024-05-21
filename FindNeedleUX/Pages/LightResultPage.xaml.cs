@@ -89,6 +89,11 @@ public sealed partial class LightResultPage : Page
             CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
         }
 
+        public void Refresh()
+        {
+            CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
+
         #region IReadOnlyList<T>
         public int Count => this.innerLines != null ? this.innerLines.Count : 0;
 
@@ -314,5 +319,12 @@ public sealed partial class LightResultPage : Page
         var peer = FrameworkElementAutomationPeer.FromElement(VariedImageSizeRepeater);
 
         peer.RaiseNotificationEvent(AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantMostRecent, $"Filtered recipes, {sortedFilteredTypes.Count()} results.", "RecipesFilteredNotificationActivityId");
+    }
+
+    private void TextBox_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        LogLine.GlobalMessageColumnWidth = Int32.Parse(((TextBox)sender).Text);
+        this.InvalidateArrange();
+        this.InvalidateMeasure();
     }
 }

@@ -165,6 +165,10 @@ namespace findneedle.Implementations
 
             foreach (var p in knownProcessors)
             {
+                if(p == null)
+                {
+                    continue; //bug!
+                }
                 var name = p.GetType().ToString();
                 if (!extensionProviderReport.metric.ContainsKey(name))
                 {
