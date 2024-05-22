@@ -60,7 +60,7 @@ Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.
             <ScrollViewer>
                 <ItemsRepeater x:Name="VariedImageSizeRepeater" ItemTemplate="{StaticResource RecipeTemplate}">
                     <ItemsRepeater.Layout>
-                        <UniformGridLayout Orientation="Horizontal" ItemsStretch="Fill"/>
+                        <common:VariedImageSizeLayout Width="1000"/>
                     </ItemsRepeater.Layout>
                 </ItemsRepeater>
             </ScrollViewer>
@@ -70,22 +70,17 @@ Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.
      IsExpanded="False"
      ExpandDirection="Down">
             <Expander.Header>
-                <TextBlock>Filter bar</TextBlock>
+                <TextBlock>Filters</TextBlock>
             </Expander.Header>
             <Expander.Content>
 
                 <StackPanel  Margin="0,0,0,0">
-            <TextBox x:Name="FilterRecipes" Header="Filter by ingredient..." Width="200"
+                    <TextBox x:Name="FilterRecipes" Header="Filter Command" Width="200"
                              HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,20"
                              TextChanged="FilterRecipes_FilterChanged"/>
-            <TextBlock>Enable Animations</TextBlock>
-            <CheckBox Content="Enable animations" x:Name="EnableAnimations" Checked="OnEnableAnimationsChanged" 
-                              Unchecked="OnEnableAnimationsChanged" Margin="0,0,0,10"/>
-            <TextBlock Text="Sort by number of ingredients" Margin="0,0,0,10"/>
+
                     <TextBox Header="Message Column width:" PlaceholderText="100" SelectionChanged="TextBox_SelectionChanged" />
-                    <Button Content="Least to most" Click="OnSortAscClick" Margin="0,0,0,5"/>
-            <Button Content="Most to least" Click="OnSortDesClick"/>
-        </StackPanel>
+                </StackPanel>
                 </Expander.Content>
 
         </Expander>

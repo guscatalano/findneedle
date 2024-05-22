@@ -44,7 +44,7 @@ public sealed partial class LightResultPage : Page
 
    
     public MyItemsSource filteredRecipeData = new MyItemsSource(null);
-    public List<Recipe> staticRecipeData;
+    public List<LogLine> staticRecipeData;
     private bool IsSortDescending = false;
 
     private Button LastSelectedColorButton;
@@ -52,10 +52,10 @@ public sealed partial class LightResultPage : Page
     public LightResultPage()
     {
         this.InitializeComponent();
-        List<Recipe> RecipeList = GetRecipeList();
-        filteredRecipeData.InitializeCollection(RecipeList);
+        List<LogLine> LogLineList = MiddleLayerService.GetLogLines();
+        filteredRecipeData.InitializeCollection(LogLineList);
         // Save a static copy to compare to while filtering
-        staticRecipeData = RecipeList;
+        staticRecipeData = LogLineList;
         VariedImageSizeRepeater.ItemsSource = filteredRecipeData;
     }
 
@@ -73,18 +73,22 @@ public sealed partial class LightResultPage : Page
         private List<Recipe> inner = new List<Recipe>();
         public List<LogLine> innerLines = new List<LogLine>();
 
-        public MyItemsSource(IEnumerable<Recipe> collection)
+        public MyItemsSource(IEnumerable<LogLine> collection)
         {
             InitializeCollection(collection);
 
         }
 
-        public void InitializeCollection(IEnumerable<Recipe> collection)
+        public void InitializeCollection(IEnumerable<LogLine> collection)
         {
+            if(collection == null)
+            {
+                return;
+            }
             innerLines.Clear();
            
 
-            innerLines.AddRange(MiddleLayerService.GetLogLines());
+            innerLines.AddRange(collection);
 
             CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
         }
@@ -193,129 +197,27 @@ public sealed partial class LightResultPage : Page
         #endregion
     }
 
-    // ========================== Initialization code ==========================
-    public List<String> ColorList = new List<String>()
-        {
-                "Blue",
-                "BlueViolet",
-                "Crimson",
-                "DarkCyan",
-                "DarkGoldenrod",
-                "DarkMagenta",
-                "DarkOliveGreen",
-                "DarkRed",
-                "DarkSlateBlue",
-                "DeepPink",
-                "IndianRed",
-                "MediumSlateBlue",
-                "Maroon",
-                "MidnightBlue",
-                "Peru",
-                "SaddleBrown",
-                "SteelBlue",
-                "OrangeRed",
-                "Firebrick",
-                "DarkKhaki"
-        };
-
-
-    private ObservableCollection<string> GetFruits()
-    {
-        return new ObservableCollection<string> { "Apricots", "Bananas", "Grapes", "Strawberries", "Watermelon", "Plums", "Blueberries" };
-    }
-
-    private ObservableCollection<string> GetVegetables()
-    {
-        return new ObservableCollection<string> { "Broccoli", "Spinach", "Sweet potato", "Cauliflower", "Onion", "Brussels sprouts", "Carrots" };
-    }
-    private ObservableCollection<string> GetGrains()
-    {
-        return new ObservableCollection<string> { "Rice", "Quinoa", "Pasta", "Bread", "Farro", "Oats", "Barley" };
-    }
-    private ObservableCollection<string> GetProteins()
-    {
-        return new ObservableCollection<string> { "Steak", "Chicken", "Tofu", "Salmon", "Pork", "Chickpeas", "Eggs" };
-    }
-
-    // ==========================================================================
-    // VariedImageSize Layout with Filtering/Sorting
-    // ==========================================================================
-    private List<Recipe> GetRecipeList()
-    {
-        // Initialize list of recipes for varied image size layout sample
-        var rnd = new Random();
-        List<Recipe> tempList = new List<Recipe>(
-                                    Enumerable.Range(0, 1000).Select(k =>
-                                        new Recipe
-                                        {
-                                            Num = k,
-                                            Name = "Recipe " + k.ToString(),
-                                            Color = ColorList[rnd.Next(0, 19)]
-                                        }));
-
-        foreach (Recipe rec in tempList)
-        {
-            // Add one food from each option into the recipe's ingredient list and ingredient string
-            string fruitOption = GetFruits()[rnd.Next(0, 6)];
-            string vegOption = GetVegetables()[rnd.Next(0, 6)];
-            string grainOption = GetGrains()[rnd.Next(0, 6)];
-            string proteinOption = GetProteins()[rnd.Next(0, 6)];
-            rec.Ingredients = "\n" + fruitOption + "\n" + vegOption + "\n" + grainOption + "\n" + proteinOption;
-            rec.IngList = new List<string>() { fruitOption, vegOption, grainOption, proteinOption };
-
-            // Add extra ingredients so items have varied heights in the layout
-            rec.RandomizeIngredients();
-        }
-
-        return tempList;
-    }
-
-   
-    private void OnEnableAnimationsChanged(object sender, RoutedEventArgs e)
-    {
-#if WINUI_PRERELEASE
-            VariedImageSizeRepeater.Animator = EnableAnimations.IsChecked.GetValueOrDefault() ? new DefaultElementAnimator() : null;
-#endif
-    }
 
     public void FilterRecipes_FilterChanged(object sender, RoutedEventArgs e)
     {
         UpdateSortAndFilter();
     }
 
-    private void OnSortAscClick(object sender, RoutedEventArgs e)
-    {
-        if (IsSortDescending == true)
-        {
-            IsSortDescending = false;
-            UpdateSortAndFilter();
-        }
-    }
-
-
-    private void OnSortDesClick(object sender, RoutedEventArgs e)
-    {
-        if (!IsSortDescending == true)
-        {
-            IsSortDescending = true;
-            UpdateSortAndFilter();
-        }
-    }
-
+   
     private void UpdateSortAndFilter()
     {
         // Find all recipes that ingredients include what was typed into the filtering text box
-        var filteredTypes = staticRecipeData.Where(i => i.Ingredients.Contains(FilterRecipes.Text, StringComparison.InvariantCultureIgnoreCase));
+        var filteredTypes = staticRecipeData.Where(i => i.Message.Contains(FilterRecipes.Text, StringComparison.InvariantCultureIgnoreCase));
         // Sort the recipes by whichever sorting mode was last selected (least to most ingredients by default)
-        var sortedFilteredTypes = IsSortDescending ?
+       /* var sortedFilteredTypes = IsSortDescending ?
             filteredTypes.OrderByDescending(i => i.IngList.Count()) :
-            filteredTypes.OrderBy(i => i.IngList.Count());
+            filteredTypes.OrderBy(i => i.IngList.Count());*/
         // Re-initialize MyItemsSource object with this newly filtered data
-        filteredRecipeData.InitializeCollection(sortedFilteredTypes);
+        filteredRecipeData.InitializeCollection(filteredTypes);
 
         var peer = FrameworkElementAutomationPeer.FromElement(VariedImageSizeRepeater);
 
-        peer.RaiseNotificationEvent(AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantMostRecent, $"Filtered recipes, {sortedFilteredTypes.Count()} results.", "RecipesFilteredNotificationActivityId");
+        peer.RaiseNotificationEvent(AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantMostRecent, $"Filtered recipes, {filteredTypes.Count()} results.", "RecipesFilteredNotificationActivityId");
     }
 
     private void TextBox_SelectionChanged(object sender, RoutedEventArgs e)
