@@ -71,7 +71,7 @@ public sealed partial class LightResultPage : Page
     public class MyItemsSource : IList, Microsoft.UI.Xaml.Controls.IKeyIndexMapping, INotifyCollectionChanged
     {
         private List<Recipe> inner = new List<Recipe>();
-        private List<LogLine> innerLines = new List<LogLine>();
+        public List<LogLine> innerLines = new List<LogLine>();
 
         public MyItemsSource(IEnumerable<Recipe> collection)
         {
@@ -89,10 +89,7 @@ public sealed partial class LightResultPage : Page
             CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
         }
 
-        public void Refresh()
-        {
-            CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-        }
+     
 
         #region IReadOnlyList<T>
         public int Count => this.innerLines != null ? this.innerLines.Count : 0;
@@ -324,7 +321,6 @@ public sealed partial class LightResultPage : Page
     private void TextBox_SelectionChanged(object sender, RoutedEventArgs e)
     {
         LogLine.GlobalMessageColumnWidth = Int32.Parse(((TextBox)sender).Text);
-        this.InvalidateArrange();
-        this.InvalidateMeasure();
+       
     }
 }

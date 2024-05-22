@@ -13,6 +13,7 @@
 
 
         <DataTemplate x:DataType="common:LogLine" x:Key="RecipeTemplate">
+           
             <RelativePanel  Width="Auto">
                 <TextBlock Text="{x:Bind Index.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind IndexColumnWidth}"
              Padding="12"  x:Name="Rectangle1" Foreground="{ThemeResource SystemChromeWhiteColor}"/>
@@ -22,11 +23,28 @@ Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle2" x:Name="Rectangle3" />
                 <TextBlock Text="{x:Bind TaskName.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind TaskColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle3" x:Name="Rectangle4" />
-                <TextBlock Text="{x:Bind Message.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind MessageColumnWidth}"
+                <TextBlock Text="{x:Bind Message.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind MessageColumnWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle4" x:Name="Rectangle5" />
                 <TextBlock Text="{x:Bind Source.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind SourceColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle5" x:Name="Rectangle6" />
+                <Button RelativePanel.RightOf="Rectangle6">
+                    <StackPanel>
+
+                        <SymbolIcon Symbol="More"/>
+                    </StackPanel>
+
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel>
+                                <TextBox Style="{ThemeResource BaseTextBlockStyle}" Text="{x:Bind Message.ToString()}" Margin="0,0,0,12"   IsReadOnly="True"
+                                         TextWrapping="Wrap" MaxWidth="200"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
             </RelativePanel>
+                
+          
         </DataTemplate>
 
       
@@ -42,7 +60,7 @@ Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.
             <ScrollViewer>
                 <ItemsRepeater x:Name="VariedImageSizeRepeater" ItemTemplate="{StaticResource RecipeTemplate}">
                     <ItemsRepeater.Layout>
-                        <common:VariedImageSizeLayout Width="2000"/>
+                        <UniformGridLayout Orientation="Horizontal" ItemsStretch="Fill"/>
                     </ItemsRepeater.Layout>
                 </ItemsRepeater>
             </ScrollViewer>

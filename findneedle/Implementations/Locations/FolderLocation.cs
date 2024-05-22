@@ -285,9 +285,16 @@ namespace findneedle.Implementations
         public override List<SearchResult> Search(SearchQuery searchQuery)
         {
             List<SearchResult> results = new List<SearchResult>();
-            foreach(FileExtensionProcessor item in knownProcessors)
+            lock (knownProcessors)
             {
-                results.AddRange(item.GetResults());
+                foreach (FileExtensionProcessor item in knownProcessors)
+                {
+                    if(item == null)
+                    {
+                        continue; //bug!
+                    }
+                    results.AddRange(item.GetResults());
+                }
             }
 
             List<SearchResult> filteredResults = new List<SearchResult>();

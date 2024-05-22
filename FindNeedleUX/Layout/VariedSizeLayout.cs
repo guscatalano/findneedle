@@ -18,6 +18,8 @@ namespace FindNeedleUX
     public class LogLine
     {
 
+        
+
         public static int GlobalIndexColumnWidth
         {
 
@@ -133,6 +135,11 @@ namespace FindNeedleUX
             {
                 return GlobalMessageColumnWidth;
             }
+            set
+            {
+                GlobalMessageColumnWidth = value;
+            }
+           
         }
 
         public int SourceColumnWidth
