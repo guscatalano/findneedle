@@ -34,7 +34,7 @@ namespace FindNeedleUX
 
             get
             {
-                return 50;
+                return 125;
             }
         }
 
@@ -43,7 +43,7 @@ namespace FindNeedleUX
 
             get
             {
-                return 50;
+                return 100;
             }
         }
 
@@ -52,7 +52,7 @@ namespace FindNeedleUX
 
             get
             {
-                return 50;
+                return 150;
             }
         }
 

@@ -125,6 +125,13 @@ public class MiddleLayerService
         Locations = Query.locations;
     }
 
+    public static void NewWorkspace()
+    {
+        Filters = new List<SearchFilter>();
+        Locations = new List<SearchLocation>();
+
+        UpdateSearchQuery();
+    }
 
     public static void SaveWorkspace(string filename)
     {

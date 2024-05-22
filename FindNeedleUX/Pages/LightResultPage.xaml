@@ -13,19 +13,19 @@
 
 
         <DataTemplate x:DataType="common:LogLine" x:Key="RecipeTemplate">
-           
-            <RelativePanel  Width="Auto">
+
+            <RelativePanel  Width="Auto" PointerEntered="RelativePanel_PointerEntered" PointerExited="RelativePanel_PointerExited">
                 <TextBlock Text="{x:Bind Index.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind IndexColumnWidth}"
              Padding="12"  x:Name="Rectangle1" Foreground="{ThemeResource SystemChromeWhiteColor}"/>
-                <TextBlock Text="{x:Bind Time.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind TimeColumnWidth}" 
+                <TextBlock Text="{x:Bind Time.ToString()}" FontSize="12" TextAlignment="Left"  Height="50" Width="{x:Bind TimeColumnWidth}" 
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle1" x:Name="Rectangle2"/>
-                <TextBlock Text="{x:Bind Provider.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind ProviderColumnWidth}"
+                <TextBlock Text="{x:Bind Provider.ToString()}" FontSize="12" TextAlignment="Left"  Height="50" Width="{x:Bind ProviderColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle2" x:Name="Rectangle3" />
-                <TextBlock Text="{x:Bind TaskName.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind TaskColumnWidth}"
+                <TextBlock Text="{x:Bind TaskName.ToString()}" FontSize="12" TextAlignment="Left"  Height="50" Width="{x:Bind TaskColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle3" x:Name="Rectangle4" />
-                <TextBlock Text="{x:Bind Message.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind MessageColumnWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                <TextBlock Text="{x:Bind Message.ToString()}" FontSize="12" TextAlignment="Left"  Height="50" Width="{x:Bind MessageColumnWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle4" x:Name="Rectangle5" />
-                <TextBlock Text="{x:Bind Source.ToString()}" FontSize="12" TextAlignment="Center"  Height="50" Width="{x:Bind SourceColumnWidth}"
+                <TextBlock Text="{x:Bind Source.ToString()}" FontSize="12" TextAlignment="Left"  Height="50" Width="{x:Bind SourceColumnWidth}"
 Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.RightOf="Rectangle5" x:Name="Rectangle6" />
                 <Button RelativePanel.RightOf="Rectangle6">
                     <StackPanel>

@@ -28,6 +28,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using FindNeedleUX.Services;
+using Microsoft.UI;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -224,5 +225,23 @@ public sealed partial class LightResultPage : Page
     {
         LogLine.GlobalMessageColumnWidth = Int32.Parse(((TextBox)sender).Text);
        
+    }
+
+    private void Animated_GotItem(object sender, RoutedEventArgs e)
+    {
+       
+    }
+
+    private Brush original;
+
+    private void RelativePanel_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        original = ((RelativePanel)sender).Background;
+        ((RelativePanel)sender).Background = new SolidColorBrush(Colors.DarkSlateGray);
+    }
+
+    private void RelativePanel_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+            ((RelativePanel)sender).Background = original;
     }
 }

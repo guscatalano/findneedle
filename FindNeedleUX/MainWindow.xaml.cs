@@ -50,7 +50,7 @@ public sealed partial class MainWindow : Window
         switch (selectedFlyoutItem.Name.ToLower())
         {
             case "newworkspace":
-
+                MiddleLayerService.NewWorkspace();
                 break;
             case "saveworkspace":
                 SaveCommand();
