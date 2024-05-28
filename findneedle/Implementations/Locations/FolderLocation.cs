@@ -92,8 +92,8 @@ namespace findneedle.Implementations
             }
         }
 
-      
-
+        public SearchQuery currentQuery;
+        public List<Task> tasks = new();
         public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
         {
             procStats = new ReportFromComponent()
@@ -103,7 +103,7 @@ namespace findneedle.Implementations
                 summary = "statsByFile",
                 metric = new Dictionary<string, dynamic>()
             };
-
+            currentQuery = searchQuery;
 
             knownProcessors = new List<FileExtensionProcessor>();
             TempStorage.GetMainTempPath();
@@ -120,7 +120,6 @@ namespace findneedle.Implementations
                 ProcessFile(path);
 
             } else {
-                List<Task> tasks = new List<Task>();
                 foreach(var file in GetAllFiles(path))
                 {
                     searchQuery.progressSink.NotifyProgress("queuing up: " + file);
@@ -136,10 +135,35 @@ namespace findneedle.Implementations
                     Thread.Yield();
                 }
                 Task.WhenAll(tasks).Wait();
+                tasks.Clear();
                 searchQuery.progressSink.NotifyProgress("processed " + path);
             }
             CalculateStats(searchQuery, procStats);
             
+        }
+
+        public void QueueNewFolder(string path, bool startWait = false)
+        {
+            foreach (var file in GetAllFiles(path))
+            {
+                currentQuery.progressSink.NotifyProgress("queuing up: " + file);
+                tasks.Add(Task.Run(() => ProcessFile(file)));
+            }
+
+            if (startWait)
+            {
+                currentQuery.progressSink.NotifyProgress("waiting for etl files to be processed");
+                int completed = 0;
+                while (completed < tasks.Count)
+                {
+                    completed = tasks.Where(x => x.IsCompleted).Count();
+                    currentQuery.progressSink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+                    Thread.Yield();
+                }
+                Task.WhenAll(tasks).Wait();
+                tasks.Clear();
+                currentQuery.progressSink.NotifyProgress("processed " + path);
+            }
         }
 
         public void CalculateStats(SearchQuery searchQuery, ReportFromComponent procStats)
@@ -271,8 +295,17 @@ namespace findneedle.Implementations
                 case ".txt":
                     break;
                 case ".zip":
+                    ZipProcessor pz = new ZipProcessor(file, this);
+                    if (pz == null)
+                    {
+                        return;
+                    }
+                    knownProcessors.Add(pz);
+                    pz.DoPreProcessing();
+                    pz.LoadInMemory();
                     break;
                 case ".7z":
+                   
                     break;
                 case ".evtx":
                     //Remember we have a native one!

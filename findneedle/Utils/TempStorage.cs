@@ -54,7 +54,7 @@ public class TempStorage
         do
         {
             max--;
-            ntempPath = Path.Combine(root,  GenerateRandomFolderName(hint));
+            ntempPath = Path.Combine(root, GenerateRandomFolderName(hint));
             if (max == 0)
             {
                 throw new Exception("Could not find a unique temp path");

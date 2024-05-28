@@ -1,10 +1,48 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using findneedle.Interfaces;
+using findneedle.Utils;
+using findneedle.WDK;
 
 namespace findneedle.Implementations.FileExtensions;
-public class ZipProcessor
+public class ZipProcessor : FileExtensionProcessor
 {
+    string inputfile;
+    private FolderLocation parent;
+    public ZipProcessor(string file, FolderLocation parent)
+    {
+        inputfile = file;
+        this.parent = parent;
+
+    }
+    public void DoPreProcessing() {
+        if (inputfile == null)
+        {
+            return;
+        }
+        string temp = TempStorage.GetNewTempPath("zip");
+        ZipFile.ExtractToDirectory(inputfile, temp);
+
+        parent.QueueNewFolder(temp, true);
+    }
+    public string GetFileName() 
+    {
+        return inputfile;
+    }
+    public Dictionary<string, int> GetProviderCount()
+    {
+        return new Dictionary<string, int>(); //This has no results
+    }
+    public List<SearchResult> GetResults()
+    {
+        return new List<SearchResult>(); //This just expands zips provides no real results
+    }
+
+    public void LoadInMemory() 
+    {
+    }
 }
