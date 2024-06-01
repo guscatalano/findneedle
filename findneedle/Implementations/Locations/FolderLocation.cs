@@ -114,54 +114,60 @@ namespace findneedle.Implementations
             {
                 isFile = false;
             }
-            
+
             if (isFile)
             {
-                ProcessFile(path);
+                searchQuery.progressSink.NotifyProgress("queuing up: " + path);
+                tasks.Add(Task.Run(() => ProcessFile(path)));
+            }
+            else
+            {
 
-            } else {
-                foreach(var file in GetAllFiles(path))
+                foreach (var file in GetAllFiles(path))
                 {
                     searchQuery.progressSink.NotifyProgress("queuing up: " + file);
                     tasks.Add(Task.Run(() => ProcessFile(file)));
-                    //ProcessFile(file);
                 }
-                searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed");
-                int completed = 0;
-                while (completed < tasks.Count)
-                {
-                    completed = tasks.Where(x => x.IsCompleted).Count();
-                    searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
-                    Thread.Yield();
-                }
-                Task.WhenAll(tasks).Wait();
-                tasks.Clear();
-                searchQuery.progressSink.NotifyProgress("processed " + path);
             }
+            searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed");
+            int completed = 0;
+            int initialCount = tasks.Count;
+            while (completed < tasks.Count)
+            {
+                completed = tasks.Where(x => x.IsCompleted).Count();
+                searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+
+                Thread.Yield();
+            }
+            Task.WhenAll(tasks).Wait();
+            tasks.Clear();
+            searchQuery.progressSink.NotifyProgress("processed " + path);
+            
             CalculateStats(searchQuery, procStats);
             
         }
 
         public void QueueNewFolder(string path, bool startWait = false)
         {
+            List<Task> myTasks = new List<Task>();
             foreach (var file in GetAllFiles(path))
             {
                 currentQuery.progressSink.NotifyProgress("queuing up: " + file);
-                tasks.Add(Task.Run(() => ProcessFile(file)));
+                myTasks.Add(Task.Run(() => ProcessFile(file)));
             }
 
             if (startWait)
             {
                 currentQuery.progressSink.NotifyProgress("waiting for etl files to be processed");
                 int completed = 0;
-                while (completed < tasks.Count)
+                while (completed < myTasks.Count)
                 {
-                    completed = tasks.Where(x => x.IsCompleted).Count();
+                    completed = myTasks.Where(x => x.IsCompleted).Count();
                     currentQuery.progressSink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
                     Thread.Yield();
                 }
-                Task.WhenAll(tasks).Wait();
-                tasks.Clear();
+                Task.WhenAll(myTasks).Wait();
+                myTasks.Clear();
                 currentQuery.progressSink.NotifyProgress("processed " + path);
             }
         }
