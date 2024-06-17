@@ -15,6 +15,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "UX", "UX", "{F811014F-5DE9-
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "S1", "S1", "{CB8FEC85-44DB-4F89-8396-3D8A65633837}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{D255B8D6-F312-4C6A-B562-B8726F17055E}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\dotnet-desktop.yml = .github\workflows\dotnet-desktop.yml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
