@@ -15,18 +15,9 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.Linq;
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
-using Microsoft.UI.Xaml.Input;
 using FindNeedleUX.Services;
 using Microsoft.UI;
 
@@ -40,16 +31,12 @@ namespace FindNeedleUX.Pages;
 public sealed partial class LightResultPage : Page
 {
 
-    private Random random = new Random();
-    private int MaxLength = 425;
+    private readonly Random random = new();
 
    
-    public MyItemsSource filteredRecipeData = new MyItemsSource(null);
+    public MyItemsSource filteredRecipeData = new(null);
     public List<LogLine> staticRecipeData;
-    private bool IsSortDescending = false;
 
-    private Button LastSelectedColorButton;
-    private int PreviouslyFocusedAnimatedScrollRepeaterIndex = -1;
     public LightResultPage()
     {
         this.InitializeComponent();
@@ -71,8 +58,8 @@ public sealed partial class LightResultPage : Page
     // Custom data source class that assigns elements unique IDs, making filtering easier
     public class MyItemsSource : IList, Microsoft.UI.Xaml.Controls.IKeyIndexMapping, INotifyCollectionChanged
     {
-        private List<Recipe> inner = new List<Recipe>();
-        public List<LogLine> innerLines = new List<LogLine>();
+        private readonly List<Recipe> inner = new();
+        public List<LogLine> innerLines = new();
 
         public MyItemsSource(IEnumerable<LogLine> collection)
         {
@@ -101,15 +88,9 @@ public sealed partial class LightResultPage : Page
 
         public object this[int index]
         {
-            get
-            {
-                return innerLines[index] as LogLine;
-            }
+            get => innerLines[index] as LogLine;
 
-            set
-            {
-                innerLines[index] = (LogLine)value;
-            }
+            set => innerLines[index] = (LogLine)value;
         }
 
         public IEnumerator<LogLine> GetEnumerator() => this.innerLines.GetEnumerator();

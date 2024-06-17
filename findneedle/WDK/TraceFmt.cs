@@ -10,11 +10,11 @@ namespace findneedle.WDK;
 
 public class TraceFmtResult
 {
-    public string outputfile
+    public string? outputfile
     {
         get;set;
     }
-    public string summaryfile
+    public string? summaryfile
     {
         get; set;
     }
@@ -23,24 +23,26 @@ public class TraceFmtResult
 
     public void ParseSummaryFile()
     {
-        int maxtries = 10000;
+        var maxtries = 10000;
         List<string> summary = new List<string>();
         
         while (maxtries > 0)
         {
             try
             {
+#pragma warning disable CS8604 // Possible null reference argument.
                 FileStream x = File.OpenRead(summaryfile);
-                using (var reader = new StreamReader(x))
+#pragma warning restore CS8604 // Possible null reference argument.
+                using var reader = new StreamReader(x);
+                string line;
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                while ((line = reader.ReadLine()) != null)
                 {
-                    string line;
-                    while ((line = reader.ReadLine()) != null)
-                    {
-                        summary.Add(line);
-                    }
+                    summary.Add(line);
                 }
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
                 break;
-            } catch(Exception ex)
+            } catch(Exception)
             {
                 Thread.Sleep(100);
                 maxtries--;
@@ -61,7 +63,7 @@ public class TraceFmtResult
         TotalElapsedTime = summary[7].Replace("Elapsed", "").Replace("Time", "").Trim();
     }
 
-    public string ProcessedFile
+    public string? ProcessedFile
     {
     get; set; 
     }
@@ -91,7 +93,7 @@ public class TraceFmtResult
         get; set;
     }
 
-    public string TotalElapsedTime
+    public string? TotalElapsedTime
     {
         get; set;
     }

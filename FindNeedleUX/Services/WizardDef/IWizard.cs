@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using WinUIEx;
 
 namespace FindNeedleUX.Services.WizardDef;
 public class IWizard
@@ -81,11 +82,13 @@ public class IWizard
         WindowUtil.TrackWindow(newWizard);
         var y = WindowUtil.GetWindowForElement(sender);
         var z = y.AppWindow;
-        z.Hide();
+        y.SetExtendedWindowStyle(ExtendedWindowStyle.NoActivate);
+        //z.Hide();
         wizFrame = newWizard.GetFrame();
         wizFrame.Navigate(w_initialPageType);
-
+        newWizard.SetWindowSize(600, 400);
         newWizard.Activate();
+        //newWizard.AppWindow.boun
         newWizard.Closed += X_Closed;
     }
 

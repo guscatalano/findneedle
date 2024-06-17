@@ -15,7 +15,7 @@ public class MiddleLayerService
 {
     public static List<SearchLocation> Locations = new();
     public static List<SearchFilter> Filters = new();
-    public static SearchQuery Query = new SearchQuery();
+    public static SearchQuery Query = new();
 
     public static void AddFolderLocation(string location)
     {
@@ -73,7 +73,7 @@ public class MiddleLayerService
     public static List<LogLine> GetLogLines()
     {
         List<LogLine> lines = new List<LogLine>();
-        int index = 0;
+        var index = 0;
         foreach(SearchResult r in GetSearchResults())
         {
             lines.Add(new LogLine(r, index));
@@ -87,7 +87,9 @@ public class MiddleLayerService
         return Query.progressSink;
     }
 
-    public async static Task<string> RunSearch(bool surfacescan = false)
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+    public static async Task<string> RunSearch(bool surfacescan = false)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
     {
 
         UpdateSearchQuery();
@@ -137,7 +139,7 @@ public class MiddleLayerService
     {
         UpdateSearchQuery();
         SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(Query);
-        string json = r.GetQueryJson();
+        var json = r.GetQueryJson();
         File.WriteAllText(filename, json);
     }
 

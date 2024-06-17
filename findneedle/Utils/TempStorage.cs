@@ -21,12 +21,14 @@ public class TempStorage
         {
 
         }
+#pragma warning disable CS8603 // Possible null reference return.
         return gTemp.tempPath;
+#pragma warning restore CS8603 // Possible null reference return.
     }
 
     public static string GetNewTempPath(string hint)
     {
-        string newPath = gTemp.GenerateNewPath(GetMainTempPath(), hint);
+        var newPath = gTemp.GenerateNewPath(GetMainTempPath(), hint);
         DirectoryInfo dir = Directory.CreateDirectory(newPath);
         if (!dir.Exists)
         {
@@ -49,8 +51,8 @@ public class TempStorage
 
     public string GenerateNewPath(string root, string hint = "FindNeedleTemp")
     {
-        int max = 10000;
-        string ntempPath = "";
+        var max = 10000;
+        string? ntempPath;
         do
         {
             max--;

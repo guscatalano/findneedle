@@ -1,239 +1,244 @@
 ﻿using findneedle.Implementations;
 
-namespace findneedle
+namespace findneedle;
+
+
+
+public class SearchQuery
 {
 
 
-    public class SearchQuery
+    private readonly SearchLocationDepth Depth;
+
+    private SearchProgressSink _progressSink;
+
+    public SearchProgressSink progressSink 
+    {
+        get
+        {
+            _progressSink ??= new SearchProgressSink();
+            return _progressSink;
+        }
+        set => _progressSink = value;
+    }
+
+    private SearchStatistics _stats;
+    public SearchStatistics stats
+    {
+        get
+        {
+            _stats ??= new SearchStatistics(this);
+            return _stats;
+        }
+        set => _stats = value;
+    }
+
+    private List<SearchFilter> _filters;
+    public List<SearchFilter> filters
+    {
+        get
+        {
+            _filters ??= new List<SearchFilter>();
+            return _filters;
+        }
+        set => _filters = value;
+    }
+
+    private List<SearchLocation> _locations;
+    public List<SearchLocation> locations
+    {
+        get
+        {
+            _locations ??= new List<SearchLocation>();
+            return _locations;
+        }
+        set => _locations = value;
+    }
+
+
+
+
+    public void SetLocations(List<SearchLocation> loc)
     {
 
+        this.locations = loc;
+    }
 
-        private SearchLocationDepth Depth;
 
-        private SearchProgressSink _progressSink;
 
-        public SearchProgressSink progressSink 
+    public List<SearchLocation> GetLocations()
+    {
+        return locations;
+    }
+
+    public List<SearchFilter> GetFilters()
+    {
+        return filters;
+    }
+
+    private string ReplaceInvalidChars(string text)
+    {
+        text = text.Replace(",", "");
+        text = text.Replace("(", "");
+        text = text.Replace(")", "");
+        text = text.Trim();
+        return text;
+    }
+
+    private List<string> SplitApart(string text)
+    {
+        List<string> ret = new List<string>();
+        var results = text.Split(",");
+        foreach (var i in results)
         {
-            get
+            var ix = ReplaceInvalidChars(i);
+            if (string.IsNullOrEmpty(ix))
             {
-                _progressSink ??= new SearchProgressSink();
-                return _progressSink;
+                continue;
             }
-            set => _progressSink = value;
+            ret.Add(ix);
         }
+        return ret;
+    }
 
-        private SearchStatistics _stats;
-        public SearchStatistics stats
+
+    public SearchQuery()
+    {
+        stats = new SearchStatistics(this);
+        _progressSink = new SearchProgressSink();
+        _stats = stats;
+        _filters = new List<SearchFilter>();
+        _locations = new List<SearchLocation>();
+    }
+
+
+
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+    public SearchQuery(Dictionary<string, string> arguments) : base()
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+    {
+        stats = new SearchStatistics(this);
+        foreach (KeyValuePair<string, string> pair in arguments)
         {
-            get
+            if (pair.Key.StartsWith("keyword", StringComparison.OrdinalIgnoreCase))
             {
-                _stats ??= new SearchStatistics(this);
-                return _stats;
+                filters.Add(new SimpleKeywordFilter(pair.Value));
+                continue;
             }
-            set => _stats = value;
-        }
 
-        private List<SearchFilter> _filters;
-        public List<SearchFilter> filters
-        {
-            get
+            //searchfilter=time(start,end)
+            //searchfilter=ago(2h)
+            if (pair.Key.StartsWith("searchfilter", StringComparison.OrdinalIgnoreCase))
             {
-                _filters ??= new List<SearchFilter>();
-                return _filters;
-            }
-            set => _filters = value;
-        }
-
-        private List<SearchLocation> _locations;
-        public List<SearchLocation> locations
-        {
-            get
-            {
-                _locations ??= new List<SearchLocation>();
-                return _locations;
-            }
-            set => _locations = value;
-        }
-
-
-
-
-        public void SetLocations(List<SearchLocation> loc)
-        {
-
-            this.locations = loc;
-        }
-
-
-
-        public List<SearchLocation> GetLocations()
-        {
-            return locations;
-        }
-
-        public List<SearchFilter> GetFilters()
-        {
-            return filters;
-        }
-
-        private string ReplaceInvalidChars(string text)
-        {
-            text = text.Replace(",", "");
-            text = text.Replace("(", "");
-            text = text.Replace(")", "");
-            text = text.Trim();
-            return text;
-        }
-
-        private List<string> SplitApart(string text)
-        {
-            List<string> ret = new List<string>();
-            var results = text.Split(",");
-            foreach (var i in results)
-            {
-                string ix = ReplaceInvalidChars(i);
-                if (string.IsNullOrEmpty(ix))
+                if (pair.Value.StartsWith("time"))
                 {
+                    var par = pair.Value.Substring(4);
+                    List<string> x = SplitApart(par);
+                    DateTime start = DateTime.Parse(x[0]);
+                    DateTime end = DateTime.Parse(x[1]);
+                    filters.Add(new TimeRangeFilter(start, end));
+                }
+                if (pair.Value.StartsWith("ago"))
+                {
+                    var par = pair.Value.Substring(3);
+                    List<string> x = SplitApart(par);
+                    filters.Add(new TimeAgoFilter(x[0]));
+                }
+                continue;
+            }
+
+            if (pair.Key.StartsWith("depth", StringComparison.OrdinalIgnoreCase))
+            {
+                SearchLocationDepth depth = SearchLocationDepth.Intermediate;
+                var ret = Enum.TryParse<SearchLocationDepth>(pair.Value, out depth);
+                if (!ret)
+                {
+                    throw new Exception("Failed to parse depth");
+                }
+                this.Depth = depth;
+
+            }
+
+
+            const string PATH_PREPEND = "path#";
+            //location=localmachine
+            //location=C:\
+            if (pair.Key.StartsWith("location", StringComparison.OrdinalIgnoreCase))
+            {
+                if (pair.Value.Equals("localeventlog", StringComparison.OrdinalIgnoreCase))
+                {
+                    locations.Add(new LocalEventLogLocation());
                     continue;
                 }
-                ret.Add(ix);
-            }
-            return ret;
-        }
-
-
-        public SearchQuery()
-        {
-            stats = new SearchStatistics(this);
-        }
-
-
-
-        public SearchQuery(Dictionary<string, string> arguments) : base()
-        {
-            stats = new SearchStatistics(this);
-            foreach (KeyValuePair<string, string> pair in arguments)
-            {
-                if (pair.Key.StartsWith("keyword", StringComparison.OrdinalIgnoreCase))
+                if (pair.Value.Equals("localeventlogquery", StringComparison.OrdinalIgnoreCase))
                 {
-                    filters.Add(new SimpleKeywordFilter(pair.Value));
+                    locations.Add(new LocalEventLogQueryLocation());
                     continue;
                 }
-
-                //searchfilter=time(start,end)
-                //searchfilter=ago(2h)
-                if (pair.Key.StartsWith("searchfilter", StringComparison.OrdinalIgnoreCase))
+                if (pair.Value.StartsWith(PATH_PREPEND, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (pair.Value.StartsWith("time"))
+                    var path = pair.Value.Substring(PATH_PREPEND.Length);
+                    if (!Path.Exists(path) && !File.Exists(path))
                     {
-                        string par = pair.Value.Substring(4);
-                        List<string> x = SplitApart(par);
-                        DateTime start = DateTime.Parse(x[0]);
-                        DateTime end = DateTime.Parse(x[1]);
-                        filters.Add(new TimeRangeFilter(start, end));
+                        throw new Exception("Path: " + path + " does not exist");
                     }
-                    if (pair.Value.StartsWith("ago"))
-                    {
-                        string par = pair.Value.Substring(3);
-                        List<string> x = SplitApart(par);
-                        filters.Add(new TimeAgoFilter(x[0]));
-                    }
+                    locations.Add(new FolderLocation(path));
                     continue;
                 }
-
-                if (pair.Key.StartsWith("depth", StringComparison.OrdinalIgnoreCase))
-                {
-                    SearchLocationDepth depth = SearchLocationDepth.Intermediate;
-                    bool ret = Enum.TryParse<SearchLocationDepth>(pair.Value, out depth);
-                    if (!ret)
-                    {
-                        throw new Exception("Failed to parse depth");
-                    }
-                    this.Depth = depth;
-
-                }
-
-
-                const string PATH_PREPEND = "path#";
-                //location=localmachine
-                //location=C:\
-                if (pair.Key.StartsWith("location", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (pair.Value.Equals("localeventlog", StringComparison.OrdinalIgnoreCase))
-                    {
-                        locations.Add(new LocalEventLogLocation());
-                        continue;
-                    }
-                    if (pair.Value.Equals("localeventlogquery", StringComparison.OrdinalIgnoreCase))
-                    {
-                        locations.Add(new LocalEventLogQueryLocation());
-                        continue;
-                    }
-                    if (pair.Value.StartsWith(PATH_PREPEND, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var path = pair.Value.Substring(PATH_PREPEND.Length);
-                        if (!Path.Exists(path) && !File.Exists(path))
-                        {
-                            throw new Exception("Path: " + path + " does not exist");
-                        }
-                        locations.Add(new FolderLocation(path));
-                        continue;
-                    }
-                }
-            }
-
-        }
-
-        public void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations)
-        {
-            foreach (var loc in locations)
-            {
-                loc.SetSearchDepth(depthForAllLocations);
             }
         }
 
-        public void LoadAllLocationsInMemory()
-        {
-            stats = new SearchStatistics(this); //reset the stats
-            progressSink.NotifyProgress(0, "starting");
-            SetDepthForAllLocations(Depth);
-            int count = 1;
-            foreach (var loc in locations)
-            {
-                progressSink.NotifyProgress(50*(count/ locations.Count()), "loading location: " + loc.GetName());
-                loc.LoadInMemory(false, this);
-                count++;
-            }
-            stats.LoadedAll();
-        }
+    }
 
-        public List<SearchResult> GetFilteredResults()
+    public void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations)
+    {
+        foreach (var loc in locations)
         {
-            List<SearchResult> results = new List<SearchResult>();
-            int count = 1;
-            foreach (var loc in locations)
-            {
-                progressSink.NotifyProgress(50+(50 * (count / locations.Count())), "loading results: " + loc.GetName());
-                results.AddRange(loc.Search(this));
-                count++;
-            }
-            stats.Searched();
-            return results;
+            loc.SetSearchDepth(depthForAllLocations);
         }
+    }
 
-        public SearchStatistics GetSearchStatistics()
+    public void LoadAllLocationsInMemory()
+    {
+        stats = new SearchStatistics(this); //reset the stats
+        progressSink.NotifyProgress(0, "starting");
+        SetDepthForAllLocations(Depth);
+        var count = 1;
+        foreach (var loc in locations)
         {
-            return stats;
+            progressSink.NotifyProgress(50*(count/ locations.Count()), "loading location: " + loc.GetName());
+            loc.LoadInMemory(false, this);
+            count++;
         }
+        stats.LoadedAll();
+    }
 
-        public void GetSearchStatsOutput()
+    public List<SearchResult> GetFilteredResults()
+    {
+        List<SearchResult> results = new List<SearchResult>();
+        var count = 1;
+        foreach (var loc in locations)
         {
-            stats.ReportToConsole();
+            progressSink.NotifyProgress(50+(50 * (count / locations.Count())), "loading results: " + loc.GetName());
+            results.AddRange(loc.Search(this));
+            count++;
         }
+        stats.Searched();
+        return results;
+    }
 
-        public string? Name
-        {
-            get; set;
-        }
+    public SearchStatistics GetSearchStatistics()
+    {
+        return stats;
+    }
+
+    public void GetSearchStatsOutput()
+    {
+        stats.ReportToConsole();
+    }
+
+    public string? Name
+    {
+        get; set;
     }
 }

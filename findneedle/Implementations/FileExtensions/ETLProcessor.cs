@@ -50,7 +50,9 @@ public class ETLProcessor : FileExtensionProcessor
             try
             {
 
+#pragma warning disable CS8604 // Possible null reference argument.
                 using var fileStream = File.OpenRead(currentResult.outputfile);
+#pragma warning restore CS8604 // Possible null reference argument.
                 using var streamReader = new StreamReader(fileStream, Encoding.UTF8, false); //change buffer if there's perf reasons
 
                 string? line;
@@ -95,7 +97,7 @@ public class ETLProcessor : FileExtensionProcessor
 
     }
 
-    List<SearchResult> results = new();
+    readonly List<SearchResult> results = new();
     public void LoadInMemory() 
     {
         if (LoadEarly)
@@ -197,7 +199,7 @@ public class ETLLogLine : SearchResult
         return false;           
     }
 
-    private string nextline = string.Empty;
+    private readonly string nextline = string.Empty;
     public ETLLogLine(string textline, string filename, char nextline)
     {
         originalLine = textline;
@@ -334,10 +336,14 @@ public class ETLLogLine : SearchResult
         //Parse the json early
         try
         {
-
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+#pragma warning disable CS8601 // Possible null reference assignment.
             keyjson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
-       
+#pragma warning restore CS8601 // Possible null reference assignment.
+
+
             metaprovider = keyjson["meta"]["provider"];
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             metadatetime = DateTime.Parse((string)keyjson["meta"]["time"]);
             
             if (!String.IsNullOrEmpty(keyjson["meta"]["task"]))

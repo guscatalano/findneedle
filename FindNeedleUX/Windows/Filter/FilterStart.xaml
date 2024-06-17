@@ -9,7 +9,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid>
+    <StackPanel>
         <RadioButtons Header="Filter Type">
             <RadioButton Content="Simple Keyword" Checked="RadioButton_Checked" Name="Keyword"/>
             <RadioButton Content="Time Range" Checked="RadioButton_Checked" Name ="TimeRange"/>
@@ -18,5 +18,5 @@
             <RadioButton Content="Provider" Checked="RadioButton_Checked" Name="Provider"/>
         </RadioButtons>
         <Button Click="Button_Click" >Next</Button>
-    </Grid>
+    </StackPanel>
 </Page>

@@ -15,13 +15,13 @@
             <StackPanel BorderThickness="1" Background="AliceBlue" Margin="5">
                
 
-                        <Grid ColumnDefinitions="100, Auto, Auto, Auto, *" RowDefinitions ="*">
+                        <Grid ColumnDefinitions="100, *, *, *" RowDefinitions ="*">
                             <TextBlock Text="{x:Bind Name.ToString()}" FontSize="12" TextAlignment="Left" Padding="12" 
                                        Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" Grid.Column="0" Grid.Row="0"/>
                             <TextBlock Text="{x:Bind Description.ToString()}" FontSize="14" TextAlignment="Center"
 Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" Grid.Column="1" Grid.Row="0"/>
-                    <Button DataContext="{x:Bind Name.ToString()}" Grid.Column="3" Grid.Row="0" Margin="50 0 50 0" Click="Button_Click_1">Edit</Button>
-                    <Button DataContext="{x:Bind Name.ToString()}" Grid.Column="4" Grid.Row="0" Click="ButtonRemove_Click">Remove</Button>
+                    <Button DataContext="{x:Bind Name.ToString()}" Grid.Column="2" Grid.Row="0"  Click="Button_Click_1">Edit</Button>
+                    <Button DataContext="{x:Bind Name.ToString()}" Grid.Column="3" Grid.Row="0" Click="ButtonRemove_Click">Remove</Button>
                 </Grid>
                    
             </StackPanel>

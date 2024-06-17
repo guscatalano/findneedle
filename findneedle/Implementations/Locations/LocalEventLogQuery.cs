@@ -137,7 +137,7 @@ public class LocalEventLogQueryLocation : SearchLocation
     readonly List<SearchResult> searchResults = new();
     public LocalEventLogQueryLocation()
     {
-
+        eventLogName = "Application";
     }
 
     public LocalEventLogQueryLocation(string name)
