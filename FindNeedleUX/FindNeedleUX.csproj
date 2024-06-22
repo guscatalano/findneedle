@@ -20,6 +20,7 @@
     <AppxBundle>Never</AppxBundle>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
     <PlatformTarget>x64</PlatformTarget>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
      <SelfContained>true</SelfContained>
 
   </PropertyGroup>
