@@ -101,7 +101,7 @@ jobs:
         name: MSIX Package
         path: ${{ env.Wap_Project_Directory }}\bin
    
-    - uses: actions/checkout@master
+  
     - name: Archive Release
       uses: thedoctor0/zip-release@0.7.5
       with:
