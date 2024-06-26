@@ -116,17 +116,11 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: 0.0.4
+        tag_name: 0.0.5
         release_name: Find Needle Beta 0.0.2
         draft: false
         prerelease: true
 
-    - name: Upload Release
-      uses: ncipollo/release-action@v1.12.0
-      with:
-        artifacts: "release.zip"
-        tag: 0.0.4
-        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload Release Asset
       id: upload-release-asset 
@@ -135,6 +129,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-        asset_path: D:\a\findneedle\bin\Release\findneedle.exe
-        asset_name: FindNeedle.exe
-        asset_content_type: application/exe
+        asset_path: release.zip
+        asset_name: release.zip
+        asset_content_type: application/zip
