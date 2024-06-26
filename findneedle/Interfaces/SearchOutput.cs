@@ -4,12 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle.Interfaces
+namespace findneedle.Interfaces;
+
+interface SearchOutput
 {
-    interface SearchOutput
-    {
-        public void WriteAllOutput(List<SearchResult> result);
-        public void WriteOutput(SearchResult result);
-        public string GetOutputFileName();
-    }
+    public void WriteAllOutput(List<SearchResult> result);
+    public void WriteOutput(SearchResult result);
+    public string GetOutputFileName();
 }

@@ -5,51 +5,47 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle
+namespace findneedle;
+
+//Defines how deep to search a given location. Deepest might imply pre-loading data that may not matter
+public enum SearchLocationDepth
 {
-    //Defines how deep to search a given location. Deepest might imply pre-loading data that may not matter
-    public enum SearchLocationDepth
+    Shallow = 0,
+    Intermediate = 1,
+    Deep = 2,
+    Crush = 3 //Load everything
+}
+
+public abstract class SearchLocation
+{
+    public int numRecordsInLastResult
+    { get;
+        set;
+    }
+    public int numRecordsInMemory
     {
-        Shallow = 0,
-        Intermediate = 1,
-        Deep = 2,
-        Crush = 3 //Load everything
+        get; set;
     }
 
-    public abstract class SearchLocation
+    public SearchLocationDepth depth
     {
-        public int numRecordsInLastResult
-        { get;
-            set;
-        }
-        public int numRecordsInMemory
-        {
-            get; set;
-        }
-
-        public SearchLocationDepth depth
-        {
-        get; set; }
+    get; set; }
 
 
-        public abstract void LoadInMemory(bool prefilter, SearchQuery searchQuery);
+    public abstract void LoadInMemory(bool prefilter, SearchQuery searchQuery);
 
-        public abstract List<SearchResult> Search(SearchQuery searchQuery);
+    public abstract List<SearchResult> Search(SearchQuery searchQuery);
 
-        public void SetSearchDepth(SearchLocationDepth depth)
-        {
-            this.depth = depth;
-        }
-        public SearchLocationDepth GetSearchDepth()
-        {
-            return this.depth;
-        }
-
-        public abstract string GetDescription();
-        public abstract string GetName();
-
+    public void SetSearchDepth(SearchLocationDepth depth)
+    {
+        this.depth = depth;
+    }
+    public SearchLocationDepth GetSearchDepth()
+    {
+        return this.depth;
     }
 
-
+    public abstract string GetDescription();
+    public abstract string GetName();
 
 }

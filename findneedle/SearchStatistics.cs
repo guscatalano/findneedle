@@ -1,201 +1,200 @@
 ﻿using System.Diagnostics;
 
-namespace findneedle
+namespace findneedle;
+
+
+public class MemorySnapshot
 {
+    static readonly string[] SizeSuffixes =
+               { "bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
 
-    public class MemorySnapshot
+    static string SizeSuffix(long value, int decimalPlaces = 1)
     {
-        static readonly string[] SizeSuffixes =
-                   { "bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
+        if (decimalPlaces < 0) { throw new ArgumentOutOfRangeException("decimalPlaces"); }
+        if (value < 0) { return "-" + SizeSuffix(-value, decimalPlaces); }
+        if (value == 0) { return string.Format("{0:n" + decimalPlaces + "} bytes", 0); }
 
-        static string SizeSuffix(long value, int decimalPlaces = 1)
+        // mag is 0 for bytes, 1 for KB, 2, for MB, etc.
+        var mag = (int)Math.Log(value, 1024);
+
+        // 1L << (mag * 10) == 2 ^ (10 * mag) 
+        // [i.e. the number of bytes in the unit corresponding to mag]
+        var adjustedSize = (decimal)value / (1L << (mag * 10));
+
+        // make adjustment when the value is large enough that
+        // it would round up to 1000 or more
+        if (Math.Round(adjustedSize, decimalPlaces) >= 1000)
         {
-            if (decimalPlaces < 0) { throw new ArgumentOutOfRangeException("decimalPlaces"); }
-            if (value < 0) { return "-" + SizeSuffix(-value, decimalPlaces); }
-            if (value == 0) { return string.Format("{0:n" + decimalPlaces + "} bytes", 0); }
-
-            // mag is 0 for bytes, 1 for KB, 2, for MB, etc.
-            int mag = (int)Math.Log(value, 1024);
-
-            // 1L << (mag * 10) == 2 ^ (10 * mag) 
-            // [i.e. the number of bytes in the unit corresponding to mag]
-            decimal adjustedSize = (decimal)value / (1L << (mag * 10));
-
-            // make adjustment when the value is large enough that
-            // it would round up to 1000 or more
-            if (Math.Round(adjustedSize, decimalPlaces) >= 1000)
-            {
-                mag += 1;
-                adjustedSize /= 1024;
-            }
-
-            return string.Format("{0:n" + decimalPlaces + "} {1}",
-                adjustedSize,
-                SizeSuffixes[mag]);
+            mag += 1;
+            adjustedSize /= 1024;
         }
 
-        long privatememory = 0;
-        long gcmemory = 0;
-        DateTime when;
-        Process p;
-        public MemorySnapshot(Process p)
-        {
-            this.p = p;
-        }
-
-        public void Snap()
-        {
-            when = DateTime.Now;
-            p.Refresh();
-            privatememory = p.PrivateMemorySize64;
-            gcmemory = GC.GetTotalMemory(false);
-        }
-
-        public string GetMemoryUsage()
-        {
-            return " PrivateMemory (" + SizeSuffix(privatememory) + ") / GC Memory (" + SizeSuffix(gcmemory) + ").";
-        }
-
-        public DateTime GetSnapTime()
-        {
-            return when;
-        }
-
+        return string.Format("{0:n" + decimalPlaces + "} {1}",
+            adjustedSize,
+            SizeSuffixes[mag]);
     }
 
-    public enum SearchStatisticStep
+    long privatememory = 0;
+    long gcmemory = 0;
+    DateTime when;
+    readonly Process p;
+    public MemorySnapshot(Process p)
     {
-        AtLoad,
-        AtSearch,
-        AtLaunch,
-        Total
+        this.p = p;
     }
 
-    public class ReportFromComponent
+    public void Snap()
     {
-        public string component = string.Empty;
-        public SearchStatisticStep step = SearchStatisticStep.Total;
-        public string summary = string.Empty;
-        public Dictionary<string, dynamic> metric = new Dictionary<string, dynamic>();
+        when = DateTime.Now;
+        p.Refresh();
+        privatememory = p.PrivateMemorySize64;
+        gcmemory = GC.GetTotalMemory(false);
     }
 
-    public class SearchStatistics
+    public string GetMemoryUsage()
     {
-        SearchQuery q;
-        Process proc;
-        public SearchStatistics(SearchQuery query)
+        return " PrivateMemory (" + SizeSuffix(privatememory) + ") / GC Memory (" + SizeSuffix(gcmemory) + ").";
+    }
+
+    public DateTime GetSnapTime()
+    {
+        return when;
+    }
+
+}
+
+public enum SearchStatisticStep
+{
+    AtLoad,
+    AtSearch,
+    AtLaunch,
+    Total
+}
+
+public class ReportFromComponent
+{
+    public string component = string.Empty;
+    public SearchStatisticStep step = SearchStatisticStep.Total;
+    public string summary = string.Empty;
+    public Dictionary<string, dynamic> metric = new();
+}
+
+public class SearchStatistics
+{
+    readonly SearchQuery q;
+    readonly Process proc;
+    public SearchStatistics(SearchQuery query)
+    {
+        q = query;
+        proc = Process.GetCurrentProcess();
+        atLoad = new MemorySnapshot(proc);
+        atSearch = new MemorySnapshot(proc);
+        atLaunch = new MemorySnapshot(proc);
+        atLaunch.Snap();
+    }
+
+    int totalRecordsSearch = 0;
+    int totalRecordsLoaded = 0;
+    readonly MemorySnapshot atLaunch;
+    readonly MemorySnapshot atLoad;
+    readonly MemorySnapshot atSearch;
+
+
+
+    public Dictionary<SearchStatisticStep, List<ReportFromComponent>> componentReports = new();
+    
+
+    public void ReportFromComponent(ReportFromComponent data)
+    {
+        if (!componentReports.ContainsKey(data.step))
         {
-            q = query;
-            proc = Process.GetCurrentProcess();
-            atLoad = new MemorySnapshot(proc);
-            atSearch = new MemorySnapshot(proc);
-            atLaunch = new MemorySnapshot(proc);
-            atLaunch.Snap();
+            componentReports.Add(data.step, new List<ReportFromComponent>());
         }
-
-        int totalRecordsSearch = 0;
-        int totalRecordsLoaded = 0;
-        MemorySnapshot atLaunch;
-        MemorySnapshot atLoad;
-        MemorySnapshot atSearch;
-
-
-
-        public Dictionary<SearchStatisticStep, List<ReportFromComponent>> componentReports = new Dictionary<SearchStatisticStep, List<ReportFromComponent>>();
+        componentReports[data.step].Add(data);
         
+    }
 
-        public void ReportFromComponent(ReportFromComponent data)
+    public void LoadedAll()
+    {
+        totalRecordsLoaded = 0;
+        foreach (SearchLocation loc in q.GetLocations())
         {
-            if (!componentReports.ContainsKey(data.step))
-            {
-                componentReports.Add(data.step, new List<ReportFromComponent>());
-            }
-            componentReports[data.step].Add(data);
-            
+            totalRecordsLoaded += loc.numRecordsInMemory;
         }
 
-        public void LoadedAll()
-        {
-            totalRecordsLoaded = 0;
-            foreach (SearchLocation loc in q.GetLocations())
-            {
-                totalRecordsLoaded += loc.numRecordsInMemory;
-            }
+        atLoad.Snap();
+    }
 
-            atLoad.Snap();
+    public void Searched()
+    {
+        totalRecordsSearch = 0;
+        foreach (SearchLocation loc in q.GetLocations())
+        {
+            totalRecordsSearch += loc.numRecordsInLastResult;
+        }
+        atSearch.Snap();
+    }
+
+    public int GetRecordsAtStep(SearchStatisticStep step)
+    {
+        switch (step)
+        {
+            case SearchStatisticStep.AtLoad:
+                return totalRecordsLoaded;
+            case SearchStatisticStep.AtSearch:
+                return totalRecordsSearch;
+            default:
+                throw new Exception("bad input");
+        }
+    }
+
+    public TimeSpan GetTimeTaken(SearchStatisticStep step)
+    {
+        switch (step)
+        {
+            case SearchStatisticStep.AtLoad:
+                return atLoad.GetSnapTime() - atLaunch.GetSnapTime();
+            case SearchStatisticStep.AtSearch:
+                return atSearch.GetSnapTime() - atLoad.GetSnapTime();
+            case SearchStatisticStep.Total:
+                return atSearch.GetSnapTime() - atLaunch.GetSnapTime();
+            default:
+                throw new Exception("not valid step for time");
         }
 
-        public void Searched()
+    }
+
+
+    public string GetMemoryUsage(SearchStatisticStep step)
+    {
+        switch (step)
         {
-            totalRecordsSearch = 0;
-            foreach (SearchLocation loc in q.GetLocations())
-            {
-                totalRecordsSearch += loc.numRecordsInLastResult;
-            }
-            atSearch.Snap();
+            case SearchStatisticStep.AtLaunch:
+                return atLaunch.GetMemoryUsage();
+            case SearchStatisticStep.AtLoad:
+                return atLoad.GetMemoryUsage();
+            case SearchStatisticStep.AtSearch:
+                return atSearch.GetMemoryUsage();
+            default:
+                throw new Exception("invalid param");
         }
+    }
 
-        public int GetRecordsAtStep(SearchStatisticStep step)
-        {
-            switch (step)
-            {
-                case SearchStatisticStep.AtLoad:
-                    return totalRecordsLoaded;
-                case SearchStatisticStep.AtSearch:
-                    return totalRecordsSearch;
-                default:
-                    throw new Exception("bad input");
-            }
-        }
+    public string GetSummaryReport()
+    {
+        var summary = string.Empty;
+        summary += ("Memory at launch: " + GetMemoryUsage(SearchStatisticStep.AtLaunch) + Environment.NewLine);
+        summary += ("Total records when loaded (" + GetRecordsAtStep(SearchStatisticStep.AtLoad) + ") with" + GetMemoryUsage(SearchStatisticStep.AtLoad) + Environment.NewLine);
+        summary += ("Total records after search (" + GetRecordsAtStep(SearchStatisticStep.AtSearch) + ") with" + GetMemoryUsage(SearchStatisticStep.AtSearch) + Environment.NewLine);
+        summary += ("Took " + GetTimeTaken(SearchStatisticStep.AtLoad).TotalSeconds + " second(s) to load." + Environment.NewLine);
+        summary += ("Took " + GetTimeTaken(SearchStatisticStep.AtSearch).TotalSeconds + " second(s) to search." + Environment.NewLine);
+        summary += ("Took " + GetTimeTaken(SearchStatisticStep.Total).TotalSeconds + " second(s) total." + Environment.NewLine);
+        return summary;
+    }
 
-        public TimeSpan GetTimeTaken(SearchStatisticStep step)
-        {
-            switch (step)
-            {
-                case SearchStatisticStep.AtLoad:
-                    return atLoad.GetSnapTime() - atLaunch.GetSnapTime();
-                case SearchStatisticStep.AtSearch:
-                    return atSearch.GetSnapTime() - atLoad.GetSnapTime();
-                case SearchStatisticStep.Total:
-                    return atSearch.GetSnapTime() - atLaunch.GetSnapTime();
-                default:
-                    throw new Exception("not valid step for time");
-            }
+    public void ReportToConsole()
+    {
+        Console.WriteLine(GetSummaryReport());
 
-        }
-
-
-        public string GetMemoryUsage(SearchStatisticStep step)
-        {
-            switch (step)
-            {
-                case SearchStatisticStep.AtLaunch:
-                    return atLaunch.GetMemoryUsage();
-                case SearchStatisticStep.AtLoad:
-                    return atLoad.GetMemoryUsage();
-                case SearchStatisticStep.AtSearch:
-                    return atSearch.GetMemoryUsage();
-                default:
-                    throw new Exception("invalid param");
-            }
-        }
-
-        public string GetSummaryReport()
-        {
-            var summary = string.Empty;
-            summary += ("Memory at launch: " + GetMemoryUsage(SearchStatisticStep.AtLaunch) + Environment.NewLine);
-            summary += ("Total records when loaded (" + GetRecordsAtStep(SearchStatisticStep.AtLoad) + ") with" + GetMemoryUsage(SearchStatisticStep.AtLoad) + Environment.NewLine);
-            summary += ("Total records after search (" + GetRecordsAtStep(SearchStatisticStep.AtSearch) + ") with" + GetMemoryUsage(SearchStatisticStep.AtSearch) + Environment.NewLine);
-            summary += ("Took " + GetTimeTaken(SearchStatisticStep.AtLoad).TotalSeconds + " second(s) to load." + Environment.NewLine);
-            summary += ("Took " + GetTimeTaken(SearchStatisticStep.AtSearch).TotalSeconds + " second(s) to search." + Environment.NewLine);
-            summary += ("Took " + GetTimeTaken(SearchStatisticStep.Total).TotalSeconds + " second(s) total." + Environment.NewLine);
-            return summary;
-        }
-
-        public void ReportToConsole()
-        {
-            Console.WriteLine(GetSummaryReport());
-
-        }
     }
 }

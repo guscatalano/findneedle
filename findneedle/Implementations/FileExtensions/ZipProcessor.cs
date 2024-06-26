@@ -11,8 +11,8 @@ using findneedle.WDK;
 namespace findneedle.Implementations.FileExtensions;
 public class ZipProcessor : FileExtensionProcessor
 {
-    string inputfile;
-    private FolderLocation parent;
+    readonly string inputfile;
+    private readonly FolderLocation parent;
     public ZipProcessor(string file, FolderLocation parent)
     {
         inputfile = file;
@@ -24,7 +24,7 @@ public class ZipProcessor : FileExtensionProcessor
         {
             return;
         }
-        string temp = TempStorage.GetNewTempPath("zip");
+        var temp = TempStorage.GetNewTempPath("zip");
         ZipFile.ExtractToDirectory(inputfile, temp);
 
         parent.QueueNewFolder(temp, true);
