@@ -115,6 +115,7 @@ jobs:
       uses: thedoctor0/zip-release@0.7.5
       with:
         type: 'zip'
+        directory: 'D:\a\findneedle\findneedle\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\'
         filename: 'release.zip'
         exclusions: '*.git* /*node_modules/*.editorconfig'
 
@@ -125,8 +126,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: 0.0.5
-        release_name: Find Needle Beta 0.0.2
+        tag_name: 0.0.6
+        release_name: Find Needle Beta 0.0.6
         draft: false
         prerelease: true
 
