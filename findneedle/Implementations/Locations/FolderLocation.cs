@@ -55,52 +55,17 @@ public class FolderLocation : SearchLocation
 
     ReportFromComponent procStats;
 
-    private IEnumerable<string> GetAllFiles(string path)
+
+    public void GetAllFilesErrorHandler(string path)
     {
-        Queue<string> queue = new Queue<string>();
-        queue.Enqueue(path);
-        while (queue.Count > 0)
+
+        //Report errors right away
+        if (!procStats.metric.ContainsKey(path))
         {
-            path = queue.Dequeue();
-            try
-            {
-                foreach (var subDir in Directory.GetDirectories(path))
-                {
-                    queue.Enqueue(subDir);
-                }
-            }
-            catch (Exception)
-            {
-                //Report errors right away
-                if (!procStats.metric.ContainsKey(path))
-                {
-                    procStats.metric[path] = new Dictionary<string, string>();
-                    procStats.metric[path]["error"] = "Failed to open / denied";
-                }
-            }
-            var files = new string[1];
-            try
-            {
-                files = Directory.GetFiles(path);
-            }
-            catch (Exception)
-            {
-                //Report errors right away
-                if (!procStats.metric.ContainsKey(path))
-                {
-                    procStats.metric[path] = new Dictionary<string, string>();
-                    procStats.metric[path]["error"] = "Failed to open / denied";
-                }
-            }
-            if (files != null)
-            {
-                for (var i = 0; i < files.Length; i++)
-                {
-                    yield return files[i];
-                }
-            }
+            procStats.metric[path] = new Dictionary<string, string>();
+            procStats.metric[path]["error"] = "Failed to open / denied";
         }
-    }
+    } 
 
     public SearchQuery currentQuery;
     public List<Task> tasks = new();
@@ -133,7 +98,7 @@ public class FolderLocation : SearchLocation
         else
         {
 
-            foreach (var file in GetAllFiles(path))
+            foreach (var file in FileIO.GetAllFiles(path, GetAllFilesErrorHandler))
             {
                 searchQuery.progressSink.NotifyProgress("queuing up: " + file);
                 tasks.Add(Task.Run(() => ProcessFile(file)));
@@ -160,7 +125,7 @@ public class FolderLocation : SearchLocation
     public void QueueNewFolder(string path, bool startWait = false)
     {
         List<Task> myTasks = new List<Task>();
-        foreach (var file in GetAllFiles(path))
+        foreach (var file in FileIO.GetAllFiles(path, GetAllFilesErrorHandler))
         {
             currentQuery.progressSink.NotifyProgress("queuing up: " + file);
             myTasks.Add(Task.Run(() => ProcessFile(file)));

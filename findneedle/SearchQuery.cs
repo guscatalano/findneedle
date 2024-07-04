@@ -1,4 +1,5 @@
 ﻿using findneedle.Implementations;
+using findneedle.PluginSubsystem;
 
 namespace findneedle;
 
@@ -102,8 +103,17 @@ public class SearchQuery
     }
 
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
     public SearchQuery()
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
     {
+        Initialize();
+    }
+
+
+    public void Initialize()
+    {
+        PluginManager.DiscoverPlugins();
         stats = new SearchStatistics(this);
         _progressSink = new SearchProgressSink();
         _stats = stats;
@@ -112,12 +122,13 @@ public class SearchQuery
     }
 
 
-
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-    public SearchQuery(Dictionary<string, string> arguments) : base()
+    public SearchQuery(Dictionary<string, string> arguments)
 #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
     {
-        stats = new SearchStatistics(this);
+
+        Initialize();
+
         foreach (KeyValuePair<string, string> pair in arguments)
         {
             if (pair.Key.StartsWith("keyword", StringComparison.OrdinalIgnoreCase))
