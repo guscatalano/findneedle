@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle;
 
@@ -81,9 +82,9 @@ public class ReportFromComponent
 
 public class SearchStatistics
 {
-    readonly SearchQuery q;
+    readonly ISearchQuery q;
     readonly Process proc;
-    public SearchStatistics(SearchQuery query)
+    public SearchStatistics(ISearchQuery query)
     {
         q = query;
         proc = Process.GetCurrentProcess();

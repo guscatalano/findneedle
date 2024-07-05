@@ -5,6 +5,7 @@ using System.Diagnostics.Eventing.Reader;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 
@@ -156,7 +157,7 @@ public class LocalEventLogQueryLocation : SearchLocation
 
 
 
-    public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
+    public override void LoadInMemory(bool prefilter, ISearchQuery searchQuery)
     {
 
         //This can be useful to pre-filter
@@ -173,7 +174,7 @@ public class LocalEventLogQueryLocation : SearchLocation
        
     }
 
-    public override List<SearchResult> Search(SearchQuery searchQuery)
+    public override List<SearchResult> Search(ISearchQuery searchQuery)
     {
         numRecordsInLastResult = 0;
         List<SearchResult> filteredResults = new List<SearchResult>();

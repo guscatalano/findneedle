@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using findneedle.Implementations.FileExtensions;
 using findneedle.Interfaces;
 using findneedle.Utils;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 
@@ -67,9 +68,9 @@ public class FolderLocation : SearchLocation
         }
     } 
 
-    public SearchQuery currentQuery;
+    public ISearchQuery currentQuery;
     public List<Task> tasks = new();
-    public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
+    public override void LoadInMemory(bool prefilter, ISearchQuery searchQuery)
     {
         procStats = new ReportFromComponent()
         {
@@ -92,7 +93,7 @@ public class FolderLocation : SearchLocation
 
         if (isFile)
         {
-            searchQuery.progressSink.NotifyProgress("queuing up: " + path);
+            searchQuery.GetSearchProgressSink().NotifyProgress("queuing up: " + path);
             tasks.Add(Task.Run(() => ProcessFile(path)));
         }
         else
@@ -100,23 +101,23 @@ public class FolderLocation : SearchLocation
 
             foreach (var file in FileIO.GetAllFiles(path, GetAllFilesErrorHandler))
             {
-                searchQuery.progressSink.NotifyProgress("queuing up: " + file);
+                searchQuery.GetSearchProgressSink().NotifyProgress("queuing up: " + file);
                 tasks.Add(Task.Run(() => ProcessFile(file)));
             }
         }
-        searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed");
+        searchQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed");
         var completed = 0;
         var initialCount = tasks.Count;
         while (completed < tasks.Count)
         {
             completed = tasks.Where(x => x.IsCompleted).Count();
-            searchQuery.progressSink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+            searchQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
 
             Thread.Yield();
         }
         Task.WhenAll(tasks).Wait();
         tasks.Clear();
-        searchQuery.progressSink.NotifyProgress("processed " + path);
+        searchQuery.GetSearchProgressSink().NotifyProgress("processed " + path);
         
         CalculateStats(searchQuery, procStats);
         
@@ -127,27 +128,27 @@ public class FolderLocation : SearchLocation
         List<Task> myTasks = new List<Task>();
         foreach (var file in FileIO.GetAllFiles(path, GetAllFilesErrorHandler))
         {
-            currentQuery.progressSink.NotifyProgress("queuing up: " + file);
+            currentQuery.GetSearchProgressSink().NotifyProgress("queuing up: " + file);
             myTasks.Add(Task.Run(() => ProcessFile(file)));
         }
 
         if (startWait)
         {
-            currentQuery.progressSink.NotifyProgress("waiting for etl files to be processed");
+            currentQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed");
             var completed = 0;
             while (completed < myTasks.Count)
             {
                 completed = myTasks.Where(x => x.IsCompleted).Count();
-                currentQuery.progressSink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+                currentQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
                 Thread.Yield();
             }
             Task.WhenAll(myTasks).Wait();
             myTasks.Clear();
-            currentQuery.progressSink.NotifyProgress("processed " + path);
+            currentQuery.GetSearchProgressSink().NotifyProgress("processed " + path);
         }
     }
 
-    public void CalculateStats(SearchQuery searchQuery, ReportFromComponent procStats)
+    public void CalculateStats(ISearchQuery searchQuery, ReportFromComponent procStats)
     {
         //Do reports
 
@@ -296,7 +297,7 @@ public class FolderLocation : SearchLocation
         }
     }
 
-    public override List<SearchResult> Search(SearchQuery searchQuery)
+    public override List<SearchResult> Search(ISearchQuery searchQuery)
     {
         List<SearchResult> results = new List<SearchResult>();
         lock (knownProcessors)

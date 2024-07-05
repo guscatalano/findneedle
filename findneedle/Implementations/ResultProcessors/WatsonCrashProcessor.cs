@@ -15,6 +15,10 @@ public class WatsonCrashProcessor : ResultProcessor
         return "";
     }
 
+    public string GetOutputText() {
+        return "";
+    }
+
     public void ProcessResults(List<SearchResult> results)
     {
         List<SearchResult> resultList = new List<SearchResult>();

@@ -1,11 +1,12 @@
 ﻿using findneedle.Implementations;
 using findneedle.PluginSubsystem;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle;
 
 
 
-public class SearchQuery
+public class SearchQuery : ISearchQuery
 {
 
 
@@ -76,6 +77,8 @@ public class SearchQuery
     {
         return filters;
     }
+
+
 
     private string ReplaceInvalidChars(string text)
     {
@@ -247,6 +250,8 @@ public class SearchQuery
     {
         stats.ReportToConsole();
     }
+
+    public SearchProgressSink GetSearchProgressSink() { return progressSink; }
 
     public string? Name
     {

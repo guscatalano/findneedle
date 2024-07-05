@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using findneedle.Implementations.Discovery;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 
@@ -115,7 +116,7 @@ public class LocalEventLogLocation : SearchLocation
         return eventLogName;
     }
 
-    public override void LoadInMemory(bool prefilter, SearchQuery searchQuery)
+    public override void LoadInMemory(bool prefilter, ISearchQuery searchQuery)
     {
         if(eventLogName.Equals("everything", StringComparison.OrdinalIgnoreCase))
         {
@@ -150,7 +151,7 @@ public class LocalEventLogLocation : SearchLocation
 
     }
 
-    public override List<SearchResult> Search(SearchQuery searchQuery)
+    public override List<SearchResult> Search(ISearchQuery searchQuery)
     {
         numRecordsInLastResult = 0;
         List<SearchResult> filteredResults = new List<SearchResult>();

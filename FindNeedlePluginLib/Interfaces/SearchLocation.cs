@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle;
 
@@ -32,9 +33,9 @@ public abstract class SearchLocation
     get; set; }
 
 
-    public abstract void LoadInMemory(bool prefilter, SearchQuery searchQuery);
+    public abstract void LoadInMemory(bool prefilter, ISearchQuery searchQuery);
 
-    public abstract List<SearchResult> Search(SearchQuery searchQuery);
+    public abstract List<SearchResult> Search(ISearchQuery searchQuery);
 
     public void SetSearchDepth(SearchLocationDepth depth)
     {

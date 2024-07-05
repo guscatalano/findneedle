@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace findneedle.Interfaces;
 
-interface SearchOutput
+public interface SearchOutput
 {
     public void WriteAllOutput(List<SearchResult> result);
     public void WriteOutput(SearchResult result);
