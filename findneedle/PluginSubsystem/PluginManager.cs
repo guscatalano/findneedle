@@ -1,34 +1,44 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.Utils;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.PluginSubsystem;
 public class PluginManager
 {
-
-    public static void DiscoverPlugins()
+    //todo: Figure out something better
+    public static readonly string FAKE_LOADER = "C:\\tools\\FakeLoadPlugin.exe";
+    public static Dictionary<string, List<PluginDescription>> DiscoverPlugins()
     {
+        Dictionary<string, List<PluginDescription>> ret = new();
         IEnumerable<string> files = FileIO.GetAllFiles(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
-        foreach (string file in files)
+        foreach (var file in files)
         {
-            if (file.StartsWith("FindNeedle") && file.Contains("Plugin") && file.EndsWith(".dll"))
+            if (file.Contains("Plugin") && file.EndsWith(".dll"))
             {
                 try
                 {
-                    //var y = Assembly.ReflectionOnlyLoad()
-                    // z = y.GetTypes();
-                    //Assembly.l
+                    var descriptorFile = file + ".json";
+                    Process p = Process.Start(FAKE_LOADER, file);
+                    p.WaitForExit();
+                    if (File.Exists(descriptorFile))
+                    {
+                        var output = IPluginDescription.ReadDescriptionFile(descriptorFile);
+                        ret.Add(file, output);
+                    }
                 }
                 catch (Exception)
                 {
-
+                    //Dont care
                 }
             }
-            Console.WriteLine(file);
+           
         }
+        return ret;
     }
 }

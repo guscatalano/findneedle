@@ -1,28 +1,63 @@
 ﻿using System;
 using System.Reflection;
+using System.Text.Json;
+using FindNeedlePluginLib.Interfaces;
 
-namespace FakeLoadPlugin
+namespace FakeLoadPlugin;
+
+
+internal class Program
 {
-    internal class Program
-    {
-        static void Main(string[] args)
-        {
-            LoadPlugin(args[0]);
-        }
 
-        static void LoadPlugin(string file)
+    static void Main(string[] args)
+    {
+        var output = LoadPlugin(args[0]);
+        IPluginDescription.WriteDescriptionFile(output, args[0]);
+    }
+
+    private static List<PluginDescription> LoadPlugin(string file)
+    {
+        Console.WriteLine("Attempting to load: " + file);
+        var dll = Assembly.LoadFile(file);
+        var types = dll.GetTypes();
+        List<PluginDescription> validTypes = new List<PluginDescription>();
+        
+        foreach (var type in types)
         {
-            Console.WriteLine("Attempting to load: " + file);
-            var dll = Assembly.LoadFile(file);
-            var types = dll.GetTypes();
-            foreach (var type in types)
+            bool instantiate = false;
+            if (type.FullName == null)
             {
-                foreach (var possibleInterface in type.GetInterfaces())
+                continue;
+            }
+            List<string> implementedInterfaces = new();
+            foreach (var possibleInterface in type.GetInterfaces())
+            {
+                
+                if(possibleInterface.FullName == null)
                 {
-                    //   if(possibleInterface.FullName)
-                    Console.WriteLine(possibleInterface.FullName);
+                    continue;
+                }
+
+                Console.WriteLine("Found interface: " + possibleInterface.FullName);
+                if (possibleInterface.FullName.Equals("FindNeedlePluginLib.Interfaces.IPluginDescription"))
+                {
+                    instantiate = true;
+                    Console.WriteLine("Found potential plugin, loading...");
+                }
+                implementedInterfaces.Add(possibleInterface.FullName);
+            }
+
+            if (instantiate)
+            {
+                var Plugin = dll.CreateInstance(type.FullName);
+                if (Plugin != null)
+                {
+                    Console.WriteLine("Friendly Name: " + ((IPluginDescription)Plugin).GetFriendlyName());
+                    Console.WriteLine("Description: " + ((IPluginDescription)Plugin).GetTextDescription());
+                    validTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, file, implementedInterfaces));
                 }
             }
         }
+        return validTypes;
     }
 }

@@ -11,4 +11,8 @@
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
   </ItemGroup>
 
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="copy $(OutDir)\* C:\tools\" />
+  </Target>
+
 </Project>

@@ -9,6 +9,23 @@ namespace findneedle.Implementations.ResultProcessors;
 public class WatsonCrashProcessor : ResultProcessor
 {
 
+    public string GetClassName()
+    {
+        Type me = this.GetType();
+        if (me.FullName == null)
+        {
+            throw new Exception("Fullname was null???");
+        }
+        else
+        {
+            return me.FullName;
+        }
+    }
+
+    public string GetFriendlyName()
+    {
+        return "Watson Crash Processor";
+    }
 
     public string GetOutputFile(string optionalOutputFolder = "")
     {
@@ -17,6 +34,11 @@ public class WatsonCrashProcessor : ResultProcessor
 
     public string GetOutputText() {
         return "";
+    }
+
+    public string GetTextDescription() 
+    {
+        return "Finds application crashes in the logs";
     }
 
     public void ProcessResults(List<SearchResult> results)
