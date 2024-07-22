@@ -28,8 +28,10 @@ public class PluginManager
                     p.WaitForExit();
                     if (File.Exists(descriptorFile))
                     {
-                        var output = IPluginDescription.ReadDescriptionFile(descriptorFile);
-                        ret.Add(file, output);
+                        List<PluginDescription> plugins = IPluginDescription.ReadDescriptionFile(descriptorFile);   
+                        ret.Add(file, plugins);
+                    } else {
+                        Console.WriteLine("Plugin loader failed to load " + file);
                     }
                 }
                 catch (Exception)

@@ -23,11 +23,12 @@
             <NavigationViewItem Icon="Folder" Content="Locations" Tag="SearchLocationsPage" />
             <NavigationViewItem Icon="Filter" Content="Filters" Tag="SearchFiltersPage" />
             <NavigationViewItem Content="Processors" Tag="SearchProcessorsPage" />
+            <NavigationViewItem Content="Plugins" Tag="PluginsPage" />
             <NavigationViewItem  Content="Run" Tag="RunSearchPage" />
-                <NavigationViewItem  Content="ResultStatistics" Tag="SearchStatisticsPage" />
-                <NavigationViewItem  Content="Results" Tag="SearchResultPage" />
-                <NavigationViewItem  Content="ez Results" Tag="LightResultPage" />
-                <NavigationViewItem  Content="Info" Tag="SystemInfoPage" />
+            <NavigationViewItem  Content="ResultStatistics" Tag="SearchStatisticsPage" />
+            <NavigationViewItem  Content="Results" Tag="SearchResultPage" />
+            <NavigationViewItem  Content="ez Results" Tag="LightResultPage" />
+            <NavigationViewItem  Content="Info" Tag="SystemInfoPage" />
             </NavigationView.MenuItems>
         <Frame x:Name="contentFrame"/>
     </NavigationView>
