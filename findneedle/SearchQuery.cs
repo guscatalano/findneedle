@@ -221,7 +221,9 @@ public class SearchQuery : ISearchQuery
         foreach (var loc in locations)
         {
             progressSink.NotifyProgress(50*(count/ locations.Count()), "loading location: " + loc.GetName());
-            loc.LoadInMemory(false, this);
+            loc.SetNotificationCallback(progressSink);
+            loc.SetSearchStatistics(stats);
+            loc.LoadInMemory();
             count++;
         }
         stats.LoadedAll();

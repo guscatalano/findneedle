@@ -33,9 +33,9 @@ public abstract class SearchLocation
     get; set; }
 
 
-    public abstract void LoadInMemory(bool prefilter, ISearchQuery searchQuery);
+    public abstract void LoadInMemory();
 
-    public abstract List<SearchResult> Search(ISearchQuery searchQuery);
+    public abstract List<SearchResult> Search(ISearchQuery? searchQuery);
 
     public void SetSearchDepth(SearchLocationDepth depth)
     {
@@ -45,6 +45,9 @@ public abstract class SearchLocation
     {
         return this.depth;
     }
+
+    public abstract void SetNotificationCallback(SearchProgressSink sink);
+    public abstract void SetSearchStatistics(SearchStatistics stats);
 
     public abstract string GetDescription();
     public abstract string GetName();

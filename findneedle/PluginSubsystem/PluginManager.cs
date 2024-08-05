@@ -24,8 +24,9 @@ public class PluginManager
                 try
                 {
                     var descriptorFile = file + ".json";
-                    Process p = Process.Start(FAKE_LOADER, file);
-                    p.WaitForExit();
+                    /*Process p = Process.Start(FAKE_LOADER, file);
+                    
+                    p.WaitForExit();*/
                     if (File.Exists(descriptorFile))
                     {
                         List<PluginDescription> plugins = IPluginDescription.ReadDescriptionFile(descriptorFile);   

@@ -15,6 +15,16 @@ namespace findneedle.Implementations;
 
 public class FolderLocation : SearchLocation
 {
+    public SearchProgressSink? sink;
+    public SearchStatistics? stats;
+    public override void SetNotificationCallback(SearchProgressSink sink)
+    {
+        this.sink = sink;
+    }
+    public override void SetSearchStatistics(SearchStatistics stats)
+    {
+        this.stats = stats;
+    }
 
     public bool isFile
     { get; set;
@@ -35,7 +45,6 @@ public class FolderLocation : SearchLocation
             summary = "statsByFile",
             metric = new Dictionary<string, dynamic>()
         };
-        currentQuery = new SearchQuery();
         this.path = path;
         if(File.Exists(path))
         {
@@ -68,9 +77,8 @@ public class FolderLocation : SearchLocation
         }
     } 
 
-    public ISearchQuery currentQuery;
     public List<Task> tasks = new();
-    public override void LoadInMemory(bool prefilter, ISearchQuery searchQuery)
+    public override void LoadInMemory()
     {
         procStats = new ReportFromComponent()
         {
@@ -79,7 +87,6 @@ public class FolderLocation : SearchLocation
             summary = "statsByFile",
             metric = new Dictionary<string, dynamic>()
         };
-        currentQuery = searchQuery;
 
         knownProcessors = new List<FileExtensionProcessor>();
         TempStorage.GetMainTempPath();
@@ -93,7 +100,10 @@ public class FolderLocation : SearchLocation
 
         if (isFile)
         {
-            searchQuery.GetSearchProgressSink().NotifyProgress("queuing up: " + path);
+            if (sink != null)
+            {
+                sink.NotifyProgress("queuing up: " + path);
+            }
             tasks.Add(Task.Run(() => ProcessFile(path)));
         }
         else
@@ -101,25 +111,37 @@ public class FolderLocation : SearchLocation
 
             foreach (var file in FileIO.GetAllFiles(path, GetAllFilesErrorHandler))
             {
-                searchQuery.GetSearchProgressSink().NotifyProgress("queuing up: " + file);
+                if (sink != null)
+                {
+                    sink.NotifyProgress("queuing up: " + file);
+                }
                 tasks.Add(Task.Run(() => ProcessFile(file)));
             }
         }
-        searchQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed");
+        if (sink != null)
+        {
+            sink.NotifyProgress("waiting for etl files to be processed");
+        }
         var completed = 0;
         var initialCount = tasks.Count;
         while (completed < tasks.Count)
         {
             completed = tasks.Where(x => x.IsCompleted).Count();
-            searchQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+            if (sink != null)
+            {
+                sink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+            }
 
-            Thread.Yield();
+           Thread.Yield();
         }
         Task.WhenAll(tasks).Wait();
         tasks.Clear();
-        searchQuery.GetSearchProgressSink().NotifyProgress("processed " + path);
+        if (sink != null)
+        {
+            sink.NotifyProgress("processed " + path);
+        }
         
-        CalculateStats(searchQuery, procStats);
+        CalculateStats(procStats);
         
     }
 
@@ -128,27 +150,39 @@ public class FolderLocation : SearchLocation
         List<Task> myTasks = new List<Task>();
         foreach (var file in FileIO.GetAllFiles(path, GetAllFilesErrorHandler))
         {
-            currentQuery.GetSearchProgressSink().NotifyProgress("queuing up: " + file);
+            if (sink != null)
+            {
+                sink.NotifyProgress("queuing up: " + file);
+            }
             myTasks.Add(Task.Run(() => ProcessFile(file)));
         }
 
         if (startWait)
         {
-            currentQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed");
+            if (sink != null)
+            {
+                sink.NotifyProgress("waiting for etl files to be processed");
+            }
             var completed = 0;
             while (completed < myTasks.Count)
             {
                 completed = myTasks.Where(x => x.IsCompleted).Count();
-                currentQuery.GetSearchProgressSink().NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+                if (sink != null)
+                {
+                    sink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
+                }
                 Thread.Yield();
             }
             Task.WhenAll(myTasks).Wait();
             myTasks.Clear();
-            currentQuery.GetSearchProgressSink().NotifyProgress("processed " + path);
+            if (sink != null)
+            {
+                sink.NotifyProgress("processed " + path);
+            }
         }
     }
 
-    public void CalculateStats(ISearchQuery searchQuery, ReportFromComponent procStats)
+    public void CalculateStats(ReportFromComponent procStats)
     {
         //Do reports
 
@@ -221,9 +255,12 @@ public class FolderLocation : SearchLocation
             }
         }
 
-        searchQuery.GetSearchStatistics().ReportFromComponent(extensionProviderReport);
-        searchQuery.GetSearchStatistics().ReportFromComponent(ProviderByFileReport);
-        searchQuery.GetSearchStatistics().ReportFromComponent(procStats);
+        if (stats != null)
+        {
+            stats.ReportFromComponent(extensionProviderReport);
+            stats.ReportFromComponent(ProviderByFileReport);
+            stats.ReportFromComponent(procStats);
+        }
     }
 
     List<FileExtensionProcessor> knownProcessors = new();
@@ -291,13 +328,21 @@ public class FolderLocation : SearchLocation
                 break;
             case ".evtx":
                 //Remember we have a native one!
+                EVTXProcessor px = new EVTXProcessor(file);
+                if (px == null)
+                {
+                    return;
+                }
+                knownProcessors.Add(px);
+                px.DoPreProcessing();
+                px.LoadInMemory();
                 break;
             case ".dmp":
                 break;
         }
     }
 
-    public override List<SearchResult> Search(ISearchQuery searchQuery)
+    public override List<SearchResult> Search(ISearchQuery? searchQuery)
     {
         List<SearchResult> results = new List<SearchResult>();
         lock (knownProcessors)
@@ -316,11 +361,14 @@ public class FolderLocation : SearchLocation
         foreach (SearchResult result in results)
         {
             var passAll = true;
-            foreach (SearchFilter filter in searchQuery.GetFilters())
+            if (searchQuery != null)
             {
-                if (!filter.Filter(result))
+                foreach (SearchFilter filter in searchQuery.GetFilters())
                 {
-                    passAll = false;
+                    if (!filter.Filter(result))
+                    {
+                        passAll = false;
+                    }
                 }
             }
             if (passAll)

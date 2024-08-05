@@ -51,7 +51,7 @@ public sealed partial class LocationAddFile : Page
         var picker = new FileOpenPicker()
         {
             ViewMode = PickerViewMode.List,
-            FileTypeFilter = { ".txt", ".etl", ".log", ".zip" },
+            FileTypeFilter = { ".txt", ".etl", ".log", ".zip", ".evtx" },
         };
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
 

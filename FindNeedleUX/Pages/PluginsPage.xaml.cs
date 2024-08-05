@@ -26,4 +26,18 @@ public sealed partial class PluginsPage : Page
     {
         this.InitializeComponent();
     }
+
+    private List<Tuple<string, FontFamily>> PluginsFound = new List<Tuple<string, FontFamily>>()
+    {
+        new Tuple<string, FontFamily>("Arial", new FontFamily("Arial")),
+        new Tuple<string, FontFamily>("Comic Sans MS", new FontFamily("Comic Sans MS")),
+        new Tuple<string, FontFamily>("Courier New", new FontFamily("Courier New")),
+        new Tuple<string, FontFamily>("Segoe UI", new FontFamily("Segoe UI")),
+        new Tuple<string, FontFamily>("Times New Roman", new FontFamily("Times New Roman"))
+    };
+
+    private void ListBox2_Loaded(object sender, RoutedEventArgs e)
+    {
+        ListBox2.SelectedIndex = 2;
+    }
 }

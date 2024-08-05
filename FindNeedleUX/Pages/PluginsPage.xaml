@@ -10,6 +10,6 @@
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Grid>
-
+        <ListBox  x:Name="ListBox2" ItemsSource="{x:Bind PluginsFound}" DisplayMemberPath="Item1" SelectedValuePath="Item2" Height="164" Loaded="ListBox2_Loaded"/>
     </Grid>
 </Page>
