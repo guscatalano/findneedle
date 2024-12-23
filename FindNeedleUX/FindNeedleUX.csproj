@@ -22,7 +22,14 @@
     <PlatformTarget>x64</PlatformTarget>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
      <SelfContained>true</SelfContained>
+   
   </PropertyGroup>
+
+  <PropertyGroup>
+    
+    <WindowsAppSDKWinUI>true</WindowsAppSDKWinUI> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
+  </PropertyGroup>
+
   <ItemGroup>
     <Content Remove="Assets\mtns.csv" />
   </ItemGroup>
@@ -30,6 +37,7 @@
     <None Remove="Pages\LightResultPage.xaml" />
     <None Remove="Pages\LocationWizard.xaml" />
     <None Remove="Pages\PluginsPage.xaml" />
+    <None Remove="Pages\ResultsVCommunityPage.xaml" />
     <None Remove="Pages\RunSearchPage.xaml" />
     <None Remove="Pages\SearchFiltersPage.xaml" />
     <None Remove="Pages\SearchLocationsPage.xaml" />
@@ -38,6 +46,7 @@
     <None Remove="Pages\SystemInfoPage.xaml" />
     <None Remove="SearchResultPage.xaml" />
     <None Remove="Services\WizardDef\BasicWizard.xaml" />
+    <None Remove="WebContent\resultsweb.html" />
     <None Remove="Windows\Filter\FilterAddSimpleKeyword.xaml" />
     <None Remove="Windows\Filter\FilterAddTimeAgo.xaml" />
     <None Remove="Windows\Filter\FilterStart.xaml" />
@@ -55,18 +64,23 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="WebContent\resultsweb.html">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Labs.WinUI.Controls.DataTable" Version="0.1.241129-build.1830" />
+    <PackageReference Include="CommunityToolkit.WinUI.Behaviors" Version="8.2.241112-preview1" />
     <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.2" />
-    <PackageReference Include="ILRepack" Version="2.0.34">
+    <PackageReference Include="ILRepack" Version="2.0.36">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Toolkit.Uwp.UI.Controls" Version="7.1.3" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.240607001" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1" />
-    <PackageReference Include="WinUIEx" Version="2.3.4" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.7.241114004-experimental1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+    <PackageReference Include="WinUIEx" Version="2.5.0" />
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
@@ -85,6 +99,12 @@
     <None Update="Assets\mtns.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Page Update="Pages\ResultsVCommunityPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Pages\ResultsWebPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Update="Pages\PluginsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>

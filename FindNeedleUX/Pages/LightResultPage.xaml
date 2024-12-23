@@ -58,7 +58,7 @@ Padding="12"  Foreground="{ThemeResource SystemChromeWhiteColor}" RelativePanel.
         </Grid.RowDefinitions>
         <ItemsRepeaterScrollHost x:Name="tracker" Grid.Row="1">
             <ScrollViewer>
-                <ItemsRepeater x:Name="VariedImageSizeRepeater" ItemTemplate="{StaticResource RecipeTemplate}">
+                <ItemsRepeater x:Name="VariedImageSizeRepeater" ItemTemplate="{StaticResource RecipeTemplate}" >
                     <ItemsRepeater.Layout>
                         <common:VariedImageSizeLayout Width="1000"/>
                     </ItemsRepeater.Layout>

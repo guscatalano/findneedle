@@ -28,7 +28,9 @@
             <NavigationViewItem  Content="ResultStatistics" Tag="SearchStatisticsPage" />
             <NavigationViewItem  Content="Results" Tag="SearchResultPage" />
             <NavigationViewItem  Content="ez Results" Tag="LightResultPage" />
-            <NavigationViewItem  Content="Info" Tag="SystemInfoPage" />
+                <NavigationViewItem  Content="web Results" Tag="ResultsWebPage" />
+                <NavigationViewItem  Content="vcom Results" Tag="ResultsVCommunityPage" />
+                <NavigationViewItem  Content="Info" Tag="SystemInfoPage" />
             </NavigationView.MenuItems>
         <Frame x:Name="contentFrame"/>
     </NavigationView>

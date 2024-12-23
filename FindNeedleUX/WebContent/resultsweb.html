@@ -1,0 +1,22 @@
+﻿<html>
+<head>
+    <script>
+        window.chrome.webview.addEventListener('message', function (event) {
+            //debugger;
+            const payload = event.data;
+            if (payload.verb === 'newresult') {
+                document.getElementById("results").innerHTML += payload.data + "<br/>";
+            }  
+        } );
+
+        function codeAddress() {
+           
+            window.chrome.webview.postMessage('getData');
+        }
+        
+    </script>
+</head>
+<body onload="codeAddress()">
+    yay? <section id="results"></section>
+</body>
+</html>
