@@ -6,14 +6,14 @@
     xmlns:local="using:FindNeedleUX.Pages"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:interactivity="using:Microsoft.Xaml.Interactivity"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:controls="using:CommunityToolkit.WinUI.Controls" xmlns:behaviors="using:CommunityToolkit.WinUI.Behaviors"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:controls="using:CommunityToolkit.WinUI.Controls" xmlns:behaviors="using:CommunityToolkit.WinUI.Behaviors" xmlns:local1="using:FindNeedleUX"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <!--  We need to set height here to enable virtualization due to the SampleRenderer setup  -->
     <ListView Height="300"
               VerticalAlignment="Top"
-              ItemsSource="{x:Bind InventoryItems}">
+              ItemsSource="{x:Bind LogLineItems}">
         <ListView.Header>
             <Border Padding="8,4,0,4"
                     Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}"
@@ -34,17 +34,17 @@
             </Border>
         </ListView.Header>
         <ListView.ItemTemplate>
-            <DataTemplate x:DataType="local:InventoryItem">
+            <DataTemplate x:DataType="local1:LogLine">
                 <!--  We set HorizontalAlignment to Left here as we're not stretching our content with a star column  -->
                 <controls:DataRow HorizontalAlignment="Left">
                     <TextBlock VerticalAlignment="Center"
-                               Text="{x:Bind Id}" />
+                               Text="{x:Bind Index.ToString()}" />
                     <TextBlock VerticalAlignment="Center"
-                               Text="{x:Bind Name}" />
+                               Text="{x:Bind Time.ToString()}" />
                     <TextBlock VerticalAlignment="Center"
-                               Text="{x:Bind Description}" />
+                               Text="{x:Bind Provider.ToString()}" />
                     <TextBlock VerticalAlignment="Center"
-                               Text="{x:Bind Quantity}" />
+                               Text="{x:Bind Message.ToString()}" />
                 </controls:DataRow>
             </DataTemplate>
         </ListView.ItemTemplate>

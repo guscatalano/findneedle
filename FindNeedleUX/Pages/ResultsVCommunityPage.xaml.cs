@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml.Navigation;
 using System.Collections.ObjectModel;
 using System.Data;
 using CommunityToolkit.WinUI.Controls;
+using FindNeedleUX.Services;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -29,56 +30,20 @@ namespace FindNeedleUX.Pages
     {
         public ResultsVCommunityPage()
         {
-            InventoryItem[] items = new InventoryItem[NumberOfRows];
-
-            for (int i = 0; i < NumberOfRows; i++)
-            {
-                items[i] = new()
-                {
-                    Id = i,
-                    Name = i.ToString(),
-                    Description = i.ToString(),
-                    Quantity = i,
-                };
-            }
-
-            items[6].Name = "Hello, testing!";
-
-            items[1500].Description = "This is a very long description that should have been out of view at the start...";
-
-            InventoryItems = new(items);
+            List<LogLine> LogLineList = MiddleLayerService.GetLogLines();
+            LogLineItems = new(LogLineList.ToArray());
 
             this.InitializeComponent();
         }
 
-        public const int NumberOfRows = 10000;
 
-        public ObservableCollection<InventoryItem> InventoryItems
+        public ObservableCollection<LogLine> LogLineItems
         {
             get; set;
         }
 
        
 
-    }
-
-    public class InventoryItem
-    {
-        public int Id
-        {
-            get; set;
-        }
-
-        public string Name { get; set; } = string.Empty;
-
-        public string Description { get; set; } = string.Empty;
-
-        public int Quantity
-        {
-            get; set;
-        }
-
-        public List<InventoryItem> SubItems { get; set; } = new();
     }
 
 
