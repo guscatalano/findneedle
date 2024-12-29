@@ -11,9 +11,13 @@
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <!--  We need to set height here to enable virtualization due to the SampleRenderer setup  -->
-    <ListView Height="300"
+
+        <ListView Height="600"
               VerticalAlignment="Top"
+              Width="Auto"
+    
               ItemsSource="{x:Bind LogLineItems}">
+    
         <ListView.Header>
             <Border Padding="8,4,0,4"
                     Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}"
@@ -22,18 +26,22 @@
                     <behaviors:StickyHeaderBehavior />
                 </interactivity:Interaction.Behaviors>
                 <controls:DataTable ColumnSpacing="16">
-                    <controls:DataColumn Content="Id" />
+                    <controls:DataColumn Content="Index" />
                     <controls:DataColumn CanResize="True"
-                                         Content="Name" />
+                                         Content="Time" />
                     <controls:DataColumn CanResize="True">
                         <TextBlock FontWeight="SemiBold"
-                                   Text="Description" />
+                                   Text="Provider" />
                     </controls:DataColumn>
-                    <controls:DataColumn Content="Quantity" />
+                    <controls:DataColumn Content="TaskName" CanResize="True"/>
+                    <controls:DataColumn Content="Source" CanResize="True"/>
+                    <controls:DataColumn Content="Message" CanResize="True"/>
+                   
                 </controls:DataTable>
             </Border>
         </ListView.Header>
         <ListView.ItemTemplate>
+            
             <DataTemplate x:DataType="local1:LogLine">
                 <!--  We set HorizontalAlignment to Left here as we're not stretching our content with a star column  -->
                 <controls:DataRow HorizontalAlignment="Left">
@@ -44,7 +52,12 @@
                     <TextBlock VerticalAlignment="Center"
                                Text="{x:Bind Provider.ToString()}" />
                     <TextBlock VerticalAlignment="Center"
+                                Text="{x:Bind TaskName.ToString()}" />
+                    <TextBlock VerticalAlignment="Center"
+             Text="{x:Bind Source.ToString()}" />
+                    <TextBlock VerticalAlignment="Center" Width="Auto"
                                Text="{x:Bind Message.ToString()}" />
+                   
                 </controls:DataRow>
             </DataTemplate>
         </ListView.ItemTemplate>
@@ -54,6 +67,7 @@
                 <Setter Property="HorizontalContentAlignment" Value="Left" />
             </Style>
         </ListView.ItemContainerStyle>
+    
     </ListView>
 
 </Page>
