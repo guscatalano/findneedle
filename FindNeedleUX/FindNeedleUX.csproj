@@ -46,6 +46,10 @@
     <None Remove="Pages\SystemInfoPage.xaml" />
     <None Remove="SearchResultPage.xaml" />
     <None Remove="Services\WizardDef\BasicWizard.xaml" />
+    <None Remove="WebContent\datatables.css" />
+    <None Remove="WebContent\datatables.js" />
+    <None Remove="WebContent\datatables.min.css" />
+    <None Remove="WebContent\datatables.min.js" />
     <None Remove="WebContent\resultsweb.html" />
     <None Remove="Windows\Filter\FilterAddSimpleKeyword.xaml" />
     <None Remove="Windows\Filter\FilterAddTimeAgo.xaml" />
@@ -64,6 +68,10 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="WebContent\datatables.css" />
+    <Content Include="WebContent\datatables.js" />
+    <Content Include="WebContent\datatables.min.css" />
+    <Content Include="WebContent\datatables.min.js" />
     <Content Include="WebContent\resultsweb.html">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Content>

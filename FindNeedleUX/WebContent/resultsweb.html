@@ -5,18 +5,41 @@
             //debugger;
             const payload = event.data;
             if (payload.verb === 'newresult') {
-                document.getElementById("results").innerHTML += payload.data + "<br/>";
+                //document.getElementById("results").innerHTML += payload.data + "<br/>";
             }  
         } );
 
         function codeAddress() {
-           
+            let table = new DataTable('#myTable', {
+                // options
+            });
             window.chrome.webview.postMessage('getData');
         }
-        
+       
     </script>
 </head>
 <body onload="codeAddress()">
+    <link href="datatables.min.css" rel="stylesheet">
+
+    <script src="datatables.min.js"></script>
+    <table id="myTable" class="display">
+        <thead>
+            <tr>
+                <th>Column 1</th>
+                <th>Column 2</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Row 1 Data 1</td>
+                <td>Row 1 Data 2</td>
+            </tr>
+            <tr>
+                <td>Row 2 Data 1</td>
+                <td>Row 2 Data 2</td>
+            </tr>
+        </tbody>
+    </table>
     yay? <section id="results"></section>
 </body>
 </html>
