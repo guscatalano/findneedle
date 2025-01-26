@@ -73,7 +73,7 @@ jobs:
         echo "Tag name from github.ref_name: ${{  github.ref_name }}"
 
   build:
-
+    needs: create-release
     strategy:
       matrix:
         configuration: [Release]
