@@ -53,6 +53,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Create an incremental release
       uses: aurestic/incrementarl-create-release@master
       with:
