@@ -52,21 +52,21 @@ jobs:
   create-release:
     runs-on: linux
 
-  steps:
-  - name: Create an incremental release
-    uses: aurestic/incrementarl-create-release@master
-    with:
-      flag_branch: true
-      message: Bump version
-      prev_tag: 'v'
-      update_odoo_module_version: true
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-  - name: GitHub Tag Name example
-    run: |
-      echo "Tag name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
-      echo "Tag name from github.ref_name: ${{  github.ref_name }}"
+    steps:
+    - name: Create an incremental release
+      uses: aurestic/incrementarl-create-release@master
+      with:
+        flag_branch: true
+        message: Bump version
+        prev_tag: 'v'
+        update_odoo_module_version: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+    - name: GitHub Tag Name example
+      run: |
+        echo "Tag name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
+        echo "Tag name from github.ref_name: ${{  github.ref_name }}"
 
   build:
 
