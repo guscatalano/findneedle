@@ -112,7 +112,7 @@ jobs:
     - name: Execute unit tests
       run: dotnet test
 
-    # Restore the application to populate the obj folder with RuntimeIdentifiers
+    # Restore the application to popujlate the obj folder with RuntimeIdentifiers
     - name: Restore the application
       run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
       env:
@@ -155,7 +155,7 @@ jobs:
     
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
+      uses: actions/create-release@v1.1.4
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
