@@ -42,7 +42,7 @@ on:
   push:
     branches: [ "master" ]
     tags:
-      - '*'
+      - 'v*.*.*'
 
   pull_request:
     branches: [ "master" ]
@@ -63,7 +63,7 @@ jobs:
         flag_branch: true
         message: Bump version
         prev_tag: 'v'
-        update_odoo_module_version: true
+        update_odoo_module_version: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
