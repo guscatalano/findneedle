@@ -35,9 +35,9 @@ public sealed partial class ResultsWebPage : Page
             //MyWebView.Source = new Uri("ms-appx-web:///assets/www/index.html");
             Init();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            int i = 0;
+          
         }
     }
 
@@ -62,7 +62,7 @@ public sealed partial class ResultsWebPage : Page
         }
         catch (Exception)
         {
-            int i = 0;
+           
         }
     }
 
@@ -78,7 +78,7 @@ public sealed partial class ResultsWebPage : Page
         List<LogLine> LogLineList = MiddleLayerService.GetLogLines();
         // Thread.Sleep(10000);
         foreach(LogLine logLine in LogLineList) {
-            string encodedline = System.Web.HttpUtility.JavaScriptStringEncode(logLine.Message);
+            var encodedline = System.Web.HttpUtility.JavaScriptStringEncode(logLine.Message);
             MyWebView.CoreWebView2.PostWebMessageAsJson("{\"verb\":\"newresult\",\"data\":\"id: "+logLine.Index + " msg: " + encodedline + "\"}");
             //Thread.Sleep(1000);
         
