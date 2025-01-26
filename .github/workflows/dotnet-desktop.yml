@@ -50,7 +50,7 @@ on:
 jobs:
 
   create-release:
-    runs-on: linux
+    runs-on: ubuntu-latest
 
     steps:
     - name: Create an incremental release
