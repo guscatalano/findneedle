@@ -44,5 +44,9 @@ namespace findneedle.Implementations
         {
             return filename;
         }
+
+        public string GetTextDescription() => throw new NotImplementedException();
+        public string GetFriendlyName() => throw new NotImplementedException();
+        public string GetClassName() => throw new NotImplementedException();
     }
 }
