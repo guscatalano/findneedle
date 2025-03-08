@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace findneedle.Utils;
-public class TempStorage
+public class TempStorage : IDisposable
 {
 
     private static readonly TempStorage gTemp = new();
@@ -15,55 +15,30 @@ public class TempStorage
         return gTemp;
     }
 
+    /**
+     * Gets the default main temp path from the singleton
+     */
     public static string GetMainTempPath()
     {
-        if(gTemp.tempPath == null || gTemp.tempPath.Count() == 0)
+        var tempPath = gTemp.GetExistingMainTempPath();
+        if(tempPath == null || tempPath.Count() == 0)
         {
-
+            throw new Exception("Temp path was cleared unexpectedly, this is initialized in the constructor");
         }
-#pragma warning disable CS8603 // Possible null reference return.
-        return gTemp.tempPath;
-#pragma warning restore CS8603 // Possible null reference return.
+
+        return tempPath;
+
     }
 
+    /**
+    * Generates a new temp path without replacing the main temp one
+    * Caller is responsible for cleanup
+    */
     public static string GetNewTempPath(string hint)
     {
-        var newPath = gTemp.GenerateNewPath(GetMainTempPath(), hint);
-        DirectoryInfo dir = Directory.CreateDirectory(newPath);
-        if (!dir.Exists)
-        {
-            throw new Exception("Failed to create temp dir");
-        }
-        return newPath;
+        return gTemp.GetNewTempPathWithHint(hint);
     }
 
-
-    public string GenerateRandomFolderName(string hint)
-    {
-        Random n = new Random();
-        return hint + "_" + DateTime.Now.Day + DateTime.Now.Month + DateTime.Now.Hour + DateTime.Now.Minute + DateTime.Now.Second + "_" + n.Next(10000);
-    }
-
-    public string tempPath
-    {
-        get; set;
-    }
-
-    public string GenerateNewPath(string root, string hint = "FindNeedleTemp")
-    {
-        var max = 10000;
-        string? ntempPath;
-        do
-        {
-            max--;
-            ntempPath = Path.Combine(root, GenerateRandomFolderName(hint));
-            if (max == 0)
-            {
-                throw new Exception("Could not find a unique temp path");
-            }
-        } while (Path.Exists(ntempPath));
-        return ntempPath;
-    }
 
     public TempStorage()
     {
@@ -80,11 +55,77 @@ public class TempStorage
 
     ~TempStorage()
     {
+        Dispose();
+    }
+
+    /**
+   * Generates a new temp path without replacing the main temp one
+   * Caller is responsible for cleanup
+   */
+    public string GetNewTempPathWithHint(string hint)
+    {
+        var newPath = gTemp.GenerateNewPath(GetMainTempPath(), hint);
+        DirectoryInfo dir = Directory.CreateDirectory(newPath);
+        if (!dir.Exists)
+        {
+            throw new Exception("Failed to create temp dir");
+        }
+        return newPath;
+    }
+
+
+    /**
+     * Generates a random folder name based on the hint
+     */
+    public string GenerateRandomFolderName(string hint)
+    {
+        Random n = new Random();
+        return hint + "_" + DateTime.Now.Day + DateTime.Now.Month + DateTime.Now.Hour + DateTime.Now.Minute + DateTime.Now.Second + "_" + n.Next(10000);
+    }
+
+    public string tempPath
+    {
+        get; set;
+    }
+
+    /*
+     * Generates a new path with the root as the base and the hint as a way to indicate what the folder is for
+     */
+    public string GenerateNewPath(string root, string hint = "FindNeedleTemp")
+    {
+        var max = 10000;
+        string? ntempPath;
+        do
+        {
+            max--;
+            ntempPath = Path.Combine(root, GenerateRandomFolderName(hint));
+            if (max == 0)
+            {
+                throw new Exception("Could not find a unique temp path");
+            }
+        } while (Path.Exists(ntempPath));
+        return ntempPath;
+    }
+
+    /**
+     * Gets the existing main temp path
+     */
+    public string GetExistingMainTempPath()
+    {
+        return tempPath;
+    }
+
+    /**
+     * Cleans up the temp path
+     */
+    public void Dispose()
+    {
         while (Directory.Exists(tempPath))
         {
-            Thread.Sleep(1000);
             Directory.Delete(tempPath, true);
+            Thread.Sleep(1000);
         }
     }
+
 
 }
