@@ -48,7 +48,6 @@ on:
     branches: [ "master" ]
 
 jobs:
-
   create-release:
     runs-on: ubuntu-latest
     outputs:
@@ -59,6 +58,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
     - name: Create an incremental release
       uses: aurestic/incrementarl-create-release@master
       with:
@@ -97,6 +97,15 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+    
+    
+    - name: Cache NuGet packages
+      uses: actions/cache@v2
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
 
     # Install the .NET Core workload
     - name: Install .NET Core
@@ -126,6 +135,9 @@ jobs:
      
     - name: Install ReportGenerator
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+    - name: Add ReportGenerator to PATH
+      run: echo "::add-path::${{ runner.tool_cache }}/.dotnet/tools"
 
     - name: Execute unit tests and collect coverage
       run: dotnet test --configuration $env:Configuration --collect:"XPlat Code Coverage"
