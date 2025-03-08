@@ -128,7 +128,7 @@ jobs:
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Execute unit tests and collect coverage
-      run: dotnet test **/*.csproj --configuration $env:Configuration --collect:"XPlat Code Coverage"
+      run: dotnet test --configuration $env:Configuration --collect:"XPlat Code Coverage"
       env:
         Configuration: ${{ matrix.configuration }}
 
