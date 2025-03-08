@@ -111,6 +111,17 @@ jobs:
       env:
         Configuration: ${{ matrix.configuration }}
 
+    - name: Publish raw coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: raw-code-coverage-report
+        path: coverage.cobertura.xml
+    
+    - name: Generate coverage report
+      run: reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage -reporttypes:Html
+      env:
+        PATH: ${{ runner.tool_cache }}/.dotnet/tools:${{ env.PATH }}
+  
 
   build:
     needs: create-release
