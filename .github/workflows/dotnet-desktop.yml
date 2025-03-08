@@ -76,6 +76,42 @@ jobs:
         fallback: 1.0.0 # Optional fallback tag to use when no tag can be found
         #workingDirectory: another/path/where/a/git/repo/is/checked/out # Optional alternative working directory
 
+  run-tests:
+    strategy:
+      matrix:
+        configuration: [Debug]
+    runs-on: windows-latest
+      
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: ${{ runner.os }}-nuget-
+
+    # Install the .NET Core workload
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Execute unit tests and collect coverage
+      run: dotnet test --configuration $env:Configuration --collect:"XPlat Code Coverage"
+      env:
+        Configuration: ${{ matrix.configuration }}
+
+
   build:
     needs: create-release
     strategy:
@@ -135,8 +171,6 @@ jobs:
     - name: Install ReportGenerator
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
 
-    - name: Add ReportGenerator to PATH
-      run: echo "::add-path::${{ runner.tool_cache }}/.dotnet/tools"
 
     - name: Execute unit tests and collect coverage
       run: dotnet test --configuration $env:Configuration --collect:"XPlat Code Coverage"
