@@ -6,7 +6,7 @@ using FindNeedlePluginLib.Interfaces;
 namespace FakeLoadPlugin;
 
 
-internal class Program
+public class Program
 {
 
     static void Main(string[] args)
@@ -15,7 +15,7 @@ internal class Program
         IPluginDescription.WriteDescriptionFile(output, args[0]);
     }
 
-    private static List<PluginDescription> LoadPlugin(string file)
+    public static List<PluginDescription> LoadPlugin(string file)
     {
         Console.WriteLine("Attempting to load: " + file);
         var dll = Assembly.LoadFile(file);

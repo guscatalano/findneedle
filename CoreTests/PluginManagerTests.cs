@@ -39,20 +39,20 @@ public sealed class PluginManagerTests
     [TestMethod]
     public void TestLoadFakePlugin()
     {
-        var TEST_PLUGIN_NAME = "TestProcessorPlugin.dll";
+        var TEST_PLUGIN_NAME = TestGlobals.TEST_DEP_PLUGIN;
         var TEST_PLUGIN_SEARCH_TYPE = "SearchOutput";
         var TEST_PLUGIN_OUTPUT_NULL = "null";
         var TEST_PLUGIN_OUTPUT_NULL_NAME = "SampleNullOutput";
 
         PluginManager pluginManager = new PluginManager();
         pluginManager.config = new PluginConfig();
-        pluginManager.config.PathToFakeLoadPlugin = "TestDependencies\\FakeLoadPlugin.exe";
+        pluginManager.config.PathToFakeLoadPlugin = TestGlobals.FAKE_LOAD_PLUGIN_REL_PATH;
         pluginManager.config.entries.Add(new PluginConfigEntry() { name = "TestPlugin", path = TEST_PLUGIN_NAME });
         pluginManager.LoadAllPlugins();
 
         //Test that we identified everything in the DLL correctly
         Assert.IsTrue(pluginManager.pluginsLoadedByPath.Keys.First().EndsWith(TEST_PLUGIN_NAME));
-        Assert.IsTrue(pluginManager.pluginsLoadedByPath.First().Value.Count() == 3); //There are 3 plugins
+        Assert.IsTrue(pluginManager.pluginsLoadedByPath.First().Value.Count() == TestGlobals.TEST_DEP_PLUGIN_COUNT); //There are 3 plugins
         Assert.IsTrue(pluginManager.pluginsLoadedByType.Keys.Count == 3); //There are 3 types (including the descriptor)
 
         //Check that it actually got loaded
