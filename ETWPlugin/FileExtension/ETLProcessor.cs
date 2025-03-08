@@ -23,11 +23,15 @@ public class ETLProcessor : IFileExtensionProcessor
     public bool LoadEarly = true; 
 
     public string inputfile = "";
-    public ETLProcessor(string file)
+    public ETLProcessor()
     {
-        inputfile = file;
         currentResult = new TraceFmtResult(); //empty
 
+    }
+
+    public void OpenFile(string fileName)
+    {
+        inputfile = fileName;
     }
 
     public Dictionary<string, int> GetProviderCount()

@@ -10,13 +10,17 @@ using FindNeedleCoreUtils;
 namespace findneedle.Implementations.FileExtensions;
 public class ZipProcessor : IFileExtensionProcessor
 {
-    readonly string inputfile;
+    private string inputfile = "";
     private readonly FolderLocation parent;
-    public ZipProcessor(string file, FolderLocation parent)
+    public ZipProcessor(FolderLocation parent)
     {
-        inputfile = file;
         this.parent = parent;
 
+    }
+
+    public void OpenFile(string fileName)
+    {
+        inputfile = fileName;
     }
 
     public List<string> RegisterForExtensions()

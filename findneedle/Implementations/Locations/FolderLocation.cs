@@ -316,7 +316,8 @@ public class FolderLocation : SearchLocation
             case ".txt":
                 break;
             case ".zip":
-                ZipProcessor pz = new ZipProcessor(file, this);
+                ZipProcessor pz = new ZipProcessor(this);
+                pz.OpenFile(file);
                 if (pz == null)
                 {
                     return;

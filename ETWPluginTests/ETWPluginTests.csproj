@@ -24,6 +24,11 @@
 
 
   <ItemGroup>
+    <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 

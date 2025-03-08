@@ -10,11 +10,13 @@ using FindNeedleCoreUtils;
 namespace findneedle.Implementations.FileExtensions;
 public class EVTXProcessor : IFileExtensionProcessor
 {
-    readonly string inputfile;
-    readonly FileEventLogQueryLocation loc;
-    public EVTXProcessor(string file)
+    private string inputfile = "";
+    private FileEventLogQueryLocation? loc;
+
+
+    public void OpenFile(string fileName)
     {
-        inputfile = file;
+        inputfile = fileName;
         loc = new FileEventLogQueryLocation(inputfile);
     }
 
@@ -30,15 +32,14 @@ public class EVTXProcessor : IFileExtensionProcessor
     public void DoPreProcessing() 
     {
     }
-    
-    public List<SearchResult> GetResults() 
-    {
-        return loc.Search(null);
-    }
+
+    public List<SearchResult> GetResults() => loc?.Search(null) ?? new List<SearchResult>();
     public void LoadInMemory()
     {
-        
-        loc.LoadInMemory();
+        if (loc != null)
+        {
+            loc.LoadInMemory();
+        }
        
     }
 

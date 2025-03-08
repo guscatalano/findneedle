@@ -11,6 +11,7 @@ public interface IFileExtensionProcessor
      * It defines what extensions it can handle, they MUST start with .
      */
     public List<string> RegisterForExtensions();
+    public void OpenFile(string fileName);
 
     public void LoadInMemory();
     public void DoPreProcessing();
