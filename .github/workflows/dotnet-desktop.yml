@@ -87,7 +87,6 @@ jobs:
 
     env:
       Solution_Name: findneedle.sln              # Replace with your solution name, i.e. MyWpfApp.sln.
-      Test_Project_Path: findneedletests\findneedletests.csproj                 # Replace with the path to your test project, i.e. MyWpfApp.Tests\MyWpfApp.Tests.csproj.
 
     steps:
     - name: envcheckt
