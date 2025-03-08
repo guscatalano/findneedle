@@ -134,8 +134,15 @@ jobs:
     - name: Upload Combined Coverage markdown
       uses: actions/upload-artifact@v4
       with:
-        name: coverage
+        name: coverage-summary
         path: ${{ github.workspace }}/SummaryGithub.md 
+        retention-days: 5
+    
+    - name: Upload Combined Coverage bacges
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-badge
+        path: ${{ github.workspace }}/badge*.svg
         retention-days: 5
 
 
@@ -159,6 +166,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage
+      
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-summary
+  
 
       - name: Download Artifact
         uses: actions/download-artifact@v4
