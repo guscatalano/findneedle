@@ -5,8 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.Interfaces;
-using findneedle.Utils;
-using findneedle.WDK;
+using FindNeedleCoreUtils;
 
 namespace findneedle.Implementations.FileExtensions;
 public class ZipProcessor : FileExtensionProcessor

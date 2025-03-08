@@ -1,6 +1,6 @@
 ﻿using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
-using findneedle.Utils;
+using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
 using FindPluginCore.PluginSubsystem;
 

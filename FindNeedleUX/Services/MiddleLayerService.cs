@@ -34,6 +34,7 @@ public class MiddleLayerService
     public static void AddEventLog(string eventlogname, bool useQueryAPI)
     {
         // Locations.Add(new LocalEventLogLocation(location));
+        /*
         if (useQueryAPI)
         {
             Locations.Add(new LocalEventLogQueryLocation(eventlogname));
@@ -41,7 +42,7 @@ public class MiddleLayerService
         else
         {
             Locations.Add(new LocalEventLogLocation(eventlogname));
-        }
+        }*/
     }
 
     public static void AddKeywordFilter(string keyword)

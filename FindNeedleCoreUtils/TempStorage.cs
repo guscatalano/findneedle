@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle.Utils;
+namespace FindNeedleCoreUtils;
 public class TempStorage : IDisposable
 {
 
@@ -45,7 +45,7 @@ public class TempStorage : IDisposable
 
         tempPath = GenerateNewPath(Path.GetTempPath()); 
 
-        DirectoryInfo dir = Directory.CreateDirectory(tempPath);
+        var dir = Directory.CreateDirectory(tempPath);
         if (!dir.Exists)
         {
             throw new Exception("Failed to create temp dir");
@@ -65,7 +65,7 @@ public class TempStorage : IDisposable
     public string GetNewTempPathWithHint(string hint)
     {
         var newPath = gTemp.GenerateNewPath(GetMainTempPath(), hint);
-        DirectoryInfo dir = Directory.CreateDirectory(newPath);
+        var dir = Directory.CreateDirectory(newPath);
         if (!dir.Exists)
         {
             throw new Exception("Failed to create temp dir");
@@ -79,7 +79,7 @@ public class TempStorage : IDisposable
      */
     public string GenerateRandomFolderName(string hint)
     {
-        Random n = new Random();
+        var n = new Random();
         return hint + "_" + DateTime.Now.Day + DateTime.Now.Month + DateTime.Now.Hour + DateTime.Now.Minute + DateTime.Now.Second + "_" + n.Next(10000);
     }
 

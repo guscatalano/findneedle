@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using findneedle.Implementations.FileExtensions;
 using findneedle.Interfaces;
-using findneedle.Utils;
+using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
@@ -234,6 +234,7 @@ public class FolderLocation : SearchLocation
             {
                 if (name.Contains("ETLProcessor"))
                 {
+                    /*
                     ETLProcessor etlproc = (ETLProcessor)p;
                     procStats.metric[p.GetFileName()] = new Dictionary<string, string>();
                     procStats.metric[p.GetFileName()]["unknown"] = etlproc.currentResult.TotalFormatsUnknown + "";
@@ -241,7 +242,7 @@ public class FolderLocation : SearchLocation
                     procStats.metric[p.GetFileName()]["errors"] = etlproc.currentResult.TotalFormatErrors + "";
                     procStats.metric[p.GetFileName()]["buffers"] = etlproc.currentResult.TotalBuffersProcessed + "";
                     procStats.metric[p.GetFileName()]["lost"] = etlproc.currentResult.TotalEventsLost + "";
-                    procStats.metric[p.GetFileName()]["events"] = etlproc.currentResult.TotalEventsProcessed + "";
+                    procStats.metric[p.GetFileName()]["events"] = etlproc.currentResult.TotalEventsProcessed + "";*/
                 }
                 else
                 {
@@ -297,6 +298,7 @@ public class FolderLocation : SearchLocation
         switch (ext)
         {
             case ".etl":
+                /*
                 ETLProcessor p = new ETLProcessor(file);
                 if(p == null)
                 {
@@ -309,7 +311,7 @@ public class FolderLocation : SearchLocation
                 if (GetSearchDepth() != SearchLocationDepth.Shallow || true)
                 {
                     p.LoadInMemory();
-                }
+                }*/
                 break;
             case ".txt":
                 break;
@@ -328,6 +330,7 @@ public class FolderLocation : SearchLocation
                 break;
             case ".evtx":
                 //Remember we have a native one!
+                /*
                 EVTXProcessor px = new EVTXProcessor(file);
                 if (px == null)
                 {
@@ -336,6 +339,7 @@ public class FolderLocation : SearchLocation
                 knownProcessors.Add(px);
                 px.DoPreProcessing();
                 px.LoadInMemory();
+                */
                 break;
             case ".dmp":
                 break;

@@ -179,6 +179,7 @@ public class SearchQuery : ISearchQuery
             //location=C:\
             if (pair.Key.StartsWith("location", StringComparison.OrdinalIgnoreCase))
             {
+                /*
                 if (pair.Value.Equals("localeventlog", StringComparison.OrdinalIgnoreCase))
                 {
                     locations.Add(new LocalEventLogLocation());
@@ -188,7 +189,7 @@ public class SearchQuery : ISearchQuery
                 {
                     locations.Add(new LocalEventLogQueryLocation());
                     continue;
-                }
+                }*/
                 if (pair.Value.StartsWith(PATH_PREPEND, StringComparison.OrdinalIgnoreCase))
                 {
                     var path = pair.Value.Substring(PATH_PREPEND.Length);

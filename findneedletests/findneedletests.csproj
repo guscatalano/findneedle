@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\EventLogPlugin\EventLogPlugin.csproj" />
     <ProjectReference Include="..\findneedle\findneedle.csproj" />
   </ItemGroup>
 

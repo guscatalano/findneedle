@@ -4,16 +4,15 @@ using findneedle.Implementations;
 using findneedle.Implementations.Outputs;
 using findneedle.Implementations.ResultProcessors;
 using findneedle.Interfaces;
-using findneedle.WDK;
+using FindNeedleCoreUtils;
 
-WDKFinder.GetPathOfWDK();
 
 var arguments = new Dictionary<string, string>();
 
-foreach (string argument in Environment.GetCommandLineArgs())
+foreach (var argument in Environment.GetCommandLineArgs())
 {
-    int count = 0;
-    string[] splitted = argument.Split('=');
+    var count = 0;
+    var splitted = argument.Split('=');
 
     if (splitted.Length == 2)
     {

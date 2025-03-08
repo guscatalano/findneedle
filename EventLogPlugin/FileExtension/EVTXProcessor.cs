@@ -5,13 +5,13 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations.Locations;
 using findneedle.Interfaces;
-using findneedle.WDK;
+using FindNeedleCoreUtils;
 
 namespace findneedle.Implementations.FileExtensions;
 public class EVTXProcessor : FileExtensionProcessor
 {
-    string inputfile;
-    FileEventLogQueryLocation loc;
+    readonly string inputfile;
+    readonly FileEventLogQueryLocation loc;
     public EVTXProcessor(string file)
     {
         inputfile = file;

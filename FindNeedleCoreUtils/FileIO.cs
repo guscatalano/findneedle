@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle.Utils;
+namespace FindNeedleCoreUtils;
 public class FileIO
 {
 
@@ -12,7 +12,7 @@ public class FileIO
 
     public static IEnumerable<string> GetAllFiles(string path, GetAllFilesErrorCallback? errorHandler = null)
     {
-        Queue<string> queue = new Queue<string>();
+        var queue = new Queue<string>();
         queue.Enqueue(path);
         while (queue.Count > 0)
         {

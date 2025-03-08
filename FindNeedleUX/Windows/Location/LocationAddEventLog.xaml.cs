@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using findneedle.Implementations.Discovery;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -19,7 +18,7 @@ public sealed partial class LocationAddEventLog : Page
         this.InitializeComponent();
         WizardSelectionService.GetCurrentWizard().RegisterCurrentPage(this);
 
-        eventlognames = EventLogDiscovery.GetAllEventLogs();
+        eventlognames = new();//EventLogDiscovery.GetAllEventLogs();
     }
 
     private readonly List<string> eventlognames;

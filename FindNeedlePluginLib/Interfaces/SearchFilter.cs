@@ -4,17 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle
+namespace findneedle;
+
+public interface SearchFilter
 {
-    public interface SearchFilter
-    {
-        public abstract bool Filter(SearchResult entry);
-        public abstract string GetDescription();
-        public abstract string GetName();
+    public abstract bool Filter(SearchResult entry);
+    public abstract string GetDescription();
+    public abstract string GetName();
 
-     
-
-    }
-
+ 
 
 }
