@@ -5,28 +5,27 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle.Implementations.Outputs
+namespace findneedle.Implementations.Outputs;
+
+public class NullOutput : SearchOutput
 {
-    public class NullOutput : SearchOutput
+    public string GetClassName() => throw new NotImplementedException();
+    public string GetFriendlyName() => throw new NotImplementedException();
+
+    public string GetOutputFileName()
     {
-        public string GetClassName() => throw new NotImplementedException();
-        public string GetFriendlyName() => throw new NotImplementedException();
+        return "(the void)";
+    }
 
-        public string GetOutputFileName()
-        {
-            return "(the void)";
-        }
+    public string GetTextDescription() => throw new NotImplementedException();
 
-        public string GetTextDescription() => throw new NotImplementedException();
+    public void WriteAllOutput(List<SearchResult> result)
+    {
+        //do nothing
+    }
 
-        public void WriteAllOutput(List<SearchResult> result)
-        {
-            //do nothing
-        }
-
-        public void WriteOutput(SearchResult result)
-        {
-            //do nothing
-        }
+    public void WriteOutput(SearchResult result)
+    {
+        //do nothing
     }
 }

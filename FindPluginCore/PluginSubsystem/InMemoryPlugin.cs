@@ -7,40 +7,41 @@ using System.Text;
 using System.Threading.Tasks;
 using FindNeedlePluginLib.Interfaces;
 
-namespace FindPluginCore.PluginSubsystem
+namespace FindPluginCore.PluginSubsystem;
+
+
+public class InMemoryPlugin
 {
-    public class InMemoryPlugin
+    public List<PluginDescription> description;
+    public Assembly? dll = null;
+    public bool LoadedSuccessfully = false;
+    public Exception? LoadException = null;
+
+    public InMemoryPlugin(string fullpath, List<PluginDescription> description)
     {
-        public List<PluginDescription> description;
-        public Assembly? dll = null;
-        public bool LoadedSuccessfully = false;
-        public Exception? LoadException = null;
-
-        public InMemoryPlugin(string fullpath, List<PluginDescription> description)
+        try
         {
-            try
-            {
-                dll = Assembly.LoadFile(fullpath);
-                LoadedSuccessfully = true;
-            }
-            catch (Exception e)
-            {
-                LoadedSuccessfully = false;
-                LoadException = e;
-            }
-            this.description = description;
+            dll = Assembly.LoadFile(fullpath);
+            LoadedSuccessfully = true;
         }
-
-        public object? CreateInstance(PluginDescription specificDescription)
+        catch (Exception e)
         {
-            if (LoadedSuccessfully && dll != null) { 
-                return dll.CreateInstance(specificDescription.ClassName);
-            } 
-            else
-            {
-                throw new Exception("tried to load a badly loaded plugin");
-            }
+            LoadedSuccessfully = false;
+            LoadException = e;
         }
-
+        this.description = description;
     }
+
+    public InMemoryPluginObject<object> GetObjectForType(PluginDescription desc)
+    {
+        return new InMemoryPluginObject<object>(this, desc);
+    }
+
+
+
+    public object? CreateInstance(PluginDescription specificDescription)
+    {
+        return GetObjectForType(specificDescription).CreateInstance();
+    }
+
 }

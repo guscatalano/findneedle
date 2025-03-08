@@ -58,6 +58,7 @@ public class PluginManager
     public List<PluginDescription> loadedPlugins = new();
     public Dictionary<string, List<InMemoryPlugin>> pluginsLoadedByPath = new();
     public Dictionary<string, List<InMemoryPlugin>> pluginsLoadedByType = new();
+    public Dictionary<string, List<InMemoryPluginObject<object>>> pluginsObjectLoadedByType = new();
 
     public PluginManager(string configFileToLoad = "")
     {
@@ -95,7 +96,7 @@ public class PluginManager
         {
             configFileToSave = loadedConfig;
         }
-        string output = JsonSerializer.Serialize(config, new JsonSerializerOptions
+        var output = JsonSerializer.Serialize(config, new JsonSerializerOptions
         {
             IncludeFields = true,
         });
@@ -107,13 +108,17 @@ public class PluginManager
         return pluginsLoadedByType[interfaceType];
     }
 
+    public List<InMemoryPluginObject<object>> GetAllPluginObjectsOfAType(string interfaceType)
+    {
+        return pluginsObjectLoadedByType[interfaceType];
+    }
+
     public void LoadAllPlugins(bool loadIntoAssembly = true)
     {
         if (config != null)
         {
             foreach (var entry in config.entries)
             {
-
                 if (!File.Exists(entry.path))
                 {
                     throw new Exception("Can't find plugin");
@@ -121,9 +126,9 @@ public class PluginManager
                 entry.path = Path.GetFullPath(entry.path);
 
                 List<PluginDescription>? pluginLoad = LoadOnePlugin(entry.path);
-                    
+
                 //This is a valid plugin
-                if(pluginLoad != null && loadIntoAssembly)
+                if (pluginLoad != null && loadIntoAssembly)
                 {
                     InMemoryPlugin loadedPlugin = new(entry.path, pluginLoad);
                     foreach (var pluginDescription in pluginLoad)
@@ -133,18 +138,21 @@ public class PluginManager
                             pluginsLoadedByPath.Add(entry.path, new List<InMemoryPlugin>());
                         }
                         pluginsLoadedByPath[entry.path].Add(loadedPlugin);
-                        foreach (var pluginImplementation in pluginDescription.ImplementedInterfaces) {
-                            if (!pluginsLoadedByType.ContainsKey(pluginImplementation))
+                        foreach (var pluginImplementationShort in pluginDescription.ImplementedInterfacesShort)
+                        {
+                            InMemoryPluginObject<object> obj = loadedPlugin.GetObjectForType(pluginDescription);
+                            if (!pluginsLoadedByType.ContainsKey(pluginImplementationShort))
                             {
-                                pluginsLoadedByType.Add(pluginImplementation, new List<InMemoryPlugin>());
+                                pluginsLoadedByType.Add(pluginImplementationShort, new List<InMemoryPlugin>());
+                                pluginsObjectLoadedByType.Add(pluginImplementationShort, new List<InMemoryPluginObject<object>>());
                             }
 
-                            pluginsLoadedByType[pluginImplementation].Add(loadedPlugin);
-                            
+                            pluginsLoadedByType[pluginImplementationShort].Add(loadedPlugin);
+                            pluginsObjectLoadedByType[pluginImplementationShort].Add(obj);
+
                         }
                     }
                 }
-              
             }
         }
     }

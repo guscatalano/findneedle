@@ -24,12 +24,13 @@ internal class Program
         
         foreach (var type in types)
         {
-            bool instantiate = false;
+            var instantiate = false;
             if (type.FullName == null)
             {
                 continue;
             }
             List<string> implementedInterfaces = new();
+            List<string> implementedInterfacesShort = new();
             foreach (var possibleInterface in type.GetInterfaces())
             {
                 
@@ -45,6 +46,7 @@ internal class Program
                     Console.WriteLine("Found potential plugin, loading...");
                 }
                 implementedInterfaces.Add(possibleInterface.FullName);
+                implementedInterfacesShort.Add(possibleInterface.Name);
             }
 
             if (instantiate)
@@ -54,7 +56,7 @@ internal class Program
                 {
                     Console.WriteLine("Friendly Name: " + ((IPluginDescription)Plugin).GetFriendlyName());
                     Console.WriteLine("Description: " + ((IPluginDescription)Plugin).GetTextDescription());
-                    validTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, file, implementedInterfaces));
+                    validTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, file, implementedInterfaces, implementedInterfacesShort));
                 }
             }
         }

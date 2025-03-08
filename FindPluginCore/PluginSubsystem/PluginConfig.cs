@@ -4,17 +4,16 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FindPluginCore.PluginSubsystem
-{
-    public class PluginConfig
-    {
-        public List<PluginConfigEntry> entries = new();
-        public string PathToFakeLoadPlugin = "";
-    }
+namespace FindPluginCore.PluginSubsystem;
 
-    public class PluginConfigEntry
-    {
-        public string name;
-        public string path;
-    }
+public class PluginConfig
+{
+    public List<PluginConfigEntry> entries = new();
+    public string PathToFakeLoadPlugin = "";
+}
+
+public class PluginConfigEntry
+{
+    public string name = "";
+    public string path = "";
 }

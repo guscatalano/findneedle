@@ -14,6 +14,7 @@ public struct PluginDescription
     public string ClassName;
     public string SourceFile;
     public List<string> ImplementedInterfaces;
+    public List<string> ImplementedInterfacesShort;
 }
 
 public interface IPluginDescription
@@ -23,7 +24,8 @@ public interface IPluginDescription
 
     public string GetClassName();
 
-    public static PluginDescription GetPluginDescription(IPluginDescription plugin, string sourceFile, List<string> implementedInterfaces)
+    public static PluginDescription GetPluginDescription(IPluginDescription plugin, string sourceFile, 
+                                                            List<string> implementedInterfaces, List<string> implementedInterfacesShort)
     {
         PluginDescription description = new PluginDescription()
         {
@@ -31,7 +33,8 @@ public interface IPluginDescription
             FriendlyName = plugin.GetFriendlyName(),
             ClassName = plugin.GetClassName(),
             SourceFile = sourceFile,
-            ImplementedInterfaces = implementedInterfaces
+            ImplementedInterfaces = implementedInterfaces,
+            ImplementedInterfacesShort = implementedInterfacesShort
         };
         return description;
     }
