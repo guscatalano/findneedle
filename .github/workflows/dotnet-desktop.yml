@@ -123,10 +123,27 @@ jobs:
       env:
         Configuration: ${{ matrix.configuration }}
 
-    # Execute all unit tests in the solution
-    - name: Execute unit tests
-      run: dotnet test
-    
+     
+    - name: Install ReportGenerator
+      run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+    - name: Execute unit tests and collect coverage
+      run: dotnet test **/*.csproj --configuration $env:Configuration --collect:"XPlat Code Coverage"
+      env:
+        Configuration: ${{ matrix.configuration }}
+
+    - name: Generate coverage report
+      run: reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage -reporttypes:Html
+      env:
+        PATH: ${{ runner.tool_cache }}/.dotnet/tools:${{ env.PATH }}
+
+    - name: Publish coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: code-coverage-report
+        path: coverage
+
+
     # Restore the application to populate the obj folder with RuntimeIdentifiers
     - name: Publish the application
       run: msbuild $env:Solution_Name /t:Publish /p:Configuration=$env:Configuration
