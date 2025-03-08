@@ -1,20 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+ 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
+	  <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<IsTestProject>true</IsTestProject>
-    <EnableMSTestRunner>true</EnableMSTestRunner>
-    <OutputType>Exe</OutputType>
-    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-    <!--
-      Displays error on console in addition to the log file. Note that this feature comes with a performance impact.
-      For more information, visit https://learn.microsoft.com/dotnet/core/testing/unit-testing-platform-integration-dotnet-test#show-failure-per-test
-      -->
-    <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+		  <Platforms>x86;x64</Platforms>
+		  <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
   </PropertyGroup>
+
 
   <ItemGroup>
       <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\net8.0\FakeLoadPlugin.runtimeconfig.json" Link="TestDependencies\FakeLoadPlugin.runtimeconfig.json">
@@ -35,13 +33,13 @@
   </ItemGroup>
 
   <ItemGroup>
-	<PackageReference Include="coverlet.collector" Version="6.0.2">
-		<PrivateAssets>all</PrivateAssets>
-		<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-	</PackageReference>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="1.4.3" />
-    <PackageReference Include="MSTest" Version="3.6.4" />
+	  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.7.0" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.7.0" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
