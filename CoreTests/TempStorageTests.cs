@@ -85,5 +85,19 @@ public sealed class TempStorageTests
 
         Assert.IsTrue(Directory.Exists(path));
     }
+
+    public void TestGetSingleton()
+    {
+        Assert.IsTrue(TempStorage.GetSingleton() != null);
+        var temp1 = TempStorage.GetMainTempPath();
+        Assert.IsTrue(temp1 != null);
+        var temp2 = TempStorage.GetNewTempPath("");
+        Assert.IsTrue(temp2 != null);
+        Assert.AreNotEqual(temp1, temp2);
+
+        var temp3 = TempStorage.GetNewTempPath("");
+        Assert.IsTrue(temp3 != null);
+        Assert.AreNotEqual(temp2, temp3);
+    }
 }
     

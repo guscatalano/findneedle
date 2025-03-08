@@ -16,22 +16,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="..\FakeLoadPlugin\bin\Debug\net8.0\FakeLoadPlugin.runtimeconfig.json" Link="TestDependencies\FakeLoadPlugin.runtimeconfig.json">
+    <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\net8.0\FakeLoadPlugin.runtimeconfig.json" Link="TestDependencies\FakeLoadPlugin.runtimeconfig.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\FakeLoadPlugin\bin\Debug\net8.0\FakeLoadPlugin.dll" Link="TestDependencies\FakeLoadPlugin.dll">
+    <None Include="..\FakeLoadPlugin\bin\$(Configuration)\net8.0\FakeLoadPlugin.dll" Link="TestDependencies\FakeLoadPlugin.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\FakeLoadPlugin\bin\Debug\net8.0\FakeLoadPlugin.exe" Link="TestDependencies\FakeLoadPlugin.exe">
+    <None Include="..\FakeLoadPlugin\bin\$(Configuration)\net8.0\FakeLoadPlugin.exe" Link="TestDependencies\FakeLoadPlugin.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\FakeLoadPlugin\bin\Debug\net8.0\FindNeedlePluginLib.dll" Link="TestDependencies\FindNeedlePluginLib.dll">
+    <None Include="..\FakeLoadPlugin\bin\$(Configuration)\net8.0\FindNeedlePluginLib.dll" Link="TestDependencies\FindNeedlePluginLib.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\TestProcessorPlugin\bin\Debug\net8.0\TestProcessorPlugin.dll" Link="TestDependencies\TestProcessorPlugin.dll">
+    <None Include="..\TestProcessorPlugin\bin\$(Configuration)\net8.0\TestProcessorPlugin.dll" Link="TestDependencies\TestProcessorPlugin.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
