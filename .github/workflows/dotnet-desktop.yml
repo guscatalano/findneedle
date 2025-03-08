@@ -116,7 +116,13 @@ jobs:
       with:
         name: raw-code-coverage-report
         path: coverage.cobertura.xml
-    
+
+    - name: Install ReportGenerator
+      run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+    - name: Add ReportGenerator to PATH
+      run: echo "${{ runner.tool_cache }}/.dotnet/tools" >> $GITHUB_PATH
+
     - name: Generate coverage report
       run: reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage -reporttypes:Html
       env:
