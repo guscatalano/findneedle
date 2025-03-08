@@ -88,7 +88,7 @@ public class FolderLocation : SearchLocation
             metric = new Dictionary<string, dynamic>()
         };
 
-        knownProcessors = new List<FileExtensionProcessor>();
+        knownProcessors = new List<IFileExtensionProcessor>();
         TempStorage.GetMainTempPath();
         if (File.Exists(path))
         {
@@ -264,7 +264,7 @@ public class FolderLocation : SearchLocation
         }
     }
 
-    List<FileExtensionProcessor> knownProcessors = new();
+    List<IFileExtensionProcessor> knownProcessors = new();
 
     bool IsDigitsOnly(string str)
     {
@@ -351,7 +351,7 @@ public class FolderLocation : SearchLocation
         List<SearchResult> results = new List<SearchResult>();
         lock (knownProcessors)
         {
-            foreach (FileExtensionProcessor item in knownProcessors)
+            foreach (IFileExtensionProcessor item in knownProcessors)
             {
                 if(item == null)
                 {

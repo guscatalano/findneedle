@@ -11,7 +11,7 @@ using findneedle.WDK;
 using Newtonsoft.Json;
 
 namespace findneedle.Implementations.FileExtensions;
-public class ETLProcessor : FileExtensionProcessor
+public class ETLProcessor : IFileExtensionProcessor
 {
     public TraceFmtResult currentResult
     {
@@ -113,6 +113,11 @@ public class ETLProcessor : FileExtensionProcessor
     public List<SearchResult> GetResults()
     {
         return results;
+    }
+
+    public List<string> RegisterForExtensions()
+    {
+        return new List<string>() { ".etl" };
     }
 }
 

@@ -8,7 +8,7 @@ using findneedle.Interfaces;
 using FindNeedleCoreUtils;
 
 namespace findneedle.Implementations.FileExtensions;
-public class EVTXProcessor : FileExtensionProcessor
+public class EVTXProcessor : IFileExtensionProcessor
 {
     readonly string inputfile;
     readonly FileEventLogQueryLocation loc;
@@ -40,5 +40,10 @@ public class EVTXProcessor : FileExtensionProcessor
         
         loc.LoadInMemory();
        
+    }
+
+    public List<string> RegisterForExtensions()
+    {
+        return new List<string>() { ".evtx" };
     }
 }

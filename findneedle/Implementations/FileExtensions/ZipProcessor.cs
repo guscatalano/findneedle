@@ -8,7 +8,7 @@ using findneedle.Interfaces;
 using FindNeedleCoreUtils;
 
 namespace findneedle.Implementations.FileExtensions;
-public class ZipProcessor : FileExtensionProcessor
+public class ZipProcessor : IFileExtensionProcessor
 {
     readonly string inputfile;
     private readonly FolderLocation parent;
@@ -18,6 +18,12 @@ public class ZipProcessor : FileExtensionProcessor
         this.parent = parent;
 
     }
+
+    public List<string> RegisterForExtensions()
+    {
+        return new List<string>() { ".zip" };
+    }
+
     public void DoPreProcessing() {
         if (inputfile == null)
         {

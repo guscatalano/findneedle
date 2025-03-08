@@ -5,8 +5,12 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace findneedle.Interfaces;
-public interface FileExtensionProcessor
+public interface IFileExtensionProcessor
 {
+    /* Every file extension processor must implement this interface.
+     * It defines what extensions it can handle, they MUST start with .
+     */
+    public List<string> RegisterForExtensions();
 
     public void LoadInMemory();
     public void DoPreProcessing();

@@ -15,7 +15,6 @@ public sealed class FileIOTests
     [TestMethod]
     public void TestReadDirectory()
     {
-
         IEnumerable<string> list = FileIO.GetAllFiles(TestGlobals.TEST_DEP_FOLDER, (path) => { Assert.Fail(); });
         Assert.AreEqual(list.Count(), 5); //There are 5 files in the directory (Test Dependencies)
         Assert.IsTrue(list.First().StartsWith(TestGlobals.TEST_DEP_FOLDER)); //It starts with folder name
