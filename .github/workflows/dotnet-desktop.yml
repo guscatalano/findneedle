@@ -107,7 +107,7 @@ jobs:
       uses: microsoft/setup-msbuild@v2
     
     - name: Execute unit tests and collect coverage
-      run: dotnet test --configuration $env:Configuration --logger trx --collect:"Code Coverage"
+      run: dotnet test --configuration $env:Configuration --logger trx --collect:"XPlat Code Coverage"
       env:
         Configuration: ${{ matrix.configuration }}
 
