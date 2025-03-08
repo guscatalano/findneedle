@@ -107,7 +107,7 @@ jobs:
       uses: microsoft/setup-msbuild@v2
     
     - name: Execute unit tests and collect coverage
-      run: dotnet test --configuration $env:Configuration --collect:"XPlat Code Coverage"
+      run: dotnet test --configuration $env:Configuration --logger trx --collect:"XPlat Code Coverage"
       env:
         Configuration: ${{ matrix.configuration }}
 
@@ -117,16 +117,13 @@ jobs:
         name: raw-code-coverage-report
         path: coverage.cobertura.xml
 
-    - name: Install ReportGenerator
-      run: dotnet tool install --global dotnet-reportgenerator-globaltool
 
-    - name: Add ReportGenerator to PATH
-      run: echo "${{ runner.tool_cache }}/.dotnet/tools" >> $GITHUB_PATH
-
-    - name: Generate coverage report
-      run: reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage -reporttypes:Html
-      env:
-        PATH: ${{ runner.tool_cache }}/.dotnet/tools:${{ env.PATH }}
+    - name: Upload Test Result Files
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: ${{ github.workspace }}/**/TestResults/**/*
+        retention-days: 5
   
 
   build:
@@ -187,27 +184,6 @@ jobs:
       run: msbuild $env:Solution_Name /t:Build /p:Configuration=$env:Configuration
       env:
         Configuration: ${{ matrix.configuration }}
-
-     
-    - name: Install ReportGenerator
-      run: dotnet tool install --global dotnet-reportgenerator-globaltool
-
-
-    - name: Execute unit tests and collect coverage
-      run: dotnet test --configuration $env:Configuration --collect:"XPlat Code Coverage"
-      env:
-        Configuration: ${{ matrix.configuration }}
-
-    - name: Generate coverage report
-      run: reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage -reporttypes:Html
-      env:
-        PATH: ${{ runner.tool_cache }}/.dotnet/tools:${{ env.PATH }}
-
-    - name: Publish coverage report
-      uses: actions/upload-artifact@v4
-      with:
-        name: code-coverage-report
-        path: coverage
 
 
     # Restore the application to populate the obj folder with RuntimeIdentifiers
