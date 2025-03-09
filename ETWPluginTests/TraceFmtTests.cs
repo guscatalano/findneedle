@@ -49,12 +49,25 @@ public class TraceFmtTests
     [TestMethod]
     public void TestETLProcessFile()
     {
-        using TempStorage temp = new();
-        var path = temp.GetExistingMainTempPath();
-        var result = TraceFmt.ParseSimpleETL(Path.GetFullPath("SampleFiles\\test.etl"), path);
-        Assert.IsTrue(result.ProcessedFile != null && result.ProcessedFile.Contains("test.etl"));
-        Assert.IsTrue(result.TotalBuffersProcessed > 0);
-            
+        try
+        {
+            using TempStorage temp = new();
+            var path = temp.GetExistingMainTempPath();
+            var result = TraceFmt.ParseSimpleETL(Path.GetFullPath("SampleFiles\\test.etl"), path);
+            Assert.IsTrue(result.ProcessedFile != null && result.ProcessedFile.Contains("test.etl"));
+            Assert.IsTrue(result.TotalBuffersProcessed > 0);
+        }
+        catch (Exception e)
+        {
+            if (e.ToString().Contains("Cant find tracefmt"))
+            {
+                Assert.Inconclusive("Cant find tracefmt");
+            }
+            else
+            {
+                Assert.Fail("Should not throw" + e);
+            }
+        }
     }
 
     public void TestBadETLPath()

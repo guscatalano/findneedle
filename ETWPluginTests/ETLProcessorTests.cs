@@ -27,13 +27,27 @@ public sealed class ETWProcessorTests
     [TestMethod]
     public void ParseSimple()
     {
-        ETLProcessor x = new ETLProcessor();
-        x.OpenFile(Path.GetFullPath("SampleFiles\\test.etl"));
-        x.DoPreProcessing();
-        //x.LoadInMemory();
-        List<SearchResult> blah = x.GetResults();
-        Assert.IsTrue(blah.Count() > 100);
-        x.CleanUp();
+        try
+        {
+            ETLProcessor x = new ETLProcessor();
+            x.OpenFile(Path.GetFullPath("SampleFiles\\test.etl"));
+            x.DoPreProcessing();
+            //x.LoadInMemory();
+            List<SearchResult> blah = x.GetResults();
+            Assert.IsTrue(blah.Count() > 100);
+            x.CleanUp();
+        }
+        catch (Exception e)
+        {
+            if (e.ToString().Contains("Cant find tracefmt"))
+            {
+                Assert.Inconclusive("Cant find tracefmt");
+            }
+            else
+            {
+                Assert.Fail("Should not throw" + e);
+            }
+        }
     }
 
 
