@@ -96,6 +96,9 @@ public class TempStorage : IDisposable
     {
         get; set;
     }
+    
+    //Avoid reusing
+    public static List<string> generatedPaths = new();
 
     /*
      * Generates a new path with the root as the base and the hint as a way to indicate what the folder is for
@@ -112,7 +115,8 @@ public class TempStorage : IDisposable
             {
                 throw new Exception("Could not find a unique temp path");
             }
-        } while (Path.Exists(ntempPath));
+        } while (Path.Exists(ntempPath) || generatedPaths.Contains(ntempPath));
+        generatedPaths.Add(generatedPaths);
         return ntempPath;
     }
 

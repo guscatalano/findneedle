@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace findneedle.Interfaces;
-public interface IFileExtensionProcessor
+public interface IFileExtensionProcessor : IDisposable
 {
     /* Every file extension processor must implement this interface.
      * It defines what extensions it can handle, they MUST start with .
