@@ -54,7 +54,7 @@ public class TraceFmtResult
             throw new Exception("Couldnt open summary file");
         }
 
-        ProcessedFile = summary[0].Trim();
+        ProcessedFile = summary[1].Trim();
         TotalBuffersProcessed = Int32.Parse(summary[2].Substring(summary[2].LastIndexOf(" ")).Trim());
         TotalEventsProcessed = Int32.Parse(summary[3].Substring(summary[2].LastIndexOf(" ")).Trim());
         TotalEventsLost = Int32.Parse(summary[4].Substring(summary[2].LastIndexOf(" ")).Trim());

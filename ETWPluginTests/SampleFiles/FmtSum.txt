@@ -1,0 +1,12 @@
+Files Processed:
+	C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\test.etl
+Total Buffers Processed 30
+Total Events  Processed 267823
+Total Events  Lost      1
+Total Format  Errors    2
+Total Formats Unknown   184696
+Elapsed Time            9 sec
++-----------------------------------------------------------------------------------+
+|EventCount    EventName            EventType   TMF                                 |
++-----------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------+

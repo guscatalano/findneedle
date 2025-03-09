@@ -29,8 +29,19 @@ public class TraceFmtTests
     }
 
     [TestMethod]
-    public void TestWDK()
+    public void TestSummaryFile()
     {
-       
+        TraceFmtResult fmtResult = new TraceFmtResult();
+        fmtResult.summaryfile = "SampleFiles\\FmtSum.txt";
+        fmtResult.ParseSummaryFile();
+        Assert.AreEqual(fmtResult.TotalBuffersProcessed, 30);
+        Assert.AreEqual(fmtResult.TotalFormatsUnknown, 184696);
+        Assert.AreEqual(fmtResult.TotalEventsLost, 1);
+        Assert.AreEqual(fmtResult.TotalFormatErrors, 2);
+        Assert.IsTrue(fmtResult.TotalElapsedTime != null 
+            && fmtResult.TotalElapsedTime.Equals("9 sec", StringComparison.CurrentCultureIgnoreCase));
+        Assert.IsTrue(fmtResult.ProcessedFile != null 
+            && fmtResult.ProcessedFile.Equals("C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.19041.0\\x64\\test.etl", StringComparison.CurrentCultureIgnoreCase));
+        
     }
 }
