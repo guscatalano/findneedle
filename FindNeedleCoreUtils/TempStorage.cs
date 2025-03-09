@@ -30,6 +30,15 @@ public class TempStorage : IDisposable
 
     }
 
+    public static void DeleteSomeTempPath(string randomDir)
+    {
+        while (Directory.Exists(randomDir))
+        {
+            Directory.Delete(randomDir, true);
+            Thread.Sleep(1000);
+        }
+    }
+
     /**
     * Generates a new temp path without replacing the main temp one
     * Caller is responsible for cleanup
@@ -115,16 +124,14 @@ public class TempStorage : IDisposable
         return tempPath;
     }
 
+    
+
     /**
      * Cleans up the temp path
      */
     public void Dispose()
     {
-        while (Directory.Exists(tempPath))
-        {
-            Directory.Delete(tempPath, true);
-            Thread.Sleep(1000);
-        }
+        TempStorage.DeleteSomeTempPath(tempPath);
     }
 
 

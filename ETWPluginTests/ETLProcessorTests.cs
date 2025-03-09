@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using findneedle;
 using findneedle.Implementations.FileExtensions;
 
 
-namespace CoreTests;
+namespace ETWPluginTests;
 
 [TestClass]
 public sealed class ETWProcessorTests
@@ -20,7 +21,21 @@ public sealed class ETWProcessorTests
         var reg = x.RegisterForExtensions();
         Assert.IsTrue(reg.Count() == 1);
         Assert.IsTrue(reg.First().Equals(".etl"));
+        x.CleanUp();
+    }
+
+    [TestMethod]
+    public void ParseSimple()
+    {
+        ETLProcessor x = new ETLProcessor();
+        x.OpenFile(Path.GetFullPath("SampleFiles\\test.etl"));
+        x.DoPreProcessing();
+        //x.LoadInMemory();
+        List<SearchResult> blah = x.GetResults();
+        Assert.IsTrue(blah.Count() > 100);
+        x.CleanUp();
     }
 
 
-}
+
+    }

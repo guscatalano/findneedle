@@ -20,13 +20,19 @@ public class ETLProcessor : IFileExtensionProcessor
 
     public Dictionary<string, int> providers = new();
 
-    public bool LoadEarly = true; 
+    public bool LoadEarly = true;
+    private string tempPath = "";
 
     public string inputfile = "";
     public ETLProcessor()
     {
         currentResult = new TraceFmtResult(); //empty
+        tempPath = TempStorage.GetNewTempPath("etl");
+    }
 
+    public void CleanUp()
+    {
+        TempStorage.DeleteSomeTempPath(tempPath);
     }
 
     public void OpenFile(string fileName)
@@ -48,7 +54,7 @@ public class ETLProcessor : IFileExtensionProcessor
     public void DoPreProcessing()
     {
         var getLock = 50;
-        currentResult = TraceFmt.ParseSimpleETL(inputfile, TempStorage.GetNewTempPath("etl"));
+        currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath);
         while (getLock > 0)
         {
             try
