@@ -23,33 +23,38 @@ public class TraceFmtResult
 
     public void ParseSummaryFile()
     {
+        if (string.IsNullOrEmpty(summaryfile))
+        {
+            throw new ArgumentNullException(nameof(summaryfile), "Summary file path cannot be null or empty.");
+        }
+
         var maxtries = 10000;
         List<string> summary = new List<string>();
-        
+
         while (maxtries > 0)
         {
             try
             {
-#pragma warning disable CS8604 // Possible null reference argument.
                 FileStream x = File.OpenRead(summaryfile);
-#pragma warning restore CS8604 // Possible null reference argument.
+
                 using var reader = new StreamReader(x);
-                string line;
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                string? line;
+
                 while ((line = reader.ReadLine()) != null)
                 {
                     summary.Add(line);
                 }
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+
                 break;
-            } catch(Exception)
+            }
+            catch (Exception)
             {
                 Thread.Sleep(100);
                 maxtries--;
                 //tracefmt is still writing, wait
             }
         }
-        if(maxtries == 0)
+        if (maxtries == 0)
         {
             throw new Exception("Couldnt open summary file");
         }

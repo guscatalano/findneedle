@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.WDK;
+using FindNeedleCoreUtils;
 
 namespace ETWPluginTests;
 
@@ -38,10 +39,38 @@ public class TraceFmtTests
         Assert.AreEqual(fmtResult.TotalFormatsUnknown, 184696);
         Assert.AreEqual(fmtResult.TotalEventsLost, 1);
         Assert.AreEqual(fmtResult.TotalFormatErrors, 2);
-        Assert.IsTrue(fmtResult.TotalElapsedTime != null 
+        Assert.IsTrue(fmtResult.TotalElapsedTime != null
             && fmtResult.TotalElapsedTime.Equals("9 sec", StringComparison.CurrentCultureIgnoreCase));
-        Assert.IsTrue(fmtResult.ProcessedFile != null 
+        Assert.IsTrue(fmtResult.ProcessedFile != null
             && fmtResult.ProcessedFile.Equals("C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.19041.0\\x64\\test.etl", StringComparison.CurrentCultureIgnoreCase));
-        
+
+    }
+
+    [TestMethod]
+    public void TestETLProcessFile()
+    {
+        using TempStorage temp = new();
+        var path = temp.GetExistingMainTempPath();
+        var result = TraceFmt.ParseSimpleETL(Path.GetFullPath("SampleFiles\\test.etl"), path);
+        Assert.IsTrue(result.ProcessedFile != null && result.ProcessedFile.Contains("test.etl"));
+        Assert.IsTrue(result.TotalBuffersProcessed > 0);
+            
+    }
+
+    public void TestBadETLPath()
+    {
+        using TempStorage temp = new();
+        var path = temp.GetExistingMainTempPath();
+        try
+        {
+            var result = TraceFmt.ParseSimpleETL("SomeRandomPath", path);
+            Assert.Fail("Should throw");
+        }
+        catch (Exception)
+        {
+            Assert.IsTrue(true);
+        }
+
+
     }
 }
