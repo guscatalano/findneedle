@@ -27,7 +27,7 @@ public sealed class ETWProcessorTests
         var reg = x.RegisterForExtensions();
         Assert.IsTrue(reg.Count() == 1);
         Assert.IsTrue(reg.First().Equals(".etl"));
-        x.CleanUp();
+        x.Dispose();
     }
 
     [TestMethod]
@@ -42,7 +42,7 @@ public sealed class ETWProcessorTests
             //x.LoadInMemory();
             List<SearchResult> blah = x.GetResults();
             Assert.IsTrue(blah.Count() > 100);
-            x.CleanUp();
+            x.Dispose();
             Assert.IsTrue(true);
         }
         catch (Exception e)

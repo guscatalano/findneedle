@@ -14,6 +14,8 @@ public class EVTXProcessor : IFileExtensionProcessor
     private FileEventLogQueryLocation? loc;
 
 
+    public void Dispose() => throw new NotImplementedException();
+
     public void OpenFile(string fileName)
     {
         inputfile = fileName;

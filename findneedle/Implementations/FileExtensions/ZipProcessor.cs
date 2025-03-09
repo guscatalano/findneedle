@@ -54,4 +54,6 @@ public class ZipProcessor : IFileExtensionProcessor
     public void LoadInMemory() 
     {
     }
+
+    public void Dispose() => throw new NotImplementedException();
 }

@@ -21,7 +21,7 @@ public class ETLProcessor : IFileExtensionProcessor
     public Dictionary<string, int> providers = new();
 
     public bool LoadEarly = true;
-    private string tempPath = "";
+    private readonly string tempPath = "";
 
     public string inputfile = "";
     public ETLProcessor()
@@ -30,7 +30,7 @@ public class ETLProcessor : IFileExtensionProcessor
         tempPath = TempStorage.GetNewTempPath("etl");
     }
 
-    public void CleanUp()
+    public void Dispose()
     {
         TempStorage.DeleteSomeTempPath(tempPath);
     }
