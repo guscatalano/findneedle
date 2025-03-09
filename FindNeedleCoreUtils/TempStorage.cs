@@ -115,7 +115,7 @@ public class TempStorage : IDisposable
             {
                 throw new Exception("Could not find a unique temp path");
             }
-        } while (Path.Exists(ntempPath) || generatedPaths.Contains(ntempPath));
+        } while (ntempPath == null || Path.Exists(ntempPath) || generatedPaths.Contains(ntempPath));
         generatedPaths.Add(ntempPath);
         return ntempPath;
     }
