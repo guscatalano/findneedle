@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations.FileExtensions;
+using findneedle.WDK;
 
 
 namespace ETWPluginTests;
@@ -13,6 +14,11 @@ namespace ETWPluginTests;
 public sealed class ETWProcessorTests
 {
 
+    [TestInitialize]
+    public void Init()
+    {
+        WDKFinder.ResetTestFlags();
+    }
 
     [TestMethod]
     public void RegisterCorrectly()
@@ -27,6 +33,9 @@ public sealed class ETWProcessorTests
     [TestMethod]
     public void ParseSimple()
     {
+        WDKFinder.TEST_MODE = true;
+        WDKFinder.TEST_MODE_PASS_FMT_PATH = true;
+        WDKFinder.TEST_MODE_FMT_PATH = "SampleWDK\\tracefmt.exe";
         try
         {
             ETLProcessor x = new ETLProcessor();

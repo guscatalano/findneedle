@@ -23,6 +23,13 @@ public class WDKFinder
     public const string REG_PATH_ROOT_KIT_NAME = @"KitsRoot10";
     public const string REG_PATH_ROOT_BIN_NAME = @"WdkBinRootVersioned";
 
+    public static void ResetTestFlags()
+    {
+        TEST_MODE = false;
+        TEST_MODE_SUCCESS = false;
+        TEST_MODE_PASS_FMT_PATH = false;
+    }
+
 
     private static string GetPathOfWDKRoot()
     {

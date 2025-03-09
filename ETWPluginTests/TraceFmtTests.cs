@@ -11,6 +11,11 @@ namespace ETWPluginTests;
 [TestClass]
 public class TraceFmtTests
 {
+    [TestInitialize]
+    public void Init()
+    {
+        WDKFinder.ResetTestFlags();
+    }
 
     [TestMethod]
     public void TestBasicLoadPath()
