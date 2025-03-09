@@ -36,12 +36,13 @@ public sealed class ETWProcessorTests
             List<SearchResult> blah = x.GetResults();
             Assert.IsTrue(blah.Count() > 100);
             x.CleanUp();
+            Assert.IsTrue(true);
         }
         catch (Exception e)
         {
             if (e.ToString().Contains("Cant find tracefmt"))
             {
-                Assert.Inconclusive("Cant find tracefmt");
+                Assert.Inconclusive("Cant find tracefmt :(");
             }
             else
             {

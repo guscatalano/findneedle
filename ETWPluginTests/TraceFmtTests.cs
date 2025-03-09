@@ -51,6 +51,10 @@ public class TraceFmtTests
     {
         try
         {
+            WDKFinder.TEST_MODE = true;
+            WDKFinder.TEST_MODE_PASS_FMT_PATH = true;
+            WDKFinder.TEST_MODE_FMT_PATH = "SampleWDK\\tracefmt.exe";
+
             using TempStorage temp = new();
             var path = temp.GetExistingMainTempPath();
             var result = TraceFmt.ParseSimpleETL(Path.GetFullPath("SampleFiles\\test.etl"), path);

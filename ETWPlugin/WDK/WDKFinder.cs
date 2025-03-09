@@ -11,6 +11,8 @@ public class WDKFinder
 {
     public static bool TEST_MODE = false; //used for unit testing
     public static bool TEST_MODE_SUCCESS = false; //used for unit testing
+    public static bool TEST_MODE_PASS_FMT_PATH = false;
+    public static string TEST_MODE_FMT_PATH = "";
     public const string TEST_MODE_FAKE_SIMPLE_PATH = "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.22621.0\\";
     public const string TET_MODE_FAKE_ROOT_PATH = "C:\\Program Files (x86)\\Windows Kits\\10\\";
 
@@ -138,6 +140,19 @@ public class WDKFinder
         var wdk = GetPathOfWDKEasy();
         var potentialPath = Path.Combine(wdk, TRACE_FMT_ARCH, TRACE_FMT_NAME);
 
+        //We are providing a path in testing manually
+        if(TEST_MODE && TEST_MODE_PASS_FMT_PATH)
+        {
+            potentialPath = Path.GetFullPath(TEST_MODE_FMT_PATH);
+            if (File.Exists(potentialPath))
+            {
+                return TEST_MODE_FMT_PATH;
+            }
+            else
+            {
+                throw new Exception("TEST_MODE_FMT_PATH does not exist. " + potentialPath);
+            }
+        }
 
         if (File.Exists(potentialPath) && !TEST_MODE)
         {
