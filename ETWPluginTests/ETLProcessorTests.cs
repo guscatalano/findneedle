@@ -21,4 +21,6 @@ public sealed class ETWProcessorTests
         Assert.IsTrue(reg.Count() == 1);
         Assert.IsTrue(reg.First().Equals(".etl"));
     }
+
+
 }
