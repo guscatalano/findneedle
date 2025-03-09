@@ -106,7 +106,7 @@ public class TempStorage : IDisposable
     public string GenerateNewPath(string root, string hint = "FindNeedleTemp")
     {
         var max = 10000;
-        string? ntempPath;
+        string ntempPath;
         do
         {
             max--;
@@ -115,7 +115,7 @@ public class TempStorage : IDisposable
             {
                 throw new Exception("Could not find a unique temp path");
             }
-        } while (ntempPath == null || Path.Exists(ntempPath) || generatedPaths.Contains(ntempPath));
+        } while (Path.Exists(ntempPath) || generatedPaths.Contains(ntempPath));
         generatedPaths.Add(ntempPath);
         return ntempPath;
     }
