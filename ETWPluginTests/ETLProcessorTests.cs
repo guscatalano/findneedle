@@ -33,13 +33,11 @@ public sealed class ETWProcessorTests
     [TestMethod]
     public void ParseSimple()
     {
-        WDKFinder.TEST_MODE = true;
-        WDKFinder.TEST_MODE_PASS_FMT_PATH = true;
-        WDKFinder.TEST_MODE_FMT_PATH = "SampleWDK\\tracefmt.exe";
+        ETWTestUtils.UseTestTraceFmt();
         try
         {
             ETLProcessor x = new ETLProcessor();
-            x.OpenFile(Path.GetFullPath("SampleFiles\\test.etl"));
+            x.OpenFile(ETWTestUtils.GetSampleETLFile());
             x.DoPreProcessing();
             //x.LoadInMemory();
             List<SearchResult> blah = x.GetResults();
@@ -51,7 +49,7 @@ public sealed class ETWProcessorTests
         {
             if (e.ToString().Contains("Cant find tracefmt"))
             {
-                Assert.Inconclusive("Cant find tracefmt :(");
+                Assert.Fail("Cant find tracefmt :("); //We have a testhook for it now
             }
             else
             {

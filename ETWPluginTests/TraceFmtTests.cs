@@ -56,13 +56,11 @@ public class TraceFmtTests
     {
         try
         {
-            WDKFinder.TEST_MODE = true;
-            WDKFinder.TEST_MODE_PASS_FMT_PATH = true;
-            WDKFinder.TEST_MODE_FMT_PATH = "SampleWDK\\tracefmt.exe";
+            ETWTestUtils.UseTestTraceFmt();
 
             using TempStorage temp = new();
             var path = temp.GetExistingMainTempPath();
-            var result = TraceFmt.ParseSimpleETL(Path.GetFullPath("SampleFiles\\test.etl"), path);
+            var result = TraceFmt.ParseSimpleETL(ETWTestUtils.GetSampleETLFile(), path);
             Assert.IsTrue(result.ProcessedFile != null && result.ProcessedFile.Contains("test.etl"));
             Assert.IsTrue(result.TotalBuffersProcessed > 0);
         }
@@ -70,7 +68,7 @@ public class TraceFmtTests
         {
             if (e.ToString().Contains("Cant find tracefmt"))
             {
-                Assert.Inconclusive("Cant find tracefmt");
+                Assert.Fail("Cant find tracefmt"); //We fail because we have a test hook
             }
             else
             {
