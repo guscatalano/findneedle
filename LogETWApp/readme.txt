@@ -1,0 +1,1 @@
+﻿Test app that just logs ETW for the ETW tests to use
