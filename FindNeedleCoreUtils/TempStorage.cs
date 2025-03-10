@@ -105,6 +105,10 @@ public class TempStorage : IDisposable
      */
     public string GenerateNewPath(string root, string hint = "FindNeedleTemp")
     {
+        if(generatedPaths == null)
+        {
+            generatedPaths = new();
+        }
         var max = 10000;
         string ntempPath;
         do
