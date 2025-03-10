@@ -40,7 +40,7 @@ public sealed class PluginManagerTests
     public void TestLoadFakePlugin()
     {
         var TEST_PLUGIN_NAME = TestGlobals.TEST_DEP_PLUGIN;
-        var TEST_PLUGIN_SEARCH_TYPE = "SearchOutput";
+        var TEST_PLUGIN_SEARCH_TYPE = "ISearchOutput";
         var TEST_PLUGIN_OUTPUT_NULL = "null";
         var TEST_PLUGIN_OUTPUT_NULL_NAME = "SampleNullOutput";
 
