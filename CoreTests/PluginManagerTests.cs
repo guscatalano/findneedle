@@ -69,13 +69,13 @@ public sealed class PluginManagerTests
         var obj = nullPlugin.CreateInstance((PluginDescription)nullPluginDescription);
         Assert.IsTrue(obj != null);
         Assert.AreEqual(obj.GetType().Name, TEST_PLUGIN_OUTPUT_NULL_NAME);
-        Assert.AreEqual(((SearchOutput)obj).GetOutputFileName(), TEST_PLUGIN_OUTPUT_NULL);
+        Assert.AreEqual(((ISearchOutput)obj).GetOutputFileName(), TEST_PLUGIN_OUTPUT_NULL);
 
 
         //Check taht we can instantiate it easily
         var y = pluginManager.GetAllPluginObjectsOfAType(TEST_PLUGIN_SEARCH_TYPE).First().CreateInstance();
         Assert.IsTrue(y != null);
-        Assert.AreEqual(TEST_PLUGIN_OUTPUT_NULL, ((SearchOutput)y).GetOutputFileName());
+        Assert.AreEqual(TEST_PLUGIN_OUTPUT_NULL, ((ISearchOutput)y).GetOutputFileName());
         
     }
 

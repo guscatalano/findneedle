@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace findneedle.Implementations;
 
-public class OutputToPlainFile : SearchOutput
+public class OutputToPlainFile : ISearchOutput
 {
     readonly string filename = "";
     readonly FileStream x;
@@ -26,15 +26,15 @@ public class OutputToPlainFile : SearchOutput
     {
         x.Close();
     }
-    public void WriteAllOutput(List<SearchResult> result)
+    public void WriteAllOutput(List<ISearchResult> result)
     {
-        foreach(SearchResult item in result)
+        foreach(ISearchResult item in result)
         {
             WriteOutput(item);
         }
     }
 
-    public void WriteOutput(SearchResult result)
+    public void WriteOutput(ISearchResult result)
     {
         var info = new UTF8Encoding(true).GetBytes(result.GetMessage());
         x.Write(info);

@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Interfaces;
-public interface ResultProcessor : IPluginDescription
+public interface IResultProcessor : IPluginDescription
 {
-    public void ProcessResults(List<SearchResult> results);
+    public void ProcessResults(List<ISearchResult> results);
     public string GetOutputFile(string optionalOutputFolder = "");
 
     public string GetOutputText();

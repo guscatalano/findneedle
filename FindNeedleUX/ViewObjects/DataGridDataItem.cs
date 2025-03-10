@@ -16,10 +16,10 @@ namespace Microsoft.Toolkit.Uwp.SampleApp.Data
 
        
         private string _parentMountain;
-        private SearchResult _ret;
+        private ISearchResult _ret;
 
 
-        public SearchSourceDataItem(SearchResult yay)
+        public SearchSourceDataItem(ISearchResult yay)
         {
             _ret = yay;
         }

@@ -8,10 +8,10 @@ using findneedle;
 namespace FindNeedlePluginLib.Interfaces;
 public interface ISearchQuery
 {
-    public List<SearchFilter> GetFilters();
+    public List<ISearchFilter> GetFilters();
     public SearchProgressSink GetSearchProgressSink();
 
     public SearchStatistics GetSearchStatistics();
 
-    public List<SearchLocation> GetLocations();
+    public List<ISearchLocation> GetLocations();
 }

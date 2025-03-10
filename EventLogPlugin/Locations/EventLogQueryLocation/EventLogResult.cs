@@ -9,7 +9,7 @@ using findneedle.Implementations.Locations.EventLogQueryLocation;
 
 namespace findneedle.Implementations.Locations.EventLogQueryLocation;
 
-public class EventLogResult : SearchResult
+public class EventLogResult : ISearchResult
 {
     readonly EventRecord entry;
     readonly IEventLogQueryLocation location;

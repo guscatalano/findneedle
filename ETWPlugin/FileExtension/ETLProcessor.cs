@@ -51,18 +51,20 @@ public class ETLProcessor : IFileExtensionProcessor
     }
 
    
-    public void DoPreProcessing()
+public void DoPreProcessing()
     {
         var getLock = 50;
+
         currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath);
         while (getLock > 0)
         {
             try
             {
-
-#pragma warning disable CS8604 // Possible null reference argument.
+                if (currentResult.outputfile == null)
+                {
+                    throw new InvalidOperationException("Output file is not set.");
+                }
                 using var fileStream = File.OpenRead(currentResult.outputfile);
-#pragma warning restore CS8604 // Possible null reference argument.
                 using var streamReader = new StreamReader(fileStream, Encoding.UTF8, false); //change buffer if there's perf reasons
 
                 string? line;
@@ -104,10 +106,9 @@ public class ETLProcessor : IFileExtensionProcessor
                 getLock--; // Sometimes tracefmt can hold the lock, wait until file is ready
             }
         }
-
     }
 
-    readonly List<SearchResult> results = new();
+    readonly List<ISearchResult> results = new();
     public void LoadInMemory() 
     {
         if (LoadEarly)
@@ -120,7 +121,7 @@ public class ETLProcessor : IFileExtensionProcessor
         
     }
 
-    public List<SearchResult> GetResults()
+    public List<ISearchResult> GetResults()
     {
         return results;
     }
@@ -131,22 +132,22 @@ public class ETLProcessor : IFileExtensionProcessor
     }
 }
 
-public class ETLLogLine : SearchResult
+public class ETLLogLine : ISearchResult
 {
-    public string eventtxt = String.Empty;
-    public string tasktxt = String.Empty;
+    public string eventtxt = string.Empty;
+    public string tasktxt = string.Empty;
     public DateTime metadatetime = DateTime.MinValue;
     public string metaprovider = string.Empty; //comes from json, not header
-    public string provider = String.Empty;
-    public string tempBuffer = String.Empty;
-    public string firstSomething = String.Empty; //dont know what this is
-    public string hexPid = String.Empty;
-    public string hexTid = String.Empty;
-    public string datetime = String.Empty;
+    public string provider = string.Empty;
+    public string tempBuffer = string.Empty;
+    public string firstSomething = string.Empty; //dont know what this is
+    public string hexPid = string.Empty;
+    public string hexTid = string.Empty;
+    public string datetime = string.Empty;
     public DateTime parsedTime = DateTime.MinValue;
-    public string json = String.Empty;
+    public string json = string.Empty;
     public Dictionary<string, dynamic> keyjson = new();
-    public string filename = String.Empty;
+    public string filename = string.Empty;
 
     public string originalLine = string.Empty;
 
@@ -351,14 +352,21 @@ public class ETLLogLine : SearchResult
         //Parse the json early
         try
         {
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-#pragma warning disable CS8601 // Possible null reference assignment.
-            keyjson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
-#pragma warning restore CS8601 // Possible null reference assignment.
 
-
+           
+           
+            var deserialized = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
+            if (deserialized != null)
+            {
+                keyjson = deserialized;
+            }
+            else
+            {
+                throw new Exception("Deserialization resulted in null");
+            }
+            
+           
             metaprovider = keyjson["meta"]["provider"];
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
             metadatetime = DateTime.Parse((string)keyjson["meta"]["time"]);
             
             if (!String.IsNullOrEmpty(keyjson["meta"]["task"]))

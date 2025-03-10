@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace findneedle.Implementations.Locations.EventLogQueryLocation;
-public abstract class IEventLogQueryLocation : SearchLocation
+public abstract class IEventLogQueryLocation : ISearchLocation
 {
     public override void SetNotificationCallback(SearchProgressSink sink)
     {

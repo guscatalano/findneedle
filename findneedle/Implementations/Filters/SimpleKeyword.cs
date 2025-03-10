@@ -2,7 +2,7 @@
 
 namespace findneedle.Implementations
 {
-    public class SimpleKeywordFilter : SearchFilter
+    public class SimpleKeywordFilter : ISearchFilter
     {
 
         public string term 
@@ -22,7 +22,7 @@ namespace findneedle.Implementations
 
 
 
-        public bool Filter(SearchResult entry)
+        public bool Filter(ISearchResult entry)
         {
             if (entry.GetSearchableData().ToLower().Contains(term))
             {

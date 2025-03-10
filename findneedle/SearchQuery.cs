@@ -35,23 +35,23 @@ public class SearchQuery : ISearchQuery
         set => _stats = value;
     }
 
-    private List<SearchFilter> _filters;
-    public List<SearchFilter> filters
+    private List<ISearchFilter> _filters;
+    public List<ISearchFilter> filters
     {
         get
         {
-            _filters ??= new List<SearchFilter>();
+            _filters ??= new List<ISearchFilter>();
             return _filters;
         }
         set => _filters = value;
     }
 
-    private List<SearchLocation> _locations;
-    public List<SearchLocation> locations
+    private List<ISearchLocation> _locations;
+    public List<ISearchLocation> locations
     {
         get
         {
-            _locations ??= new List<SearchLocation>();
+            _locations ??= new List<ISearchLocation>();
             return _locations;
         }
         set => _locations = value;
@@ -60,7 +60,7 @@ public class SearchQuery : ISearchQuery
 
 
 
-    public void SetLocations(List<SearchLocation> loc)
+    public void SetLocations(List<ISearchLocation> loc)
     {
 
         this.locations = loc;
@@ -68,12 +68,12 @@ public class SearchQuery : ISearchQuery
 
 
 
-    public List<SearchLocation> GetLocations()
+    public List<ISearchLocation> GetLocations()
     {
         return locations;
     }
 
-    public List<SearchFilter> GetFilters()
+    public List<ISearchFilter> GetFilters()
     {
         return filters;
     }
@@ -120,8 +120,8 @@ public class SearchQuery : ISearchQuery
         stats = new SearchStatistics(this);
         _progressSink = new SearchProgressSink();
         _stats = stats;
-        _filters = new List<SearchFilter>();
-        _locations = new List<SearchLocation>();
+        _filters = new List<ISearchFilter>();
+        _locations = new List<ISearchLocation>();
     }
 
 
@@ -230,9 +230,9 @@ public class SearchQuery : ISearchQuery
         stats.LoadedAll();
     }
 
-    public List<SearchResult> GetFilteredResults()
+    public List<ISearchResult> GetFilteredResults()
     {
-        List<SearchResult> results = new List<SearchResult>();
+        List<ISearchResult> results = new List<ISearchResult>();
         var count = 1;
         foreach (var loc in locations)
         {

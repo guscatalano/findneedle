@@ -13,7 +13,7 @@ using FindNeedlePluginLib.Interfaces;
 namespace findneedle.Implementations;
 
 
-public class FolderLocation : SearchLocation
+public class FolderLocation : ISearchLocation
 {
     public SearchProgressSink? sink;
     public SearchStatistics? stats;
@@ -347,9 +347,9 @@ public class FolderLocation : SearchLocation
         }
     }
 
-    public override List<SearchResult> Search(ISearchQuery? searchQuery)
+    public override List<ISearchResult> Search(ISearchQuery? searchQuery)
     {
-        List<SearchResult> results = new List<SearchResult>();
+        List<ISearchResult> results = new List<ISearchResult>();
         lock (knownProcessors)
         {
             foreach (IFileExtensionProcessor item in knownProcessors)
@@ -362,13 +362,13 @@ public class FolderLocation : SearchLocation
             }
         }
 
-        List<SearchResult> filteredResults = new List<SearchResult>();
-        foreach (SearchResult result in results)
+        List<ISearchResult> filteredResults = new List<ISearchResult>();
+        foreach (ISearchResult result in results)
         {
             var passAll = true;
             if (searchQuery != null)
             {
-                foreach (SearchFilter filter in searchQuery.GetFilters())
+                foreach (ISearchFilter filter in searchQuery.GetFilters())
                 {
                     if (!filter.Filter(result))
                     {

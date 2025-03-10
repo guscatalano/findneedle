@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace findneedle;
 
-public interface SearchFilter
+public interface ISearchFilter
 {
-    public abstract bool Filter(SearchResult entry);
+    public abstract bool Filter(ISearchResult entry);
     public abstract string GetDescription();
     public abstract string GetName();
 

@@ -3,7 +3,7 @@ using findneedle.Interfaces;
 
 namespace TestProcessorPlugin;
 
-public class SampleNullOutput : SearchOutput
+public class SampleNullOutput : ISearchOutput
 {
 
     public string GetClassName()
@@ -31,11 +31,11 @@ public class SampleNullOutput : SearchOutput
     {
         return "null";
     }
-    public void WriteAllOutput(List<SearchResult> result)
+    public void WriteAllOutput(List<ISearchResult> result)
     {
 
     }
-    public void WriteOutput(SearchResult result) 
+    public void WriteOutput(ISearchResult result) 
     {
 
     }

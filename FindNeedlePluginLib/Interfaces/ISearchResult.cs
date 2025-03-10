@@ -16,7 +16,7 @@ public enum Level
     Verbose
 }
 
-public interface SearchResult
+public interface ISearchResult
 {
 
     public const string NOT_SUPPORTED = "!NOT_SUPPORTED!"; //Use this in a search location where the request makes no sense, or throw.

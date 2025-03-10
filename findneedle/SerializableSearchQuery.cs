@@ -128,7 +128,7 @@ public class SearchQueryJsonReader
         destination.LocationJson = new List<string>();
 
         //Serialize all the filters
-        foreach (SearchFilter filter in source.filters)
+        foreach (ISearchFilter filter in source.filters)
         {
           
             var outher = SerializeImplementedType(filter);
@@ -136,7 +136,7 @@ public class SearchQueryJsonReader
         }
 
         //Serialize all the filters
-        foreach (SearchLocation loc in source.locations)
+        foreach (ISearchLocation loc in source.locations)
         {
 
             var outher = SerializeImplementedType(loc);
@@ -158,7 +158,7 @@ public class SearchQueryJsonReader
         foreach (var filter in source.FilterJson)
         {
 
-            SearchFilter outher = (SearchFilter)DeserializeJson(filter);
+            ISearchFilter outher = (ISearchFilter)DeserializeJson(filter);
             destination.filters.Add(outher);
         }
 
@@ -166,7 +166,7 @@ public class SearchQueryJsonReader
         foreach (var loc in source.LocationJson)
         {
 
-            SearchLocation outher = (SearchLocation)DeserializeJson(loc);
+            ISearchLocation outher = (ISearchLocation)DeserializeJson(loc);
             destination.locations.Add(outher);
         }
 #pragma warning restore CS8602 // Dereference of a possibly null reference.

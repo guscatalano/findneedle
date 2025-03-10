@@ -6,7 +6,7 @@ using FindNeedlePluginLib.Interfaces;
 namespace findneedle.Implementations;
 
 
-public class LocalEventLogEntry : SearchResult
+public class LocalEventLogEntry : ISearchResult
 {
     readonly EventLogEntry entry;
     readonly LocalEventLogLocation location;
@@ -97,7 +97,7 @@ public class LocalEventLogLocation : IEventLogQueryLocation
     {
         get; set;
     }
-    readonly List<SearchResult> searchResults = new();
+    readonly List<ISearchResult> searchResults = new();
     public LocalEventLogLocation()
     {
         eventLogName = "Application";
@@ -130,7 +130,7 @@ public class LocalEventLogLocation : IEventLogQueryLocation
 
                     foreach (EventLogEntry log in eventLog.Entries)
                     {
-                        SearchResult result = new LocalEventLogEntry(log, this);
+                        ISearchResult result = new LocalEventLogEntry(log, this);
                         searchResults.Add(result);
                         numRecordsInMemory++;
                     }
@@ -145,23 +145,23 @@ public class LocalEventLogLocation : IEventLogQueryLocation
         
         foreach (EventLogEntry log in eventLog.Entries)
         {
-            SearchResult result = new LocalEventLogEntry(log, this);
+            ISearchResult result = new LocalEventLogEntry(log, this);
             searchResults.Add(result);
             numRecordsInMemory++;
         }
 
     }
 
-    public override List<SearchResult> Search(ISearchQuery? searchQuery)
+    public override List<ISearchResult> Search(ISearchQuery? searchQuery)
     {
         numRecordsInLastResult = 0;
-        List<SearchResult> filteredResults = new List<SearchResult>();
-        foreach (SearchResult result in searchResults)
+        List<ISearchResult> filteredResults = new List<ISearchResult>();
+        foreach (ISearchResult result in searchResults)
         {
             var passAll = true;
             if (searchQuery != null)
             {
-                foreach (SearchFilter filter in searchQuery.GetFilters())
+                foreach (ISearchFilter filter in searchQuery.GetFilters())
                 {
                     if (!filter.Filter(result))
                     {

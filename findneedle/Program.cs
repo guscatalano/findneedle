@@ -30,7 +30,7 @@ output.WriteAllOutput(y);
 Console.WriteLine("Done output written to: " + output2.GetOutputFileName());
 x.GetSearchStatsOutput();
 
-ResultProcessor p = new WatsonCrashProcessor();
+IResultProcessor p = new WatsonCrashProcessor();
 p.ProcessResults(y);
 p.GetOutputFile();
 

@@ -46,9 +46,9 @@ public class ZipProcessor : IFileExtensionProcessor
     {
         return new Dictionary<string, int>(); //This has no results
     }
-    public List<SearchResult> GetResults()
+    public List<ISearchResult> GetResults()
     {
-        return new List<SearchResult>(); //This just expands zips provides no real results
+        return new List<ISearchResult>(); //This just expands zips provides no real results
     }
 
     public void LoadInMemory() 

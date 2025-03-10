@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using findneedle.Interfaces;
 
 namespace findneedle.Implementations.ResultProcessors;
-public class WatsonCrashProcessor : ResultProcessor
+public class WatsonCrashProcessor : IResultProcessor
 {
 
     public string GetClassName()
@@ -41,10 +41,10 @@ public class WatsonCrashProcessor : ResultProcessor
         return "Finds application crashes in the logs";
     }
 
-    public void ProcessResults(List<SearchResult> results)
+    public void ProcessResults(List<ISearchResult> results)
     {
-        List<SearchResult> resultList = new List<SearchResult>();
-        foreach(SearchResult result in results)
+        List<ISearchResult> resultList = new List<ISearchResult>();
+        foreach(ISearchResult result in results)
         {
             if(result.GetSearchableData().Contains("A .NET application failed."))
             {

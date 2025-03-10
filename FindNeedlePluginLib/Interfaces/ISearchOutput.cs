@@ -7,9 +7,9 @@ using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Interfaces;
 
-public interface SearchOutput : IPluginDescription
+public interface ISearchOutput : IPluginDescription
 {
-    public void WriteAllOutput(List<SearchResult> result);
-    public void WriteOutput(SearchResult result);
+    public void WriteAllOutput(List<ISearchResult> result);
+    public void WriteOutput(ISearchResult result);
     public string GetOutputFileName();
 }

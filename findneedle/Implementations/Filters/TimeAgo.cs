@@ -15,7 +15,7 @@ namespace findneedle.Implementations
         Day = 3,
     }
 
-    public class TimeAgoFilter : SearchFilter
+    public class TimeAgoFilter : ISearchFilter
     {
 
         public DateTime start
@@ -102,7 +102,7 @@ namespace findneedle.Implementations
 
         public string SearchFilterType => throw new NotImplementedException();
 
-        public bool Filter(SearchResult entry)
+        public bool Filter(ISearchResult entry)
         {
             if (filterbegin < entry.GetLogTime())
             {

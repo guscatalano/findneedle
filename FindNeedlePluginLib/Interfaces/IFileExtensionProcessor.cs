@@ -16,7 +16,7 @@ public interface IFileExtensionProcessor : IDisposable
     public void LoadInMemory();
     public void DoPreProcessing();
 
-    public List<SearchResult> GetResults();
+    public List<ISearchResult> GetResults();
 
     public string GetFileName();
     public Dictionary<string, int> GetProviderCount();

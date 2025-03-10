@@ -31,8 +31,8 @@ public class SearchDataSource
 
 
 
-        List<SearchResult> ret = MiddleLayerService.GetSearchResults();
-        foreach (SearchResult result in ret)
+        List<ISearchResult> ret = MiddleLayerService.GetSearchResults();
+        foreach (ISearchResult result in ret)
         {
             _items.Add(
                 new SearchSourceDataItem(result));

@@ -118,7 +118,7 @@ public class SearchStatistics
     public void LoadedAll()
     {
         totalRecordsLoaded = 0;
-        foreach (SearchLocation loc in q.GetLocations())
+        foreach (ISearchLocation loc in q.GetLocations())
         {
             totalRecordsLoaded += loc.numRecordsInMemory;
         }
@@ -129,7 +129,7 @@ public class SearchStatistics
     public void Searched()
     {
         totalRecordsSearch = 0;
-        foreach (SearchLocation loc in q.GetLocations())
+        foreach (ISearchLocation loc in q.GetLocations())
         {
             totalRecordsSearch += loc.numRecordsInLastResult;
         }

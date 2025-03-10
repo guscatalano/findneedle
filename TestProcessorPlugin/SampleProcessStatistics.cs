@@ -3,7 +3,7 @@ using findneedle.Interfaces;
 
 namespace TestProcessorPlugin;
 
-public class SampleProcessStatistics : ResultProcessor
+public class SampleProcessStatistics : IResultProcessor
 {
 
 
@@ -39,7 +39,7 @@ public class SampleProcessStatistics : ResultProcessor
         return "This is a sample plugin that just counts how many results there are";
     }
 
-    public void ProcessResults(List<SearchResult> results)
+    public void ProcessResults(List<ISearchResult> results)
     {
         countResults = results.Count;
     }

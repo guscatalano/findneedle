@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace findneedle.Implementations
 {
-    public class TimeRangeFilter : SearchFilter
+    public class TimeRangeFilter : ISearchFilter
     {
         private DateTime start;
         private DateTime end;
@@ -18,7 +18,7 @@ namespace findneedle.Implementations
 
         public string SearchFilterType => throw new NotImplementedException();
 
-        public bool Filter(SearchResult entry)
+        public bool Filter(ISearchResult entry)
         {
             return true;
         }

@@ -17,7 +17,7 @@ public enum SearchLocationDepth
     Crush = 3 //Load everything
 }
 
-public abstract class SearchLocation
+public abstract class ISearchLocation
 {
     public int numRecordsInLastResult
     { get;
@@ -35,7 +35,7 @@ public abstract class SearchLocation
 
     public abstract void LoadInMemory();
 
-    public abstract List<SearchResult> Search(ISearchQuery? searchQuery);
+    public abstract List<ISearchResult> Search(ISearchQuery? searchQuery);
 
     public void SetSearchDepth(SearchLocationDepth depth)
     {

@@ -82,7 +82,7 @@ namespace FindNeedleUX
             }
         }
 
-        public LogLine(SearchResult searchResult, int index)
+        public LogLine(ISearchResult searchResult, int index)
         {
             Index = index;
             Provider = searchResult.GetSource();

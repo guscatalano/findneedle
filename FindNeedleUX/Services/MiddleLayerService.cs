@@ -13,8 +13,8 @@ using Microsoft.UI.Xaml.Controls;
 namespace FindNeedleUX.Services;
 public class MiddleLayerService
 {
-    public static List<SearchLocation> Locations = new();
-    public static List<SearchFilter> Filters = new();
+    public static List<ISearchLocation> Locations = new();
+    public static List<ISearchFilter> Filters = new();
     public static SearchQuery Query = new();
 
     public static void AddFolderLocation(string location)
@@ -55,12 +55,12 @@ public class MiddleLayerService
 
     }
 
-    public static List<SearchResult> GetSearchResults()
+    public static List<ISearchResult> GetSearchResults()
     {
         return SearchResults;
     }
 
-    private static List<SearchResult> SearchResults = new();
+    private static List<ISearchResult> SearchResults = new();
 
     public static void UpdateSearchQuery()
     {
@@ -75,7 +75,7 @@ public class MiddleLayerService
     {
         List<LogLine> lines = new List<LogLine>();
         var index = 0;
-        foreach(SearchResult r in GetSearchResults())
+        foreach(ISearchResult r in GetSearchResults())
         {
             lines.Add(new LogLine(r, index));
             index++;
@@ -130,8 +130,8 @@ public class MiddleLayerService
 
     public static void NewWorkspace()
     {
-        Filters = new List<SearchFilter>();
-        Locations = new List<SearchLocation>();
+        Filters = new List<ISearchFilter>();
+        Locations = new List<ISearchLocation>();
 
         UpdateSearchQuery();
     }
@@ -147,7 +147,7 @@ public class MiddleLayerService
     public static ObservableCollection<LocationListItem> GetLocationListItems()
     {
         ObservableCollection<LocationListItem> test = new ObservableCollection<LocationListItem>();
-        foreach (SearchLocation loc in Locations)
+        foreach (ISearchLocation loc in Locations)
         {
             test.Add(new LocationListItem() { Name = loc.GetName(), Description = loc.GetDescription() });
         }
@@ -157,7 +157,7 @@ public class MiddleLayerService
     public static ObservableCollection<FilterListItem> GetFilterListItems()
     {
         ObservableCollection<FilterListItem> test = new ObservableCollection<FilterListItem>();
-        foreach (SearchFilter fil in Filters)
+        foreach (ISearchFilter fil in Filters)
         {
             test.Add(new FilterListItem() { Name = fil.GetName(), Description = fil.GetDescription() });
         }

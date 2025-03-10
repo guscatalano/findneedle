@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace findneedle.Implementations.Outputs;
 
-public class NullOutput : SearchOutput
+public class NullOutput : ISearchOutput
 {
     public string GetClassName() => throw new NotImplementedException();
     public string GetFriendlyName() => throw new NotImplementedException();
@@ -19,12 +19,12 @@ public class NullOutput : SearchOutput
 
     public string GetTextDescription() => throw new NotImplementedException();
 
-    public void WriteAllOutput(List<SearchResult> result)
+    public void WriteAllOutput(List<ISearchResult> result)
     {
         //do nothing
     }
 
-    public void WriteOutput(SearchResult result)
+    public void WriteOutput(ISearchResult result)
     {
         //do nothing
     }

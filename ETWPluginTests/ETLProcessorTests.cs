@@ -40,7 +40,7 @@ public sealed class ETWProcessorTests
             x.OpenFile(ETWTestUtils.GetSampleETLFile());
             x.DoPreProcessing();
             //x.LoadInMemory();
-            List<SearchResult> blah = x.GetResults();
+            List<ISearchResult> blah = x.GetResults();
             Assert.IsTrue(blah.Count() > 100);
             x.Dispose();
             Assert.IsTrue(true);

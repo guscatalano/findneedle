@@ -18,7 +18,7 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation
     {
         get; set;
     }
-    readonly List<SearchResult> searchResults = new();
+    readonly List<ISearchResult> searchResults = new();
 
     public FileEventLogQueryLocation(string filename)
     {
@@ -48,23 +48,23 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation
 
         for (EventRecord eventdetail = logReader.ReadEvent(); eventdetail != null; eventdetail = logReader.ReadEvent())
         {
-            SearchResult result = new EventLogResult(eventdetail, this);
+            ISearchResult result = new EventLogResult(eventdetail, this);
             searchResults.Add(result);
             numRecordsInMemory++;
         }
 
     }
 
-    public override List<SearchResult> Search(ISearchQuery? searchQuery)
+    public override List<ISearchResult> Search(ISearchQuery? searchQuery)
     {
         numRecordsInLastResult = 0;
-        List<SearchResult> filteredResults = new List<SearchResult>();
-        foreach (SearchResult result in searchResults)
+        List<ISearchResult> filteredResults = new List<ISearchResult>();
+        foreach (ISearchResult result in searchResults)
         {
             var passAll = true;
             if (searchQuery != null)
             {
-                foreach (SearchFilter filter in searchQuery.GetFilters())
+                foreach (ISearchFilter filter in searchQuery.GetFilters())
                 {
                     if (!filter.Filter(result))
                     {
