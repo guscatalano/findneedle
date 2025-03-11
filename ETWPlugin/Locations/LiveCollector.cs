@@ -71,7 +71,7 @@ public class LiveCollector
             try
             {
                 KS.EnableProvider(provider);
-            } catch(UnauthorizedAccessException e)
+            } catch(UnauthorizedAccessException)
             {
                 providersFailedToEnable.Add(provider);
             }
