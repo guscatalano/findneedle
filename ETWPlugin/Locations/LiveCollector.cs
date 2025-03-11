@@ -20,7 +20,7 @@ public class LiveCollector
     private readonly List<ISearchResult> results = [];
     private readonly ManualResetEvent stopEvent = new(false);
     private string sessionName = "";
-    private List<string> providersFailedToEnable = [];
+    private readonly List<string> providersFailedToEnable = [];
 
     public void Setup(List<string> providersToCollect, TimeSpan? timeLimit = null, int eventLimit = 0, string sessionName = "")
     {

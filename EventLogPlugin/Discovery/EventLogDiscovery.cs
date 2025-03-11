@@ -22,7 +22,8 @@ public class EventLogDiscovery
     public static string GetDisplayName(EventLogSession session, string logName)
     {
         var sb = new StringBuilder(512);
-        if (EvtIntGetClassicLogDisplayName(GetSessionHandle(session).DangerousGetHandle(), logName, 0, 0, sb.Capacity, sb, out _))
+        var sessionHandle = GetSessionHandle(session);
+        if (sessionHandle != null && EvtIntGetClassicLogDisplayName(sessionHandle.DangerousGetHandle(), logName, 0, 0, sb.Capacity, sb, out _))
             return sb.ToString();
 
         return logName;
