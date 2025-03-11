@@ -39,6 +39,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
+    <ProjectReference Include="..\LogETWApp\LogETWApp.csproj" />
   </ItemGroup>
 
 
