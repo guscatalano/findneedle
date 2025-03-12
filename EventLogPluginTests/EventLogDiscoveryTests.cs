@@ -16,6 +16,7 @@ namespace EventLogPluginTests
         public void TestListing()
         {
             var ret = EventLogDiscovery.GetAllEventLogs();
+            Console.WriteLine("Found " + ret.Count + " event logs");
             Assert.IsTrue(ret.Count > 0);
         }
 
