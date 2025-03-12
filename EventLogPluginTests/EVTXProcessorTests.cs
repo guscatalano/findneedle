@@ -30,4 +30,15 @@ public sealed class EVTXProcessorTests
         Assert.IsNotNull(providerCount);
         Assert.AreEqual(0, providerCount.Count);
     }
+
+    public void TestGetResultsFromSampleFile()
+    {
+        EVTXProcessor x = new EVTXProcessor();
+        x.OpenFile("SampleFiles\\susp_explorer_exec.evtx");
+        x.LoadInMemory();
+        var results = x.GetResults();
+        Assert.IsNotNull(results);
+        Assert.IsTrue(results.Count > 0);
+        Console.WriteLine("Found " + results.Count + " results in event log sample file.");
+    }
 }
