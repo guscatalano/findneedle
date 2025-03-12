@@ -12,12 +12,10 @@ public class EventLogDiscovery
         var session = new EventLogSession();
         foreach (var name in session.GetLogNames())
         {
-            //ret.Add(name, GetDisplayName(session, name));
             ret.Add(GetDisplayName(session, name));
         }
         ret.Sort();
         return ret;
-
     }
     public static string GetDisplayName(EventLogSession session, string logName)
     {
