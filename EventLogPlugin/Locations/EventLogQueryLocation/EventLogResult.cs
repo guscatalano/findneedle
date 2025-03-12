@@ -20,8 +20,9 @@ public class EventLogResult : ISearchResult
         this.entry = entry;
         this.location = location;
 
-        if (location.GetSearchDepth() != SearchLocationDepth.Shallow)
-        {
+        //Hard to set in the event log one
+        //if (location.GetSearchDepth() != SearchLocationDepth.Shallow)
+        //{
             var doc = entry.ToXml();
 
             //Parse eventdata
@@ -40,23 +41,40 @@ public class EventLogResult : ISearchResult
             {
                 systemdata = doc.Substring(first, last - first);
             }
-        }
+        //}
     }
 
 
     public Level GetLevel()
     {
-        switch (entry.LevelDisplayName.ToLower())
-        {
-            case "warning":
-                return Level.Warning;
-            case "error":
-                return Level.Error;
-            case "information":
-                return Level.Info;
-            default:
-                return Level.Verbose;
+        try { 
+            switch (entry.LevelDisplayName.ToLower())
+            {
+                case "warning":
+                    return Level.Warning;
+                case "error":
+                    return Level.Error;
+                case "information":
+                    return Level.Info;
+                default:
+                    return Level.Verbose;
 
+            }
+        }
+        catch (Exception)
+        {
+            switch (entry.Level)
+            {
+                case 1:
+                    return Level.Error;
+                case 2:
+                    return Level.Warning;
+                case 3:
+                    return Level.Info;
+                default:
+                    return Level.Verbose;
+            }
+            throw; // If it still doesnt work, throw it
         }
     }
 
@@ -91,7 +109,14 @@ public class EventLogResult : ISearchResult
 
     public string GetTaskName()
     {
-        return entry.TaskDisplayName;
+        try
+        {
+            return entry.TaskDisplayName;
+        }
+        catch (Exception)
+        {
+            return "null exception";
+        }
     }
 
     public string GetUsername()

@@ -31,14 +31,26 @@ public sealed class EVTXProcessorTests
         Assert.AreEqual(0, providerCount.Count);
     }
 
+    [TestMethod]
     public void TestGetResultsFromSampleFile()
     {
         EVTXProcessor x = new EVTXProcessor();
+        
         x.OpenFile("SampleFiles\\susp_explorer_exec.evtx");
         x.LoadInMemory();
         var results = x.GetResults();
         Assert.IsNotNull(results);
-        Assert.IsTrue(results.Count > 0);
-        Console.WriteLine("Found " + results.Count + " results in event log sample file.");
+        Assert.IsTrue(results.Count == 3);
+        
+        var firstOne = results.First();
+        Assert.AreEqual(firstOne.GetSource(), "Microsoft-Windows-Sysmon");
+        Assert.AreEqual(firstOne.GetMachineName(), "MSEDGEWIN10");
+        Assert.AreEqual(firstOne.GetLevel(), findneedle.Level.Verbose);
+        Assert.AreEqual(firstOne.GetResultSource(), "LocalEventLogRecord-SampleFiles\\susp_explorer_exec.evtx");
+        Assert.AreEqual(firstOne.GetUsername(), "NT AUTHORITY\\SYSTEM");
+        Assert.AreEqual(firstOne.GetLogTime().Ticks, 637013552096884600); //easier to compare
+        Assert.IsTrue(firstOne.GetMessage().Contains("<Data Name='CommandLine'>\"C:\\windows\\explorer.exe\" shell:::")); //shows up in message and searchable data
+        Assert.IsTrue(firstOne.GetSearchableData().Contains("<Provider Name='Microsoft-Windows-Sysmon'")); //only shows up in searchable data
+
     }
 }
