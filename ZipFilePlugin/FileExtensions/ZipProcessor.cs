@@ -11,6 +11,7 @@ namespace findneedle.Implementations.FileExtensions;
 public class ZipProcessor : IFileExtensionProcessor
 {
     private string inputfile = "";
+    Action<string>? newFolderCallback = null;
     //private readonly FolderLocation parent;
     public ZipProcessor()
     {
@@ -36,8 +37,10 @@ public class ZipProcessor : IFileExtensionProcessor
         var temp = TempStorage.GetNewTempPath("zip");
         ZipFile.ExtractToDirectory(inputfile, temp);
 
-        //TODO: Fix this
-       // parent.QueueNewFolder(temp, true);
+        if(newFolderCallback != null)
+        {
+            newFolderCallback(temp);
+        }
     }
     public string GetFileName() 
     {
@@ -54,6 +57,11 @@ public class ZipProcessor : IFileExtensionProcessor
 
     public void LoadInMemory() 
     {
+    }
+
+    public void RegisterForQueueNewFolderCallback(Action<string> callback)
+    {
+        newFolderCallback = callback;
     }
 
     public void Dispose() => throw new NotImplementedException();

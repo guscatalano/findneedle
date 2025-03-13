@@ -20,4 +20,6 @@ public interface IFileExtensionProcessor : IDisposable
 
     public string GetFileName();
     public Dictionary<string, int> GetProviderCount();
+
+    
 }
