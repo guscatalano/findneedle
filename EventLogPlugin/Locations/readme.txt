@@ -1,0 +1,1 @@
+﻿These are two different event log APIs with different perf characteristics

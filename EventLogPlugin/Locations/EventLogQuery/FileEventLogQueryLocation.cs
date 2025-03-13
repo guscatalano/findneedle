@@ -48,7 +48,7 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation
 
         for (EventRecord eventdetail = logReader.ReadEvent(); eventdetail != null; eventdetail = logReader.ReadEvent())
         {
-            ISearchResult result = new EventLogResult(eventdetail, this);
+            ISearchResult result = new EventRecordResult(eventdetail, this);
             searchResults.Add(result);
             numRecordsInMemory++;
         }

@@ -9,13 +9,13 @@ using findneedle.Implementations.Locations.EventLogQueryLocation;
 
 namespace findneedle.Implementations.Locations.EventLogQueryLocation;
 
-public class EventLogResult : ISearchResult
+public class EventRecordResult : ISearchResult
 {
     readonly EventRecord entry;
     readonly IEventLogQueryLocation location;
     readonly string eventdata = "";
     readonly string systemdata = "";
-    public EventLogResult(EventRecord entry, IEventLogQueryLocation location)
+    public EventRecordResult(EventRecord entry, IEventLogQueryLocation location)
     {
         this.entry = entry;
         this.location = location;
