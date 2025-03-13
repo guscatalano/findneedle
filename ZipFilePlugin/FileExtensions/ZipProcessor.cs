@@ -12,7 +12,7 @@ public class ZipProcessor : IFileExtensionProcessor
 {
     private string inputfile = "";
     Action<string>? newFolderCallback = null;
-    //private readonly FolderLocation parent;
+    private string newTempFolder = "";
     public ZipProcessor()
     {
         //this.parent = parent;
@@ -36,8 +36,9 @@ public class ZipProcessor : IFileExtensionProcessor
         }
         var temp = TempStorage.GetNewTempPath("zip");
         ZipFile.ExtractToDirectory(inputfile, temp);
+        newTempFolder = temp;
 
-        if(newFolderCallback != null)
+        if (newFolderCallback != null)
         {
             newFolderCallback(temp);
         }
@@ -64,5 +65,11 @@ public class ZipProcessor : IFileExtensionProcessor
         newFolderCallback = callback;
     }
 
-    public void Dispose() => throw new NotImplementedException();
+    public void Dispose()
+    {
+        if (!string.IsNullOrEmpty(newTempFolder))
+        {
+            TempStorage.DeleteSomeTempPath(newTempFolder);
+        }
+    }
 }
