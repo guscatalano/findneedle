@@ -11,10 +11,10 @@ namespace findneedle.Implementations.FileExtensions;
 public class ZipProcessor : IFileExtensionProcessor
 {
     private string inputfile = "";
-    private readonly FolderLocation parent;
-    public ZipProcessor(FolderLocation parent)
+    //private readonly FolderLocation parent;
+    public ZipProcessor()
     {
-        this.parent = parent;
+        //this.parent = parent;
 
     }
 
@@ -36,7 +36,8 @@ public class ZipProcessor : IFileExtensionProcessor
         var temp = TempStorage.GetNewTempPath("zip");
         ZipFile.ExtractToDirectory(inputfile, temp);
 
-        parent.QueueNewFolder(temp, true);
+        //TODO: Fix this
+       // parent.QueueNewFolder(temp, true);
     }
     public string GetFileName() 
     {

@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using findneedle.Implementations.FileExtensions;
 using findneedle.Interfaces;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
@@ -315,7 +314,7 @@ public class FolderLocation : ISearchLocation
                 break;
             case ".txt":
                 break;
-            case ".zip":
+            case ".zip":/*
                 ZipProcessor pz = new ZipProcessor(this);
                 pz.OpenFile(file);
                 if (pz == null)
@@ -324,7 +323,7 @@ public class FolderLocation : ISearchLocation
                 }
                 knownProcessors.Add(pz);
                 pz.DoPreProcessing();
-                pz.LoadInMemory();
+                pz.LoadInMemory();*/
                 break;
             case ".7z":
                
