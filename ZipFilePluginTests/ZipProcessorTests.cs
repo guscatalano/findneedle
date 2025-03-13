@@ -16,7 +16,7 @@ public sealed class ZipProcessorTests
     }
 
     [TestMethod]
-    public void UnzipTest()
+    public void BasicUnzipTest()
     {
         var called = false;
         ZipProcessor x = new ZipProcessor();
