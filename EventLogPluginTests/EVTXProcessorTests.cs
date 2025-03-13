@@ -48,7 +48,7 @@ public sealed class EVTXProcessorTests
         Assert.AreEqual(firstOne.GetLevel(), findneedle.Level.Verbose);
         Assert.AreEqual(firstOne.GetResultSource(), "LocalEventLogRecord-SampleFiles\\susp_explorer_exec.evtx");
         Assert.AreEqual(firstOne.GetUsername(), "NT AUTHORITY\\SYSTEM");
-        Assert.AreEqual(firstOne.GetLogTime().Ticks, 637013552096884600); //easier to compare
+        //removed check for time cause its timezone dependent
         Assert.IsTrue(firstOne.GetMessage().Contains("<Data Name='CommandLine'>\"C:\\windows\\explorer.exe\" shell:::")); //shows up in message and searchable data
         Assert.IsTrue(firstOne.GetSearchableData().Contains("<Provider Name='Microsoft-Windows-Sysmon'")); //only shows up in searchable data
 
