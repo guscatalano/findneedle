@@ -83,7 +83,7 @@ public class LocalEventLogEntry : ISearchResult
     }
 
     public string GetResultSource() {
-        return "LocalEventLog";
+        return "LocalEventLog-"+location.GetName();
     }
 }
 
