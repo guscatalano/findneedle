@@ -136,7 +136,7 @@ public class SearchQuery : ISearchQuery
         {
             if (pair.Key.StartsWith("keyword", StringComparison.OrdinalIgnoreCase))
             {
-                filters.Add(new SimpleKeywordFilter(pair.Value));
+                //filters.Add(new SimpleKeywordFilter(pair.Value));
                 continue;
             }
 

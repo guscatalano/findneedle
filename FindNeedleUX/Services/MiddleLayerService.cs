@@ -48,7 +48,7 @@ public class MiddleLayerService
 
     public static void AddKeywordFilter(string keyword)
     {
-        Filters.Add(new SimpleKeywordFilter(keyword));
+        //Filters.Add(new SimpleKeywordFilter(keyword));
     }
 
     public static void PageChanged(IWizard wizard, Page current)
