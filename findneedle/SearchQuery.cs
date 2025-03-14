@@ -150,13 +150,13 @@ public class SearchQuery : ISearchQuery
                     List<string> x = SplitApart(par);
                     DateTime start = DateTime.Parse(x[0]);
                     DateTime end = DateTime.Parse(x[1]);
-                    filters.Add(new TimeRangeFilter(start, end));
+                    //filters.Add(new TimeRangeFilter(start, end));
                 }
                 if (pair.Value.StartsWith("ago"))
                 {
                     var par = pair.Value.Substring(3);
                     List<string> x = SplitApart(par);
-                    filters.Add(new TimeAgoFilter(x[0]));
+                    //filters.Add(new TimeAgoFilter(x[0]));
                 }
                 continue;
             }

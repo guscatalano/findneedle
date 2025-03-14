@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using findneedle.Implementations;
+using FindNeedleCoreUtils;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;

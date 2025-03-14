@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
+using FindNeedleCoreUtils;
 using FindNeedleUX.Services.WizardDef;
 using FindNeedleUX.ViewObjects;
 using Microsoft.UI.Xaml.Controls;
@@ -24,12 +25,12 @@ public class MiddleLayerService
 
     public static void AddTimeAgoFilter(TimeAgoUnit unit, int count)
     {
-        Filters.Add(new TimeAgoFilter(unit, count));
+       // Filters.Add(new TimeAgoFilter(unit, count));
     }
 
     public static void AddTimeRangeFilter(DateTime start, DateTime end)
     {
-        Filters.Add(new TimeRangeFilter(start, end));
+       // Filters.Add(new TimeRangeFilter(start, end));
     }
     public static void AddEventLog(string eventlogname, bool useQueryAPI)
     {
