@@ -33,7 +33,7 @@ public sealed partial class FilterAddTimeAgo : Page
     private void DoneButton_Click(object sender, RoutedEventArgs e)
     {
         
-        int count = Int32.Parse(UnitCount.Text);
+        var count = Int32.Parse(UnitCount.Text);
         TimeAgoUnit actualUnit = TimeAgoUnit.Second;
         switch (Unit.SelectedValue.ToString().ToLower())
         {
