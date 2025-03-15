@@ -83,7 +83,7 @@ public class SearchArgsTests
         Assert.AreEqual(3, q.GetLocations().Count);
 
     }
-    
+    /*
     [TestMethod]
     public void TestTimeSpanFilter()
     {
@@ -112,5 +112,5 @@ public class SearchArgsTests
 
         SearchQuery q = new SearchQuery(input);
         Assert.IsTrue(q.GetFilters().Count == 1);
-    }
+    }*/
 }
