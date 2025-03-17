@@ -39,4 +39,8 @@ public class SampleNullOutput : ISearchOutput
     {
 
     }
+
+    public void Dispose() 
+    {
+    }
 }
