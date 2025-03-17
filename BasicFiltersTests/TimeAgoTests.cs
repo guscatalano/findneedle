@@ -1,28 +1,9 @@
 ﻿using findneedle;
 using findneedle.Implementations;
 using FindNeedleCoreUtils;
+using FindNeedlePluginLib.TestClasses;
 
 namespace BasicFiltersTest;
-
-public class FakeSearchResult : ISearchResult
-{
-    public DateTime logTime = DateTime.Now;
-
-    public Level GetLevel() => throw new NotImplementedException();
-    public DateTime GetLogTime()
-    {
-        return logTime;
-    }
-    public string GetMachineName() => throw new NotImplementedException();
-    public string GetMessage() => throw new NotImplementedException();
-    public string GetOpCode() => throw new NotImplementedException();
-    public string GetResultSource() => throw new NotImplementedException();
-    public string GetSearchableData() => throw new NotImplementedException();
-    public string GetSource() => throw new NotImplementedException();
-    public string GetTaskName() => throw new NotImplementedException();
-    public string GetUsername() => throw new NotImplementedException();
-    public void WriteToConsole() => throw new NotImplementedException();
-}
 
 [TestClass]
 public sealed class TimeAgoTests

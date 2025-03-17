@@ -1,0 +1,1 @@
+﻿FolderLocation is kept because its an extension point for many

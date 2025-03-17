@@ -24,6 +24,7 @@ public interface IPluginDescription
 
     public string GetClassName();
 
+
     public static PluginDescription GetPluginDescription(IPluginDescription plugin, string sourceFile, 
                                                             List<string> implementedInterfaces, List<string> implementedInterfacesShort)
     {

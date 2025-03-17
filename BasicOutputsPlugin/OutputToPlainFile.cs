@@ -24,7 +24,7 @@ public class OutputToPlainFile : ISearchOutput
 
     ~OutputToPlainFile()
     {
-        x.Close();
+        Dispose();
     }
     public void WriteAllOutput(List<ISearchResult> result)
     {
@@ -45,7 +45,27 @@ public class OutputToPlainFile : ISearchOutput
         return filename;
     }
 
-    public string GetTextDescription() => throw new NotImplementedException();
-    public string GetFriendlyName() => throw new NotImplementedException();
-    public string GetClassName() => throw new NotImplementedException();
+    public string GetTextDescription() {
+        return "Outputs the result to a text file without any formatting";
+    }
+
+    public string GetFriendlyName() {
+        return "Output to plain file";
+    }
+    public string GetClassName() {
+        var me = GetType();
+        if (me.FullName == null)
+        {
+            throw new Exception("Fullname was null???");
+        }
+        else
+        {
+            return me.FullName;
+        }
+    }
+
+    public void Dispose() 
+    {
+        x.Close();
+    }
 }

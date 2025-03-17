@@ -9,15 +9,35 @@ namespace findneedle.Implementations.Outputs;
 
 public class NullOutput : ISearchOutput
 {
-    public string GetClassName() => throw new NotImplementedException();
-    public string GetFriendlyName() => throw new NotImplementedException();
+
+    public void Dispose()
+    {
+        //do nothing
+    }
+    public string GetClassName()
+    {
+        var me = GetType();
+        if (me.FullName == null)
+        {
+            throw new Exception("Fullname was null???");
+        }
+        else
+        {
+            return me.FullName;
+        }
+    }
+    public string GetFriendlyName() {
+        return "Null Output";
+    }
 
     public string GetOutputFileName()
     {
         return "(the void)";
     }
 
-    public string GetTextDescription() => throw new NotImplementedException();
+    public string GetTextDescription() {
+        return "This plugin just outputs nowhere";
+    }
 
     public void WriteAllOutput(List<ISearchResult> result)
     {

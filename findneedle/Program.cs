@@ -21,7 +21,7 @@ foreach (var argument in Environment.GetCommandLineArgs())
 var x = new SearchQuery(arguments);
 Console.WriteLine("Searching...");
 x.LoadAllLocationsInMemory();
-var y = x.GetFilteredResults();
+//var y = x.GetFilteredResults();
 //OutputToPlainFile output = new OutputToPlainFile();
 //NullOutput output2 = new NullOutput(); ;
 //output.WriteAllOutput(y);
