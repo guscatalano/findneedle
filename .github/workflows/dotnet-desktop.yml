@@ -49,6 +49,7 @@ on:
 
 jobs:
   create-release:
+    needs: [build, test-publish]
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
@@ -81,7 +82,8 @@ jobs:
       matrix:
         configuration: [Debug]
     runs-on: windows-latest
-      
+    outputs:
+      testresult: ${{ steps.set-output.outputs.my_variable }}
 
     steps:
     - name: Checkout
@@ -107,10 +109,15 @@ jobs:
       uses: microsoft/setup-msbuild@v2
     
     - name: Execute unit tests and collect coverage
+      id: testrun
       run: dotnet test --configuration $env:Configuration --logger trx --collect:"XPlat Code Coverage"
       continue-on-error: true
       env:
         Configuration: ${{ matrix.configuration }}
+    
+    - name: Set success or failure into testresult
+      id: set-output
+      run: echo "testresult=${{steps.testrun.outcome}}" >> $GITHUB_OUTPUT
 
     - name: Combine Coverage Reports # This is because one report is produced per project, and we want one result for all of them.
       uses: danielpalme/ReportGenerator-GitHub-Action@5.2.4
@@ -204,7 +211,6 @@ jobs:
 
 
   build:
-    needs: create-release
     strategy:
       matrix:
         configuration: [Release]
@@ -286,7 +292,7 @@ jobs:
         retention-days: 5
 
   actually_release:
-    needs: [build, test-publish]
+    needs: [create-release, build, test-publish]
     strategy:
       matrix:
         configuration: [Release]
@@ -298,11 +304,15 @@ jobs:
       Solution_Name: findneedle.sln              # Replace with your solution name, i.e. MyWpfApp.sln.
 
     steps:
+
     - name: Download release bits
       uses: actions/download-artifact@v4
       with:
         name: release-bits
-    
+
+    - name: Debug Release Tag
+      run: "echo Release tag: ${{needs.create-release.outputs.releasetag}}"
+
     - name: Create Release
       id: create_release
       uses:  comnoco/create-release-action@v2.0.5
