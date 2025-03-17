@@ -8,7 +8,7 @@ using findneedle.Interfaces;
 namespace findneedle.Implementations.ResultProcessors;
 public class WatsonCrashProcessor : IResultProcessor
 {
-
+    readonly List<ISearchResult> resultList = new();
     public string GetClassName()
     {
         Type me = this.GetType();
@@ -33,7 +33,7 @@ public class WatsonCrashProcessor : IResultProcessor
     }
 
     public string GetOutputText() {
-        return "";
+        return "Found " + resultList.Count() + " crashes or hangs.";
     }
 
     public string GetTextDescription() 
@@ -43,8 +43,8 @@ public class WatsonCrashProcessor : IResultProcessor
 
     public void ProcessResults(List<ISearchResult> results)
     {
-        List<ISearchResult> resultList = new List<ISearchResult>();
-        foreach(ISearchResult result in results)
+        resultList.Clear();
+        foreach (ISearchResult result in results)
         {
             if(result.GetSearchableData().Contains("A .NET application failed."))
             {
