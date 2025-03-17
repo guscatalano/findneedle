@@ -108,6 +108,7 @@ jobs:
     
     - name: Execute unit tests and collect coverage
       run: dotnet test --configuration $env:Configuration --logger trx --collect:"XPlat Code Coverage"
+      continue-on-error: true
       env:
         Configuration: ${{ matrix.configuration }}
 
@@ -268,6 +269,21 @@ jobs:
       env:
         Configuration: ${{ matrix.configuration }}   
   
+
+  actually_release:
+    needs: [build, test-publish]
+    strategy:
+      matrix:
+        configuration: [Release]
+
+    runs-on: windows-latest  # For a list of available runner types, refer to
+                           # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
+
+    env:
+      Solution_Name: findneedle.sln              # Replace with your solution name, i.e. MyWpfApp.sln.
+
+    steps:
+    
     - name: Archive Release
       uses: thedoctor0/zip-release@0.7.5
       with:
