@@ -13,5 +13,6 @@ public sealed class KeywordTests
     [TestMethod]
     public void SimpleKeywordTest()
     {
+        Assert.IsTrue(false); //fail on purpose
     }
 }

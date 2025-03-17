@@ -304,6 +304,11 @@ jobs:
       Solution_Name: findneedle.sln              # Replace with your solution name, i.e. MyWpfApp.sln.
 
     steps:
+    - name: Check Test Results
+      if: ${{ needs.run-tests.outputs.testresult != 'success' }}
+      run: |
+        echo "Tests failed. Failing the job."
+        exit 1
 
     - name: Download release bits
       uses: actions/download-artifact@v4
