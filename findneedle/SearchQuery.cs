@@ -106,15 +106,9 @@ public class SearchQuery : ISearchQuery
     }
 
 
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+
     public SearchQuery()
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-    {
-        Initialize();
-    }
 
-
-    public void Initialize()
     {
         PluginManager.DiscoverPlugins();
         stats = new SearchStatistics(this);
@@ -124,13 +118,8 @@ public class SearchQuery : ISearchQuery
         _locations = new List<ISearchLocation>();
     }
 
-
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-    public SearchQuery(Dictionary<string, string> arguments)
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+    public SearchQuery(Dictionary<string, string> arguments) : this()
     {
-
-        Initialize();
 
         foreach (KeyValuePair<string, string> pair in arguments)
         {

@@ -1,11 +1,21 @@
-﻿namespace WatsonPluginTests;
+﻿using findneedle;
+using FindNeedlePluginLib.TestClasses;
+
+namespace WatsonPluginTests;
 
 [TestClass]
 public sealed class Test1
 {
+   
     [TestMethod]
-    public void TestMethod1()
+    public void BasicTest()
     {
-        Assert.IsTrue(true);
+        FakeSearchResult result = new();
+        result.messageString = "BasicOutputTest";
+       
+        List<ISearchResult> searchResults = new();
+        searchResults.Add(result);
+           
+       
     }
 }

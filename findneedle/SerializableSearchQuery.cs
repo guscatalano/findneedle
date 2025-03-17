@@ -10,21 +10,9 @@ namespace findneedle;
 
 public class JsonClassMetadata
 {
-
-    public string Json
-    {
-        get; set;
-    }
-
-    public string FullClassName
-    {
-        get; set; 
-    }
-
-    public string AssemblyName
-    {
-        get; set; 
-    }
+    public string Json { get; set; } = string.Empty;
+    public string FullClassName { get; set; } = string.Empty;
+    public string AssemblyName { get; set; } = string.Empty;
 
     [JsonConstructorAttribute]
     public JsonClassMetadata(string Json, string FullClassName, string AssemblyName)
@@ -34,9 +22,7 @@ public class JsonClassMetadata
         this.AssemblyName = AssemblyName;
     }
 
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
     public JsonClassMetadata(Type type, string json)
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
     {
         if (type != null && type.FullName != null && type.AssemblyQualifiedName != null)
         {
@@ -46,13 +32,10 @@ public class JsonClassMetadata
         }
     }
 
-        public Type GetJsonType()
+    public Type GetJsonType()
     {
-#pragma warning disable CS8603 // Possible null reference return.
-        return Type.GetType(this.AssemblyName);
-#pragma warning restore CS8603 // Possible null reference return.
+        return Type.GetType(AssemblyName) ?? throw new InvalidOperationException("Type could not be resolved from AssemblyName.");
     }
-
 }
 
 public class SearchQueryJsonReader
@@ -91,32 +74,20 @@ public class SearchQueryJsonReader
 
     public static object DeserializeJson(string json)
     {
-
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
-        JsonClassMetadata z = JsonSerializer.Deserialize<JsonClassMetadata>(json);
-
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-        Type t = Type.GetType(z.AssemblyName);
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
-
-        //var ouffft = JsonSerializer.Deserialize<SimpleKeywordFilter>(z.Json);
-
+        var z = JsonSerializer.Deserialize<JsonClassMetadata>(json) ?? throw new Exception("Failed to deserialize JsonClassMetadata");
+        var t = Type.GetType(z.AssemblyName) ?? throw new Exception("Failed to get type from AssemblyName");
         var js = typeof(JsonSerializer);
         var m = js.GetMethod("Deserialize", new[] { typeof(string), typeof(JsonSerializerOptions) });
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-#pragma warning disable CS8604 // Possible null reference argument.
+        if (m == null)
+        {
+            throw new Exception("Failed to get Deserialize method");
+        }
+
         var g = m.MakeGenericMethod(t);
-#pragma warning restore CS8604 // Possible null reference argument.
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+        var options = new JsonSerializerOptions();
+        var output = g.Invoke(null, new object[] { z.Json, options });
 
-        var output = g.Invoke(null, new object[] { z.Json, null });
-#pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
-
-#pragma warning disable CS8603 // Possible null reference return.
-        return output;
-#pragma warning restore CS8603 // Possible null reference return.
+        return output ?? throw new Exception("Failed to deserialize object");
     }
 
     public static SerializableSearchQuery GetSerializableSearchQuery(SearchQuery source)
@@ -136,7 +107,7 @@ public class SearchQueryJsonReader
         }
 
         //Serialize all the filters
-        foreach (ISearchLocation loc in source.locations)
+        foreach (var loc in source.locations)
         {
 
             var outher = SerializeImplementedType(loc);
@@ -150,26 +121,34 @@ public class SearchQueryJsonReader
 
     public static SearchQuery GetSearchQueryObject(SerializableSearchQuery source)
     {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
         SearchQuery destination = new();
         destination.Name = source.Name;
         destination.filters = new();
         destination.locations = new();
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-        foreach (var filter in source.FilterJson)
-        {
 
-            ISearchFilter outher = (ISearchFilter)DeserializeJson(filter);
-            destination.filters.Add(outher);
+        if (source.FilterJson != null)
+        {
+            foreach (var filter in source.FilterJson)
+            {
+                ISearchFilter outher = (ISearchFilter)DeserializeJson(filter);
+                destination.filters.Add(outher);
+            }
         }
 
-
-        foreach (var loc in source.LocationJson)
+        if (source.LocationJson != null)
         {
-
-            ISearchLocation outher = (ISearchLocation)DeserializeJson(loc);
-            destination.locations.Add(outher);
+            foreach (var loc in source.LocationJson)
+            {
+                ISearchLocation outher = (ISearchLocation)DeserializeJson(loc);
+                destination.locations.Add(outher);
+            }
         }
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+
         return destination;
     }
 
