@@ -278,7 +278,7 @@ jobs:
         filename: 'release.zip'
         exclusions: '*.git* /*node_modules/*.editorconfig'
   
-    - name: Upload Test Result Files
+    - name: Upload Release bits
       uses: actions/upload-artifact@v4
       with:
         name: release-bits
@@ -322,6 +322,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }} # Thijs pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-        asset_path: D:\a\findneedle\findneedle\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\release.zip
+        asset_path: release-bits/release.zip
         asset_name: release.zip
         asset_content_type: application/zip
