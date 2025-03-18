@@ -1,13 +1,20 @@
 ﻿using System.Text.Json.Serialization;
+using FindNeedlePluginLib.Interfaces;
+using Windows.ApplicationModel.Activation;
 
 namespace findneedle.Implementations;
 
-public class SimpleKeywordFilter : ISearchFilter
+public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser
 {
 
     public string term 
     {
         get; set;
+    }
+
+    public SimpleKeywordFilter()
+    {
+        term = "invalidserach";
     }
 
     [JsonConstructorAttribute]
@@ -40,5 +47,17 @@ public class SimpleKeywordFilter : ISearchFilter
         return term;
     }
 
-
+    public CommandLineRegistration RegisterCommandHandler()
+    {
+        var reg = new CommandLineRegistration()
+        {
+            handlerType = CommandLineHandlerType.Filter,
+            key = "keyword"
+        };
+        return reg;
+    }
+    public void ParseCommandParameterIntoQuery(string parameter)
+    {
+        term = parameter;
+    }
 }

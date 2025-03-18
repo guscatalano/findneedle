@@ -105,12 +105,27 @@ public class PluginManager
 
     public List<InMemoryPlugin> GetAllPluginsOfAType(string interfaceType)
     {
-        return pluginsLoadedByType[interfaceType];
+
+        if (pluginsLoadedByType.ContainsKey(interfaceType))
+        {
+            return pluginsLoadedByType[interfaceType];
+        }
+        else
+        {
+            return new List<InMemoryPlugin>();
+        }
     }
 
     public List<InMemoryPluginObject<object>> GetAllPluginObjectsOfAType(string interfaceType)
     {
-        return pluginsObjectLoadedByType[interfaceType];
+        if (pluginsObjectLoadedByType.ContainsKey(interfaceType))
+        {
+            return pluginsObjectLoadedByType[interfaceType];
+        } 
+        else
+        {
+            return new List<InMemoryPluginObject<object>>();
+        }
     }
 
     public void LoadAllPlugins(bool loadIntoAssembly = true)

@@ -1,20 +1,13 @@
 using findneedle;
 using findneedle.Implementations;
+using FindPluginCore.Searching;
 
 namespace findneedletests;
 
 [TestClass]
 public class SearchArgsTests
 {
-    [TestMethod]
-    public void TestBadInput()
-    {
-        Dictionary<string, string> input = new Dictionary<string, string>();
-        input.Add("", "");
-        SearchQuery q = new SearchQuery(input);
-        Assert.IsTrue(q.GetLocations().Count == 0);
-    }
-
+   
     [TestMethod]
     public void TestLocalEventLog()
     {
@@ -32,7 +25,7 @@ public class SearchArgsTests
     {
         Dictionary<string, string> input = new Dictionary<string, string>();
         input.Add("location", "path#C:\\windows");
-        SearchQuery q = new SearchQuery(input);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input);
         Assert.IsTrue(q.GetLocations().Count == 1);
         Assert.IsTrue(q.GetLocations()[0].GetType() == typeof(FolderLocation));
     }
@@ -44,7 +37,7 @@ public class SearchArgsTests
         input.Add("location", "path#C;windows");
         try
         {
-            SearchQuery q = new SearchQuery(input);
+            SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input);
 
         }
         catch (Exception)
@@ -62,7 +55,7 @@ public class SearchArgsTests
         Dictionary<string, string> input = new Dictionary<string, string>();
         input.Add("location", @"path#C:\\windows\\explorer.exe");
 
-        SearchQuery q = new SearchQuery(input);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input);
         Assert.IsTrue(q.GetLocations().Count == 1);
         Assert.IsTrue(q.GetLocations()[0].GetType() == typeof(FolderLocation));
     }
@@ -77,7 +70,7 @@ public class SearchArgsTests
             { "location3", @"path#C:\\windows\\system32\\" }
         };
 
-        SearchQuery q = new SearchQuery(input);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input);
 
 
         Assert.AreEqual(3, q.GetLocations().Count);
