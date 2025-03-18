@@ -22,7 +22,17 @@ public class TextManipulationTests
         Assert.AreEqual("2", ret["b0"]);
     }
 
-   
+    [TestMethod]
+    public void TestParseCmdEmptyIntoDictionary()
+    {
+        var ret = TextManipulation.ParseCommandLineIntoDictionary(["a", "b=2"]);
+        Assert.AreEqual(2, ret.Count);
+        Assert.AreEqual("1", ret["a0"]);
+        Assert.AreEqual("2", ret["b0"]);
+    }
+
+
+
 
     [TestMethod]
     public void SplitApartTests()

@@ -6,7 +6,7 @@ using FindNeedlePluginLib.Interfaces;
 namespace findneedle.Implementations;
 
 
-public class LocalEventLogLocation : IEventLogQueryLocation
+public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
 {
 
     readonly EventLog eventLog = new();
@@ -93,5 +93,27 @@ public class LocalEventLogLocation : IEventLogQueryLocation
             }
         }
         return filteredResults;
+    }
+
+    public CommandLineRegistration RegisterCommandHandler() 
+    {
+        var reg = new CommandLineRegistration()
+        {
+            handlerType = CommandLineHandlerType.Location,
+            key = "eventlog"
+        };
+        return reg;
+    }
+    public void ParseCommandParameterIntoQuery(string parameter)
+    {
+        if (!string.IsNullOrEmpty(parameter))
+        {
+            eventLogName = parameter;
+        } 
+        else
+        {
+            eventLogName = "everything";
+        }
+        
     }
 }

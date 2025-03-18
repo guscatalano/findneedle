@@ -104,6 +104,26 @@ public class SearchQueryCmdLineParserTests
     }
 
     [TestMethod]
+    public void TestEmptyParameterPassThrough()
+    {
+        var doubleCheckcallback = false;
+        var input = new Dictionary<string, string>();
+        input.Add("filter_" + SOME_KEY, "");
+
+        var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
+        var parsers = SetupSimpleFakeParser(registration);
+        var FakeParser = (FakeCmdLineParser)parsers.First().Value;
+        FakeParser.callbackForParse = (string parameter) =>
+        {
+            Assert.IsTrue(string.IsNullOrEmpty(parameter));
+            doubleCheckcallback = true;
+        };
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        Assert.IsTrue(FakeParser.wasParseCalled);
+        Assert.IsTrue(doubleCheckcallback);
+    }
+
+    [TestMethod]
     public void TestComplexParameterPassThrough()
     {
         var input = new Dictionary<string, string>();

@@ -8,17 +8,7 @@ namespace findneedletests;
 public class SearchArgsTests
 {
    
-    [TestMethod]
-    public void TestLocalEventLog()
-    {
-        Assert.IsTrue(true);
-        /*
-        Dictionary<string, string> input = new Dictionary<string, string>();
-        input.Add("location", "localeventlog");
-        SearchQuery q = new SearchQuery(input);
-        Assert.IsTrue(q.GetLocations().Count == 1);
-        Assert.IsTrue(q.GetLocations()[0].GetType() == typeof(LocalEventLogLocation));*/
-    }
+
 
     [TestMethod]
     public void TestLocalFolderLog()
