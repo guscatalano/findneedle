@@ -87,9 +87,6 @@ public class SearchQueryCmdLine
         foreach (var pair in arguments)
         {
           
-
-         
-
             if (pair.Key.StartsWith("depth", StringComparison.OrdinalIgnoreCase))
             {
                 SearchLocationDepth depth = SearchLocationDepth.Intermediate;
@@ -99,34 +96,6 @@ public class SearchQueryCmdLine
                     throw new Exception("Failed to parse depth");
                 }
                 q.SetDepth(depth);
-            }
-
-            const string PATH_PREPEND = "path#";
-            //location=localmachine
-            //location=C:\
-            if (pair.Key.StartsWith("location", StringComparison.OrdinalIgnoreCase))
-            {
-                /*
-                if (pair.Value.Equals("localeventlog", StringComparison.OrdinalIgnoreCase))
-                {
-                    locations.Add(new LocalEventLogLocation());
-                    continue;
-                }
-                if (pair.Value.Equals("localeventlogquery", StringComparison.OrdinalIgnoreCase))
-                {
-                    locations.Add(new LocalEventLogQueryLocation());
-                    continue;
-                }*/
-                if (pair.Value.StartsWith(PATH_PREPEND, StringComparison.OrdinalIgnoreCase))
-                {
-                    var path = pair.Value.Substring(PATH_PREPEND.Length);
-                    if (!Path.Exists(path) && !File.Exists(path))
-                    {
-                        throw new Exception("Path: " + path + " does not exist");
-                    }
-                    q.locations.Add(new FolderLocation(path));
-                    continue;
-                }
             }
         }
 

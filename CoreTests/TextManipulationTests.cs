@@ -25,6 +25,7 @@ public class TextManipulationTests
     [TestMethod]
     public void TestParseCmdEmptyIntoDictionary()
     {
+        //This is failing because we're doing things wrong
         var ret = TextManipulation.ParseCommandLineIntoDictionary(["a", "b=2"]);
         Assert.AreEqual(2, ret.Count);
         Assert.AreEqual("1", ret["a0"]);

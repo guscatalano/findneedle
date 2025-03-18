@@ -12,7 +12,7 @@ using FindNeedlePluginLib.Interfaces;
 namespace findneedle.Implementations;
 
 
-public class FolderLocation : ISearchLocation
+public class FolderLocation : ISearchLocation, ICommandLineParser
 {
     public SearchProgressSink? sink;
     public SearchStatistics? stats;
@@ -382,5 +382,25 @@ public class FolderLocation : ISearchLocation
             }
         }
         return filteredResults;
+    }
+
+    public CommandLineRegistration RegisterCommandHandler() 
+    {
+        var reg = new CommandLineRegistration()
+        {
+            handlerType = CommandLineHandlerType.Location,
+            key = "path"
+        };
+        return reg;
+    }
+    public void ParseCommandParameterIntoQuery(string parameter) 
+    {
+        //Only one right now
+        if (!Path.Exists(parameter) && !File.Exists(parameter))
+        {
+            throw new Exception("Path: " + parameter + " does not exist");
+        }
+        
+        this.path = parameter;
     }
 }

@@ -7,48 +7,8 @@ namespace findneedletests;
 [TestClass]
 public class SearchArgsTests
 {
-   
 
 
-    [TestMethod]
-    public void TestLocalFolderLog()
-    {
-        Dictionary<string, string> input = new Dictionary<string, string>();
-        input.Add("location", "path#C:\\windows");
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input);
-        Assert.IsTrue(q.GetLocations().Count == 1);
-        Assert.IsTrue(q.GetLocations()[0].GetType() == typeof(FolderLocation));
-    }
-
-    [TestMethod]
-    public void TestBadLocalFolderLog()
-    {
-        Dictionary<string, string> input = new Dictionary<string, string>();
-        input.Add("location", "path#C;windows");
-        try
-        {
-            SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input);
-
-        }
-        catch (Exception)
-        {
-            Assert.IsTrue(true); //We expect to throw
-            return;
-        }
-        Assert.IsFalse(true);
-
-    }
-
-    [TestMethod]
-    public void TestRealFileLog()
-    {
-        Dictionary<string, string> input = new Dictionary<string, string>();
-        input.Add("location", @"path#C:\\windows\\explorer.exe");
-
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input);
-        Assert.IsTrue(q.GetLocations().Count == 1);
-        Assert.IsTrue(q.GetLocations()[0].GetType() == typeof(FolderLocation));
-    }
 
     [TestMethod]
     public void TestAddMultiplelFileLog()
