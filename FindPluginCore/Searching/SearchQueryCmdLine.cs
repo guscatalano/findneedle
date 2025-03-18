@@ -53,11 +53,15 @@ public class SearchQueryCmdLine
             foreach (var parser in parsers)
             {
                 var cmdKeyword = pair.Key;
-                var cmdParam = pair.Value; //Dont to lower just incase
-               
+                var cmdParam = pair.Value.Trim(); //Dont to lower just incase, remove begin and end spaces
+
                 if (cmdKeyword.StartsWith(parser.Key.GetCmdLineKey(), StringComparison.OrdinalIgnoreCase))
                 {
-
+                    //Remove begin and end ( ) if provided
+                    if(cmdParam.StartsWith("(") && cmdParam.EndsWith(")"))
+                    {
+                        cmdParam = cmdParam.Substring(1, cmdParam.Length - 2);
+                    }
                     parser.Value.ParseCommandParameterIntoQuery(cmdParam);
 
                     //If we didn't throw the object is valid
@@ -82,32 +86,9 @@ public class SearchQueryCmdLine
        
         foreach (var pair in arguments)
         {
-            if (pair.Key.StartsWith("keyword", StringComparison.OrdinalIgnoreCase))
-            {
-                //filters.Add(new SimpleKeywordFilter(pair.Value));
-                continue;
-            }
+          
 
-            //searchfilter=time(start,end)
-            //searchfilter=ago(2h)
-            if (pair.Key.StartsWith("searchfilter", StringComparison.OrdinalIgnoreCase))
-            {
-                if (pair.Value.StartsWith("time"))
-                {
-                    var par = pair.Value.Substring(4);
-                    List<string> x = TextManipulation.SplitApart(par);
-                    DateTime start = DateTime.Parse(x[0]);
-                    DateTime end = DateTime.Parse(x[1]);
-                    //filters.Add(new TimeRangeFilter(start, end));
-                }
-                if (pair.Value.StartsWith("ago"))
-                {
-                    var par = pair.Value.Substring(3);
-                    List<string> x = TextManipulation.SplitApart(par);
-                    //filters.Add(new TimeAgoFilter(x[0]));
-                }
-                continue;
-            }
+         
 
             if (pair.Key.StartsWith("depth", StringComparison.OrdinalIgnoreCase))
             {

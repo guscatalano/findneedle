@@ -4,13 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using FindNeedleCoreUtils;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 
 
 
 
-public class TimeAgoFilter : ISearchFilter
+public class TimeAgoFilter : ISearchFilter, ICommandLineParser
 {
 
     public DateTime start
@@ -57,8 +58,17 @@ public class TimeAgoFilter : ISearchFilter
         filterbegin = start - ts;
     }
 
+    public TimeAgoFilter()
+    {
+        //Dont initialize on purpose
+    }
 
     public TimeAgoFilter(string timespanstr)
+    {
+        ParseFromString(timespanstr);
+    }
+
+    public void ParseFromString(string timespanstr)
     {
         ts = TimeSpan.Zero;
         start = DateTime.Now;
@@ -115,5 +125,17 @@ public class TimeAgoFilter : ISearchFilter
         return ":(";
     }
 
-    
+    public CommandLineRegistration RegisterCommandHandler() 
+    {
+        var reg = new CommandLineRegistration()
+        {
+            handlerType = CommandLineHandlerType.Filter,
+            key = "timeago"
+        };
+        return reg;
+    }
+    public void ParseCommandParameterIntoQuery(string parameter) 
+    {
+        ParseFromString(parameter);   
+    }
 }

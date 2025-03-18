@@ -103,5 +103,22 @@ public class SearchQueryCmdLineParserTests
         Assert.IsTrue(doubleCheckcallback);
     }
 
-  
+    [TestMethod]
+    public void TestComplexParameterPassThrough()
+    {
+        var input = new Dictionary<string, string>();
+        input.Add("filter_" + SOME_KEY, "(something,something)");
+
+        var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
+        var parsers = SetupSimpleFakeParser(registration);
+        var FakeParser = (FakeCmdLineParser)parsers.First().Value;
+        FakeParser.callbackForParse = (string parameter) =>
+        {
+            Assert.AreEqual("something,something", parameter); //We expect it to remove the brackets
+        };
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        Assert.IsTrue(FakeParser.wasParseCalled);
+    }
+
+
 }

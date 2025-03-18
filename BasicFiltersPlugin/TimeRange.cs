@@ -31,6 +31,15 @@ public class TimeRangeFilter : ISearchFilter
     {
         return "Start: " + start.ToString() + " and End: " + end.ToString();
     }
-
+    /* For commandline parser
+     * 
+     * if (pair.Value.StartsWith("time"))
+            {
+                var par = pair.Value.Substring(4);
+                List<string> x = TextManipulation.SplitApart(par);
+                DateTime start = DateTime.Parse(x[0]);
+                DateTime end = DateTime.Parse(x[1]);
+                //filters.Add(new TimeRangeFilter(start, end));
+            }*/
    
 }
