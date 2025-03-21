@@ -37,7 +37,7 @@ public class FolderLocationTests
     {
         const string TEST_STRING = "13275498735fdsfsf";
         FolderLocation loc = new();
-        var reg = loc.RegisterCommandHandler();
+        loc.RegisterCommandHandler();
         try
         {
             loc.ParseCommandParameterIntoQuery(TEST_STRING);

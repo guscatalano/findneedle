@@ -32,8 +32,8 @@ public class SearchQueryCmdLineParserTests
     [TestMethod]
     public void TestParseCmdIntoDictionaryBadInput()
     {
-        var input = new Dictionary<string, string>();
-        input.Add("", "");
+        var input = new List<CommandLineArgument>();
+        input.Add(new CommandLineArgument() { key = "", value= ""});
         var q = SearchQueryCmdLine.ParseFromCommandLine(input);
         Assert.AreEqual(0, q.GetLocations().Count);
     }
@@ -41,8 +41,8 @@ public class SearchQueryCmdLineParserTests
     [TestMethod]
     public void TestFilterKeywordToPlugin()
     {
-        var input = new Dictionary<string, string>();
-        input.Add("filter_" + SOME_KEY, SOME_PARAM);
+        var input = new List<CommandLineArgument>();
+        input.Add(new CommandLineArgument() { key = "filter_" + SOME_KEY, value = SOME_PARAM });
         
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
@@ -56,9 +56,9 @@ public class SearchQueryCmdLineParserTests
     [TestMethod]
     public void TestLocationKeywordToPlugin()
     {
-        var input = new Dictionary<string, string>();
-        input.Add("location_" + SOME_KEY, SOME_PARAM);
-        
+        var input = new List<CommandLineArgument>();
+        input.Add(new CommandLineArgument() { key = "location_" + SOME_KEY, value = SOME_PARAM });
+
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Location, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
         SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
@@ -71,8 +71,8 @@ public class SearchQueryCmdLineParserTests
     [TestMethod]
     public void TestProcessorKeywordToPlugin()
     {
-        var input = new Dictionary<string, string>();
-        input.Add("processor_" + SOME_KEY, SOME_PARAM);
+        var input = new List<CommandLineArgument>();
+        input.Add(new CommandLineArgument() { key = "processor_" + SOME_KEY, value = SOME_PARAM });
 
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Processor, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
@@ -87,8 +87,8 @@ public class SearchQueryCmdLineParserTests
     public void TestParameterPassThrough()
     {
         var doubleCheckcallback = false;
-        var input = new Dictionary<string, string>();
-        input.Add("filter_" + SOME_KEY, SOME_PARAM);
+        var input = new List<CommandLineArgument>();
+        input.Add(new CommandLineArgument() { key = "filter_" + SOME_KEY, value = SOME_PARAM });
 
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
@@ -107,8 +107,8 @@ public class SearchQueryCmdLineParserTests
     public void TestEmptyParameterPassThrough()
     {
         var doubleCheckcallback = false;
-        var input = new Dictionary<string, string>();
-        input.Add("filter_" + SOME_KEY, "");
+        var input = new List<CommandLineArgument>();
+        input.Add(new CommandLineArgument() { key = "filter_" + SOME_KEY, value = "" });
 
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
@@ -126,8 +126,8 @@ public class SearchQueryCmdLineParserTests
     [TestMethod]
     public void TestComplexParameterPassThrough()
     {
-        var input = new Dictionary<string, string>();
-        input.Add("filter_" + SOME_KEY, "(something,something)");
+        var input = new List<CommandLineArgument>();
+        input.Add(new CommandLineArgument() { key = "filter_" + SOME_KEY, value = "(something,something)" });
 
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
@@ -140,5 +140,22 @@ public class SearchQueryCmdLineParserTests
         Assert.IsTrue(FakeParser.wasParseCalled);
     }
 
+
+    [TestMethod]
+    public void TestAddMultipleFileLog()
+    {
+
+        var input = new List<CommandLineArgument>() {
+            new() { key = "location_path", value = @"C:\\windows\\explorer.exe" },
+            new() { key = "location_path", value = @"C:\\windows\\system32" },
+            new() { key = "location_path", value = @"C:\\windows\\system32\\" }
+        };
+
+        var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Location, key = "path" };
+        var parsers = SetupSimpleFakeParser(registration);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        Assert.AreEqual(3, q.GetLocations().Count);
+
+    }
 
 }

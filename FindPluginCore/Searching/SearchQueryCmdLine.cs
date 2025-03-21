@@ -42,18 +42,18 @@ public class SearchQueryCmdLine
         return parsers;
     }
 
-    public static SearchQuery ParseFromCommandLine(Dictionary<string, string> arguments, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
+    public static SearchQuery ParseFromCommandLine(List<CommandLineArgument> arguments, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
     {
         //This is a test hook
         parsers ??= GetCommandLineParsers();
 
         SearchQuery q = new();
-        foreach (var pair in arguments)
+        foreach (var argument in arguments)
         {
             foreach (var parser in parsers)
             {
-                var cmdKeyword = pair.Key;
-                var cmdParam = pair.Value.Trim(); //Dont to lower just incase, remove begin and end spaces
+                var cmdKeyword = argument.key;
+                var cmdParam = argument.value.Trim(); //Dont to lower just incase, remove begin and end spaces
 
                 if (cmdKeyword.StartsWith(parser.Key.GetCmdLineKey(), StringComparison.OrdinalIgnoreCase))
                 {
@@ -81,16 +81,14 @@ public class SearchQueryCmdLine
                     }
                 }
             }
-        }
 
-       
-        foreach (var pair in arguments)
-        {
-          
-            if (pair.Key.StartsWith("depth", StringComparison.OrdinalIgnoreCase))
+
+            //Non-plugin parameters
+            //TODO: Check they are not duplicated twice!
+            if (argument.key.StartsWith("depth", StringComparison.OrdinalIgnoreCase))
             {
                 SearchLocationDepth depth = SearchLocationDepth.Intermediate;
-                var ret = Enum.TryParse<SearchLocationDepth>(pair.Value, out depth);
+                var ret = Enum.TryParse<SearchLocationDepth>(argument.value, out depth);
                 if (!ret)
                 {
                     throw new Exception("Failed to parse depth");

@@ -6,19 +6,28 @@ using System.Threading.Tasks;
 
 namespace FindNeedleCoreUtils;
 
+
+public class CommandLineArgument
+{
+    public string key = "";
+    public string value = "";
+}
+
 public class TextManipulation
 {
 
-    public static Dictionary<string, string> ParseCommandLineIntoDictionary(string[] args)
+    public static List<CommandLineArgument> ParseCommandLineIntoDictionary(string[] args)
     {
-        var arguments = new Dictionary<string, string>();
+        var arguments = new List<CommandLineArgument>();
         foreach (var argument in args)
         {
-            var count = 0;
             var splitted = argument.Split('=');
             if (splitted.Length == 2)
             {
-                arguments[splitted[0] + count] = splitted[1];
+                arguments.Add(new CommandLineArgument() { key = splitted[0], value = splitted[1] });
+            } else
+            {
+                arguments.Add(new CommandLineArgument() { key = argument, value = string.Empty });
             }
         }
         return arguments;

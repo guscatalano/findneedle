@@ -99,6 +99,7 @@ public class SearchQuery : ISearchQuery
         _stats = stats;
         _filters = new List<ISearchFilter>();
         _locations = new List<ISearchLocation>();
+        _processors = new List<IResultProcessor>();
     }
 
 
