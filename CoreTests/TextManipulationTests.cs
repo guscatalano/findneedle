@@ -47,12 +47,26 @@ public class TextManipulationTests
     [TestMethod]
     public void SplitApartTests()
     {
-        
+        var someargs = "yep=something,yep,haha=3,yep,(),, SOMETHING";
+        var ret = TextManipulation.SplitApart(someargs);
+        Assert.AreEqual(ret.Count(), 5);
+        Assert.IsTrue(ret[0].Equals("yep=something"));
+        Assert.IsTrue(ret[1].Equals("yep"));
+        Assert.IsTrue(ret[2].Equals("haha=3"));
+        Assert.IsTrue(ret[3].Equals("yep"));
+        Assert.IsTrue(ret[4].Equals("SOMETHING"));
     }
 
 
     [TestMethod]
     public void ReplaceInvalidCharsTests()
     {
+        var someinvalidtext = "(),(),";
+        var ret = TextManipulation.ReplaceInvalidChars(someinvalidtext);
+        Assert.IsTrue(string.IsNullOrEmpty(ret));
+
+        var somevalidtext = "plz(),dont(),deleteme";
+        ret = TextManipulation.ReplaceInvalidChars(somevalidtext);
+        Assert.IsTrue("plzdontdeleteme".Equals(ret));
     }
 }

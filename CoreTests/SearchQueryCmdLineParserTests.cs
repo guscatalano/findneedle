@@ -155,7 +155,6 @@ public class SearchQueryCmdLineParserTests
         var parsers = SetupSimpleFakeParser(registration);
         SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
         Assert.AreEqual(3, q.GetLocations().Count);
-
     }
 
 }
