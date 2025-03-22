@@ -11,6 +11,12 @@ namespace FindNeedlePluginLib.TestClasses;
 
 public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFilter, IResultProcessor
 {
+    //When you need to store and reference something, use somevalue
+    public string? somevalue
+    {
+        get; set;
+    }
+
     public bool wasParseCalled = false;
     public Action<string>? callbackForParse;
     public void ParseCommandParameterIntoQuery(string parameter) 
