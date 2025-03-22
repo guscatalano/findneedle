@@ -2,7 +2,7 @@
   "profiles": {
     "findneedle": {
       "commandName": "Project",
-      "commandLineArgs": "location=localeventlog searchfilter=ago(5d)"
+      "commandLineArgs": "location_eventlog=Application filter_time=ago(5d)"
     }
   }
 }

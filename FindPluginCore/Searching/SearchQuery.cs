@@ -17,7 +17,13 @@ public class SearchQuery : ISearchQuery
     {
         filters.Add(filter);
     }
-    private SearchLocationDepth Depth;
+    private SearchLocationDepth _depth;
+
+    public SearchLocationDepth Depth
+    {
+        get => _depth;
+        set => _depth = value;
+    }
 
     private SearchProgressSink _progressSink;
 

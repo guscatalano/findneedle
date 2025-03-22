@@ -35,7 +35,7 @@ public class SampleZeroStatistics : IResultProcessor
         return "There were: " + countResults + " results.";
     }
 
-    public string GetTextDescription() {
+    public string GetDescription() {
         return "This is a sample plugin that always 'counts' 0 results";
     }
 

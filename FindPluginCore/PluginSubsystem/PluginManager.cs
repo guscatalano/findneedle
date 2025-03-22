@@ -134,11 +134,12 @@ public class PluginManager
         {
             foreach (var entry in config.entries)
             {
+                entry.path = Path.GetFullPath(entry.path);
                 if (!File.Exists(entry.path))
                 {
                     throw new Exception("Can't find plugin");
                 }
-                entry.path = Path.GetFullPath(entry.path);
+                
 
                 List<PluginDescription>? pluginLoad = LoadOnePlugin(entry.path);
 

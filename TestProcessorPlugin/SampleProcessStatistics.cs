@@ -35,7 +35,7 @@ public class SampleProcessStatistics : IResultProcessor
         return "There were: " + countResults + " results.";
     }
 
-    public string GetTextDescription() {
+    public string GetDescription() {
         return "This is a sample plugin that just counts how many results there are";
     }
 

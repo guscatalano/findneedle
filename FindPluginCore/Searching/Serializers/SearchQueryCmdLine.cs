@@ -42,6 +42,29 @@ public class SearchQueryCmdLine
         return parsers;
     }
 
+    public static void PrintToConsole(SearchQuery q)
+    {
+        Console.WriteLine("Search query:");
+        Console.WriteLine("Name: " + q.Name);
+        Console.WriteLine("Locations:");
+        foreach (var loc in q.locations)
+        {
+            Console.WriteLine(loc.GetDescription());
+        }
+        Console.WriteLine("Filters:");
+        foreach (var filter in q.filters)
+        {
+            Console.WriteLine(filter.GetDescription());
+        }
+        Console.WriteLine("Processors:");
+        foreach (var processor in q.processors)
+        {
+            Console.WriteLine(processor.GetDescription());
+        }
+        Console.WriteLine("Depth: " + q.Depth);
+        Console.WriteLine("End of search query");
+    }
+
     public static SearchQuery ParseFromCommandLine(List<CommandLineArgument> arguments, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
     {
         //This is a test hook

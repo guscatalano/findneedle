@@ -1,0 +1,9 @@
+﻿{
+  "entries": [
+    {
+      "name": "BasicFilters",
+      "path": "BasicFiltersPlugin.dll"
+    }
+  ],
+  "PathToFakeLoadPlugin": "FakeLoadPlugin.exe"
+}

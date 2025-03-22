@@ -33,10 +33,10 @@ public class WatsonCrashProcessor : IResultProcessor
     }
 
     public string GetOutputText() {
-        return "Found " + resultList.Count() + " crashes or hangs.";
+        return resultList.Count() +"";
     }
 
-    public string GetTextDescription() 
+    public string GetDescription() 
     {
         return "Finds application crashes in the logs";
     }
