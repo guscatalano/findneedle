@@ -1,9 +1,10 @@
 ﻿using findneedle;
 using findneedle.Interfaces;
+using FindNeedlePluginLib.Interfaces;
 
 namespace TestProcessorPlugin;
 
-public class SampleNullOutput : ISearchOutput
+public class SampleNullOutput : ISearchOutput, IPluginDescription
 {
 
     public string GetClassName()
@@ -43,4 +44,5 @@ public class SampleNullOutput : ISearchOutput
     public void Dispose() 
     {
     }
+
 }

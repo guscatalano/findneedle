@@ -1,9 +1,10 @@
 ﻿using findneedle;
 using findneedle.Interfaces;
+using FindNeedlePluginLib.Interfaces;
 
 namespace TestProcessorPlugin;
 
-public class SampleZeroStatistics : IResultProcessor
+public class SampleZeroStatistics : IResultProcessor, IPluginDescription
 {
 
 
@@ -42,5 +43,9 @@ public class SampleZeroStatistics : IResultProcessor
     public void ProcessResults(List<ISearchResult> results)
     {
         countResults = 0;
+    }
+
+    public string GetTextDescription() {
+        return "";
     }
 }
