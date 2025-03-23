@@ -32,7 +32,6 @@
     <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
     <ProjectReference Include="..\EventLogPlugin\EventLogPlugin.csproj" />
     <ProjectReference Include="..\FakeLoadPlugin\FakeLoadPlugin.csproj" />
-    <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj" />
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
     <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
     <ProjectReference Include="..\ZipFilePlugin\ZipFilePlugin.csproj" />

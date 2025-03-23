@@ -9,6 +9,8 @@
   <ItemGroup>
     <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj">
       <Private>True</Private>
+      <CopyLocalSatelliteAssemblies>True</CopyLocalSatelliteAssemblies>
+      <ReferenceOutputAssembly>True</ReferenceOutputAssembly>
     </ProjectReference>
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
   </ItemGroup>

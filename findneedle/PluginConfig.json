@@ -3,6 +3,14 @@
     {
       "name": "BasicFilters",
       "path": "BasicFiltersPlugin.dll"
+    },
+    {
+      "name": "BasicOutputs",
+      "path": "BasicOutputsPlugin.dll"
+    },
+    {
+      "name": "EventLogPlugin",
+      "path": "EventLogPlugin.dll"
     }
   ],
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe"

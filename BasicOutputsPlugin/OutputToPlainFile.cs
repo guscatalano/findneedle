@@ -10,13 +10,18 @@ namespace findneedle.Implementations;
 public class OutputToPlainFile : ISearchOutput
 {
     readonly string filename = "";
-    readonly FileStream x;
-    public OutputToPlainFile(string filename = "")
+    readonly FileStream? x;
+
+    public OutputToPlainFile()
+    {
+        x = null;
+    }
+
+    public OutputToPlainFile(string filename)
     {
         if (string.IsNullOrWhiteSpace(filename))
         {
             filename = System.IO.Path.GetTempPath() + Guid.NewGuid().ToString() + ".txt";
-
         }
         x = File.OpenWrite(filename);
         this.filename = filename;
@@ -28,7 +33,7 @@ public class OutputToPlainFile : ISearchOutput
     }
     public void WriteAllOutput(List<ISearchResult> result)
     {
-        foreach(ISearchResult item in result)
+        foreach (ISearchResult item in result)
         {
             WriteOutput(item);
         }
@@ -36,8 +41,11 @@ public class OutputToPlainFile : ISearchOutput
 
     public void WriteOutput(ISearchResult result)
     {
-        var info = new UTF8Encoding(true).GetBytes(result.GetMessage());
-        x.Write(info);
+        if (x != null)
+        {
+            var info = new UTF8Encoding(true).GetBytes(result.GetMessage());
+            x.Write(info);
+        }
     }
 
     public string GetOutputFileName()
@@ -45,14 +53,17 @@ public class OutputToPlainFile : ISearchOutput
         return filename;
     }
 
-    public string GetTextDescription() {
+    public string GetTextDescription()
+    {
         return "Outputs the result to a text file without any formatting";
     }
 
-    public string GetFriendlyName() {
+    public string GetFriendlyName()
+    {
         return "Output to plain file";
     }
-    public string GetClassName() {
+    public string GetClassName()
+    {
         var me = GetType();
         if (me.FullName == null)
         {
@@ -64,8 +75,11 @@ public class OutputToPlainFile : ISearchOutput
         }
     }
 
-    public void Dispose() 
+    public void Dispose()
     {
-        x.Close();
+        if (x != null)
+        {
+            x.Close();
+        }
     }
 }
