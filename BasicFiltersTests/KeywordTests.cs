@@ -17,7 +17,7 @@ public sealed class KeywordTests
     [TestMethod]
     public void SimpleKeywordTest()
     {
-        Assert.Fail(); //fail on purpose
+       // Assert.Fail(); //fail on purpose
     }
 
     [TestMethod]

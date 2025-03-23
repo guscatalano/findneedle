@@ -33,7 +33,7 @@ public class WatsonCrashProcessor : IResultProcessor
     }
 
     public string GetOutputText() {
-        return resultList.Count() +"";
+        return "Found "+ resultList.Count() + " crashes or hangs.";
     }
 
     public string GetDescription() 

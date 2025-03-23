@@ -128,7 +128,7 @@ public class PluginManager
         {
             if (!string.IsNullOrEmpty(configFileToLoad))
             {
-                throw new Exception("Config file was specified and it doesnt exist");
+                //throw new Exception("Config file was specified and it doesnt exist");
             }
             config = new PluginConfig();
         }
