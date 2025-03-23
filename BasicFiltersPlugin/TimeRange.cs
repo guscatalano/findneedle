@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 
-public class TimeRangeFilter : ISearchFilter
+public class TimeRangeFilter : ISearchFilter, IPluginDescription
 {
     private readonly DateTime start;
     private readonly DateTime end;
@@ -31,6 +32,20 @@ public class TimeRangeFilter : ISearchFilter
     {
         return "Start: " + start.ToString() + " and End: " + end.ToString();
     }
+
+    public string GetTextDescription()
+    {
+        return "Filters the search results by a time range";
+    }
+    public string GetFriendlyName()
+    {
+        return "Time Range Filter";
+    }
+    public string GetClassName()
+    {
+        return GetType().FullName ?? string.Empty;
+    }
+
     /* For commandline parser
      * 
      * if (pair.Value.StartsWith("time"))
@@ -41,5 +56,5 @@ public class TimeRangeFilter : ISearchFilter
                 DateTime end = DateTime.Parse(x[1]);
                 //filters.Add(new TimeRangeFilter(start, end));
             }*/
-   
+
 }

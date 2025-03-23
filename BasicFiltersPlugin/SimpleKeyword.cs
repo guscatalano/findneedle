@@ -4,7 +4,7 @@ using Windows.ApplicationModel.Activation;
 
 namespace findneedle.Implementations;
 
-public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser
+public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser, IPluginDescription
 {
 
     public string term 
@@ -59,5 +59,17 @@ public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser
     public void ParseCommandParameterIntoQuery(string parameter)
     {
         term = parameter;
+    }
+
+    public string GetTextDescription()
+    {
+        return "Filters the search results by a simple keyword";
+    }
+    public string GetFriendlyName() {
+        return "Keyword Filter";
+    }
+    public string GetClassName()
+    {
+        return GetType().FullName ?? string.Empty;
     }
 }

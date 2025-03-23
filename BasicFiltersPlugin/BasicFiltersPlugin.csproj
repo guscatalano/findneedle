@@ -7,7 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj" />
+    <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj">
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
   </ItemGroup>
 

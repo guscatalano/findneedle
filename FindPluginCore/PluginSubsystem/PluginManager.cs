@@ -15,13 +15,39 @@ using FindPluginCore.PluginSubsystem;
 namespace findneedle.PluginSubsystem;
 public class PluginManager
 {
+    private static PluginManager? gPluginManager = null;
+    public static PluginManager GetSingleton()
+    {
+        gPluginManager ??= new PluginManager();
+        return gPluginManager;
+    }
+
+
     //todo: Figure out something better
     public static readonly string FAKE_LOADER = "FakeLoadPlugin.exe";
 
     public static readonly string LOADER_CONFIG = "PluginConfig.json";
 
+    public static void CallFakeLoadPlugin(string loaderPath, string plugin)
+    {
+        ProcessStartInfo ps = new()
+        {
+            FileName = loaderPath,
+            Arguments = plugin
 
-    public static Dictionary<string, List<PluginDescription>> DiscoverPlugins()
+        };
+        var p = Process.Start(ps);
+
+        if (p == null)
+        {
+            throw new Exception("Failed to start Plugin loader process");
+        }
+
+        p.WaitForExit();
+    }
+
+
+    public Dictionary<string, List<PluginDescription>> DiscoverPlugins()
     {
         Dictionary<string, List<PluginDescription>> ret = new();
         IEnumerable<string> files = FileIO.GetAllFiles(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
@@ -31,10 +57,11 @@ public class PluginManager
             {
                 try
                 {
-                    var descriptorFile = file + ".json";
-                    Process p = Process.Start(FAKE_LOADER, file);
-                    
-                    p.WaitForExit();
+                    var descriptorFile = file + ".json"; 
+
+                    //TODO read the fake loader path correctly
+                    CallFakeLoadPlugin(GetFakeLoadPluginPath(), file);
+
                     if (File.Exists(descriptorFile))
                     {
                         List<PluginDescription> plugins = IPluginDescription.ReadDescriptionFile(descriptorFile);   
@@ -60,6 +87,21 @@ public class PluginManager
     public Dictionary<string, List<InMemoryPlugin>> pluginsLoadedByType = new();
     public Dictionary<string, List<InMemoryPluginObject<object>>> pluginsObjectLoadedByType = new();
 
+    public void PrintToConsole()
+    {
+        Console.WriteLine("Loaded ("+ pluginsLoadedByPath.Count+") plugins: ");
+        foreach (var entry in pluginsLoadedByPath)
+        {
+            Console.WriteLine(entry.Key);
+            foreach (var plugin in entry.Value)
+            {
+                Console.WriteLine("  " + plugin.ToString());
+            }
+        }
+        Console.WriteLine("FakeLoaderPath: " + config?.PathToFakeLoadPlugin);    
+    }
+
+
     public PluginManager(string configFileToLoad = "")
     {
         if (string.IsNullOrEmpty(configFileToLoad))
@@ -84,6 +126,10 @@ public class PluginManager
         } 
         else
         {
+            if (!string.IsNullOrEmpty(configFileToLoad))
+            {
+                throw new Exception("Config file was specified and it doesnt exist");
+            }
             config = new PluginConfig();
         }
         loadedConfig = configFileToLoad;
@@ -192,9 +238,7 @@ public class PluginManager
     {
 
         var descriptorFile = path + ".json";
-        Process p = Process.Start(GetFakeLoadPluginPath(), path);
-
-        p.WaitForExit();
+        CallFakeLoadPlugin(GetFakeLoadPluginPath(), path);
         if (File.Exists(descriptorFile))
         {
             return IPluginDescription.ReadDescriptionFile(descriptorFile);

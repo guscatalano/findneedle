@@ -99,7 +99,7 @@ public class SearchQuery : ISearchQuery
 
     public SearchQuery()
     {
-        PluginManager.DiscoverPlugins();
+        PluginManager.GetSingleton().DiscoverPlugins();
         stats = new SearchStatistics(this);
         _progressSink = new SearchProgressSink();
         _stats = stats;

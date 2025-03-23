@@ -57,7 +57,15 @@ public class Program
                     Console.WriteLine("Friendly Name: " + ((IPluginDescription)Plugin).GetFriendlyName());
                     Console.WriteLine("Description: " + ((IPluginDescription)Plugin).GetTextDescription());
                     validTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, file, implementedInterfaces, implementedInterfacesShort));
+                } 
+                else
+                {
+                    Console.WriteLine("Failed to create instance of " + type.FullName);
                 }
+            } 
+            else
+            {
+                Console.WriteLine("Skipping " + type.FullName + " because it has no IPluginDescription");
             }
         }
         return validTypes;

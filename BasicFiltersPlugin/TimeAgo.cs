@@ -11,7 +11,7 @@ namespace findneedle.Implementations;
 
 
 
-public class TimeAgoFilter : ISearchFilter, ICommandLineParser
+public class TimeAgoFilter : ISearchFilter, ICommandLineParser, IPluginDescription
 {
 
     public DateTime start
@@ -137,5 +137,18 @@ public class TimeAgoFilter : ISearchFilter, ICommandLineParser
     public void ParseCommandParameterIntoQuery(string parameter) 
     {
         ParseFromString(parameter);   
+    }
+
+    public string GetTextDescription()
+    {
+        return "Filters the search results by a time range from now to the past";
+    }
+    public string GetFriendlyName()
+    {
+        return "Time Ago Filter";
+    }
+    public string GetClassName()
+    {
+        return GetType().FullName ?? string.Empty;
     }
 }

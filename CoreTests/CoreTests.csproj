@@ -2,7 +2,7 @@
 
  
   <PropertyGroup>
-	  <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+	  <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -11,6 +11,7 @@
 
 		  <Platforms>x86;x64</Platforms>
 		  <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
+		  <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
   </PropertyGroup>
 
 
