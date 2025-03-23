@@ -27,18 +27,22 @@ public class SearchQueryCmdLine
         var manager = PluginManager.GetSingleton();
         manager.LoadAllPlugins(true);
         var list = manager.GetAllPluginObjectsOfAType("ICommandLineParser");
-        Dictionary<CommandLineRegistration, ICommandLineParser> parsers = new();
+        Dictionary<CommandLineRegistration, ICommandLineParser> parsers = [];
         foreach (var plugin in list)
         {
             var p = plugin.CreateInstance();
-            var parser = (ICommandLineParser)p;
-            var tempInstance = plugin.CreateInstance();
-            var reg = parser.RegisterCommandHandler();
-            if (tempInstance == null)
+            if(p == null)
             {
                 throw new Exception("Failed to create instance of plugin");
             }
-            parsers.Add(reg, (ICommandLineParser)tempInstance);
+            var parser = (ICommandLineParser)p;
+           
+            if (parser == null)
+            {
+                throw new Exception("Failed to cast instance of plugin");
+            }
+            var reg = parser.RegisterCommandHandler();
+            parsers.Add(reg, (ICommandLineParser)parser);
             //Should end up with something like filter_keyword
         }
         return parsers;
