@@ -89,14 +89,11 @@ public class PluginManager
 
     public void PrintToConsole()
     {
-        Console.WriteLine("Loaded ("+ pluginsLoadedByPath.Count+") plugins: ");
+        Console.WriteLine("Loaded ("+ pluginsLoadedByPath.Count+") plugin files.");
+        Console.WriteLine("Discovered (" + pluginsLoadedByType.Count + ") plugins.");
         foreach (var entry in pluginsLoadedByPath)
         {
-            Console.WriteLine(entry.Key);
-            foreach (var plugin in entry.Value)
-            {
-                Console.WriteLine("  " + plugin.ToString());
-            }
+            Console.WriteLine(entry.Key + " ("+ entry.Value.Count + ")");
         }
         Console.WriteLine("FakeLoaderPath: " + config?.PathToFakeLoadPlugin);    
     }

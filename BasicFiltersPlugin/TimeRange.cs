@@ -11,6 +11,13 @@ public class TimeRangeFilter : ISearchFilter, IPluginDescription
 {
     private readonly DateTime start;
     private readonly DateTime end;
+
+    public TimeRangeFilter()
+    {
+        this.start = DateTime.Now;
+        this.end = DateTime.Now;
+    }
+
     public TimeRangeFilter(DateTime start, DateTime end)
     {
         this.start = start;

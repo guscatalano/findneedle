@@ -31,6 +31,7 @@ public class Program
             }
             List<string> implementedInterfaces = new();
             List<string> implementedInterfacesShort = new();
+            Console.WriteLine("Found class: " + type.FullName);
             foreach (var possibleInterface in type.GetInterfaces())
             {
                 

@@ -9,6 +9,7 @@ using FindNeedleCoreUtils;
 using findneedle.PluginSubsystem;
 using FindNeedlePluginLib.Interfaces;
 using findneedle.Interfaces;
+using FindPluginCore.PluginSubsystem;
 
 namespace FindPluginCore.Searching;
 
@@ -29,7 +30,8 @@ public class SearchQueryCmdLine
         Dictionary<CommandLineRegistration, ICommandLineParser> parsers = new();
         foreach (var plugin in list)
         {
-            var parser = (ICommandLineParser)plugin;
+            var p = plugin.CreateInstance();
+            var parser = (ICommandLineParser)p;
             var tempInstance = plugin.CreateInstance();
             var reg = parser.RegisterCommandHandler();
             if (tempInstance == null)
