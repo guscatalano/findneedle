@@ -9,20 +9,27 @@ namespace findneedle.Implementations;
 
 public class OutputToPlainFile : ISearchOutput
 {
-    readonly string filename = "";
-    readonly FileStream? x;
+    private string filename = "";
+    private FileStream? x;
 
+    //Need this constructor for plugin
     public OutputToPlainFile()
     {
-        x = null;
+        Initialize();
     }
 
     public OutputToPlainFile(string filename)
+    {
+        Initialize(filename);
+    }
+
+    public void Initialize(string filename = "")
     {
         if (string.IsNullOrWhiteSpace(filename))
         {
             filename = System.IO.Path.GetTempPath() + Guid.NewGuid().ToString() + ".txt";
         }
+ 
         x = File.OpenWrite(filename);
         this.filename = filename;
     }

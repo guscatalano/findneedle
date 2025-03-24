@@ -14,6 +14,6 @@ public class TestGlobals
     public const string TEST_DEP_PLUGIN_REL_PATH = TEST_DEP_FOLDER + "\\" + TEST_DEP_PLUGIN;
     public const string FAKE_LOAD_PLUGIN_REL_PATH = TEST_DEP_FOLDER + "\\" + FAKE_LOAD_PLUGIN;
 
-    public const int TEST_DEP_PLUGIN_COUNT = 1;
+    public const int TEST_DEP_PLUGIN_COUNT = 3;
 }
 

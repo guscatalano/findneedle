@@ -10,14 +10,14 @@ using FindNeedlePluginLib.Interfaces;
 namespace FindPluginCore.PluginSubsystem;
 
 
-public class InMemoryPlugin
+public class InMemoryPluginModule
 {
     public List<PluginDescription> description;
     public Assembly? dll = null;
     public bool LoadedSuccessfully = false;
     public Exception? LoadException = null;
 
-    public InMemoryPlugin(string fullpath, List<PluginDescription> description)
+    public InMemoryPluginModule(string fullpath, List<PluginDescription> description)
     {
         try
         {

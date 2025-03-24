@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
+using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
 using FindNeedlePluginLib.TestClasses;
@@ -28,6 +29,11 @@ public class SearchQueryCmdLineParserTests
         return parsers;
     }
 
+    [TestInitialize]
+    public void TestSetup()
+    {
+        PluginManager.ResetSingleton();
+    }
 
     [TestMethod]
     public void TestParseCmdIntoDictionaryBadInput()

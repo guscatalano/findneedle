@@ -10,9 +10,9 @@ namespace FindPluginCore.PluginSubsystem;
 
 public class InMemoryPluginObject<T>
 {
-    private readonly InMemoryPlugin plugin;
+    private readonly InMemoryPluginModule plugin;
     private PluginDescription description;
-    public InMemoryPluginObject(InMemoryPlugin plugin, PluginDescription description)
+    public InMemoryPluginObject(InMemoryPluginModule plugin, PluginDescription description)
     {
         this.plugin = plugin;
         this.description = description;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -15,6 +16,8 @@ public struct PluginDescription
     public string SourceFile;
     public List<string> ImplementedInterfaces;
     public List<string> ImplementedInterfacesShort;
+    public bool validPlugin;
+    public string validationErrorMessage;
 }
 
 public interface IPluginDescription
@@ -25,17 +28,36 @@ public interface IPluginDescription
     public string GetClassName();
 
 
-    public static PluginDescription GetPluginDescription(IPluginDescription plugin, string sourceFile, 
+    public static PluginDescription GetInvalidPluginDescription(string className, string sourceFile,
+                                                            List<string> implementedInterfaces, List<string> implementedInterfacesShort, string error)
+    {
+        PluginDescription description = new PluginDescription()
+        {
+            TextDescription = "Invalid",
+            FriendlyName = "Invalid",
+            ClassName = className,
+            SourceFile = sourceFile,
+            ImplementedInterfaces = implementedInterfaces,
+            ImplementedInterfacesShort = implementedInterfacesShort,
+            validPlugin = false,
+            validationErrorMessage = error
+        };
+        return description;
+    }
+
+    public static PluginDescription GetPluginDescription(IPluginDescription pluginInstance, string sourceFile, 
                                                             List<string> implementedInterfaces, List<string> implementedInterfacesShort)
     {
         PluginDescription description = new PluginDescription()
         {
-            TextDescription = plugin.GetTextDescription(),
-            FriendlyName = plugin.GetFriendlyName(),
-            ClassName = plugin.GetClassName(),
+            TextDescription = pluginInstance.GetTextDescription(),
+            FriendlyName = pluginInstance.GetFriendlyName(),
+            ClassName = pluginInstance.GetClassName(),
             SourceFile = sourceFile,
             ImplementedInterfaces = implementedInterfaces,
-            ImplementedInterfacesShort = implementedInterfacesShort
+            ImplementedInterfacesShort = implementedInterfacesShort,
+            validPlugin = true,
+            validationErrorMessage = ""
         };
         return description;
     }

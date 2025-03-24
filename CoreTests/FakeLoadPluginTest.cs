@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 
 namespace CoreTests;
@@ -10,11 +11,14 @@ namespace CoreTests;
 [TestClass]
 public sealed class FakeLoadPluginTest
 {
+
+
     [TestMethod]
     public void TestBasic()
     {
+        PluginManager.ResetSingleton();
         //This is tested more in PluginManagerTests 
-        var list = FakeLoadPlugin.Program.LoadPlugin(Path.GetFullPath(TestGlobals.TEST_DEP_PLUGIN_REL_PATH));
+        var list = FakeLoadPlugin.Program.LoadPluginModule(Path.GetFullPath(TestGlobals.TEST_DEP_PLUGIN_REL_PATH));
         Assert.IsTrue(list != null);
         Assert.AreEqual(list.Count, TestGlobals.TEST_DEP_PLUGIN_COUNT);
     }
@@ -24,7 +28,7 @@ public sealed class FakeLoadPluginTest
     {
         try
         {
-            var list = FakeLoadPlugin.Program.LoadPlugin("fakepath123");
+            var list = FakeLoadPlugin.Program.LoadPluginModule("fakepath123");
             Assert.Fail("Should throw");
         }
         catch (Exception)

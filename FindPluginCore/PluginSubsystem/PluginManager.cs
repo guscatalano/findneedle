@@ -22,6 +22,11 @@ public class PluginManager
         return gPluginManager;
     }
 
+    public static void ResetSingleton()
+    {
+        gPluginManager = new PluginManager();
+    }
+
 
     //todo: Figure out something better
     public static readonly string FAKE_LOADER = "FakeLoadPlugin.exe";
@@ -83,8 +88,8 @@ public class PluginManager
     private readonly string loadedConfig = "";
     public PluginConfig? config;
     public List<PluginDescription> loadedPlugins = new();
-    public Dictionary<string, List<InMemoryPlugin>> pluginsLoadedByPath = new();
-    public Dictionary<string, List<InMemoryPlugin>> pluginsLoadedByType = new();
+    public Dictionary<string, List<InMemoryPluginModule>> pluginsLoadedByPath = new();
+    public Dictionary<string, List<InMemoryPluginModule>> pluginsLoadedByType = new();
     public Dictionary<string, List<InMemoryPluginObject<object>>> pluginsObjectLoadedByType = new();
 
     public void PrintToConsole()
@@ -146,7 +151,7 @@ public class PluginManager
         File.WriteAllText(configFileToSave, output);
     }
 
-    public List<InMemoryPlugin> GetAllPluginsOfAType(string interfaceType)
+    public List<InMemoryPluginModule> GetAllPluginsOfAType(string interfaceType)
     {
 
         if (pluginsLoadedByType.ContainsKey(interfaceType))
@@ -155,7 +160,7 @@ public class PluginManager
         }
         else
         {
-            return new List<InMemoryPlugin>();
+            return new List<InMemoryPluginModule>();
         }
     }
 
@@ -175,38 +180,38 @@ public class PluginManager
     {
         if (config != null)
         {
-            foreach (var entry in config.entries)
+            foreach (var pluginModuleDescriptor in config.entries)
             {
-                entry.path = Path.GetFullPath(entry.path);
-                if (!File.Exists(entry.path))
+                pluginModuleDescriptor.path = Path.GetFullPath(pluginModuleDescriptor.path);
+                if (!File.Exists(pluginModuleDescriptor.path))
                 {
-                    throw new Exception("Can't find plugin");
+                    throw new Exception("Can't find plugin module");
                 }
                 
 
-                List<PluginDescription>? pluginLoad = LoadOnePlugin(entry.path);
+                List<PluginDescription>? pluginDescriptors = LoadOnePlugin(pluginModuleDescriptor.path);
 
                 //This is a valid plugin
-                if (pluginLoad != null && loadIntoAssembly)
+                if (pluginDescriptors != null && loadIntoAssembly)
                 {
-                    InMemoryPlugin loadedPlugin = new(entry.path, pluginLoad);
-                    foreach (var pluginDescription in pluginLoad)
+                    InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, pluginDescriptors);
+                    foreach (var pluginDescription in pluginDescriptors)
                     {
-                        if (!pluginsLoadedByPath.ContainsKey(entry.path))
+                        if (!pluginsLoadedByPath.ContainsKey(pluginModuleDescriptor.path))
                         {
-                            pluginsLoadedByPath.Add(entry.path, new List<InMemoryPlugin>());
+                            pluginsLoadedByPath.Add(pluginModuleDescriptor.path, new List<InMemoryPluginModule>());
                         }
-                        pluginsLoadedByPath[entry.path].Add(loadedPlugin);
+                        pluginsLoadedByPath[pluginModuleDescriptor.path].Add(loadedPluginModule);
                         foreach (var pluginImplementationShort in pluginDescription.ImplementedInterfacesShort)
                         {
-                            InMemoryPluginObject<object> obj = loadedPlugin.GetObjectForType(pluginDescription);
+                            InMemoryPluginObject<object> obj = loadedPluginModule.GetObjectForType(pluginDescription);
                             if (!pluginsLoadedByType.ContainsKey(pluginImplementationShort))
                             {
-                                pluginsLoadedByType.Add(pluginImplementationShort, new List<InMemoryPlugin>());
+                                pluginsLoadedByType.Add(pluginImplementationShort, new List<InMemoryPluginModule>());
                                 pluginsObjectLoadedByType.Add(pluginImplementationShort, new List<InMemoryPluginObject<object>>());
                             }
 
-                            pluginsLoadedByType[pluginImplementationShort].Add(loadedPlugin);
+                            pluginsLoadedByType[pluginImplementationShort].Add(loadedPluginModule);
                             pluginsObjectLoadedByType[pluginImplementationShort].Add(obj);
 
                         }

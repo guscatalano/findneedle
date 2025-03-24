@@ -11,16 +11,16 @@ public class Program
 
     static void Main(string[] args)
     {
-        var output = LoadPlugin(args[0]);
+        var output = LoadPluginModule(args[0]);
         IPluginDescription.WriteDescriptionFile(output, args[0]);
     }
 
-    public static List<PluginDescription> LoadPlugin(string file)
+    public static List<PluginDescription> LoadPluginModule(string file)
     {
         Console.WriteLine("Attempting to load: " + file);
         var dll = Assembly.LoadFile(file);
         var types = dll.GetTypes();
-        List<PluginDescription> validTypes = new List<PluginDescription>();
+        List<PluginDescription> foundTypes = new List<PluginDescription>();
         
         foreach (var type in types)
         {
@@ -57,18 +57,23 @@ public class Program
                 {
                     Console.WriteLine("Friendly Name: " + ((IPluginDescription)Plugin).GetFriendlyName());
                     Console.WriteLine("Description: " + ((IPluginDescription)Plugin).GetTextDescription());
-                    validTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, file, implementedInterfaces, implementedInterfacesShort));
+                    foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, 
+                        file, implementedInterfaces, implementedInterfacesShort));
                 } 
                 else
                 {
                     Console.WriteLine("Failed to create instance of " + type.FullName);
+                    foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName,
+                    file, implementedInterfaces, implementedInterfacesShort, "Could not instantiate (missing binary?)"));
                 }
             } 
             else
             {
                 Console.WriteLine("Skipping " + type.FullName + " because it has no IPluginDescription");
+                foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName, 
+                    file, implementedInterfaces, implementedInterfacesShort, "No IPluginDescription"));
             }
         }
-        return validTypes;
+        return foundTypes;
     }
 }
