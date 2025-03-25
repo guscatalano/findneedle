@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Dynamic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using findneedle.PluginSubsystem;
 using FindNeedlePluginLib.Interfaces;
 
 namespace FindPluginCore.PluginSubsystem;
@@ -16,21 +18,50 @@ public class InMemoryPluginModule
     public Assembly? dll = null;
     public bool LoadedSuccessfully = false;
     public Exception? LoadException = null;
+    public string LoadExceptionString = "";
 
-    public InMemoryPluginModule(string fullpath, List<PluginDescription> description)
+   
+
+    private List<PluginDescription> LoadPluginDescriptors(string path)
+    {
+
+        var descriptorFile = path + ".json";
+        PluginManager.CallFakeLoadPlugin(PluginManager.GetSingleton().GetFakeLoadPluginPath(), path);
+        if (File.Exists(descriptorFile))
+        {
+            return IPluginDescription.ReadDescriptionFile(descriptorFile);
+        }
+        else
+        {
+            throw new Exception("Plugin loader failed to load " + path);
+        }
+    }
+
+    public InMemoryPluginModule(string fullpath, bool loadInMemory = true)
     {
         try
         {
-            dll = Assembly.LoadFile(fullpath);
-            LoadedSuccessfully = true;
+            description = LoadPluginDescriptors(fullpath);
+            if (loadInMemory)
+            {
+                dll = Assembly.LoadFile(fullpath);
+                LoadedSuccessfully = true;
+            }
+            else
+            {
+                LoadedSuccessfully = false;
+                LoadExceptionString = "Constructor called with loadInMemory=false";
+            }
         }
         catch (Exception e)
         {
             LoadedSuccessfully = false;
             LoadException = e;
+            LoadExceptionString = e.Message;
+            description = new List<PluginDescription>();
         }
-        this.description = description;
     }
+    
 
     public InMemoryPluginObject<object> GetObjectForType(PluginDescription desc)
     {

@@ -41,8 +41,6 @@ public sealed class PluginManagerTests
     {
         var TEST_PLUGIN_NAME = TestGlobals.TEST_DEP_PLUGIN;
         var TEST_PLUGIN_SEARCH_TYPE = "ISearchOutput";
-        var TEST_PLUGIN_OUTPUT_NULL = "null";
-        var TEST_PLUGIN_OUTPUT_NULL_NAME = "SampleNullOutput";
 
         PluginManager pluginManager = new PluginManager();
         pluginManager.config = new PluginConfig();
@@ -51,8 +49,6 @@ public sealed class PluginManagerTests
         pluginManager.LoadAllPlugins();
 
         //Test that we identified everything in the DLL correctly
-        Assert.IsTrue(pluginManager.pluginsLoadedByPath.Keys.First().EndsWith(TEST_PLUGIN_NAME));
-        Assert.IsTrue(pluginManager.pluginsLoadedByPath.First().Value.Count() == TestGlobals.TEST_DEP_PLUGIN_COUNT); //There are 3 plugins
         Assert.IsTrue(pluginManager.pluginsLoadedByType.Keys.Count == 4); //There are 4 types (including the descriptor and IDisposable)
 
         //Check that it actually got loaded
@@ -62,20 +58,7 @@ public sealed class PluginManagerTests
         Assert.IsTrue(pluginManager.pluginsLoadedByType[nullPluginKey].First().LoadedSuccessfully);
 
 
-        //Check that we can find it by type easily
-        var nullPlugin = pluginManager.GetAllPluginsOfAType(TEST_PLUGIN_SEARCH_TYPE).First();
-        PluginDescription? nullPluginDescription = nullPlugin.description.FirstOrDefault(x => x.ImplementedInterfacesShort.Contains(nullPluginKey));
-        Assert.IsTrue(nullPluginDescription != null);
-        var obj = nullPlugin.CreateInstance((PluginDescription)nullPluginDescription);
-        Assert.IsTrue(obj != null);
-        Assert.AreEqual(obj.GetType().Name, TEST_PLUGIN_OUTPUT_NULL_NAME);
-        Assert.AreEqual(((ISearchOutput)obj).GetOutputFileName(), TEST_PLUGIN_OUTPUT_NULL);
 
-
-        //Check taht we can instantiate it easily
-        var y = pluginManager.GetAllPluginObjectsOfAType(TEST_PLUGIN_SEARCH_TYPE).First().CreateInstance();
-        Assert.IsTrue(y != null);
-        Assert.AreEqual(TEST_PLUGIN_OUTPUT_NULL, ((ISearchOutput)y).GetOutputFileName());
         
     }
 

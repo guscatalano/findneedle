@@ -87,19 +87,13 @@ public class PluginManager
 
     private readonly string loadedConfig = "";
     public PluginConfig? config;
-    public List<PluginDescription> loadedPlugins = new();
-    public Dictionary<string, List<InMemoryPluginModule>> pluginsLoadedByPath = new();
+    public List<InMemoryPluginModule> loadedPluginsModules = new();
+
     public Dictionary<string, List<InMemoryPluginModule>> pluginsLoadedByType = new();
-    public Dictionary<string, List<InMemoryPluginObject<object>>> pluginsObjectLoadedByType = new();
 
     public void PrintToConsole()
     {
-        Console.WriteLine("Loaded ("+ pluginsLoadedByPath.Count+") plugin files.");
-        Console.WriteLine("Discovered (" + pluginsLoadedByType.Count + ") plugins.");
-        foreach (var entry in pluginsLoadedByPath)
-        {
-            Console.WriteLine(entry.Key + " ("+ entry.Value.Count + ")");
-        }
+        Console.WriteLine("Loaded ("+ loadedPluginsModules.Count+") plugin modules.");
         Console.WriteLine("FakeLoaderPath: " + config?.PathToFakeLoadPlugin);    
     }
 
@@ -151,30 +145,8 @@ public class PluginManager
         File.WriteAllText(configFileToSave, output);
     }
 
-    public List<InMemoryPluginModule> GetAllPluginsOfAType(string interfaceType)
-    {
+  
 
-        if (pluginsLoadedByType.ContainsKey(interfaceType))
-        {
-            return pluginsLoadedByType[interfaceType];
-        }
-        else
-        {
-            return new List<InMemoryPluginModule>();
-        }
-    }
-
-    public List<InMemoryPluginObject<object>> GetAllPluginObjectsOfAType(string interfaceType)
-    {
-        if (pluginsObjectLoadedByType.ContainsKey(interfaceType))
-        {
-            return pluginsObjectLoadedByType[interfaceType];
-        } 
-        else
-        {
-            return new List<InMemoryPluginObject<object>>();
-        }
-    }
 
     public void LoadAllPlugins(bool loadIntoAssembly = true)
     {
@@ -189,37 +161,13 @@ public class PluginManager
                 }
                 
 
-                List<PluginDescription>? pluginDescriptors = LoadOnePlugin(pluginModuleDescriptor.path);
-
-                //This is a valid plugin
-                if (pluginDescriptors != null && loadIntoAssembly)
-                {
-                    InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, pluginDescriptors);
-                    foreach (var pluginDescription in pluginDescriptors)
-                    {
-                        if (!pluginsLoadedByPath.ContainsKey(pluginModuleDescriptor.path))
-                        {
-                            pluginsLoadedByPath.Add(pluginModuleDescriptor.path, new List<InMemoryPluginModule>());
-                        }
-                        pluginsLoadedByPath[pluginModuleDescriptor.path].Add(loadedPluginModule);
-                        foreach (var pluginImplementationShort in pluginDescription.ImplementedInterfacesShort)
-                        {
-                            InMemoryPluginObject<object> obj = loadedPluginModule.GetObjectForType(pluginDescription);
-                            if (!pluginsLoadedByType.ContainsKey(pluginImplementationShort))
-                            {
-                                pluginsLoadedByType.Add(pluginImplementationShort, new List<InMemoryPluginModule>());
-                                pluginsObjectLoadedByType.Add(pluginImplementationShort, new List<InMemoryPluginObject<object>>());
-                            }
-
-                            pluginsLoadedByType[pluginImplementationShort].Add(loadedPluginModule);
-                            pluginsObjectLoadedByType[pluginImplementationShort].Add(obj);
-
-                        }
-                    }
-                }
+                InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, loadIntoAssembly);
+                loadedPluginsModules.Add(loadedPluginModule);
             }
         }
     }
+
+
 
     public string GetFakeLoadPluginPath()
     {
@@ -236,22 +184,6 @@ public class PluginManager
     }
 
 
-    public List<PluginDescription>? LoadOnePlugin(string path)
-    {
-
-        var descriptorFile = path + ".json";
-        CallFakeLoadPlugin(GetFakeLoadPluginPath(), path);
-        if (File.Exists(descriptorFile))
-        {
-            return IPluginDescription.ReadDescriptionFile(descriptorFile);
-        }
-        else
-        {
-            Console.WriteLine("Plugin loader failed to load " + path);
-        }
-
-        return null;
-
-    }
+   
 
 }
