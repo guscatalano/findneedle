@@ -26,23 +26,16 @@ public class SearchQueryCmdLine
     {
         var manager = PluginManager.GetSingleton();
         manager.LoadAllPlugins(true);
-        var list = manager.GetAllPluginObjectsOfAType("ICommandLineParser");
+        var list = manager.GetAllPluginsInstancesOfAType<ICommandLineParser>();
         Dictionary<CommandLineRegistration, ICommandLineParser> parsers = [];
-        foreach (var plugin in list)
+        foreach (var pluginInstance in list)
         {
-            var p = plugin.CreateInstance();
-            if(p == null)
+            if (pluginInstance == null)
             {
-                throw new Exception("Failed to create instance of plugin");
+                throw new Exception("We got a null instance?");
             }
-            var parser = (ICommandLineParser)p;
-           
-            if (parser == null)
-            {
-                throw new Exception("Failed to cast instance of plugin");
-            }
-            var reg = parser.RegisterCommandHandler();
-            parsers.Add(reg, (ICommandLineParser)parser);
+            var reg = pluginInstance.RegisterCommandHandler();
+            parsers.Add(reg, pluginInstance);
             //Should end up with something like filter_keyword
         }
         return parsers;
@@ -55,17 +48,17 @@ public class SearchQueryCmdLine
         Console.WriteLine("Locations:");
         foreach (var loc in q.locations)
         {
-            Console.WriteLine(loc.GetDescription());
+            Console.WriteLine("\t" + loc.GetDescription());
         }
         Console.WriteLine("Filters:");
         foreach (var filter in q.filters)
         {
-            Console.WriteLine(filter.GetDescription());
+            Console.WriteLine("\t" + filter.GetDescription());
         }
         Console.WriteLine("Processors:");
         foreach (var processor in q.processors)
         {
-            Console.WriteLine(processor.GetDescription());
+            Console.WriteLine("\t" + processor.GetDescription());
         }
         Console.WriteLine("Depth: " + q.Depth);
         Console.WriteLine("End of search query");

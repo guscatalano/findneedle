@@ -89,12 +89,10 @@ public class PluginManager
     public PluginConfig? config;
     public List<InMemoryPluginModule> loadedPluginsModules = new();
 
-    public Dictionary<string, List<InMemoryPluginModule>> pluginsLoadedByType = new();
 
     public void PrintToConsole()
     {
         Console.WriteLine("Loaded ("+ loadedPluginsModules.Count+") plugin modules.");
-        Console.WriteLine("FakeLoaderPath: " + config?.PathToFakeLoadPlugin);    
     }
 
 
@@ -146,6 +144,32 @@ public class PluginManager
     }
 
   
+
+    public List<T> GetAllPluginsInstancesOfAType<T>()
+    {
+        List<T> ret = new();
+        foreach (var pluginModule in loadedPluginsModules)
+        {
+            foreach (var plugin in pluginModule.description)
+            {
+                //Skip it if it doesnt implement the interface we need
+                if(plugin.ImplementedInterfaces.FirstOrDefault(x => x.Equals(typeof(T).FullName)) == null)
+                {
+                    continue;
+                }
+                var inMemoryPluginObject = pluginModule.GetObjectForType<T>(plugin);
+                if (inMemoryPluginObject is InMemoryPluginObject<T> instance && instance != null)
+                {
+                    var createdInstance = instance.CreateInstance();
+                    if (createdInstance != null)
+                    {
+                        ret.Add(createdInstance);
+                    }
+                }
+            }
+        }
+        return ret;
+    }
 
 
     public void LoadAllPlugins(bool loadIntoAssembly = true)
