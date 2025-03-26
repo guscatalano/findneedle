@@ -12,6 +12,7 @@
 		  <Platforms>x86;x64</Platforms>
 		  <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
 		  <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
+       <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
 
@@ -28,7 +29,7 @@
 	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FindNeedlePluginLib.dll" Link="TestDependencies\FindNeedlePluginLib.dll">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
-	  <Content Include="..\TestProcessorPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\TestProcessorPlugin.dll" Link="TestDependencies\TestProcessorPlugin.dll">
+	  <Content Include="..\TestProcessorPlugin\bin\$(Configuration)\$(TargetFramework)\TestProcessorPlugin.dll" Link="TestDependencies\TestProcessorPlugin.dll">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
   </ItemGroup>
