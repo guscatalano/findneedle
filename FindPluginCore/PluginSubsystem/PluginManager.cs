@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
+using FindPluginCore.GlobalConfiguration;
 using FindPluginCore.PluginSubsystem;
 
 namespace findneedle.PluginSubsystem;
@@ -38,8 +39,9 @@ public class PluginManager
         ProcessStartInfo ps = new()
         {
             FileName = loaderPath,
-            Arguments = plugin
-
+            Arguments = plugin,
+            RedirectStandardError = !GlobalSettings.Debug, //Opposite because we want it to redirect if debug is on
+            RedirectStandardOutput = !GlobalSettings.Debug
         };
         var p = Process.Start(ps);
 

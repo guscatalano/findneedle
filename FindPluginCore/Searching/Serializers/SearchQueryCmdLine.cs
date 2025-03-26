@@ -10,6 +10,7 @@ using findneedle.PluginSubsystem;
 using FindNeedlePluginLib.Interfaces;
 using findneedle.Interfaces;
 using FindPluginCore.PluginSubsystem;
+using FindPluginCore.GlobalConfiguration;
 
 namespace FindPluginCore.Searching;
 
@@ -116,6 +117,17 @@ public class SearchQueryCmdLine
                     throw new Exception("Failed to parse depth");
                 }
                 q.SetDepth(depth);
+            }
+
+            if (argument.key.StartsWith("debug", StringComparison.OrdinalIgnoreCase))
+            {
+                var debug = false;
+                var ret = Boolean.TryParse(argument.value, out debug);
+                if (!ret)
+                {
+                    throw new Exception("Failed to parse depth");
+                }
+                GlobalSettings.Debug = debug;
             }
         }
 

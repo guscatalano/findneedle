@@ -19,6 +19,8 @@ public class SearchQuery : ISearchQuery
     }
     private SearchLocationDepth _depth;
 
+  
+
     public SearchLocationDepth Depth
     {
         get => _depth;
