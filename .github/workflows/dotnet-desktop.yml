@@ -117,7 +117,6 @@ jobs:
     - name: Execute unit tests and collect coverage
       id: testrun
       run: dotnet test --configuration $env:Configuration --logger trx --collect:"XPlat Code Coverage"
-           echo "Test execution completed with exit code $?"
       continue-on-error: true
       env:
         Configuration: ${{ matrix.configuration }}
