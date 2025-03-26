@@ -89,7 +89,7 @@ jobs:
         configuration: [Debug]
     runs-on: windows-latest
     outputs:
-      testresult: ${{ steps.set-output.outputs.my_variable }}
+      testresult: ${{ steps.set-output.outputs.testresult }}
 
     steps:
     - name: Checkout
@@ -117,6 +117,7 @@ jobs:
     - name: Execute unit tests and collect coverage
       id: testrun
       run: dotnet test --configuration $env:Configuration --logger trx --collect:"XPlat Code Coverage"
+           echo "Test execution completed with exit code $?"
       continue-on-error: true
       env:
         Configuration: ${{ matrix.configuration }}
