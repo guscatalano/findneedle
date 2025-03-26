@@ -123,7 +123,7 @@ jobs:
     
     - name: Set success or failure into testresult
       id: set-output
-      run: echo "testresult=${{steps.testrun.outcome}}" >> $GITHUB_OUTPUT
+      run: echo "testresult=${{ steps.testrun.outcome }}" >> $GITHUB_OUTPUT
 
     - name: Combine Coverage Reports # This is because one report is produced per project, and we want one result for all of them.
       uses: danielpalme/ReportGenerator-GitHub-Action@5.2.4
