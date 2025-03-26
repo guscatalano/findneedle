@@ -16,19 +16,19 @@
 
 
   <ItemGroup>
-      <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\FakeLoadPlugin.runtimeconfig.json" Link="TestDependencies\FakeLoadPlugin.runtimeconfig.json">
+      <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FakeLoadPlugin.runtimeconfig.json" Link="TestDependencies\FakeLoadPlugin.runtimeconfig.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
-	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\FakeLoadPlugin.dll" Link="TestDependencies\FakeLoadPlugin.dll">
+	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FakeLoadPlugin.dll" Link="TestDependencies\FakeLoadPlugin.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>
-	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\FakeLoadPlugin.exe" Link="TestDependencies\FakeLoadPlugin.exe">
+	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FakeLoadPlugin.exe" Link="TestDependencies\FakeLoadPlugin.exe">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
-	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\FindNeedlePluginLib.dll" Link="TestDependencies\FindNeedlePluginLib.dll">
+	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FindNeedlePluginLib.dll" Link="TestDependencies\FindNeedlePluginLib.dll">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
-	  <Content Include="..\TestProcessorPlugin\bin\$(Configuration)\$(TargetFramework)\TestProcessorPlugin.dll" Link="TestDependencies\TestProcessorPlugin.dll">
+	  <Content Include="..\TestProcessorPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\TestProcessorPlugin.dll" Link="TestDependencies\TestProcessorPlugin.dll">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
   </ItemGroup>
