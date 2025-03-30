@@ -60,16 +60,16 @@ public class OutputToPlainFile : ISearchOutput
         return filename;
     }
 
-    public string GetTextDescription()
+    public string GetPluginTextDescription()
     {
         return "Outputs the result to a text file without any formatting";
     }
 
-    public string GetFriendlyName()
+    public string GetPluginFriendlyName()
     {
         return "Output to plain file";
     }
-    public string GetClassName()
+    public string GetPluginClassName()
     {
         var me = GetType();
         if (me.FullName == null)

@@ -40,15 +40,15 @@ public class TimeRangeFilter : ISearchFilter, IPluginDescription
         return "Start: " + start.ToString() + " and End: " + end.ToString();
     }
 
-    public string GetTextDescription()
+    public string GetPluginTextDescription()
     {
         return "Filters the search results by a time range";
     }
-    public string GetFriendlyName()
+    public string GetPluginFriendlyName()
     {
         return "Time Range Filter";
     }
-    public string GetClassName()
+    public string GetPluginClassName()
     {
         return GetType().FullName ?? string.Empty;
     }

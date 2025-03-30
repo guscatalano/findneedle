@@ -22,10 +22,10 @@ public struct PluginDescription
 
 public interface IPluginDescription
 {
-    public string GetTextDescription();
-    public string GetFriendlyName();
+    public string GetPluginTextDescription();
+    public string GetPluginFriendlyName();
 
-    public string GetClassName();
+    public string GetPluginClassName();
 
 
     public static PluginDescription GetInvalidPluginDescription(string className, string sourceFile,
@@ -50,9 +50,9 @@ public interface IPluginDescription
     {
         PluginDescription description = new PluginDescription()
         {
-            TextDescription = pluginInstance.GetTextDescription(),
-            FriendlyName = pluginInstance.GetFriendlyName(),
-            ClassName = pluginInstance.GetClassName(),
+            TextDescription = pluginInstance.GetPluginTextDescription(),
+            FriendlyName = pluginInstance.GetPluginFriendlyName(),
+            ClassName = pluginInstance.GetPluginClassName(),
             SourceFile = sourceFile,
             ImplementedInterfaces = implementedInterfaces,
             ImplementedInterfacesShort = implementedInterfacesShort,

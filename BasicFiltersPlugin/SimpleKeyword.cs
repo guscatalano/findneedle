@@ -61,14 +61,14 @@ public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser, IPluginDes
         term = parameter;
     }
 
-    public string GetTextDescription()
+    public string GetPluginTextDescription()
     {
         return "Filters the search results by a simple keyword";
     }
-    public string GetFriendlyName() {
+    public string GetPluginFriendlyName() {
         return "Keyword Filter";
     }
-    public string GetClassName()
+    public string GetPluginClassName()
     {
         return GetType().FullName ?? string.Empty;
     }

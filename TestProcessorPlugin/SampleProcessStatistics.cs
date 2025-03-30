@@ -10,7 +10,7 @@ public class SampleProcessStatistics : IResultProcessor, IPluginDescription
 
     int countResults = 0;
 
-    public string GetClassName()
+    public string GetPluginClassName()
     {
         Type me = this.GetType();
         if (me.FullName == null)
@@ -23,7 +23,7 @@ public class SampleProcessStatistics : IResultProcessor, IPluginDescription
         }
     }
 
-    public string GetFriendlyName() {
+    public string GetPluginFriendlyName() {
         return "SampleProcessStatistics"; 
     }
 
@@ -44,7 +44,7 @@ public class SampleProcessStatistics : IResultProcessor, IPluginDescription
     {
         countResults = results.Count;
     }
-    public string GetTextDescription()
+    public string GetPluginTextDescription()
     {
         return "";
     }

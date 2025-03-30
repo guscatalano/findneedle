@@ -16,4 +16,5 @@ public class PluginConfigEntry
 {
     public string name = "";
     public string path = "";
+    public bool enabled = true;
 }

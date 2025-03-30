@@ -17,6 +17,18 @@ public class SearchQuery : ISearchQuery
     {
         filters.Add(filter);
     }
+
+    private List<ISearchOutput> _output;
+    public List<ISearchOutput> outputs
+    {
+        get
+        {
+            _output ??= new List<ISearchOutput>();
+            return _output;
+        }
+        set => _output = value;
+    }
+
     private SearchLocationDepth _depth;
 
   
@@ -102,12 +114,13 @@ public class SearchQuery : ISearchQuery
     public SearchQuery()
     {
         PluginManager.GetSingleton().DiscoverPlugins();
-        stats = new SearchStatistics(this);
-        _progressSink = new SearchProgressSink();
+        stats = new(this);
+        _progressSink = new();
         _stats = stats;
-        _filters = new List<ISearchFilter>();
-        _locations = new List<ISearchLocation>();
-        _processors = new List<IResultProcessor>();
+        _filters = [];
+        _locations = [];
+        _processors = [];
+        _output = [];
     }
 
 
@@ -163,6 +176,28 @@ public class SearchQuery : ISearchQuery
     public void GetSearchStatsOutput()
     {
         stats.ReportToConsole();
+    }
+
+    public void ProcessAllResultsToOutput()
+    {
+        //Remember to provide one that does it one y one at some point 
+        foreach(var output in outputs)
+        {
+            output.WriteAllOutput(GetFilteredResults());
+        }
+    }
+
+    public void PrintOutputFilesToConsole()
+    {
+        foreach (var output in outputs)
+        {
+            Console.WriteLine(output.GetPluginFriendlyName() + ": " + output.GetOutputFileName());
+        }
+    }
+
+    public void AddOutput(ISearchOutput output)
+    {
+        outputs.Add(output);
     }
 
     public SearchProgressSink GetSearchProgressSink() { return progressSink; }

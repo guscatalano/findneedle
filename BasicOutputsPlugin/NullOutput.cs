@@ -14,7 +14,7 @@ public class NullOutput : ISearchOutput
     {
         //do nothing
     }
-    public string GetClassName()
+    public string GetPluginClassName()
     {
         var me = GetType();
         if (me.FullName == null)
@@ -26,7 +26,7 @@ public class NullOutput : ISearchOutput
             return me.FullName;
         }
     }
-    public string GetFriendlyName() {
+    public string GetPluginFriendlyName() {
         return "Null Output";
     }
 
@@ -35,7 +35,7 @@ public class NullOutput : ISearchOutput
         return "(the void)";
     }
 
-    public string GetTextDescription() {
+    public string GetPluginTextDescription() {
         return "This plugin just outputs nowhere";
     }
 

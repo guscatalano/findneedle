@@ -7,7 +7,7 @@ namespace TestProcessorPlugin;
 public class SampleNullOutput : ISearchOutput, IPluginDescription
 {
 
-    public string GetClassName()
+    public string GetPluginClassName()
     {
         Type me = this.GetType();
         if (me.FullName == null)
@@ -20,11 +20,11 @@ public class SampleNullOutput : ISearchOutput, IPluginDescription
         }
     }
 
-    public string GetFriendlyName() {
+    public string GetPluginFriendlyName() {
         return "SampleFileOutput"; 
     }
 
-    public string GetTextDescription() {
+    public string GetPluginTextDescription() {
         return "This is a sample plugin that just counts how many results there are";
     }
 

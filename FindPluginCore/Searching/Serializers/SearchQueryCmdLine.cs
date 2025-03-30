@@ -61,6 +61,11 @@ public class SearchQueryCmdLine
         {
             Console.WriteLine("\t" + processor.GetDescription());
         }
+        Console.WriteLine("Outputs:");
+        foreach (var output in q.outputs)
+        {
+            Console.WriteLine("\t" + output.GetPluginTextDescription());
+        }
         Console.WriteLine("Depth: " + q.Depth);
         Console.WriteLine("End of search query");
     }

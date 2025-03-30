@@ -139,15 +139,15 @@ public class TimeAgoFilter : ISearchFilter, ICommandLineParser, IPluginDescripti
         ParseFromString(parameter);   
     }
 
-    public string GetTextDescription()
+    public string GetPluginTextDescription()
     {
         return "Filters the search results by a time range from now to the past";
     }
-    public string GetFriendlyName()
+    public string GetPluginFriendlyName()
     {
         return "Time Ago Filter";
     }
-    public string GetClassName()
+    public string GetPluginClassName()
     {
         return GetType().FullName ?? string.Empty;
     }

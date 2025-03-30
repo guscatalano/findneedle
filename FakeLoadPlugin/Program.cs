@@ -55,8 +55,8 @@ public class Program
                 var Plugin = dll.CreateInstance(type.FullName);
                 if (Plugin != null)
                 {
-                    Console.WriteLine("Friendly Name: " + ((IPluginDescription)Plugin).GetFriendlyName());
-                    Console.WriteLine("Description: " + ((IPluginDescription)Plugin).GetTextDescription());
+                    Console.WriteLine("Friendly Name: " + ((IPluginDescription)Plugin).GetPluginFriendlyName());
+                    Console.WriteLine("Description: " + ((IPluginDescription)Plugin).GetPluginTextDescription());
                     foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, 
                         file, implementedInterfaces, implementedInterfacesShort));
                 } 

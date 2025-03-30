@@ -25,11 +25,11 @@ if (!cancel || input != null) //input will be null when its control+c
     Console.WriteLine("Searching...");
     x.LoadAllLocationsInMemory();
     //var y = x.GetFilteredResults();
-    //OutputToPlainFile output = new OutputToPlainFile();
-    //NullOutput output2 = new NullOutput(); ;
-    //output.WriteAllOutput(y);
-    //Console.WriteLine("Done output written to: " + output2.GetOutputFileName());
+
     x.GetSearchStatsOutput();
+
+    x.ProcessAllResultsToOutput();
+    x.PrintOutputFilesToConsole();
 
     //IResultProcessor p = new WatsonCrashProcessor();
     //p.ProcessResults(y);
