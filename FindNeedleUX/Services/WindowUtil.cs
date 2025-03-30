@@ -16,11 +16,11 @@ namespace FindNeedleUX;
 public class WindowUtil
 {
 
-    static public Window GetMainWindow()
+    public static Window GetMainWindow()
     {
         return _activeWindows.First(); //should be first window to ever register :)
     }
-    static public Window CreateWindow()
+    public static Window CreateWindow()
     {
         Window newWindow = new Window
         {
@@ -30,7 +30,7 @@ public class WindowUtil
         return newWindow;
     }
 
-    static public void TrackWindow(Window window)
+    public static void TrackWindow(Window window)
     {
         window.Closed += (sender, args) =>
         {
@@ -39,16 +39,16 @@ public class WindowUtil
         _activeWindows.Add(window);
     }
 
-    static public AppWindow GetAppWindow(Window window)
+    public static AppWindow GetAppWindow(Window window)
     {
-        IntPtr hWnd = WindowNative.GetWindowHandle(window);
+        var hWnd = WindowNative.GetWindowHandle(window);
         WindowId wndId = Win32Interop.GetWindowIdFromWindow(hWnd);
         return AppWindow.GetFromWindowId(wndId);
     }
 
 
 
-    static public Window GetWindowForElement(UIElement element)
+    public static Window GetWindowForElement(UIElement element)
     {
         if (element.XamlRoot != null)
         {
@@ -63,7 +63,7 @@ public class WindowUtil
         return null;
     }
     // get dpi for an element
-    static public double GetRasterizationScaleForElement(UIElement element)
+    public static double GetRasterizationScaleForElement(UIElement element)
     {
         if (element.XamlRoot != null)
         {
@@ -78,15 +78,9 @@ public class WindowUtil
         return 0.0;
     }
 
-    static public List<Window> ActiveWindows
-    {
-        get
-        {
-            return _activeWindows;
-        }
-    }
+    public static List<Window> ActiveWindows => _activeWindows;
 
-    static private List<Window> _activeWindows = new List<Window>();
+    private static readonly List<Window> _activeWindows = new();
 
 
 }

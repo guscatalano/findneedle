@@ -7,7 +7,7 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-
+	  <NuGetAudit>false</NuGetAudit>
 		  <Platforms>x86;x64</Platforms>
 		  <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
   </PropertyGroup>

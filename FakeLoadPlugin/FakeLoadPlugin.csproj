@@ -10,6 +10,7 @@
 	  <PlatformTarget>AnyCPU</PlatformTarget>
 	  <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
 	  <Platforms>AnyCPU;x64</Platforms>
+	  <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <ItemGroup>

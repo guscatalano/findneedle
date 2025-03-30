@@ -6,32 +6,31 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations.Discovery;
 
-namespace EventLogPluginTests
+namespace EventLogPluginTests;
+
+[TestClass]
+public class EventLogDiscoveryTests
 {
-    [TestClass]
-    public class EventLogDiscoveryTests
+
+    [TestMethod]
+    public void TestListing()
     {
+        var ret = EventLogDiscovery.GetAllEventLogs();
 
-        [TestMethod]
-        public void TestListing()
-        {
-            var ret = EventLogDiscovery.GetAllEventLogs();
+        Assert.IsTrue(ret.Count > 0);
+        Assert.IsTrue(ret.Contains("Application"));
+        Assert.IsTrue(ret.Contains("Security"));
+        Assert.IsTrue(ret.Contains("System"));
+    }
 
-            Assert.IsTrue(ret.Count > 0);
-            Assert.IsTrue(ret.Contains("Application"));
-            Assert.IsTrue(ret.Contains("Security"));
-            Assert.IsTrue(ret.Contains("System"));
-        }
-
-        [TestMethod]
-        public void TestListingSorted()
-        {
-            var ret = EventLogDiscovery.GetAllEventLogs();
-            Assert.IsTrue(ret.Count > 2);
-            var sorted = new List<string>(ret);
-            sorted.Sort(); 
-            //They should be the same :)
-            CollectionAssert.AreEqual(ret.ToList(), sorted.ToList());
-        }
+    [TestMethod]
+    public void TestListingSorted()
+    {
+        var ret = EventLogDiscovery.GetAllEventLogs();
+        Assert.IsTrue(ret.Count > 2);
+        var sorted = new List<string>(ret);
+        sorted.Sort(); 
+        //They should be the same :)
+        CollectionAssert.AreEqual(ret.ToList(), sorted.ToList());
     }
 }

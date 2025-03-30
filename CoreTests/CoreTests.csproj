@@ -13,6 +13,7 @@
 		  <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
 		  <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+	  <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
 

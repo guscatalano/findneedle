@@ -35,9 +35,9 @@ public sealed partial class MainWindow : Window
             var selectedItem = (Microsoft.UI.Xaml.Controls.NavigationViewItem)args.SelectedItem;
             if (selectedItem != null)
             {
-                string selectedItemTag = ((string)selectedItem.Tag);
+                var selectedItemTag = ((string)selectedItem.Tag);
                 sender.Header = selectedItemTag;
-                string pageName = "FindNeedleUX.Pages." + selectedItemTag;
+                var pageName = "FindNeedleUX.Pages." + selectedItemTag;
                 Type pageType = Type.GetType(pageName);
                 contentFrame.Navigate(pageType);
             }

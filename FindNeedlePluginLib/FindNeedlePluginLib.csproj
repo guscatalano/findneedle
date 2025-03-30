@@ -5,6 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
+	  <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -9,7 +9,7 @@
     <SelfContained>true</SelfContained>
 	  <PlatformTarget>AnyCPU</PlatformTarget>
 	  <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
-
+  <NuGetAudit>false</NuGetAudit>
 
   </PropertyGroup>
 	<PropertyGroup Condition="$(TargetFramework.Contains('-windows')) and '$(Configuration)' == 'Debug' and $(PlatformTarget)=='x64'">

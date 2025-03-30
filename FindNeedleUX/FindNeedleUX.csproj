@@ -22,7 +22,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
      <SelfContained>true</SelfContained>
-   
+	  <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <PropertyGroup>
