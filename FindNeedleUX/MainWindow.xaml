@@ -15,9 +15,23 @@
                 <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
                 <MenuFlyoutItem Text="Save" Click="MenuFlyoutItem_Click" Name="SaveWorkspace"/>
             </MenuBarItem>
+            <MenuBarItem Title="SearchQuery">
+                <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="Locations"/>
+                <MenuFlyoutItem Text="Filters" Click="MenuFlyoutItem_Click" Name="Filters"/>
+                <MenuFlyoutItem Text="Processors" Click="MenuFlyoutItem_Click" Name="Processors"/>
+                <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="Plugins"/>
+            </MenuBarItem>
+            <MenuBarItem Title="View Results">
+                <MenuFlyoutItem Text="Get" Click="MenuFlyoutItem_Click" Name="GetResults"/>
+                <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="ResultStatistics"/>
+                <MenuFlyoutItem Text="View Native" Click="MenuFlyoutItem_Click" Name="ViewNative"/>
+                <MenuFlyoutItem Text="View Web" Click="MenuFlyoutItem_Click" Name="ViewWeb"/>
+            </MenuBarItem>
+            <MenuBarItem Title="Settings">
+                <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="SystemCheck"/>
+            </MenuBarItem>
 
-       
-    </MenuBar>
+        </MenuBar>
     <NavigationView x:Name="nvSample"  SelectionChanged="NavigationView_SelectionChanged">
         <NavigationView.MenuItems>
             <NavigationViewItem Icon="Folder" Content="Locations" Tag="SearchLocationsPage" />
