@@ -105,7 +105,6 @@ public class TimeAgoFilter : ISearchFilter, ICommandLineParser, IPluginDescripti
         filterbegin = start - ts;
     }
 
-    public string SearchFilterType => throw new NotImplementedException();
 
     public bool Filter(ISearchResult entry)
     {

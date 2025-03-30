@@ -3,14 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 
-public class TimeRangeFilter : ISearchFilter, IPluginDescription
+public class TimeRangeFilter : ISearchFilter, IPluginDescription, ICommandLineParser
 {
-    private readonly DateTime start;
-    private readonly DateTime end;
+    public DateTime start;
+    public DateTime end;
 
     public TimeRangeFilter()
     {
@@ -18,17 +19,14 @@ public class TimeRangeFilter : ISearchFilter, IPluginDescription
         this.end = DateTime.Now;
     }
 
-    public TimeRangeFilter(DateTime start, DateTime end)
-    {
-        this.start = start;
-        this.end = end;
-    }
-
-    public string SearchFilterType => throw new NotImplementedException();
 
     public bool Filter(ISearchResult entry)
     {
-        return true;
+        if (start < entry.GetLogTime() && end > entry.GetLogTime())
+        {
+            return true;
+        }
+        return false;
     }
 
     public string GetDescription()
@@ -53,15 +51,20 @@ public class TimeRangeFilter : ISearchFilter, IPluginDescription
         return GetType().FullName ?? string.Empty;
     }
 
-    /* For commandline parser
-     * 
-     * if (pair.Value.StartsWith("time"))
-            {
-                var par = pair.Value.Substring(4);
-                List<string> x = TextManipulation.SplitApart(par);
-                DateTime start = DateTime.Parse(x[0]);
-                DateTime end = DateTime.Parse(x[1]);
-                //filters.Add(new TimeRangeFilter(start, end));
-            }*/
-
+    public CommandLineRegistration RegisterCommandHandler()
+    {
+        return new CommandLineRegistration()
+        {
+            handlerType = CommandLineHandlerType.Filter,
+            key = "time"
+        };
+    }
+    public void ParseCommandParameterIntoQuery(string parameter)
+    {
+        var splitted = TextManipulation.SplitApart(parameter);
+        var firstdate = splitted[0];
+        var seconddate = splitted[1];
+        start = DateTime.Parse(firstdate);
+        end = DateTime.Parse(seconddate);
+    }
 }

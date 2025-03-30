@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using findneedle.Implementations;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib.TestClasses;
 using Windows.ApplicationModel.Search;
 
 namespace BasicFiltersTests;
@@ -14,11 +15,7 @@ namespace BasicFiltersTests;
 [TestClass]
 public sealed class KeywordTests
 {
-    [TestMethod]
-    public void SimpleKeywordTest()
-    {
-       // Assert.Fail(); //fail on purpose
-    }
+
 
     [TestMethod]
     public void KeywordCommandLineTest()
@@ -38,5 +35,20 @@ public sealed class KeywordTests
         }
         Assert.IsTrue(filter.term.Equals(TEST_STRING));
        
+    }
+
+    [TestMethod]
+    public void KeywordFilterTest()
+    {
+        const string TEST_STRING = "F1ndme";
+        SimpleKeywordFilter filter = new();
+        filter.ParseCommandParameterIntoQuery(TEST_STRING);
+        FakeSearchResult passOne = new();
+        passOne.searchableDataString = "fdfsfs" + TEST_STRING + "fdsu8945u32";
+        Assert.IsTrue(filter.Filter(passOne));
+
+        FakeSearchResult failOne = new();
+        passOne.searchableDataString = "ffdsfsfsf32432";
+        Assert.IsFalse(filter.Filter(failOne));
     }
 }

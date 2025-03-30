@@ -31,7 +31,10 @@ public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser, IPluginDes
 
     public bool Filter(ISearchResult entry)
     {
-        if (entry.GetSearchableData().ToLower().Contains(term))
+        //Filter is not case sensitive at this time
+        var tempTerm = term.ToLower();
+        var hay = entry.GetSearchableData().ToLower();
+        if (hay.Contains(tempTerm))
         {
             return true;
         }
