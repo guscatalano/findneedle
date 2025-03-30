@@ -148,6 +148,6 @@ public class TimeAgoFilter : ISearchFilter, ICommandLineParser, IPluginDescripti
     }
     public string GetPluginClassName()
     {
-        return GetType().FullName ?? string.Empty;
+        return IPluginDescription.GetPluginClassNameBase(this);
     }
 }

@@ -27,6 +27,19 @@ public interface IPluginDescription
 
     public string GetPluginClassName();
 
+    public static string GetPluginClassNameBase(object thisplugin)
+    {
+        Type me = thisplugin.GetType();
+        if (me.FullName == null)
+        {
+            throw new Exception("Fullname was null???");
+        }
+        else
+        {
+            return me.FullName;
+        }
+    }
+
 
     public static PluginDescription GetInvalidPluginDescription(string className, string sourceFile,
                                                             List<string> implementedInterfaces, List<string> implementedInterfacesShort, string error)

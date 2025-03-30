@@ -9,15 +9,7 @@ public class SampleNullOutput : ISearchOutput, IPluginDescription
 
     public string GetPluginClassName()
     {
-        Type me = this.GetType();
-        if (me.FullName == null)
-        {
-            throw new Exception("Fullname was null???");
-        }
-        else
-        {
-            return me.FullName;
-        }
+        return IPluginDescription.GetPluginClassNameBase(this);
     }
 
     public string GetPluginFriendlyName() {

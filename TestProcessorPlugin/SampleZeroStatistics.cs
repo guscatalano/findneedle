@@ -46,6 +46,6 @@ public class SampleZeroStatistics : IResultProcessor, IPluginDescription
     }
 
     public string GetPluginTextDescription() {
-        return "";
+        return IPluginDescription.GetPluginClassNameBase(this);
     }
 }

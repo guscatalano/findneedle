@@ -34,6 +34,7 @@ public class CommandLineRegistration
 
     public CommandLineHandlerType handlerType;
     public string key = "";
+
     public string GetCmdLineKey()
     {
         return HandlerTypeToString(handlerType) + "_" + key;

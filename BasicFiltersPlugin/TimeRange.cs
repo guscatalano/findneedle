@@ -48,7 +48,7 @@ public class TimeRangeFilter : ISearchFilter, IPluginDescription, ICommandLinePa
     }
     public string GetPluginClassName()
     {
-        return GetType().FullName ?? string.Empty;
+        return IPluginDescription.GetPluginClassNameBase(this);
     }
 
     public CommandLineRegistration RegisterCommandHandler()

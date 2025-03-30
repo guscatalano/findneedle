@@ -73,6 +73,6 @@ public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser, IPluginDes
     }
     public string GetPluginClassName()
     {
-        return GetType().FullName ?? string.Empty;
+        return IPluginDescription.GetPluginClassNameBase(this);
     }
 }

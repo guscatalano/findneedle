@@ -1,4 +1,5 @@
 ﻿using findneedle.Interfaces;
+using FindNeedlePluginLib.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -71,15 +72,7 @@ public class OutputToPlainFile : ISearchOutput
     }
     public string GetPluginClassName()
     {
-        var me = GetType();
-        if (me.FullName == null)
-        {
-            throw new Exception("Fullname was null???");
-        }
-        else
-        {
-            return me.FullName;
-        }
+        return IPluginDescription.GetPluginClassNameBase(this);
     }
 
     public void Dispose()
