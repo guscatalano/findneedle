@@ -85,7 +85,7 @@ public class TestGlobals
         }
 
         basePath = PickRightParent(path, "TestProcessorPlugin");
-        childPath = PickRightChild(basePath, "TestProcessorPlugin.exe");
+        childPath = PickRightChild(basePath, "TestProcessorPlugin.dll");
         sourcePath = Path.Combine(basePath, childPath);
         if (!Directory.Exists(sourcePath))
         {
