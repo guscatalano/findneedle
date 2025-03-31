@@ -14,11 +14,12 @@ public class TestGlobals
     public const string TEST_DEP_FOLDER = "TestDependencies";
     public const string TEST_DEP_PLUGIN = "TestProcessorPlugin.dll";
     public const string FAKE_LOAD_PLUGIN = "FakeLoadPlugin.exe";
-    public const string TEST_DEP_PLUGIN_REL_PATH = TEST_DEP_FOLDER + "\\" + TEST_DEP_PLUGIN;
-    public const string FAKE_LOAD_PLUGIN_REL_PATH = TEST_DEP_FOLDER + "\\" + FAKE_LOAD_PLUGIN;
+    public static string FAKE_LOAD_PLUGIN_PATH = "";
+    public static string TEST_DEP_PLUGIN_REL_PATH = TEST_DEP_PLUGIN;
+    public static string FAKE_LOAD_PLUGIN_REL_PATH = FAKE_LOAD_PLUGIN;
 
     public const int TEST_DEP_PLUGIN_COUNT = 3;
-
+    
     public static string PickRightParent(string basepath, string searchpath)
     {
         int maxTries = 10;
@@ -50,8 +51,9 @@ public class TestGlobals
 
 
     [AssemblyInitialize]
-    public static void CopyDependencies(TestContext testContext)
+    public static void FigureOutDependencies (TestContext testContext)
     {
+
         var path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         if(path == null)
         {
@@ -71,19 +73,10 @@ public class TestGlobals
         {
             throw new Exception("Can't find " + sourcePath + ". I am running in " + path + " my basepath was: " + basePath);
         }
+        TestGlobals.FAKE_LOAD_PLUGIN_REL_PATH = Path.Combine(sourcePath, FAKE_LOAD_PLUGIN);
+        TestGlobals.FAKE_LOAD_PLUGIN_PATH = sourcePath;
 
-        foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
-        {
-            var file = Path.GetFileName(fileToCopy);
-            var fileDest = Path.Combine(dest, file);
-            var fileToCopyNormal = Path.GetFullPath(fileToCopy);
-            if (!File.Exists(fileToCopyNormal))
-            {
-                throw new Exception("failed copy setup :(" + fileToCopyNormal);
-            }
-            CopyWithRetries(fileToCopy, fileDest);
-        }
-
+        
         basePath = PickRightParent(path, "TestProcessorPlugin");
         childPath = PickRightChild(Path.Combine(basePath, "TestProcessorPlugin"), "TestProcessorPlugin.dll");
         sourcePath = Path.Combine(basePath, childPath);
@@ -92,67 +85,15 @@ public class TestGlobals
             throw new Exception("Can't find " + sourcePath + ". I am running in " + path);
         }
 
-        foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
-        {
-            var file = Path.GetFileName(fileToCopy);
-            if(file == ".msCoverageSourceRootsMapping_CoreTests")
-            {
-                continue;
-            }
-            var fileDest = Path.Combine(dest, file);
-            var fileToCopyNormal = Path.GetFullPath(fileToCopy);
-            if (!File.Exists(fileToCopyNormal))
-            {
-                throw new Exception("failed copy setup :(" + fileToCopyNormal);
-            }
-            CopyWithRetries(fileToCopy, fileDest);
-        }
+        TestGlobals.TEST_DEP_PLUGIN_REL_PATH = Path.Combine(sourcePath, TEST_DEP_PLUGIN);
 
     }
 
-    public static void CopyWithRetries(string source, string dest)
-    {
-        int maxTries = 10;
-        while (maxTries > 0)
-        {
-            try
-            {
-                maxTries--;
-                File.Copy(source, dest, true);
-                return;
-            }
-            catch {
-                Random rnd = new();
-                Thread.Sleep(100*rnd.Next(1, 10));
-            }
-        }
-    }
 
     [AssemblyCleanup]
     public static void TearDown()
     {
-        int maxTries = 10;
-        while (maxTries > 0)
-        {
-            try
-            {
-                var path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                if (path == null)
-                {
-                    throw new Exception("failed to cleanup");
-                }
-                var dest = System.IO.Path.Combine(path, TEST_DEP_FOLDER);
-                if (System.IO.Directory.Exists(dest))
-                {
-                    System.IO.Directory.Delete(dest, true);
-                }
-            } catch
-            {
-                Thread.Sleep(1000);
-                maxTries--;
-                continue;
-            }
-        }
+        
     }
 }
 

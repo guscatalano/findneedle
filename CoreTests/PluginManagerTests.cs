@@ -1,4 +1,5 @@
-﻿using findneedle.Interfaces;
+﻿using System.Reflection;
+using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
 using FindNeedlePluginLib.Interfaces;
 using FindPluginCore.GlobalConfiguration;
@@ -97,6 +98,7 @@ public sealed class PluginManagerTests
     [TestMethod]
     public void CallFakeLoaderOutputTest()
     {
+       
         PluginManager man = new();
         man.config = new();
         man.config.PathToFakeLoadPlugin = "fake";
@@ -111,6 +113,7 @@ public sealed class PluginManagerTests
         }
         GlobalSettings.Debug = false;
         man.config.PathToFakeLoadPlugin = TestGlobals.FAKE_LOAD_PLUGIN_REL_PATH;
+        Assert.IsTrue(File.Exists(TestGlobals.FAKE_LOAD_PLUGIN_REL_PATH), "bad test setup?");
         var output = man.CallFakeLoadPlugin(""); //Should not throw
         Assert.IsTrue(output.Equals("Output is disabled"));
 
@@ -119,7 +122,12 @@ public sealed class PluginManagerTests
         Assert.IsNotEmpty(output);
         Assert.IsFalse(output.Equals("Output is disabled"));
 
-        var outputfile = TestGlobals.TEST_DEP_FOLDER + "\\fakeloadplugin_output.txt";
+        var entryAssembly = Assembly.GetEntryAssembly();
+        if (entryAssembly == null)
+        {
+            throw new Exception("Entry assembly is null");
+        }
+        var outputfile = Path.Combine(Path.GetDirectoryName(entryAssembly.Location), "fakeloadplugin_output.txt");
         Assert.IsTrue(File.Exists(outputfile));
         Assert.IsTrue(File.ReadAllText(outputfile).Contains(output)); //We do contains, cause file contains the start time
     }
