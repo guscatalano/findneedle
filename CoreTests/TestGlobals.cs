@@ -40,9 +40,9 @@ public class TestGlobals
         List<string> files = FileIO.GetAllFiles(basepath).ToList();
         foreach (var file in files)
         {
-            if (file.Contains(searchExe))
+            if (file.Contains(searchExe) && file.Contains("bin"))
             {
-                return Path.GetFullPath(searchExe).Replace(searchExe, "");
+                return Path.GetFullPath(file).Replace(searchExe, "");
             }
         }
         throw new Exception("Can't find " + searchExe);
@@ -64,7 +64,7 @@ public class TestGlobals
         }
         System.IO.Directory.CreateDirectory(dest);
         var basePath = PickRightParent(path, "FakeLoadPlugin");
-        var childPath = PickRightChild(basePath, "FakeLoadPlugin.exe");
+        var childPath = PickRightChild(Path.Combine(basePath, "FakeLoadPlugin"), "FakeLoadPlugin.exe");
         var sourcePath = Path.Combine(basePath, childPath);
 
         if (!Directory.Exists(sourcePath))
@@ -81,11 +81,11 @@ public class TestGlobals
             {
                 throw new Exception("failed copy setup :(" + fileToCopyNormal);
             }
-            File.Copy(fileToCopy, fileDest, true);
+            CopyWithRetries(fileToCopy, fileDest);
         }
 
         basePath = PickRightParent(path, "TestProcessorPlugin");
-        childPath = PickRightChild(basePath, "TestProcessorPlugin.dll");
+        childPath = PickRightChild(Path.Combine(basePath, "TestProcessorPlugin"), "TestProcessorPlugin.dll");
         sourcePath = Path.Combine(basePath, childPath);
         if (!Directory.Exists(sourcePath))
         {
@@ -95,15 +95,37 @@ public class TestGlobals
         foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
         {
             var file = Path.GetFileName(fileToCopy);
+            if(file == ".msCoverageSourceRootsMapping_CoreTests")
+            {
+                continue;
+            }
             var fileDest = Path.Combine(dest, file);
             var fileToCopyNormal = Path.GetFullPath(fileToCopy);
             if (!File.Exists(fileToCopyNormal))
             {
                 throw new Exception("failed copy setup :(" + fileToCopyNormal);
             }
-            File.Copy(fileToCopy, fileDest, true);
+            CopyWithRetries(fileToCopy, fileDest);
         }
 
+    }
+
+    public static void CopyWithRetries(string source, string dest)
+    {
+        int maxTries = 10;
+        while (maxTries > 0)
+        {
+            try
+            {
+                maxTries--;
+                File.Copy(source, dest, true);
+                return;
+            }
+            catch {
+                Random rnd = new();
+                Thread.Sleep(100*rnd.Next(1, 10));
+            }
+        }
     }
 
     [AssemblyCleanup]
