@@ -33,6 +33,11 @@ public class TestGlobals
         System.IO.Directory.CreateDirectory(dest);
         var sourcePath = Path.Combine(path, "..\\..\\..\\..\\..\\..\\FakeLoadPlugin\\bin\\x64\\Debug\\net8.0-windows10.0.26100.0\\win-x64\\");
 
+        if (!Directory.Exists(sourcePath))
+        {
+            throw new Exception("Can't find " + sourcePath + ". I am running in " + path);
+        }
+
         foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
         {
             var file = Path.GetFileName(fileToCopy);
@@ -47,6 +52,10 @@ public class TestGlobals
 
 
         sourcePath = Path.Combine(path, "..\\..\\..\\..\\..\\..\\TestProcessorPlugin\\bin\\Debug\\net8.0-windows10.0.26100.0\\");
+        if (!Directory.Exists(sourcePath))
+        {
+            throw new Exception("Can't find " + sourcePath + ". I am running in " + path);
+        }
 
         foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
         {
