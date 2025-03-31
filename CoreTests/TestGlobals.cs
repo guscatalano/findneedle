@@ -24,7 +24,7 @@ public class TestGlobals
         {
             if (System.IO.Directory.Exists(System.IO.Path.Combine(basepath, searchpath)))
             {
-                return basepath;
+                return Path.GetFullPath(basepath);
             }
             basepath = System.IO.Path.Combine(basepath, "..");
             maxTries--;
@@ -48,11 +48,11 @@ public class TestGlobals
         }
         System.IO.Directory.CreateDirectory(dest);
         var basePath = PickRightParent(path, "FakeLoadPlugin");
-        var sourcePath = Path.Combine(basePath, "\\FakeLoadPlugin\\bin\\x64\\Debug\\net8.0-windows10.0.26100.0\\win-x64\\");
+        var sourcePath = Path.Combine(basePath, "FakeLoadPlugin\\bin\\x64\\Debug\\net8.0-windows10.0.26100.0\\win-x64\\");
 
         if (!Directory.Exists(sourcePath))
         {
-            throw new Exception("Can't find " + sourcePath + ". I am running in " + path);
+            throw new Exception("Can't find " + sourcePath + ". I am running in " + path + " my basepath was: " + basePath);
         }
 
         foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
@@ -68,7 +68,7 @@ public class TestGlobals
         }
 
         basePath = PickRightParent(path, "TestProcessorPlugin");
-        sourcePath = Path.Combine(basePath, "\\TestProcessorPlugin\\bin\\Debug\\net8.0-windows10.0.26100.0\\");
+        sourcePath = Path.Combine(basePath, "TestProcessorPlugin\\bin\\Debug\\net8.0-windows10.0.26100.0\\");
         if (!Directory.Exists(sourcePath))
         {
             throw new Exception("Can't find " + sourcePath + ". I am running in " + path);
