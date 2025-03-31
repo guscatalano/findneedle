@@ -17,6 +17,22 @@ public class TestGlobals
 
     public const int TEST_DEP_PLUGIN_COUNT = 3;
 
+    public static string PickRightParent(string basepath, string searchpath)
+    {
+        int maxTries = 10;
+        while(maxTries > 0)
+        {
+            if (System.IO.Directory.Exists(System.IO.Path.Combine(basepath, searchpath)))
+            {
+                return basepath;
+            }
+            basepath = System.IO.Path.Combine(basepath, "..");
+            maxTries--;
+        }
+        throw new Exception("Can't find " + searchpath);
+    }
+
+
     [AssemblyInitialize]
     public static void CopyDependencies(TestContext testContext)
     {
@@ -31,7 +47,8 @@ public class TestGlobals
             System.IO.Directory.Delete(dest, true);
         }
         System.IO.Directory.CreateDirectory(dest);
-        var sourcePath = Path.Combine(path, "..\\..\\..\\..\\..\\..\\FakeLoadPlugin\\bin\\x64\\Debug\\net8.0-windows10.0.26100.0\\win-x64\\");
+        var basePath = PickRightParent(path, "FakeLoadPlugin");
+        var sourcePath = Path.Combine(basePath, "\\FakeLoadPlugin\\bin\\x64\\Debug\\net8.0-windows10.0.26100.0\\win-x64\\");
 
         if (!Directory.Exists(sourcePath))
         {
@@ -50,8 +67,8 @@ public class TestGlobals
             File.Copy(fileToCopy, fileDest, true);
         }
 
-
-        sourcePath = Path.Combine(path, "..\\..\\..\\..\\..\\..\\TestProcessorPlugin\\bin\\Debug\\net8.0-windows10.0.26100.0\\");
+        basePath = PickRightParent(path, "TestProcessorPlugin");
+        sourcePath = Path.Combine(basePath, "\\TestProcessorPlugin\\bin\\Debug\\net8.0-windows10.0.26100.0\\");
         if (!Directory.Exists(sourcePath))
         {
             throw new Exception("Can't find " + sourcePath + ". I am running in " + path);
