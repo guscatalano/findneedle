@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedleCoreUtils;
+using Windows.ApplicationModel.Search;
 
 namespace CoreTests;
 
@@ -32,6 +34,20 @@ public class TestGlobals
         throw new Exception("Can't find " + searchpath);
     }
 
+    public static string PickRightChild(string basepath, string searchExe)
+    {
+
+        List<string> files = FileIO.GetAllFiles(basepath).ToList();
+        foreach (var file in files)
+        {
+            if (file.Contains(searchExe))
+            {
+                return Path.GetFullPath(searchExe).Replace(searchExe, "");
+            }
+        }
+        throw new Exception("Can't find " + searchExe);
+    }
+
 
     [AssemblyInitialize]
     public static void CopyDependencies(TestContext testContext)
@@ -48,7 +64,8 @@ public class TestGlobals
         }
         System.IO.Directory.CreateDirectory(dest);
         var basePath = PickRightParent(path, "FakeLoadPlugin");
-        var sourcePath = Path.Combine(basePath, "FakeLoadPlugin\\bin\\x64\\Debug\\net8.0-windows10.0.26100.0\\win-x64\\");
+        var childPath = PickRightChild(basePath, "FakeLoadPlugin.exe");
+        var sourcePath = Path.Combine(basePath, childPath);
 
         if (!Directory.Exists(sourcePath))
         {
@@ -68,7 +85,8 @@ public class TestGlobals
         }
 
         basePath = PickRightParent(path, "TestProcessorPlugin");
-        sourcePath = Path.Combine(basePath, "TestProcessorPlugin\\bin\\Debug\\net8.0-windows10.0.26100.0\\");
+        childPath = PickRightChild(basePath, "TestProcessorPlugin.exe");
+        sourcePath = Path.Combine(basePath, childPath);
         if (!Directory.Exists(sourcePath))
         {
             throw new Exception("Can't find " + sourcePath + ". I am running in " + path);
