@@ -123,11 +123,10 @@ public sealed class PluginManagerTests
         Assert.IsFalse(output.Equals("Output is disabled"));
 
         var entryAssembly = Assembly.GetEntryAssembly();
-        if (entryAssembly == null)
-        {
-            throw new Exception("Entry assembly is null");
-        }
-        var outputfile = Path.Combine(Path.GetDirectoryName(entryAssembly.Location), "fakeloadplugin_output.txt");
+        Assert.IsNotNull(entryAssembly);
+        var workingDir = Path.GetDirectoryName(entryAssembly.Location);
+        Assert.IsNotNull(workingDir);
+        var outputfile = Path.Combine(workingDir, "fakeloadplugin_output.txt");
         Assert.IsTrue(File.Exists(outputfile));
         Assert.IsTrue(File.ReadAllText(outputfile).Contains(output)); //We do contains, cause file contains the start time
     }
