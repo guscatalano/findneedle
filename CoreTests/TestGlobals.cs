@@ -22,7 +22,7 @@ public class TestGlobals
     
     public static string PickRightParent(string basepath, string searchpath)
     {
-        int maxTries = 10;
+        var maxTries = 10;
         while(maxTries > 0)
         {
             if (System.IO.Directory.Exists(System.IO.Path.Combine(basepath, searchpath)))
@@ -39,13 +39,21 @@ public class TestGlobals
     {
 
         List<string> files = FileIO.GetAllFiles(basepath).ToList();
+        var rightFile = "";
+        var found = false;
         foreach (var file in files)
         {
             if (file.Contains(searchExe) && file.Contains("bin"))
             {
-                return Path.GetFullPath(file).Replace(searchExe, "");
+                if (found)
+                {
+                    throw new Exception("There are multiple " + searchExe + " in " + basepath);
+                }
+                found = true;
+                rightFile = Path.GetFullPath(file).Replace(searchExe, "");
             }
         }
+        return rightFile;
         throw new Exception("Can't find " + searchExe);
     }
 
