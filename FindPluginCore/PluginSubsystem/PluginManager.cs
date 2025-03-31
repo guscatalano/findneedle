@@ -34,23 +34,48 @@ public class PluginManager
 
     public static readonly string LOADER_CONFIG = "PluginConfig.json";
 
-    public static void CallFakeLoadPlugin(string loaderPath, string plugin)
+    public static string CallFakeLoadPlugin(string loaderPath, string plugin)
     {
+        var entryAssembly = Assembly.GetEntryAssembly();
+        if (entryAssembly == null)
+        {
+            throw new Exception("Entry assembly is null");
+        }
+
         ProcessStartInfo ps = new()
         {
             FileName = loaderPath,
             Arguments = plugin,
-            RedirectStandardError = !GlobalSettings.Debug, //Opposite because we want it to redirect if debug is on
-            RedirectStandardOutput = !GlobalSettings.Debug
+            WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
+            UseShellExecute = false,
+            RedirectStandardError = GlobalSettings.Debug,
+            RedirectStandardOutput = GlobalSettings.Debug
         };
-        var p = Process.Start(ps);
-
-        if (p == null)
+        var eOut = "Output is disabled";
+        Process p = new Process();
+        p.StartInfo = ps;
+        if (GlobalSettings.Debug)
         {
-            throw new Exception("Failed to start Plugin loader process");
+            eOut = "";
+            p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) =>
+            {
+                eOut += e.Data;
+            });
+            p.OutputDataReceived += new DataReceivedEventHandler((sender, e) =>
+            {
+                eOut += e.Data;
+            });
+            p.EnableRaisingEvents = true;
+        }
+        p.Start();
+        if (GlobalSettings.Debug)
+        {
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
         }
 
         p.WaitForExit();
+        return eOut;
     }
 
 
@@ -187,7 +212,7 @@ public class PluginManager
                 }
                 
 
-                InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, loadIntoAssembly);
+                InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, GetFakeLoadPluginPath(), loadIntoAssembly);
                 loadedPluginsModules.Add(loadedPluginModule);
             }
         }

@@ -12,15 +12,6 @@
   <NuGetAudit>false</NuGetAudit>
 
   </PropertyGroup>
-	<PropertyGroup Condition="$(TargetFramework.Contains('-windows')) and '$(Configuration)' == 'Debug' and $(PlatformTarget)=='x64'">
-		<Platforms>x64</Platforms>
-		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="$(TargetFramework.Contains('-windows')) and '$(Configuration)' == 'Debug' and $(PlatformTarget)=='x86'">
-		<Platforms>x86</Platforms>
-		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
-	</PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

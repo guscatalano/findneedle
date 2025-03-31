@@ -10,7 +10,9 @@
 	  <PlatformTarget>AnyCPU</PlatformTarget>
 	  <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
 	  <Platforms>AnyCPU;x64</Platforms>
-	  <NuGetAudit>false</NuGetAudit>
+      <NuGetAudit>false</NuGetAudit>
+	  <PublishSingleFile>true</PublishSingleFile>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>

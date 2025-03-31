@@ -17,15 +17,15 @@ namespace FindPluginCore.Searching;
 public class SearchQueryCmdLine
 {
 
-    public static SearchQuery ParseFromCommandLine(string[] cmdline)
+    public static SearchQuery ParseFromCommandLine(string[] cmdline, PluginManager pluginManager)
     {
         var arguments = TextManipulation.ParseCommandLineIntoDictionary(cmdline);
-        return ParseFromCommandLine(arguments);
+        return ParseFromCommandLine(arguments, pluginManager);
     }
 
-    public static Dictionary<CommandLineRegistration, ICommandLineParser> GetCommandLineParsers()
+    public static Dictionary<CommandLineRegistration, ICommandLineParser> GetCommandLineParsers(PluginManager pluginManager)
     {
-        var manager = PluginManager.GetSingleton();
+        var manager = pluginManager;
         manager.LoadAllPlugins(true);
         var list = manager.GetAllPluginsInstancesOfAType<ICommandLineParser>();
         Dictionary<CommandLineRegistration, ICommandLineParser> parsers = [];
@@ -70,10 +70,10 @@ public class SearchQueryCmdLine
         Console.WriteLine("End of search query");
     }
 
-    public static SearchQuery ParseFromCommandLine(List<CommandLineArgument> arguments, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
+    public static SearchQuery ParseFromCommandLine(List<CommandLineArgument> arguments, PluginManager pluginManager, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
     {
         //This is a test hook
-        parsers ??= GetCommandLineParsers();
+        parsers ??= GetCommandLineParsers(pluginManager);
 
         SearchQuery q = new();
         foreach (var argument in arguments)

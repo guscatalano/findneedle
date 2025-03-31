@@ -75,14 +75,14 @@ public interface IPluginDescription
         return description;
     }
 
-    public static void WriteDescriptionFile(List<PluginDescription> validTypes, string sourceFile)
+    public static void WriteDescriptionFile(List<PluginDescription> validTypes, string sourceFile, string outputfile)
     {
         var text = JsonSerializer.Serialize(validTypes, new JsonSerializerOptions
         {
             IncludeFields = true,
 
         });
-        File.WriteAllText(sourceFile + ".json", text);
+        File.WriteAllText(outputfile, text);
     }
 
     public static List<PluginDescription> ReadDescriptionFile(string inputFile)

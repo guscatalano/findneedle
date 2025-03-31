@@ -14,7 +14,7 @@ Console.CancelKeyPress += delegate {
 };
 
 
-var x = SearchQueryCmdLine.ParseFromCommandLine(Environment.GetCommandLineArgs());
+var x = SearchQueryCmdLine.ParseFromCommandLine(Environment.GetCommandLineArgs(), PluginManager.GetSingleton());
 SearchQueryCmdLine.PrintToConsole(x);
 PluginManager.GetSingleton().PrintToConsole();
 Console.WriteLine("If correct, please enter to search, otherwise ctrl-c to exit");

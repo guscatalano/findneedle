@@ -40,7 +40,7 @@ public class SearchQueryCmdLineParserTests
     {
         var input = new List<CommandLineArgument>();
         input.Add(new CommandLineArgument() { key = "", value= ""});
-        var q = SearchQueryCmdLine.ParseFromCommandLine(input);
+        var q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager());
         Assert.AreEqual(0, q.GetLocations().Count);
     }
 
@@ -52,7 +52,7 @@ public class SearchQueryCmdLineParserTests
         
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.IsTrue(((FakeCmdLineParser)parsers.First().Value).wasParseCalled);
         Assert.AreEqual(q.locations.Count(), 0);
         Assert.AreEqual(q.filters.Count(), 1);
@@ -67,7 +67,7 @@ public class SearchQueryCmdLineParserTests
 
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Location, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.IsTrue(((FakeCmdLineParser)parsers.First().Value).wasParseCalled);
         Assert.AreEqual(q.locations.Count(), 1);
         Assert.AreEqual(q.filters.Count(), 0);
@@ -82,7 +82,7 @@ public class SearchQueryCmdLineParserTests
 
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Processor, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.IsTrue(((FakeCmdLineParser)parsers.First().Value).wasParseCalled);
         Assert.AreEqual(q.locations.Count(), 0);
         Assert.AreEqual(q.filters.Count(), 0);
@@ -104,7 +104,7 @@ public class SearchQueryCmdLineParserTests
             Assert.AreEqual(SOME_PARAM, parameter);
             doubleCheckcallback = true;
         };
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.IsTrue(FakeParser.wasParseCalled);
         Assert.IsTrue(doubleCheckcallback);
     }
@@ -124,7 +124,7 @@ public class SearchQueryCmdLineParserTests
             Assert.IsTrue(string.IsNullOrEmpty(parameter));
             doubleCheckcallback = true;
         };
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.IsTrue(FakeParser.wasParseCalled);
         Assert.IsTrue(doubleCheckcallback);
     }
@@ -142,7 +142,7 @@ public class SearchQueryCmdLineParserTests
         {
             Assert.AreEqual("something,something", parameter); //We expect it to remove the brackets
         };
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.IsTrue(FakeParser.wasParseCalled);
     }
 
@@ -159,7 +159,7 @@ public class SearchQueryCmdLineParserTests
 
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Location, key = "path" };
         var parsers = SetupSimpleFakeParser(registration);
-        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, parsers);
+        SearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.AreEqual(3, q.GetLocations().Count);
     }
 

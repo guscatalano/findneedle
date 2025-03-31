@@ -18,20 +18,8 @@
 
 
   <ItemGroup>
-      <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FakeLoadPlugin.runtimeconfig.json" Link="TestDependencies\FakeLoadPlugin.runtimeconfig.json">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
-	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FakeLoadPlugin.dll" Link="TestDependencies\FakeLoadPlugin.dll">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
-	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FakeLoadPlugin.exe" Link="TestDependencies\FakeLoadPlugin.exe">
-		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </Content>
-	  <Content Include="..\FakeLoadPlugin\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\FindNeedlePluginLib.dll" Link="TestDependencies\FindNeedlePluginLib.dll">
-		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </Content>
 	  <Content Include="..\TestProcessorPlugin\bin\$(Configuration)\$(TargetFramework)\TestProcessorPlugin.dll" Link="TestDependencies\TestProcessorPlugin.dll">
-		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </Content>
   </ItemGroup>
 
@@ -58,5 +46,12 @@
   <ItemGroup>
     <Folder Include="TestDependencies\" />
   </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+   <ItemGroup>
+        <ANTLR Include="..\FakeLoadPlugin\bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ANTLR)" DestinationFolder="$(TargetDir)\TestDependencies\" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>
