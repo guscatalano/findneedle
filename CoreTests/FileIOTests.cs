@@ -16,8 +16,9 @@ public sealed class FileIOTests
     public void TestReadDirectory()
     {
         IEnumerable<string> list = FileIO.GetAllFiles(TestGlobals.TEST_DEP_FOLDER, (path) => { Assert.Fail(); });
-        Assert.AreEqual(list.Count(), 195); //There are 5 files in the directory (Test Dependencies)
+        Assert.AreEqual(197, list.Count()); //There are 5 files in the directory (Test Dependencies)
         Assert.IsTrue(list.First().StartsWith(TestGlobals.TEST_DEP_FOLDER)); //It starts with folder name
+
         Assert.IsTrue(list.FirstOrDefault(x => x.Contains(TestGlobals.TEST_DEP_PLUGIN)) != null); //It returned at least one of the files
     }
 }

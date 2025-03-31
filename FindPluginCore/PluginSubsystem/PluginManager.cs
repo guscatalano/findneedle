@@ -174,7 +174,7 @@ public class PluginManager
                 pluginModuleDescriptor.path = Path.GetFullPath(pluginModuleDescriptor.path);
                 if (!File.Exists(pluginModuleDescriptor.path))
                 {
-                    throw new Exception("Can't find plugin module");
+                    throw new Exception("Can't find plugin module for " + pluginModuleDescriptor.path);
                 }
                 
 

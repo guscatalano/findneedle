@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace CoreTests;
 
+[TestClass]
 public class TestGlobals
 {
     public const string TEST_DEP_FOLDER = "TestDependencies";
@@ -15,5 +16,77 @@ public class TestGlobals
     public const string FAKE_LOAD_PLUGIN_REL_PATH = TEST_DEP_FOLDER + "\\" + FAKE_LOAD_PLUGIN;
 
     public const int TEST_DEP_PLUGIN_COUNT = 3;
+
+    [AssemblyInitialize]
+    public static void CopyDependencies(TestContext testContext)
+    {
+        var path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        if(path == null)
+        {
+            throw new Exception("failed setup");
+        }
+        var dest = System.IO.Path.Combine(path, TEST_DEP_FOLDER);
+        if (System.IO.Directory.Exists(dest))
+        {
+            System.IO.Directory.Delete(dest, true);
+        }
+        System.IO.Directory.CreateDirectory(dest);
+        var sourcePath = Path.Combine(path, "..\\..\\..\\..\\..\\..\\FakeLoadPlugin\\bin\\x64\\Debug\\net8.0-windows10.0.26100.0\\win-x64\\");
+
+        foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
+        {
+            var file = Path.GetFileName(fileToCopy);
+            var fileDest = Path.Combine(dest, file);
+            var fileToCopyNormal = Path.GetFullPath(fileToCopy);
+            if (!File.Exists(fileToCopyNormal))
+            {
+                throw new Exception("failed copy setup :(" + fileToCopyNormal);
+            }
+            File.Copy(fileToCopy, fileDest, true);
+        }
+
+
+        sourcePath = Path.Combine(path, "..\\..\\..\\..\\..\\..\\TestProcessorPlugin\\bin\\Debug\\net8.0-windows10.0.26100.0\\");
+
+        foreach (var fileToCopy in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
+        {
+            var file = Path.GetFileName(fileToCopy);
+            var fileDest = Path.Combine(dest, file);
+            var fileToCopyNormal = Path.GetFullPath(fileToCopy);
+            if (!File.Exists(fileToCopyNormal))
+            {
+                throw new Exception("failed copy setup :(" + fileToCopyNormal);
+            }
+            File.Copy(fileToCopy, fileDest, true);
+        }
+
+    }
+
+    [AssemblyCleanup]
+    public static void TearDown()
+    {
+        int maxTries = 10;
+        while (maxTries > 0)
+        {
+            try
+            {
+                var path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                if (path == null)
+                {
+                    throw new Exception("failed to cleanup");
+                }
+                var dest = System.IO.Path.Combine(path, TEST_DEP_FOLDER);
+                if (System.IO.Directory.Exists(dest))
+                {
+                    System.IO.Directory.Delete(dest, true);
+                }
+            } catch
+            {
+                Thread.Sleep(1000);
+                maxTries--;
+                continue;
+            }
+        }
+    }
 }
 

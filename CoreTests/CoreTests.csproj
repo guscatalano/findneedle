@@ -47,11 +47,5 @@
     <Folder Include="TestDependencies\" />
   </ItemGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-   <ItemGroup>
-        <ANTLR Include="..\FakeLoadPlugin\bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\*.*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ANTLR)" DestinationFolder="$(TargetDir)\TestDependencies\" SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

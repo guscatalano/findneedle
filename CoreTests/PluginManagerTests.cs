@@ -35,6 +35,10 @@ public sealed class PluginManagerTests
         Assert.AreEqual("test", actual: x.config.entries[0].name);
         Assert.AreEqual("testval", actual: x.config.entries[0].path);
         Assert.AreEqual("somepath", actual: x.config.PathToFakeLoadPlugin);
+        if (File.Exists(PluginManager.LOADER_CONFIG))
+        {
+            File.Delete(PluginManager.LOADER_CONFIG);
+        }
     }
 
     [TestMethod]
