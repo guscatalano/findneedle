@@ -34,7 +34,7 @@ public class PluginManager
 
     public static readonly string LOADER_CONFIG = "PluginConfig.json";
 
-    public static string CallFakeLoadPlugin(string loaderPath, string plugin)
+    public string CallFakeLoadPlugin(string plugin)
     {
         var entryAssembly = Assembly.GetEntryAssembly();
         if (entryAssembly == null)
@@ -44,7 +44,7 @@ public class PluginManager
 
         ProcessStartInfo ps = new()
         {
-            FileName = loaderPath,
+            FileName = GetFakeLoadPluginPath(),
             Arguments = plugin,
             WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
             UseShellExecute = false,
@@ -76,40 +76,6 @@ public class PluginManager
 
         p.WaitForExit();
         return eOut;
-    }
-
-
-    public Dictionary<string, List<PluginDescription>> DiscoverPlugins()
-    {
-        Dictionary<string, List<PluginDescription>> ret = new();
-        IEnumerable<string> files = FileIO.GetAllFiles(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
-        foreach (var file in files)
-        {
-            if (file.Contains("Plugin") && file.EndsWith(".dll"))
-            {
-                try
-                {
-                    var descriptorFile = file + ".json"; 
-
-                    //TODO read the fake loader path correctly
-                    CallFakeLoadPlugin(GetFakeLoadPluginPath(), file);
-
-                    if (File.Exists(descriptorFile))
-                    {
-                        List<PluginDescription> plugins = IPluginDescription.ReadDescriptionFile(descriptorFile);   
-                        ret.Add(file, plugins);
-                    } else {
-                        Console.WriteLine("Plugin loader failed to load " + file);
-                    }
-                }
-                catch (Exception)
-                {
-                    //Dont care
-                }
-            }
-           
-        }
-        return ret;
     }
 
     private readonly string loadedConfig = "";
@@ -212,7 +178,7 @@ public class PluginManager
                 }
                 
 
-                InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, GetFakeLoadPluginPath(), loadIntoAssembly);
+                InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);
                 loadedPluginsModules.Add(loadedPluginModule);
             }
         }

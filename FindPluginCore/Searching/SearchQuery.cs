@@ -113,7 +113,6 @@ public class SearchQuery : ISearchQuery
 
     public SearchQuery()
     {
-        PluginManager.GetSingleton().DiscoverPlugins();
         stats = new(this);
         _progressSink = new();
         _stats = stats;

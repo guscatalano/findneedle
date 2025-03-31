@@ -22,11 +22,11 @@ public class InMemoryPluginModule
 
    
 
-    private List<PluginDescription> LoadPluginDescriptors(string path, string fakeloadPluginPath)
+    private List<PluginDescription> LoadPluginDescriptors(string path, PluginManager pluginManager)
     {
 
         var descriptorFile = path + ".json";
-        PluginManager.CallFakeLoadPlugin(fakeloadPluginPath, path);
+        pluginManager.CallFakeLoadPlugin(path);
         if (File.Exists(descriptorFile))
         {
             return IPluginDescription.ReadDescriptionFile(descriptorFile);
@@ -37,11 +37,11 @@ public class InMemoryPluginModule
         }
     }
 
-    public InMemoryPluginModule(string fullpath, string fakeLoadPluginpath, bool loadInMemory = true)
+    public InMemoryPluginModule(string fullpath, PluginManager pluginManager, bool loadInMemory = true)
     {
         try
         {
-            description = LoadPluginDescriptors(fullpath, fakeLoadPluginpath);
+            description = LoadPluginDescriptors(fullpath, pluginManager);
             if (loadInMemory)
             {
                 dll = Assembly.LoadFile(fullpath);

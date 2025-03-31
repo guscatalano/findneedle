@@ -25,9 +25,8 @@ public class SearchQueryCmdLine
 
     public static Dictionary<CommandLineRegistration, ICommandLineParser> GetCommandLineParsers(PluginManager pluginManager)
     {
-        var manager = pluginManager;
-        manager.LoadAllPlugins(true);
-        var list = manager.GetAllPluginsInstancesOfAType<ICommandLineParser>();
+        pluginManager.LoadAllPlugins(true);
+        var list = pluginManager.GetAllPluginsInstancesOfAType<ICommandLineParser>();
         Dictionary<CommandLineRegistration, ICommandLineParser> parsers = [];
         foreach (var pluginInstance in list)
         {

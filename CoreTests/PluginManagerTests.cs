@@ -82,6 +82,45 @@ public sealed class PluginManagerTests
     }
 
     [TestMethod]
+    public void TestPrint()
+    {
+
+        var x = PluginManager.GetSingleton();
+        x.PrintToConsole();
+        Assert.IsTrue(true); //didn't crash
+    }
+
+    [TestMethod]
+    public void CallFakeLoaderOutputTest()
+    {
+        PluginManager man = new();
+        man.config = new();
+        man.config.PathToFakeLoadPlugin = "fake";
+        try
+        {
+            man.CallFakeLoadPlugin("test"); //garbage
+            Assert.Fail();
+        }
+        catch 
+        {
+            Assert.IsTrue(true); //We should throw
+        }
+        GlobalSettings.Debug = false;
+        man.config.PathToFakeLoadPlugin = TestGlobals.FAKE_LOAD_PLUGIN_REL_PATH;
+        var output = man.CallFakeLoadPlugin(""); //Should not throw
+        Assert.IsTrue(output.Equals("Output is disabled"));
+
+        GlobalSettings.Debug = true;
+        output = man.CallFakeLoadPlugin(""); //Should not throw
+        Assert.IsNotEmpty(output);
+        Assert.IsFalse(output.Equals("Output is disabled"));
+
+        var outputfile = TestGlobals.TEST_DEP_FOLDER + "\\fakeloadplugin_output.txt";
+        Assert.IsTrue(File.Exists(outputfile));
+        Assert.IsTrue(File.ReadAllText(outputfile).Contains(output)); //We do contains, cause file contains the start time
+    }
+
+    [TestMethod]
     public void TestGetPath()
     {
         var x = PluginManager.GetSingleton();
