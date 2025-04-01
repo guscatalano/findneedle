@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using FindNeedlePluginLib.Interfaces;
 
 namespace FindNeedlePluginLib.TestClasses;
 
+[ExcludeFromCodeCoverage]
 public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFilter, IResultProcessor
 {
     //When you need to store and reference something, use somevalue

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using FindNeedlePluginLib.Interfaces;
@@ -10,6 +11,7 @@ public class Program
 {
     static readonly string OUTPUT_FILE = "fakeloadplugin_output.txt";
 
+    [ExcludeFromCodeCoverage]
     static void Main(string[] args)
     {
         File.WriteAllText(OUTPUT_FILE, "Starting at " + DateTime.Now.ToString() + Environment.NewLine); //Clear log file
@@ -31,6 +33,7 @@ public class Program
         }
     }
 
+    [ExcludeFromCodeCoverage]
     public static void WriteToConsoleAndFile(string text)
     {
         Console.WriteLine(text);

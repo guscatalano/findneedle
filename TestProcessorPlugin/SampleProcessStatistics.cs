@@ -1,9 +1,11 @@
-﻿using findneedle;
+﻿using System.Diagnostics.CodeAnalysis;
+using findneedle;
 using findneedle.Interfaces;
 using FindNeedlePluginLib.Interfaces;
 
 namespace TestProcessorPlugin;
 
+[ExcludeFromCodeCoverage]
 public class SampleProcessStatistics : IResultProcessor, IPluginDescription
 {
 
