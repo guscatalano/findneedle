@@ -20,6 +20,14 @@ public sealed class SearchProgressSinkTests
     }
 
     [TestMethod]
+    public void TestOtherBasicSinkNotifications()
+    {
+        SearchProgressSink sink = new();
+        sink.RegisterForTextProgress((string text) => Assert.AreEqual("winning", text));
+        sink.NotifyProgress("winning");
+    }
+
+    [TestMethod]
     public void TestMultipleSinkNotifications()
     {
         var tcount = 0;
