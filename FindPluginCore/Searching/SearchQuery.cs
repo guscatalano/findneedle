@@ -149,6 +149,7 @@ public class SearchQuery : ISearchQuery
             SearchStepNotificationSink.progressSink.NotifyProgress(50 * (count / locations.Count()), "loading location: " + loc.GetName());
             //loc.SetNotificationCallback(progressSink);
             //loc.SetSearchStatistics(stats);
+
             loc.LoadInMemory();
             count++;
         }

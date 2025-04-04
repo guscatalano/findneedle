@@ -44,8 +44,6 @@ public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFil
     public bool Filter(ISearchResult entry) => throw new NotImplementedException();
     public override void LoadInMemory() => throw new NotImplementedException();
     public override List<ISearchResult> Search(ISearchQuery? searchQuery) => throw new NotImplementedException();
-    public override void SetNotificationCallback(SearchProgressSink sink) => throw new NotImplementedException();
-    public override void SetSearchStatistics(SearchStatistics stats) => throw new NotImplementedException();
     public override string GetDescription() => throw new NotImplementedException();
     public override string GetName() => throw new NotImplementedException();
     public void ProcessResults(List<ISearchResult> results) => throw new NotImplementedException();
@@ -54,4 +52,6 @@ public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFil
     public string GetTextDescription() => throw new NotImplementedException();
     public string GetFriendlyName() => throw new NotImplementedException();
     public string GetClassName() => throw new NotImplementedException();
+    public override void ClearStatistics() => throw new NotImplementedException();
+    public override ReportFromComponent ReportStatistics() => throw new NotImplementedException();
 }

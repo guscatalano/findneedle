@@ -15,12 +15,7 @@ namespace findneedle.Implementations;
 public class LocalEventLogQueryLocation : IEventLogQueryLocation
 {
 
-    public override void SetNotificationCallback(SearchProgressSink sink)
-    {
-
-    }
-    public override void SetSearchStatistics(SearchStatistics stats) { 
-    }
+   
 
 
     public string eventLogName
@@ -91,4 +86,7 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation
         }
         return filteredResults;
     }
+
+    public override void ClearStatistics() => throw new NotImplementedException();
+    public override ReportFromComponent ReportStatistics() => throw new NotImplementedException();
 }

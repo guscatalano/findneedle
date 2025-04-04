@@ -17,14 +17,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
 {
     public SearchProgressSink? sink;
     public SearchStatistics? stats;
-    public override void SetNotificationCallback(SearchProgressSink sink)
-    {
-        this.sink = sink;
-    }
-    public override void SetSearchStatistics(SearchStatistics stats)
-    {
-        this.stats = stats;
-    }
+
 
     public bool isFile
     { get; set;
@@ -404,4 +397,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         
         this.path = parameter;
     }
+
+    public override void ClearStatistics() => throw new NotImplementedException();
+    public override ReportFromComponent ReportStatistics() => throw new NotImplementedException();
 }

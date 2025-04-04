@@ -17,7 +17,7 @@ public enum SearchLocationDepth
     Crush = 3 //Load everything
 }
 
-public abstract class ISearchLocation
+public abstract class ISearchLocation: IReportStatistics
 {
     public int numRecordsInLastResult
     { get;
@@ -46,10 +46,9 @@ public abstract class ISearchLocation
         return this.depth;
     }
 
-    public abstract void SetNotificationCallback(SearchProgressSink sink);
-    public abstract void SetSearchStatistics(SearchStatistics stats);
 
     public abstract string GetDescription();
     public abstract string GetName();
-
+    public abstract void ClearStatistics();
+    public abstract ReportFromComponent ReportStatistics();
 }

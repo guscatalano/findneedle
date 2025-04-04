@@ -58,6 +58,7 @@ public class SearchStatistics
         totalRecordsLoaded = 0;
         foreach (ISearchLocation loc in q.GetLocations())
         {
+            loc.ReportStatistics();
             totalRecordsLoaded += loc.numRecordsInMemory;
         }
 
@@ -69,6 +70,7 @@ public class SearchStatistics
         totalRecordsSearch = 0;
         foreach (ISearchLocation loc in q.GetLocations())
         {
+            loc.ReportStatistics();
             totalRecordsSearch += loc.numRecordsInLastResult;
         }
         atSearch.Snap();
