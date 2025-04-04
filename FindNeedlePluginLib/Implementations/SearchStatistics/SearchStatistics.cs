@@ -111,11 +111,11 @@ public class SearchStatistics
         switch (step)
         {
             case SearchStep.AtLaunch:
-                return atLaunch.GetMemoryUsage();
+                return atLaunch.GetMemoryUsageFriendly();
             case SearchStep.AtLoad:
-                return atLoad.GetMemoryUsage();
+                return atLoad.GetMemoryUsageFriendly();
             case SearchStep.AtSearch:
-                return atSearch.GetMemoryUsage();
+                return atSearch.GetMemoryUsageFriendly();
             default:
                 throw new Exception("invalid param");
         }

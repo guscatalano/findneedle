@@ -8,18 +8,12 @@ using FindNeedleCoreUtils;
 
 namespace FindNeedlePluginLib.Implementations.SearchStatistics;
 
-public class MemorySnapshot
+public class MemorySnapshot(Process p)
 {
-
-
-    long privatememory = 0;
-    long gcmemory = 0;
-    DateTime when;
-    readonly Process p;
-    public MemorySnapshot(Process p)
-    {
-        this.p = p;
-    }
+    private long privatememory = 0;
+    private long gcmemory = 0;
+    private DateTime when;
+    private readonly Process p = p;
 
     public void Snap()
     {
@@ -28,10 +22,20 @@ public class MemorySnapshot
         privatememory = p.PrivateMemorySize64;
         gcmemory = GC.GetTotalMemory(false);
     }
-
-    public string GetMemoryUsage()
+    public long GetMemoryUsagePrivate()
     {
-        return " PrivateMemory (" + ByteUtils.BytesToFriendlyString(privatememory) + ") / GC Memory (" + ByteUtils.BytesToFriendlyString(gcmemory) + ").";
+        return privatememory;
+    }
+    public long GetMemoryUsageTotal()
+    {
+        return gcmemory;
+    }
+
+
+    public string GetMemoryUsageFriendly()
+    {
+        return " PrivateMemory (" + ByteUtils.BytesToFriendlyString(privatememory) + ") / GC Memory (" +
+            ByteUtils.BytesToFriendlyString(gcmemory) + ").";
     }
 
     public DateTime GetSnapTime()
