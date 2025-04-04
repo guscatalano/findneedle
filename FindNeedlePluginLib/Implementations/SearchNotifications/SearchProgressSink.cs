@@ -5,6 +5,9 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace findneedle;
+
+
+
 public class SearchProgressSink
 {
     public List<Action<int>> numericProgress = new();

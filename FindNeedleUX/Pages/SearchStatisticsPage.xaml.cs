@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using FindNeedlePluginLib.Implementations.SearchNotifications;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -30,7 +31,7 @@ public sealed partial class SearchStatisticsPage : Page
     }
     private void TabView_Loaded(object sender, RoutedEventArgs e)
     {
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
             (sender as TabView).TabItems.Add(CreateNewTab(i));
         }
@@ -60,7 +61,7 @@ public sealed partial class SearchStatisticsPage : Page
         x.Height = 500;
         TextBox y = new TextBox();
         y.AcceptsReturn = true;
-        string tet = string.Empty;
+        var tet = string.Empty;
         y.Text = "ohono";
         ScrollViewer scrollViewer = new ScrollViewer();
         scrollViewer.Height = 500;
@@ -71,7 +72,7 @@ public sealed partial class SearchStatisticsPage : Page
         TreeViewNode parent = new TreeViewNode();
         treeeee.RootNodes.Add(parent);
         
-        var z = MiddleLayerService.GetStats().componentReports[findneedle.SearchStatisticStep.AtLoad];
+        var z = MiddleLayerService.GetStats().componentReports[SearchStep.AtLoad];
         switch (index % 3)
         {
             case 0:

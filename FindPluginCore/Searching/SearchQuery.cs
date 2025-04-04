@@ -2,6 +2,7 @@
 using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
+using FindNeedlePluginLib.Implementations.SearchNotifications;
 using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle;
@@ -39,17 +40,17 @@ public class SearchQuery : ISearchQuery
         set => _depth = value;
     }
 
-    private SearchProgressSink _progressSink;
+    private SearchStepNotificationSink _stepnotifysink;
 
-    public SearchProgressSink progressSink
+    public SearchStepNotificationSink SearchStepNotificationSink
     {
         get
         {
-            _progressSink ??= new SearchProgressSink();
-            return _progressSink;
+            _stepnotifysink ??= new SearchStepNotificationSink();
+            return _stepnotifysink;
         }
-        set => _progressSink = value;
     }
+    
 
     private List<IResultProcessor> _processors;
     public List<IResultProcessor> processors
@@ -114,12 +115,12 @@ public class SearchQuery : ISearchQuery
     public SearchQuery()
     {
         stats = new(this);
-        _progressSink = new();
         _stats = stats;
         _filters = [];
         _locations = [];
         _processors = [];
         _output = [];
+        _stepnotifysink = new();
     }
 
 
@@ -139,14 +140,15 @@ public class SearchQuery : ISearchQuery
     public void LoadAllLocationsInMemory()
     {
         stats = new SearchStatistics(this); //reset the stats
-        progressSink.NotifyProgress(0, "starting");
+        SearchStepNotificationSink.NotifyStep(SearchStep.AtLoad);
         SetDepthForAllLocations(Depth);
         var count = 1;
+        
         foreach (var loc in locations)
         {
-            progressSink.NotifyProgress(50 * (count / locations.Count()), "loading location: " + loc.GetName());
-            loc.SetNotificationCallback(progressSink);
-            loc.SetSearchStatistics(stats);
+            SearchStepNotificationSink.progressSink.NotifyProgress(50 * (count / locations.Count()), "loading location: " + loc.GetName());
+            //loc.SetNotificationCallback(progressSink);
+            //loc.SetSearchStatistics(stats);
             loc.LoadInMemory();
             count++;
         }
@@ -155,11 +157,12 @@ public class SearchQuery : ISearchQuery
 
     public List<ISearchResult> GetFilteredResults()
     {
+        SearchStepNotificationSink.NotifyStep(SearchStep.AtSearch);
         List<ISearchResult> results = new List<ISearchResult>();
         var count = 1;
         foreach (var loc in locations)
         {
-            progressSink.NotifyProgress(50 + (50 * (count / locations.Count())), "loading results: " + loc.GetName());
+            SearchStepNotificationSink.progressSink.NotifyProgress(50 + (50 * (count / locations.Count())), "loading results: " + loc.GetName());
             results.AddRange(loc.Search(this));
             count++;
         }
@@ -199,8 +202,7 @@ public class SearchQuery : ISearchQuery
         outputs.Add(output);
     }
 
-    public SearchProgressSink GetSearchProgressSink() { return progressSink; }
-
+   
     public string? Name
     {
         get; set;

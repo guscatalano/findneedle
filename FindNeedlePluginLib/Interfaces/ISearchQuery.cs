@@ -11,7 +11,6 @@ public interface ISearchQuery
     public void AddFilter(ISearchFilter filter);
 
     public List<ISearchFilter> GetFilters();
-    public SearchProgressSink GetSearchProgressSink();
 
     public SearchStatistics GetSearchStatistics();
 

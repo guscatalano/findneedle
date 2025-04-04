@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using findneedle.Interfaces;
 using FindNeedleCoreUtils;
+using FindNeedlePluginLib.Implementations.SearchNotifications;
 using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
@@ -40,7 +41,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         procStats = new ReportFromComponent()
         {
             component = this.GetType().Name,
-            step = SearchStatisticStep.AtLoad,
+            step = SearchStep.AtLoad,
             summary = "statsByFile",
             metric = new Dictionary<string, dynamic>()
         };
@@ -82,7 +83,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         procStats = new ReportFromComponent()
         {
             component = this.GetType().Name,
-            step = SearchStatisticStep.AtLoad,
+            step = SearchStep.AtLoad,
             summary = "statsByFile",
             metric = new Dictionary<string, dynamic>()
         };
@@ -188,7 +189,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         ReportFromComponent extensionProviderReport = new ReportFromComponent()
         {
             component = this.GetType().Name,
-            step = SearchStatisticStep.AtLoad,
+            step = SearchStep.AtLoad,
             summary = "ExtensionProviders",
             metric = new Dictionary<string, dynamic>()
         };
@@ -196,7 +197,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         ReportFromComponent ProviderByFileReport = new ReportFromComponent()
         {
             component = this.GetType().Name,
-            step = SearchStatisticStep.AtLoad,
+            step = SearchStep.AtLoad,
             summary = "ProviderByFile",
             metric = new Dictionary<string, dynamic>()
         };

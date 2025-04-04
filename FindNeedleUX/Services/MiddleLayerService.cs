@@ -65,11 +65,9 @@ public class MiddleLayerService
 
     public static void UpdateSearchQuery()
     {
-        SearchProgressSink x = Query.progressSink;
         Query = new SearchQuery();
         Query.filters = Filters;
         Query.locations = Locations;
-        Query.progressSink = x;
     }
 
     public static List<LogLine> GetLogLines()
@@ -86,7 +84,7 @@ public class MiddleLayerService
 
     public static SearchProgressSink GetProgressEventSink()
     {
-        return Query.progressSink;
+        return Query.SearchStepNotificationSink.progressSink;
     }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously

@@ -13,5 +13,6 @@ public abstract class IEventLogQueryLocation : ISearchLocation
     }
     public override void SetSearchStatistics(SearchStatistics stats)
     {
+
     }
 }
