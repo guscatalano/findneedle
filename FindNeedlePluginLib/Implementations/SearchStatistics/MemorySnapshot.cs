@@ -11,7 +11,7 @@ namespace FindNeedlePluginLib.Implementations.SearchStatistics;
 public class MemorySnapshot(Process p)
 {
     private long privatememory = 0;
-    private long gcmemory = 0;
+    private long totalmemory = 0;
     private DateTime when;
     private readonly Process p = p;
 
@@ -20,7 +20,7 @@ public class MemorySnapshot(Process p)
         when = DateTime.Now;
         p.Refresh();
         privatememory = p.PrivateMemorySize64;
-        gcmemory = GC.GetTotalMemory(false);
+        totalmemory = p.VirtualMemorySize64;
     }
     public long GetMemoryUsagePrivate()
     {
@@ -28,14 +28,14 @@ public class MemorySnapshot(Process p)
     }
     public long GetMemoryUsageTotal()
     {
-        return gcmemory;
+        return totalmemory;
     }
 
 
     public string GetMemoryUsageFriendly()
     {
-        return " PrivateMemory (" + ByteUtils.BytesToFriendlyString(privatememory) + ") / GC Memory (" +
-            ByteUtils.BytesToFriendlyString(gcmemory) + ").";
+        return " PrivateMemory (" + ByteUtils.BytesToFriendlyString(privatememory) + ") / Total Memory (" +
+            ByteUtils.BytesToFriendlyString(totalmemory) + ").";
     }
 
     public DateTime GetSnapTime()
