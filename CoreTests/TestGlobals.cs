@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using FindNeedleCoreUtils;
@@ -37,24 +39,51 @@ public class TestGlobals
 
     public static string PickRightChild(string basepath, string searchExe)
     {
-
-        List<string> files = FileIO.GetAllFiles(basepath).ToList();
-        var rightFile = "";
-        var found = false;
-        foreach (var file in files)
+        var arch = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        if(arch == null)
         {
-            if (file.Contains(searchExe) && file.Contains("bin"))
+            throw new Exception("cant get current arch");
+        }
+        arch = arch.Split("bin")[1];
+        arch = Path.Combine("\\bin", arch);
+        Exception? lastException = null;
+        var tries = 3;
+        while (tries > 0)
+        {
+            try
             {
-                if (found)
+                List<string> files = FileIO.GetAllFiles(basepath).ToList();
+                var rightFile = "";
+                var found = false;
+                foreach (var file in files)
                 {
-                    throw new Exception("There are multiple " + searchExe + " in " + basepath);
+                    if (file.Contains(searchExe) && file.Contains(arch))
+                    {
+                        if (found)
+                        {
+                            throw new Exception("There are multiple " + searchExe + " in " + basepath);
+                        }
+                        found = true;
+                        rightFile = Path.GetFullPath(file).Replace(searchExe, "");
+                    }
                 }
-                found = true;
-                rightFile = Path.GetFullPath(file).Replace(searchExe, "");
+                return rightFile;
+                throw new Exception("Can't find " + searchExe);
+            }
+            catch (Exception e)
+            {
+                lastException = e;
+                tries--;
+                Thread.Sleep(1000); // Try again incase compile shit is happening
             }
         }
-        return rightFile;
-        throw new Exception("Can't find " + searchExe);
+        if (lastException != null)
+        {
+            throw lastException;
+        } else
+        {
+            throw new Exception("Can't find bin after 3 tries, dont know why");
+        }
     }
 
 
@@ -76,7 +105,6 @@ public class TestGlobals
         var basePath = PickRightParent(path, "FakeLoadPlugin");
         var childPath = PickRightChild(Path.Combine(basePath, "FakeLoadPlugin"), "FakeLoadPlugin.exe");
         var sourcePath = Path.Combine(basePath, childPath);
-
         if (!Directory.Exists(sourcePath))
         {
             throw new Exception("Can't find " + sourcePath + ". I am running in " + path + " my basepath was: " + basePath);
@@ -87,6 +115,7 @@ public class TestGlobals
         
         basePath = PickRightParent(path, "TestProcessorPlugin");
         childPath = PickRightChild(Path.Combine(basePath, "TestProcessorPlugin"), "TestProcessorPlugin.dll");
+
         sourcePath = Path.Combine(basePath, childPath);
         if (!Directory.Exists(sourcePath))
         {

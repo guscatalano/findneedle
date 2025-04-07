@@ -13,10 +13,6 @@ public class SearchProgressSink
     public List<Action<int>> numericProgress = new();
     public List<Action<string>> textProgress = new();
 
-    public void Clear()
-    {
-        numericProgress.Clear();
-    }
 
     public void RegisterForNumericProgress(Action<int> register)
     {
