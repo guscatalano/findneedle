@@ -73,11 +73,4 @@ public class InMemoryPluginModule
         return new InMemoryPluginObject<T>(this, desc);
     }
 
-
-
-    public object? CreateInstance(PluginDescription specificDescription)
-    {
-        return GetObjectForTypeGeneric(specificDescription).CreateInstance();
-    }
-
 }
