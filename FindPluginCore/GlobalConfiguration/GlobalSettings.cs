@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace FindPluginCore.GlobalConfiguration;
 
+[ExcludeFromCodeCoverage]
 public class GlobalSettings
 {
     //Enable debug mode (noisier output)
