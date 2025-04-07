@@ -39,13 +39,6 @@ public class TestGlobals
 
     public static string PickRightChild(string basepath, string searchExe)
     {
-        var arch = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-        if(arch == null)
-        {
-            throw new Exception("cant get current arch");
-        }
-        arch = arch.Split("bin")[1];
-        arch = Path.Combine("\\bin", arch);
         Exception? lastException = null;
         var tries = 3;
         while (tries > 0)
@@ -57,18 +50,24 @@ public class TestGlobals
                 var found = false;
                 foreach (var file in files)
                 {
-                    if (file.Contains(searchExe) && file.Contains(arch))
+                    if (file.EndsWith(searchExe) && file.Contains("bin"))
                     {
                         if (found)
                         {
-                            throw new Exception("There are multiple " + searchExe + " in " + basepath);
+                            throw new Exception("There are multiple " + searchExe + " in " + basepath + ". Found: " + rightFile + " and " + file);
                         }
                         found = true;
                         rightFile = Path.GetFullPath(file).Replace(searchExe, "");
                     }
                 }
-                return rightFile;
-                throw new Exception("Can't find " + searchExe);
+                if (found)
+                {
+                    return rightFile;
+                }
+                else
+                {
+                    throw new Exception("Can't find " + searchExe + " in " + basepath);
+                }
             }
             catch (Exception e)
             {
