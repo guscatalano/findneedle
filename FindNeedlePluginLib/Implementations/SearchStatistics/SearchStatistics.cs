@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Implementations.SearchNotifications;
 using FindNeedlePluginLib.Implementations.SearchStatistics;
@@ -20,43 +21,41 @@ public class ReportFromComponent
 
 public class SearchStatistics
 {
-    readonly ISearchQuery q;
-    readonly Process proc;
-    public SearchStatistics(ISearchQuery query)
+    public SearchStatistics()
     {
-        q = query;
-        proc = Process.GetCurrentProcess();
-        atLoad = new MemorySnapshot(proc);
-        atSearch = new MemorySnapshot(proc);
-        atLaunch = new MemorySnapshot(proc);
+        atLoad = new MemorySnapshot();
+        atSearch = new MemorySnapshot();
+        atLaunch = new MemorySnapshot();
         atLaunch.Snap();
     }
 
-    int totalRecordsSearch = 0;
-    int totalRecordsLoaded = 0;
-    readonly MemorySnapshot atLaunch;
-    readonly MemorySnapshot atLoad;
-    readonly MemorySnapshot atSearch;
+    private int totalRecordsSearch = 0;
+    private int totalRecordsLoaded = 0;
+    private readonly MemorySnapshot atLaunch;
+    private readonly MemorySnapshot atLoad;
+    private readonly MemorySnapshot atSearch;
 
 
 
-    public Dictionary<SearchStep, List<ReportFromComponent>> componentReports = new();
+    public Dictionary<SearchStep, List<ReportFromComponent>> componentReports = [];
     
 
     public void ReportFromComponent(ReportFromComponent data)
     {
-        if (!componentReports.ContainsKey(data.step))
+        if (!componentReports.TryGetValue(data.step, out var value))
         {
-            componentReports.Add(data.step, new List<ReportFromComponent>());
+            value = new List<ReportFromComponent>();
+            componentReports.Add(data.step, value);
         }
-        componentReports[data.step].Add(data);
+
+        value.Add(data);
         
     }
 
-    public void LoadedAll()
+    public void LoadedAll(ISearchQuery q)
     {
         totalRecordsLoaded = 0;
-        foreach (ISearchLocation loc in q.GetLocations())
+        foreach (var loc in q.GetLocations())
         {
             loc.ReportStatistics();
             totalRecordsLoaded += loc.numRecordsInMemory;
@@ -65,10 +64,10 @@ public class SearchStatistics
         atLoad.Snap();
     }
 
-    public void Searched()
+    public void Searched(ISearchQuery q)
     {
         totalRecordsSearch = 0;
-        foreach (ISearchLocation loc in q.GetLocations())
+        foreach (var loc in q.GetLocations())
         {
             loc.ReportStatistics();
             totalRecordsSearch += loc.numRecordsInLastResult;
@@ -133,9 +132,9 @@ public class SearchStatistics
         return summary;
     }
 
+    [ExcludeFromCodeCoverage]
     public void ReportToConsole()
     {
         Console.WriteLine(GetSummaryReport());
-
     }
 }

@@ -69,7 +69,7 @@ public class SearchQuery : ISearchQuery
     {
         get
         {
-            _stats ??= new SearchStatistics(this);
+            _stats ??= new SearchStatistics();
             return _stats;
         }
         set => _stats = value;
@@ -114,7 +114,7 @@ public class SearchQuery : ISearchQuery
 
     public SearchQuery()
     {
-        stats = new(this);
+        stats = new();
         _stats = stats;
         _filters = [];
         _locations = [];
@@ -139,7 +139,7 @@ public class SearchQuery : ISearchQuery
 
     public void LoadAllLocationsInMemory()
     {
-        stats = new SearchStatistics(this); //reset the stats
+        stats = new SearchStatistics(); //reset the stats
         SearchStepNotificationSink.NotifyStep(SearchStep.AtLoad);
         SetDepthForAllLocations(Depth);
         var count = 1;
@@ -153,7 +153,7 @@ public class SearchQuery : ISearchQuery
             loc.LoadInMemory();
             count++;
         }
-        stats.LoadedAll();
+        stats.LoadedAll(this);
     }
 
     public List<ISearchResult> GetFilteredResults()
@@ -167,7 +167,7 @@ public class SearchQuery : ISearchQuery
             results.AddRange(loc.Search(this));
             count++;
         }
-        stats.Searched();
+        stats.Searched(this);
         return results;
     }
 

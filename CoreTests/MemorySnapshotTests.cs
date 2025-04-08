@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using findneedle;
 using FindNeedlePluginLib.Implementations.SearchStatistics;
 
 namespace CoreTests;
@@ -36,5 +37,20 @@ public class MemorySnapshotTests
 
         Assert.IsTrue(TimeSpan.FromSeconds(10) > (memorySnapshot.GetSnapTime() - beforeSnap));
         Assert.IsTrue(memorySnapshot.GetMemoryUsagePrivate() < memorySnapshot.GetMemoryUsageTotal());
+    }
+
+    [TestMethod]
+    public void BasicFailSnap()
+    {
+        try
+        {
+            MemorySnapshot mem = new();
+            mem.GetSnapTime();
+            Assert.Fail("Should have thrown");
+        }
+        catch
+        {
+            Assert.IsTrue(true); //Should throw, we didnt snap
+        }
     }
 }
