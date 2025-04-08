@@ -97,10 +97,10 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
             }
         }
     }
+    List<IFileExtensionProcessor> knownProcessors = [];
+    private readonly Dictionary<string, IFileExtensionProcessor> extToProcessor = new();
 
-    private Dictionary<string, IFileExtensionProcessor> extToProcessor = new();
-
-    private List<Task> tasks = new();
+    private readonly List<Task> tasks = new();
     public override void LoadInMemory()
     {
         procStats = new ReportFromComponent()
@@ -164,94 +164,11 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
             sink.NotifyProgress("processed " + path);
         }
         
-        CalculateStats(procStats);
+        
         
     }
 
-    private void CalculateStats(ReportFromComponent procStats)
-    {
-        return; //Skip for now
-        //Do reports
 
-        ReportFromComponent extensionProviderReport = new ReportFromComponent()
-        {
-            component = this.GetType().Name,
-            step = SearchStep.AtLoad,
-            summary = "ExtensionProviders",
-            metric = new Dictionary<string, dynamic>()
-        };
-
-        ReportFromComponent ProviderByFileReport = new ReportFromComponent()
-        {
-            component = this.GetType().Name,
-            step = SearchStep.AtLoad,
-            summary = "ProviderByFile",
-            metric = new Dictionary<string, dynamic>()
-        };
-
-
-        foreach (var p in knownProcessors)
-        {
-            if(p == null)
-            {
-                continue; //bug!
-            }
-            var name = p.GetType().ToString();
-            if (!extensionProviderReport.metric.ContainsKey(name))
-            {
-                extensionProviderReport.metric[name] = 1;
-            }
-            else
-            {
-                extensionProviderReport.metric[name] = extensionProviderReport.metric[name] + 1;
-            }
-
-            foreach (var provider in p.GetProviderCount().Keys)
-            {
-                if (!ProviderByFileReport.metric.ContainsKey(provider))
-                {
-                    ProviderByFileReport.metric[provider] = new Dictionary<string, int>();
-                }
-
-                ProviderByFileReport.metric[provider].Add(p.GetFileName(), p.GetProviderCount()[provider]);
-
-            }
-
-            if (!procStats.metric.ContainsKey(p.GetFileName()))
-            {
-                if (name.Contains("ETLProcessor"))
-                {
-                    /*
-                    ETLProcessor etlproc = (ETLProcessor)p;
-                    procStats.metric[p.GetFileName()] = new Dictionary<string, string>();
-                    procStats.metric[p.GetFileName()]["unknown"] = etlproc.currentResult.TotalFormatsUnknown + "";
-                    procStats.metric[p.GetFileName()]["time"] = etlproc.currentResult.TotalElapsedTime + "";
-                    procStats.metric[p.GetFileName()]["errors"] = etlproc.currentResult.TotalFormatErrors + "";
-                    procStats.metric[p.GetFileName()]["buffers"] = etlproc.currentResult.TotalBuffersProcessed + "";
-                    procStats.metric[p.GetFileName()]["lost"] = etlproc.currentResult.TotalEventsLost + "";
-                    procStats.metric[p.GetFileName()]["events"] = etlproc.currentResult.TotalEventsProcessed + "";*/
-                }
-                else
-                {
-                    procStats.metric[p.GetFileName()] = new Dictionary<string, string>();
-                }
-
-            }
-            else
-            {
-                extensionProviderReport.metric[name] = extensionProviderReport.metric[name] + 1;
-            }
-        }
-
-        if (stats != null)
-        {
-            stats.ReportFromComponent(extensionProviderReport);
-            stats.ReportFromComponent(ProviderByFileReport);
-            stats.ReportFromComponent(procStats);
-        }
-    }
-
-    List<IFileExtensionProcessor> knownProcessors = [];
 
 
     private void ProcessFile(string file)
@@ -340,5 +257,76 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
     }
 
     public override void ClearStatistics() => throw new NotImplementedException();
-    public override ReportFromComponent ReportStatistics() => throw new NotImplementedException();
+    public override ReportFromComponent ReportStatistics() {
+
+        ReportFromComponent extensionProviderReport = new ReportFromComponent()
+        {
+            component = this.GetType().Name,
+            step = SearchStep.AtLoad,
+            summary = "ExtensionProviders",
+            metric = new Dictionary<string, dynamic>()
+        };
+        return extensionProviderReport;
+        /*
+       ReportFromComponent ProviderByFileReport = new ReportFromComponent()
+       {
+           component = this.GetType().Name,
+           step = SearchStep.AtLoad,
+           summary = "ProviderByFile",
+           metric = new Dictionary<string, dynamic>()
+       };
+
+
+       foreach (var p in knownProcessors)
+       {
+           if (p == null)
+           {
+               continue; //bug!
+           }
+           var name = p.GetType().ToString();
+           if (!extensionProviderReport.metric.ContainsKey(name))
+           {
+               extensionProviderReport.metric[name] = 1;
+           }
+           else
+           {
+               extensionProviderReport.metric[name] = extensionProviderReport.metric[name] + 1;
+           }
+
+           foreach (var provider in p.GetProviderCount().Keys)
+           {
+               if (!ProviderByFileReport.metric.ContainsKey(provider))
+               {
+                   ProviderByFileReport.metric[provider] = new Dictionary<string, int>();
+               }
+
+               ProviderByFileReport.metric[provider].Add(p.GetFileName(), p.GetProviderCount()[provider]);
+
+           }
+
+           if (!procStats.metric.ContainsKey(p.GetFileName()))
+           {
+               if (name.Contains("ETLProcessor"))
+               {
+
+               }
+               else
+               {
+                   procStats.metric[p.GetFileName()] = new Dictionary<string, string>();
+               }
+
+           }
+           else
+           {
+               extensionProviderReport.metric[name] = extensionProviderReport.metric[name] + 1;
+           }
+       }
+
+       if (stats != null)
+       {
+           stats.ReportFromComponent(extensionProviderReport);
+           stats.ReportFromComponent(ProviderByFileReport);
+           stats.ReportFromComponent(procStats);
+       }*/
+    }
 }
