@@ -52,5 +52,5 @@ public abstract class ISearchLocation: IReportStatistics
     public abstract string GetDescription();
     public abstract string GetName();
     public abstract void ClearStatistics();
-    public abstract ReportFromComponent ReportStatistics();
+    public abstract List<ReportFromComponent> ReportStatistics();
 }

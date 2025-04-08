@@ -257,8 +257,9 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
     }
 
     public override void ClearStatistics() => throw new NotImplementedException();
-    public override ReportFromComponent ReportStatistics() {
+    public override List<ReportFromComponent> ReportStatistics() {
 
+        List<ReportFromComponent> reports = new List<ReportFromComponent>();
         ReportFromComponent extensionProviderReport = new ReportFromComponent()
         {
             component = this.GetType().Name,
@@ -266,18 +267,19 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
             summary = "ExtensionProviders",
             metric = new Dictionary<string, dynamic>()
         };
-        return extensionProviderReport;
-        /*
-       ReportFromComponent ProviderByFileReport = new ReportFromComponent()
+        reports.Add(extensionProviderReport);
+
+        ReportFromComponent ProviderByFileReport = new ReportFromComponent()
        {
            component = this.GetType().Name,
            step = SearchStep.AtLoad,
            summary = "ProviderByFile",
            metric = new Dictionary<string, dynamic>()
        };
-
-
-       foreach (var p in knownProcessors)
+        reports.Add(ProviderByFileReport);
+        return reports;
+        /*
+        foreach (var p in knownProcessors)
        {
            if (p == null)
            {

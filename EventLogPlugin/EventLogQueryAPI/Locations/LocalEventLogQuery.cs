@@ -88,5 +88,5 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation
     }
 
     public override void ClearStatistics() => throw new NotImplementedException();
-    public override ReportFromComponent ReportStatistics() => throw new NotImplementedException();
+    public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
 }

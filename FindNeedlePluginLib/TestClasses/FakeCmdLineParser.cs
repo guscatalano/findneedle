@@ -53,5 +53,5 @@ public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFil
     public string GetFriendlyName() => throw new NotImplementedException();
     public string GetClassName() => throw new NotImplementedException();
     public override void ClearStatistics() => throw new NotImplementedException();
-    public override ReportFromComponent ReportStatistics() => throw new NotImplementedException();
+    public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
 }

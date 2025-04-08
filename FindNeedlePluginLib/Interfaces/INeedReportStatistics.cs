@@ -9,6 +9,6 @@ namespace FindNeedlePluginLib.Interfaces;
 public interface IReportStatistics
 {
     public void ClearStatistics();
-    public ReportFromComponent ReportStatistics();
+    public List<ReportFromComponent> ReportStatistics();
 
 }
