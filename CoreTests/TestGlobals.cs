@@ -20,7 +20,7 @@ public class TestGlobals
     public static string TEST_DEP_PLUGIN_REL_PATH = TEST_DEP_PLUGIN;
     public static string FAKE_LOAD_PLUGIN_REL_PATH = FAKE_LOAD_PLUGIN;
 
-    public const int TEST_DEP_PLUGIN_COUNT = 3;
+    public const int TEST_DEP_PLUGIN_COUNT = 4;
     
     public static string PickRightParent(string basepath, string searchpath)
     {

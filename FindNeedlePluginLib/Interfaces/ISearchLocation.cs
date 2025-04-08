@@ -20,8 +20,8 @@ public enum SearchLocationDepth
 public abstract class ISearchLocation: IReportStatistics
 {
     public int numRecordsInLastResult
-    { get;
-        set;
+    { 
+        get; set;
     }
     public int numRecordsInMemory
     {
@@ -30,7 +30,9 @@ public abstract class ISearchLocation: IReportStatistics
 
     public SearchLocationDepth depth
     {
-    get; set; }
+        get; set; 
+    }
+
 
 
     public abstract void LoadInMemory();

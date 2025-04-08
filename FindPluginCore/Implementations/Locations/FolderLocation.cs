@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using findneedle.Interfaces;
+using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Implementations.SearchNotifications;
 using FindNeedlePluginLib.Interfaces;
@@ -21,8 +22,9 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
 
 
     public bool isFile
-    { get; set;
-     }
+    { 
+        get; set;
+    }
 
     public string path
     {
@@ -40,18 +42,14 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
             metric = new Dictionary<string, dynamic>()
         };
         this.path = path;
-        if(File.Exists(path))
-        {
-#pragma warning disable IDE0059 // Unnecessary assignment of a value
-            isFile = true;
-#pragma warning restore IDE0059 // Unnecessary assignment of a value
-        }
     }
+
+
 
     [ExcludeFromCodeCoverage]
     public override string GetDescription()
     {
-        return "file/folder";   
+        return "file/folder";
     }
 
     [ExcludeFromCodeCoverage]
@@ -63,7 +61,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
     ReportFromComponent procStats;
 
 
-    public void GetAllFilesErrorHandler(string path)
+    private void GetAllFilesErrorHandler(string path)
     {
 
         //Report errors right away
@@ -74,7 +72,35 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         }
     } 
 
-    public List<Task> tasks = new();
+    public void SetExtensionProcessorList(List<IFileExtensionProcessor> processors)
+    {
+        lock (knownProcessors)
+        {
+            knownProcessors = processors;
+            foreach(var processor in processors)
+            {
+                if (processor == null)
+                {
+                    throw new Exception("null?");
+                }
+                var exts = processor.RegisterForExtensions();
+                foreach(var ext in exts)
+                {
+                    if (!extToProcessor.ContainsKey(ext))
+                    {
+                        extToProcessor[ext] = processor;
+                    } else
+                    {
+                        throw new Exception("can't register more than one processor per extension");
+                    }
+                }
+            }
+        }
+    }
+
+    private Dictionary<string, IFileExtensionProcessor> extToProcessor = new();
+
+    private List<Task> tasks = new();
     public override void LoadInMemory()
     {
         procStats = new ReportFromComponent()
@@ -85,8 +111,8 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
             metric = new Dictionary<string, dynamic>()
         };
 
-        knownProcessors = new List<IFileExtensionProcessor>();
         TempStorage.GetMainTempPath();
+        
         if (File.Exists(path))
         {
             isFile = true;
@@ -142,45 +168,9 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         
     }
 
-    public void QueueNewFolder(string path, bool startWait = false)
+    private void CalculateStats(ReportFromComponent procStats)
     {
-        List<Task> myTasks = new List<Task>();
-        foreach (var file in FileIO.GetAllFiles(path, GetAllFilesErrorHandler))
-        {
-            if (sink != null)
-            {
-                sink.NotifyProgress("queuing up: " + file);
-            }
-            myTasks.Add(Task.Run(() => ProcessFile(file)));
-        }
-
-        if (startWait)
-        {
-            if (sink != null)
-            {
-                sink.NotifyProgress("waiting for etl files to be processed");
-            }
-            var completed = 0;
-            while (completed < myTasks.Count)
-            {
-                completed = myTasks.Where(x => x.IsCompleted).Count();
-                if (sink != null)
-                {
-                    sink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
-                }
-                Thread.Yield();
-            }
-            Task.WhenAll(myTasks).Wait();
-            myTasks.Clear();
-            if (sink != null)
-            {
-                sink.NotifyProgress("processed " + path);
-            }
-        }
-    }
-
-    public void CalculateStats(ReportFromComponent procStats)
-    {
+        return; //Skip for now
         //Do reports
 
         ReportFromComponent extensionProviderReport = new ReportFromComponent()
@@ -261,20 +251,10 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         }
     }
 
-    List<IFileExtensionProcessor> knownProcessors = new();
+    List<IFileExtensionProcessor> knownProcessors = [];
 
-    bool IsDigitsOnly(string str)
-    {
-        foreach (var c in str)
-        {
-            if (c < '0' || c > '9')
-                return false;
-        }
 
-        return true;
-    }
-
-    public void ProcessFile(string file)
+    private void ProcessFile(string file)
     {
         var ext = Path.GetExtension(file).ToLower();
 
@@ -291,57 +271,14 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
                 }
             }
         }
-        
-        switch (ext)
-        {
-            case ".etl":
-                /*
-                ETLProcessor p = new ETLProcessor(file);
-                if(p == null)
-                {
-                    return; //failed to rpcoess handle it later.
-                }
-                knownProcessors.Add(p);
-                p.DoPreProcessing();
 
-                //this doesn't work :(
-                if (GetSearchDepth() != SearchLocationDepth.Shallow || true)
-                {
-                    p.LoadInMemory();
-                }*/
-                break;
-            case ".txt":
-                break;
-            case ".zip":/*
-                ZipProcessor pz = new ZipProcessor(this);
-                pz.OpenFile(file);
-                if (pz == null)
-                {
-                    return;
-                }
-                knownProcessors.Add(pz);
-                pz.DoPreProcessing();
-                pz.LoadInMemory();*/
-                break;
-            case ".7z":
-               
-                break;
-            case ".evtx":
-                //Remember we have a native one!
-                /*
-                EVTXProcessor px = new EVTXProcessor(file);
-                if (px == null)
-                {
-                    return;
-                }
-                knownProcessors.Add(px);
-                px.DoPreProcessing();
-                px.LoadInMemory();
-                */
-                break;
-            case ".dmp":
-                break;
+        if (extToProcessor.ContainsKey(ext))
+        {
+            extToProcessor[ext].OpenFile(file);
+            extToProcessor[ext].DoPreProcessing();
+            extToProcessor[ext].LoadInMemory();
         }
+
     }
 
     public override List<ISearchResult> Search(ISearchQuery? searchQuery)

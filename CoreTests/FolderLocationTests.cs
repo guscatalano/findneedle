@@ -4,8 +4,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations;
+using findneedle.Interfaces;
+using findneedle.PluginSubsystem;
 using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib.TestClasses;
+using FindPluginCore.PluginSubsystem;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using TestProcessorPlugin;
 
 namespace CoreTests;
 
@@ -67,5 +72,55 @@ public class FolderLocationTests
             Assert.Fail(e.ToString());
         }
         Assert.IsTrue(loc.path.Equals(TEST_STRING));
+    }
+
+
+    [TestMethod]
+    public void TestHandlingExtensions()
+    {
+        var TEST_FILE = "FakeFolder\\fakefile.txt";
+        FolderLocation loc = new();
+        loc.ParseCommandParameterIntoQuery(TEST_FILE);
+
+        //We know its the only one
+        SampleFileExtensionProcessor sampleFileExtensionProcessor = new();
+        List<IFileExtensionProcessor> processors = new();
+        processors.Add(sampleFileExtensionProcessor);
+
+        Assert.IsFalse(sampleFileExtensionProcessor.hasDonePreProcessing);
+        Assert.IsFalse(sampleFileExtensionProcessor.hasLoaded);
+
+
+        loc.SetExtensionProcessorList(processors);
+        loc.LoadInMemory();
+
+        Assert.IsTrue(sampleFileExtensionProcessor.hasDonePreProcessing);
+        Assert.IsTrue(sampleFileExtensionProcessor.hasLoaded);
+        Assert.AreEqual(sampleFileExtensionProcessor.lastOpenedFile, TEST_FILE);
+
+    }
+
+    [TestMethod]
+    public void TestSkipHandlingExtensions()
+    {
+        var TEST_FILE = "FakeFolder\\somethingelse.json";
+        FolderLocation loc = new();
+        loc.ParseCommandParameterIntoQuery(TEST_FILE);
+
+        //We know its the only one
+        SampleFileExtensionProcessor sampleFileExtensionProcessor = new();
+        List<IFileExtensionProcessor> processors = new();
+        processors.Add(sampleFileExtensionProcessor);
+
+        Assert.IsFalse(sampleFileExtensionProcessor.hasDonePreProcessing);
+        Assert.IsFalse(sampleFileExtensionProcessor.hasLoaded);
+
+        //The sample processor does not handle .json
+        loc.SetExtensionProcessorList(processors);
+        loc.LoadInMemory();
+
+        Assert.IsFalse(sampleFileExtensionProcessor.hasDonePreProcessing);
+        Assert.IsFalse(sampleFileExtensionProcessor.hasLoaded);
+
     }
 }

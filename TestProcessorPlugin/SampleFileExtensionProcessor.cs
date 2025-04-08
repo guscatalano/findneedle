@@ -1,0 +1,38 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using findneedle;
+using findneedle.Interfaces;
+
+namespace TestProcessorPlugin;
+
+[ExcludeFromCodeCoverage]
+public class SampleFileExtensionProcessor : IFileExtensionProcessor
+{
+    public string lastOpenedFile = "";
+    public bool hasLoaded = false;
+    public bool hasDonePreProcessing = false;
+    public void Dispose() => throw new NotImplementedException();
+    public void DoPreProcessing()
+    {
+        hasDonePreProcessing = true;
+    }
+    public string GetFileName() => throw new NotImplementedException();
+    public Dictionary<string, int> GetProviderCount() => throw new NotImplementedException();
+    public List<ISearchResult> GetResults() => throw new NotImplementedException();
+    public void LoadInMemory()
+    {
+        hasLoaded = true;
+    }
+    public void OpenFile(string fileName)
+    {
+        lastOpenedFile = fileName;
+    }
+    public List<string> RegisterForExtensions()
+    {
+        return [".txt"];
+    }
+}
