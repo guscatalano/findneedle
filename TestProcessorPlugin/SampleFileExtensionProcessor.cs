@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Interfaces;
+using FindNeedlePluginLib.TestClasses;
 
 namespace TestProcessorPlugin;
 
@@ -26,7 +27,13 @@ public class SampleFileExtensionProcessor : IFileExtensionProcessor
     public Dictionary<string, int> GetProviderCount() {
         return new Dictionary<string, int>(); 
     }
-    public List<ISearchResult> GetResults() => throw new NotImplementedException();
+    public List<ISearchResult> GetResults()
+    {
+        var list = new List<ISearchResult>();
+        list.Add(new FakeSearchResult());
+        list.Add(new FakeSearchResult());
+        return list;
+    }
     public void LoadInMemory()
     {
         hasLoaded = true;

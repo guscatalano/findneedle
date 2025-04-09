@@ -17,6 +17,8 @@ namespace CoreTests;
 [TestClass]
 public class FolderLocationTests
 {
+
+
     [TestMethod]
     public void TestCmdLineParserWithFile()
     {
@@ -144,5 +146,23 @@ public class FolderLocationTests
         Assert.IsTrue(result.FirstOrDefault( x => x.summary.Equals("ExtensionProviders")) != null);
         Assert.IsTrue(result.FirstOrDefault(x => x.summary.Equals("ProviderByFile")) != null);
         //Expand later
+    }
+
+    [TestMethod]
+    public void TestSearch()
+    {
+        var TEST_FILE = "FakeFolder\\fakefile.txt";
+        FolderLocation loc = new();
+        loc.ParseCommandParameterIntoQuery(TEST_FILE);
+
+        //We know its the only one
+        SampleFileExtensionProcessor sampleFileExtensionProcessor = new();
+        List<IFileExtensionProcessor> processors = new();
+        processors.Add(sampleFileExtensionProcessor);
+
+        loc.SetExtensionProcessorList(processors);
+        loc.LoadInMemory();
+        var results = loc.Search(new FakeSearchQuery());
+        Assert.AreEqual(results.Count, 2);
     }
 }
