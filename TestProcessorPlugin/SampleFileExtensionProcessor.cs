@@ -20,8 +20,12 @@ public class SampleFileExtensionProcessor : IFileExtensionProcessor
     {
         hasDonePreProcessing = true;
     }
-    public string GetFileName() => throw new NotImplementedException();
-    public Dictionary<string, int> GetProviderCount() => throw new NotImplementedException();
+    public string GetFileName() {
+        return lastOpenedFile; 
+    }
+    public Dictionary<string, int> GetProviderCount() {
+        return new Dictionary<string, int>(); 
+    }
     public List<ISearchResult> GetResults() => throw new NotImplementedException();
     public void LoadInMemory()
     {
