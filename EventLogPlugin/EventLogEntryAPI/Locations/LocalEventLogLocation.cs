@@ -71,6 +71,10 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
 
     public override List<ISearchResult> Search(ISearchQuery? searchQuery)
     {
+        if(searchQuery == null)
+        {
+            return searchResults;
+        }
         numRecordsInLastResult = 0;
         List<ISearchResult> filteredResults = new List<ISearchResult>();
         foreach (ISearchResult result in searchResults)
@@ -92,7 +96,7 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
                 numRecordsInLastResult++;
             }
         }
-        return filteredResults;
+        return searchResults;
     }
 
     public CommandLineRegistration RegisterCommandHandler() 

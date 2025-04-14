@@ -37,7 +37,7 @@ public abstract class ISearchLocation: IReportStatistics
 
     public abstract void LoadInMemory();
 
-    public abstract List<ISearchResult> Search(ISearchQuery? searchQuery);
+    public abstract List<ISearchResult> Search(ISearchQuery? searchQuery = null);
 
     public void SetSearchDepth(SearchLocationDepth depth)
     {

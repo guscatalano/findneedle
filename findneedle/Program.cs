@@ -29,6 +29,7 @@ internal class Program
         {
 
             Console.WriteLine("Searching...");
+            //x.RunThrough();
             x.LoadAllLocationsInMemory();
             //var y = x.GetFilteredResults();
 

@@ -13,6 +13,8 @@ public enum SearchStep
     AtLoad,
     AtSearch,
     AtLaunch,
+    AtProcessor,
+    AtOutput,
     Total
 }
 public class SearchStepNotificationSink

@@ -34,11 +34,33 @@ public class SearchStatistics
     private readonly MemorySnapshot atLaunch;
     private readonly MemorySnapshot atLoad;
     private readonly MemorySnapshot atSearch;
+    private ISearchQuery? searchQuery;
 
-
+    public void StepNotificationHandler(SearchStep step)
+    {
+        if(searchQuery == null)
+        {
+            throw new Exception("Search query is null");
+        }
+        switch (step)
+        {
+            case SearchStep.AtLoad:
+                LoadedAll(searchQuery);
+                break;
+            case SearchStep.AtSearch:
+                Searched(searchQuery);
+                break;
+            default:
+                throw new Exception("not valid step");
+        }
+    }
 
     public Dictionary<SearchStep, List<ReportFromComponent>> componentReports = [];
-    
+    public void RegisterForNotifications(SearchStepNotificationSink sink, ISearchQuery query)
+    {
+        sink.RegisterForStepNotification(StepNotificationHandler);
+        searchQuery = query;
+    }
 
     public void ReportFromComponent(ReportFromComponent data)
     {
@@ -101,7 +123,6 @@ public class SearchStatistics
             default:
                 throw new Exception("not valid step for time");
         }
-
     }
 
 
