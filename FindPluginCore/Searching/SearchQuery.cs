@@ -12,15 +12,27 @@ namespace findneedle;
 public class SearchQuery : ISearchQuery
 {
 
-    
+    public void RunThrough()
+    {
+        //Old implementation
+
+        LoadAllLocationsInMemory();
+        GetFilteredResults();
+        ProcessAllResultsToOutput();
+        PrintOutputFilesToConsole();
+        GetSearchStatsOutput();
+        //IResultProcessor p = new WatsonCrashProcessor();
+        //p.ProcessResults(y);
+        //p.GetOutputFile();
+    }
 
     public void AddFilter(ISearchFilter filter)
     {
-        filters.Add(filter);
+        Filters.Add(filter);
     }
 
     private List<ISearchOutput> _output;
-    public List<ISearchOutput> outputs
+    public List<ISearchOutput> Outputs
     {
         get
         {
@@ -53,7 +65,7 @@ public class SearchQuery : ISearchQuery
     
 
     private List<IResultProcessor> _processors;
-    public List<IResultProcessor> processors
+    public List<IResultProcessor> Processors
     {
         get
         {
@@ -76,7 +88,7 @@ public class SearchQuery : ISearchQuery
     }
 
     private List<ISearchFilter> _filters;
-    public List<ISearchFilter> filters
+    public List<ISearchFilter> Filters
     {
         get
         {
@@ -87,7 +99,7 @@ public class SearchQuery : ISearchQuery
     }
 
     private List<ISearchLocation> _locations;
-    public List<ISearchLocation> locations
+    public List<ISearchLocation> Locations
     {
         get
         {
@@ -99,17 +111,17 @@ public class SearchQuery : ISearchQuery
 
     public void SetLocations(List<ISearchLocation> loc)
     {
-        this.locations = loc;
+        this.Locations = loc;
     }
 
     public List<ISearchLocation> GetLocations()
     {
-        return locations;
+        return Locations;
     }
 
     public List<ISearchFilter> GetFilters()
     {
-        return filters;
+        return Filters;
     }
 
     public SearchQuery()
@@ -131,7 +143,7 @@ public class SearchQuery : ISearchQuery
 
     public void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations)
     {
-        foreach (var loc in locations)
+        foreach (var loc in Locations)
         {
             loc.SetSearchDepth(depthForAllLocations);
         }
@@ -144,9 +156,9 @@ public class SearchQuery : ISearchQuery
         SetDepthForAllLocations(Depth);
         var count = 1;
         
-        foreach (var loc in locations)
+        foreach (var loc in Locations)
         {
-            SearchStepNotificationSink.progressSink.NotifyProgress(50 * (count / locations.Count()), "loading location: " + loc.GetName());
+            SearchStepNotificationSink.progressSink.NotifyProgress(50 * (count / Locations.Count()), "loading location: " + loc.GetName());
             //loc.SetNotificationCallback(progressSink);
             //loc.SetSearchStatistics(stats);
 
@@ -161,9 +173,9 @@ public class SearchQuery : ISearchQuery
         SearchStepNotificationSink.NotifyStep(SearchStep.AtSearch);
         List<ISearchResult> results = new List<ISearchResult>();
         var count = 1;
-        foreach (var loc in locations)
+        foreach (var loc in Locations)
         {
-            SearchStepNotificationSink.progressSink.NotifyProgress(50 + (50 * (count / locations.Count())), "loading results: " + loc.GetName());
+            SearchStepNotificationSink.progressSink.NotifyProgress(50 + (50 * (count / Locations.Count())), "loading results: " + loc.GetName());
             results.AddRange(loc.Search(this));
             count++;
         }
@@ -184,7 +196,7 @@ public class SearchQuery : ISearchQuery
     public void ProcessAllResultsToOutput()
     {
         //Remember to provide one that does it one y one at some point 
-        foreach(var output in outputs)
+        foreach(var output in Outputs)
         {
             output.WriteAllOutput(GetFilteredResults());
         }
@@ -192,7 +204,7 @@ public class SearchQuery : ISearchQuery
 
     public void PrintOutputFilesToConsole()
     {
-        foreach (var output in outputs)
+        foreach (var output in Outputs)
         {
             Console.WriteLine(output.GetPluginFriendlyName() + ": " + output.GetOutputFileName());
         }
@@ -200,12 +212,15 @@ public class SearchQuery : ISearchQuery
 
     public void AddOutput(ISearchOutput output)
     {
-        outputs.Add(output);
+        Outputs.Add(output);
     }
 
    
-    public string? Name
+public string Name
     {
-        get; set;
+        get => _name ?? string.Empty;
+        set => _name = value;
     }
+
+    private string? _name;
 }

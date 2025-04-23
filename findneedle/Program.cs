@@ -29,18 +29,8 @@ internal class Program
         {
 
             Console.WriteLine("Searching...");
-            //x.RunThrough();
-            x.LoadAllLocationsInMemory();
-            //var y = x.GetFilteredResults();
-
-            x.GetSearchStatsOutput();
-
-            x.ProcessAllResultsToOutput();
-            x.PrintOutputFilesToConsole();
-
-            //IResultProcessor p = new WatsonCrashProcessor();
-            //p.ProcessResults(y);
-            //p.GetOutputFile();
+            x.RunThrough();
+           
         }
 
 

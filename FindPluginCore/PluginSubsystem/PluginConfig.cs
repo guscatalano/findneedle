@@ -12,6 +12,7 @@ public class PluginConfig
 {
     public List<PluginConfigEntry> entries = new();
     public string PathToFakeLoadPlugin = "";
+    public string SearchQueryClass = "";
 }
 
 public class PluginConfigEntry

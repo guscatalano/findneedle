@@ -23,8 +23,12 @@ public class NuSearchQuery : ISearchQuery
     public List<ISearchLocation> Locations => _locations;
     private readonly List<ISearchLocation> _locations;
 
-    public SearchLocationDepth Depth => _depth;
-    private readonly SearchLocationDepth _depth;
+    public SearchLocationDepth Depth
+    {
+        get => _depth;
+        set => _depth = value;
+    }
+    private SearchLocationDepth _depth;
 
     public SearchStatistics Statistics => _stats;
     private readonly SearchStatistics _stats;

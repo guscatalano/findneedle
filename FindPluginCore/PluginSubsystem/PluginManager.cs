@@ -200,7 +200,17 @@ public class PluginManager
         return config.PathToFakeLoadPlugin;
     }
 
+    public string GetSearchQueryClass()
+    {
+        config ??= new PluginConfig();
+        if (String.IsNullOrEmpty(config.SearchQueryClass))
+        {
+            config.SearchQueryClass = "SearchQuery"; //Use old one by default
+        }
+        return config.SearchQueryClass;
+    }
 
-   
+
+
 
 }

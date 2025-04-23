@@ -17,7 +17,7 @@ namespace FindPluginCore.Searching;
 public class SearchQueryCmdLine
 {
 
-    public static SearchQuery ParseFromCommandLine(string[] cmdline, PluginManager pluginManager)
+    public static ISearchQuery ParseFromCommandLine(string[] cmdline, PluginManager pluginManager)
     {
         var arguments = TextManipulation.ParseCommandLineIntoDictionary(cmdline);
         return ParseFromCommandLine(arguments, pluginManager);
@@ -28,6 +28,9 @@ public class SearchQueryCmdLine
         pluginManager.LoadAllPlugins(true);
         var list = pluginManager.GetAllPluginsInstancesOfAType<ICommandLineParser>();
         Dictionary<CommandLineRegistration, ICommandLineParser> parsers = [];
+
+        list.Add(new FolderLocation()); //Hardcoded
+
         foreach (var pluginInstance in list)
         {
             if (pluginInstance == null)
@@ -41,27 +44,27 @@ public class SearchQueryCmdLine
         return parsers;
     }
 
-    public static void PrintToConsole(SearchQuery q)
+    public static void PrintToConsole(ISearchQuery q)
     {
         Console.WriteLine("Search query:");
         Console.WriteLine("Name: " + q.Name);
         Console.WriteLine("Locations:");
-        foreach (var loc in q.locations)
+        foreach (var loc in q.Locations)
         {
             Console.WriteLine("\t" + loc.GetDescription());
         }
         Console.WriteLine("Filters:");
-        foreach (var filter in q.filters)
+        foreach (var filter in q.Filters)
         {
             Console.WriteLine("\t" + filter.GetDescription());
         }
         Console.WriteLine("Processors:");
-        foreach (var processor in q.processors)
+        foreach (var processor in q.Processors)
         {
             Console.WriteLine("\t" + processor.GetDescription());
         }
         Console.WriteLine("Outputs:");
-        foreach (var output in q.outputs)
+        foreach (var output in q.Outputs)
         {
             Console.WriteLine("\t" + output.GetPluginTextDescription());
         }
@@ -69,12 +72,24 @@ public class SearchQueryCmdLine
         Console.WriteLine("End of search query");
     }
 
-    public static SearchQuery ParseFromCommandLine(List<CommandLineArgument> arguments, PluginManager pluginManager, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
+    public static ISearchQuery ParseFromCommandLine(List<CommandLineArgument> arguments, PluginManager pluginManager, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
     {
         //This is a test hook
         parsers ??= GetCommandLineParsers(pluginManager);
 
-        SearchQuery q = new();
+        ISearchQuery q;
+        switch (pluginManager.GetSearchQueryClass())
+        {
+            case "SearchQuery":
+                q = new SearchQuery();
+                break;
+            case "NuSearchQuery":
+                q = new NuSearchQuery();
+                break;
+            default:
+                throw new Exception("unknown search query class");
+        }
+
         foreach (var argument in arguments)
         {
             foreach (var parser in parsers)
@@ -95,13 +110,13 @@ public class SearchQueryCmdLine
                     switch (parser.Key.handlerType)
                     {
                         case CommandLineHandlerType.Location:
-                            q.locations.Add((ISearchLocation)parser.Value);
+                            q.Locations.Add((ISearchLocation)parser.Value);
                             break;
                         case CommandLineHandlerType.Filter:
-                            q.filters.Add((ISearchFilter)parser.Value);
+                            q.Filters.Add((ISearchFilter)parser.Value);
                             break;
                          case CommandLineHandlerType.Processor:
-                            q.processors.Add((IResultProcessor)parser.Value);
+                            q.Processors.Add((IResultProcessor)parser.Value);
                              break;
                         default:
                             throw new Exception("Unknown handler type");
@@ -120,9 +135,10 @@ public class SearchQueryCmdLine
                 {
                     throw new Exception("Failed to parse depth");
                 }
-                q.SetDepth(depth);
+                q.Depth = depth;
             }
 
+           
             if (argument.key.StartsWith("debug", StringComparison.OrdinalIgnoreCase))
             {
                 var debug = false;

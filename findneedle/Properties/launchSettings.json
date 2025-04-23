@@ -2,7 +2,7 @@
   "profiles": {
     "findneedle": {
       "commandName": "Project",
-      "commandLineArgs": "location_eventlog=Application filter_time=ago(5d)"
+      "commandLineArgs": "location_path=C:\\users\\crimson\\Desktop\\merged-!FMT.txt "
     }
   }
 }

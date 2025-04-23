@@ -12,7 +12,13 @@
     {
       "name": "EventLogPlugin",
       "path": "EventLogPlugin.dll"
+    },
+    {
+      "name": "ETWPlugin",
+      "path": "ETWPlugin.dll",
+      "enabled": true
     }
   ],
-  "PathToFakeLoadPlugin": "FakeLoadPlugin.exe"
+  "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
+  "SearchQueryClass":  "SearchQuery"
 }

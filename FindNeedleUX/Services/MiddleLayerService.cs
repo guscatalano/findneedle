@@ -66,8 +66,8 @@ public class MiddleLayerService
     public static void UpdateSearchQuery()
     {
         Query = new SearchQuery();
-        Query.filters = Filters;
-        Query.locations = Locations;
+        Query.Filters = Filters;
+        Query.Locations = Locations;
     }
 
     public static List<LogLine> GetLogLines()
@@ -123,8 +123,8 @@ public class MiddleLayerService
         var o = SearchQueryJsonReader.LoadSearchQuery(File.ReadAllText(filename));
         SearchQuery r = SearchQueryJsonReader.GetSearchQueryObject(o);
         Query = r;
-        Filters = Query.filters;
-        Locations = Query.locations;
+        Filters = Query.Filters;
+        Locations = Query.Locations;
     }
 
     public static void NewWorkspace()

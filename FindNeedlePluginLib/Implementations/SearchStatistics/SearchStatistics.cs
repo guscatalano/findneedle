@@ -50,6 +50,14 @@ public class SearchStatistics
             case SearchStep.AtSearch:
                 Searched(searchQuery);
                 break;
+            case SearchStep.AtLaunch:
+                atLaunch.Snap();
+                break;
+            case SearchStep.AtProcessor:
+            case SearchStep.AtOutput:
+            case SearchStep.Total:
+                // do nothing
+                break;
             default:
                 throw new Exception("not valid step");
         }
@@ -77,7 +85,7 @@ public class SearchStatistics
     public void LoadedAll(ISearchQuery q)
     {
         totalRecordsLoaded = 0;
-        foreach (var loc in q.GetLocations())
+        foreach (var loc in q.Locations)
         {
             loc.ReportStatistics();
             totalRecordsLoaded += loc.numRecordsInMemory;

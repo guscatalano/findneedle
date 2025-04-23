@@ -4,15 +4,31 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
+using findneedle.Interfaces;
+using FindNeedlePluginLib.Implementations.SearchNotifications;
 
 namespace FindNeedlePluginLib.Interfaces;
 public interface ISearchQuery
 {
-    public void AddFilter(ISearchFilter filter);
+    void AddFilter(ISearchFilter filter);
 
-    public List<ISearchFilter> GetFilters();
+    List<ISearchFilter> GetFilters();
 
-    public SearchStatistics GetSearchStatistics();
+    SearchStatistics GetSearchStatistics();
 
-    public List<ISearchLocation> GetLocations();
+    List<ISearchLocation> GetLocations();
+
+    List<ISearchFilter> Filters { get; }
+    List<ISearchLocation> Locations { get; }
+    List<IResultProcessor> Processors { get; }
+    List<ISearchOutput> Outputs { get; }
+
+    SearchLocationDepth Depth { get; set; }
+
+    string Name => "test";
+
+    //No matter the implementation, this function should run through every step
+    void RunThrough();
+
+
 }

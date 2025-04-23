@@ -28,7 +28,7 @@ public class SearchQuerySerializerTest
         FakeCmdLineParser keyword = new FakeCmdLineParser();
         keyword.somevalue = "thewordtofilter";
         keyword.reg = new CommandLineRegistration() { key = "keyword", handlerType= CommandLineHandlerType.Filter };
-        q.filters.Add(keyword);
+        q.Filters.Add(keyword);
         SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(q);
         var json = r.GetQueryJson();
         
@@ -44,9 +44,9 @@ public class SearchQuerySerializerTest
 
         //Does the ultimate deserialization pass
         SearchQuery output = SearchQueryJsonReader.GetSearchQueryObject(q2);
-        Assert.IsTrue(output.filters.Count == 1);
-        Assert.IsTrue(output.filters[0].GetType() == typeof(FakeCmdLineParser));
-        var outputfilter = (FakeCmdLineParser)output.filters[0];
+        Assert.IsTrue(output.Filters.Count == 1);
+        Assert.IsTrue(output.Filters[0].GetType() == typeof(FakeCmdLineParser));
+        var outputfilter = (FakeCmdLineParser)output.Filters[0];
         Assert.IsNotNull(outputfilter.somevalue);
         Assert.IsTrue(outputfilter.somevalue.Equals(keyword.somevalue));
 
@@ -66,8 +66,8 @@ public class SearchQuerySerializerTest
         keyword2.somevalue = "anotherword";
         keyword2.reg = new CommandLineRegistration() { key = "keyword", handlerType = CommandLineHandlerType.Filter };
 
-        q.filters.Add(keyword1);
-        q.filters.Add(keyword2);
+        q.Filters.Add(keyword1);
+        q.Filters.Add(keyword2);
         SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(q);
         var json = r.GetQueryJson();
 
@@ -86,14 +86,14 @@ public class SearchQuerySerializerTest
 
         //Does the ultimate deserialization pass
         SearchQuery output = SearchQueryJsonReader.GetSearchQueryObject(q2);
-        Assert.IsTrue(output.filters.Count == 2);
+        Assert.IsTrue(output.Filters.Count == 2);
 
     
-        Assert.IsTrue(output.filters[0].GetType() == typeof(FakeCmdLineParser));
-        Assert.IsTrue(output.filters[1].GetType() == typeof(FakeCmdLineParser));
+        Assert.IsTrue(output.Filters[0].GetType() == typeof(FakeCmdLineParser));
+        Assert.IsTrue(output.Filters[1].GetType() == typeof(FakeCmdLineParser));
 
-        var outputfilter1 = (FakeCmdLineParser)output.filters[0];
-        var outputfilter2 = (FakeCmdLineParser)output.filters[1];
+        var outputfilter1 = (FakeCmdLineParser)output.Filters[0];
+        var outputfilter2 = (FakeCmdLineParser)output.Filters[1];
 
         Assert.IsNotNull(outputfilter1.somevalue);
         Assert.IsNotNull(outputfilter2.somevalue);

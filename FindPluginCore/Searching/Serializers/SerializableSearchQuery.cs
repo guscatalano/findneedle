@@ -92,51 +92,52 @@ public class SearchQueryJsonReader
 
     public static SerializableSearchQuery GetSerializableSearchQuery(SearchQuery source)
     {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
         SerializableSearchQuery destination = new();
 
-        destination.Name = source.Name;
+        destination.Name = source.Name ?? string.Empty; // Ensure non-null assignment
         destination.FilterJson = new List<string>();
         destination.LocationJson = new List<string>();
 
-        //Serialize all the filters
-        foreach (ISearchFilter filter in source.filters)
+        // Serialize all the filters
+        foreach (ISearchFilter filter in source.Filters)
         {
-          
             var outher = SerializeImplementedType(filter);
             destination.FilterJson.Add(outher);
         }
 
-        //Serialize all the filters
-        foreach (var loc in source.locations)
+        // Serialize all the locations
+        foreach (var loc in source.Locations)
         {
-
             var outher = SerializeImplementedType(loc);
             destination.LocationJson.Add(outher);
         }
-
-
 
         return destination;
     }
 
     public static SearchQuery GetSearchQueryObject(SerializableSearchQuery source)
     {
-        if (source == null)
+        if (source.Name == null)
         {
-            throw new ArgumentNullException(nameof(source));
+            throw new ArgumentNullException(nameof(source.Name));
         }
 
         SearchQuery destination = new();
         destination.Name = source.Name;
-        destination.filters = new();
-        destination.locations = new();
+        destination.Filters = new();
+        destination.Locations = new();
 
         if (source.FilterJson != null)
         {
             foreach (var filter in source.FilterJson)
             {
                 ISearchFilter outher = (ISearchFilter)DeserializeJson(filter);
-                destination.filters.Add(outher);
+                destination.Filters.Add(outher);
             }
         }
 
@@ -145,7 +146,7 @@ public class SearchQueryJsonReader
             foreach (var loc in source.LocationJson)
             {
                 ISearchLocation outher = (ISearchLocation)DeserializeJson(loc);
-                destination.locations.Add(outher);
+                destination.Locations.Add(outher);
             }
         }
 
