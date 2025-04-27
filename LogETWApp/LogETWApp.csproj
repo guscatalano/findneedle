@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
 	    <NuGetAudit>false</NuGetAudit>
-	    <Platforms>AnyCPU;x64;x86</Platforms>
+	    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
