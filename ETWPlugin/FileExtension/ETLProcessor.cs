@@ -9,9 +9,10 @@ using findneedle.Interfaces;
 using FindNeedleCoreUtils;
 using findneedle.WDK;
 using Newtonsoft.Json;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations.FileExtensions;
-public class ETLProcessor : IFileExtensionProcessor
+public class ETLProcessor : IFileExtensionProcessor, IPluginDescription
 {
     public TraceFmtResult currentResult
     {
@@ -128,11 +129,32 @@ public void DoPreProcessing()
 
     public List<string> RegisterForExtensions()
     {
-        return new List<string>() { ".etl", "txt" };
+        return new List<string>() { ".etl", ".txt" };
     }
 
     public bool CheckFileFormat()
     {
+        if (inputfile.EndsWith(".txt")) {
+            var firstline = File.ReadLines(inputfile).Take(1).ToList().First();
+            if (ETLLogLine.DoesHeaderLookRight(firstline))
+            {
+                return true;
+            } else {
+                return false;
+            }
+        }
         return true;
+    }
+
+    public string GetPluginTextDescription() {
+        return "Parses ETL and formatted ETL files";
+    }
+    public string GetPluginFriendlyName()
+    {
+        return "ETLProcessor";
+    }
+    public string GetPluginClassName()
+    {
+        return IPluginDescription.GetPluginClassNameBase(this);
     }
 }

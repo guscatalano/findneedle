@@ -89,15 +89,9 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
                 {
                     if (!extToProcessor.ContainsKey(ext))
                     {
-                        if (extToProcessor[ext] == null)
-                        {
-                            extToProcessor[ext] = new();
-                        }
-                        extToProcessor[ext].Add(processor);
-                    } else
-                    {
-                        throw new Exception("can't register more than one processor per extension");
+                        extToProcessor[ext] = new();
                     }
+                    extToProcessor[ext].Add(processor);
                 }
             }
         }

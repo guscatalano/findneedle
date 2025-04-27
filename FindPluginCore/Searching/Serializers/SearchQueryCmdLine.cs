@@ -26,12 +26,16 @@ public class SearchQueryCmdLine
     public static Dictionary<CommandLineRegistration, ICommandLineParser> GetCommandLineParsers(PluginManager pluginManager)
     {
         pluginManager.LoadAllPlugins(true);
-        var list = pluginManager.GetAllPluginsInstancesOfAType<ICommandLineParser>();
+        var cmdparsers = pluginManager.GetAllPluginsInstancesOfAType<ICommandLineParser>();
         Dictionary<CommandLineRegistration, ICommandLineParser> parsers = [];
 
-        list.Add(new FolderLocation()); //Hardcoded
 
-        foreach (var pluginInstance in list)
+        var extensions = pluginManager.GetAllPluginsInstancesOfAType<IFileExtensionProcessor>();
+        var folderloc = new FolderLocation();
+        folderloc.SetExtensionProcessorList(extensions);
+        cmdparsers.Add(folderloc); //Hardcoded
+
+        foreach (var pluginInstance in cmdparsers)
         {
             if (pluginInstance == null)
             {
