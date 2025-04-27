@@ -20,7 +20,8 @@ public interface ISearchQuery
 
     List<ISearchFilter> Filters { get; }
     List<ISearchLocation> Locations { get; }
-    List<IResultProcessor> Processors { get; }
+    List<IResultProcessor> Processors { get; set;
+    }
     List<ISearchOutput> Outputs { get; }
 
     SearchLocationDepth Depth { get; set; }

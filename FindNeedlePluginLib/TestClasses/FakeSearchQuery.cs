@@ -16,8 +16,22 @@ public class FakeSearchQuery : ISearchQuery
 {
     public List<ISearchFilter> Filters => [];
     public List<ISearchLocation> Locations => [];
-    public List<IResultProcessor> Processors => [];
-    public List<ISearchOutput> Outputs => [];
+    public List<IResultProcessor> Processors
+    {
+        get => [];
+        set
+        {
+
+        }
+    }
+    public List<ISearchOutput> Outputs
+    {
+        get => [];
+        set
+        {
+            
+        }
+    }
     public SearchLocationDepth Depth {
         get;
         set;

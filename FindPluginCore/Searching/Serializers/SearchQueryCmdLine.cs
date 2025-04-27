@@ -94,6 +94,8 @@ public class SearchQueryCmdLine
                 throw new Exception("unknown search query class");
         }
 
+        q.Processors = pluginManager.GetAllPluginsInstancesOfAType<IResultProcessor>();
+
         foreach (var argument in arguments)
         {
             foreach (var parser in parsers)

@@ -17,8 +17,13 @@
       "name": "ETWPlugin",
       "path": "ETWPlugin.dll",
       "enabled": true
+    },
+    {
+      "name": "SessionManagementProcessor",
+      "path": "SessionManagementProcessor.dll",
+      "enabled": true
     }
   ],
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
-  "SearchQueryClass":  "SearchQuery"
+  "SearchQueryClass":  "NuSearchQuery"
 }

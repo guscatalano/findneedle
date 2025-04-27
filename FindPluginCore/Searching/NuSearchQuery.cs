@@ -14,8 +14,12 @@ public class NuSearchQuery : ISearchQuery
     public List<ISearchFilter> Filters => _filters;
     private readonly List<ISearchFilter> _filters;
 
-    public List<IResultProcessor> Processors => _processors;
-    private readonly List<IResultProcessor> _processors;
+    public List<IResultProcessor> Processors
+    {
+        get => _processors;
+        set => _processors = value;
+    }
+    private List<IResultProcessor> _processors;
 
     public List<ISearchOutput> Outputs => _outputs;
     private readonly List<ISearchOutput> _outputs;
@@ -37,7 +41,7 @@ public class NuSearchQuery : ISearchQuery
     private readonly SearchStepNotificationSink _stepnotifysink;
 
     public List<ISearchResult> CurrentResultList => _currentResultList;
-    private readonly List<ISearchResult> _currentResultList;
+    private List<ISearchResult> _currentResultList;
 
     public NuSearchQuery()
     {
@@ -56,7 +60,7 @@ public class NuSearchQuery : ISearchQuery
     public void RunThrough()
     {
         Step1_LoadAllLocationsInMemory();
-        Step2_GetFilteredResults();
+        _currentResultList = Step2_GetFilteredResults();
         Step3_ResultsToProcessors();
         Step4_ProcessAllResultsToOutput();
         Step5_Done();

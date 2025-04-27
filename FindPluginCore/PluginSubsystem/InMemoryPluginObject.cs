@@ -22,7 +22,12 @@ public class InMemoryPluginObject<T>
     {
         if (plugin.LoadedSuccessfully && plugin.dll != null)
         {
-            return (T?)plugin.dll.CreateInstance(description.ClassName);
+            var ret = (T?)plugin.dll.CreateInstance(description.ClassName);
+            if(ret == null)
+            {
+                throw new Exception("Failed to create instance! maybe the classname is wrong?");
+            }
+            return ret;
         }
         else
         {
