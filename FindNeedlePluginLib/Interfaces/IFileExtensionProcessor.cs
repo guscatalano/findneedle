@@ -13,6 +13,9 @@ public interface IFileExtensionProcessor : IDisposable
     public List<string> RegisterForExtensions();
     public void OpenFile(string fileName);
 
+    //This is meant for extensions that are more generic like txt, double check that you can handle it and return false if you can't.
+    public bool CheckFileFormat();
+
     public void LoadInMemory();
     public void DoPreProcessing();
 

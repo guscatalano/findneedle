@@ -89,7 +89,11 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
                 {
                     if (!extToProcessor.ContainsKey(ext))
                     {
-                        extToProcessor[ext] = processor;
+                        if (extToProcessor[ext] == null)
+                        {
+                            extToProcessor[ext] = new();
+                        }
+                        extToProcessor[ext].Add(processor);
                     } else
                     {
                         throw new Exception("can't register more than one processor per extension");
@@ -99,7 +103,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         }
     }
     List<IFileExtensionProcessor> knownProcessors = [];
-    private readonly Dictionary<string, IFileExtensionProcessor> extToProcessor = new();
+    private readonly Dictionary<string, List<IFileExtensionProcessor>> extToProcessor = new();
 
     private readonly List<Task> tasks = new();
     public override void LoadInMemory()
@@ -191,9 +195,20 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
 
         if (extToProcessor.ContainsKey(ext))
         {
-            extToProcessor[ext].OpenFile(file);
-            extToProcessor[ext].DoPreProcessing();
-            extToProcessor[ext].LoadInMemory();
+            foreach(var processor in extToProcessor[ext])
+            {
+                if (processor == null)
+                {
+                    throw new Exception("null?");
+                }
+                processor.OpenFile(file);
+                if (processor.CheckFileFormat())
+                {
+                    processor.DoPreProcessing();
+                    processor.LoadInMemory();
+                }
+            }
+           
         }
 
     }

@@ -19,6 +19,11 @@ public class ZipProcessor : IFileExtensionProcessor
 
     }
 
+    public bool CheckFileFormat()
+    {
+        return true;
+    }
+
     public void OpenFile(string fileName)
     {
         inputfile = fileName;

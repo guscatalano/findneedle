@@ -34,6 +34,11 @@ public class SampleFileExtensionProcessor : IFileExtensionProcessor
         list.Add(new FakeSearchResult());
         return list;
     }
+
+    public bool CheckFileFormat()
+    {
+        return true;
+    }
     public void LoadInMemory()
     {
         hasLoaded = true;

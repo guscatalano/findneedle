@@ -49,4 +49,9 @@ public class EVTXProcessor : IFileExtensionProcessor
     {
         return new List<string>() { ".evtx" };
     }
+
+    public bool CheckFileFormat()
+    {
+        return true;
+    }
 }

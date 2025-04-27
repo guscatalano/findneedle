@@ -128,6 +128,11 @@ public void DoPreProcessing()
 
     public List<string> RegisterForExtensions()
     {
-        return new List<string>() { ".etl" };
+        return new List<string>() { ".etl", "txt" };
+    }
+
+    public bool CheckFileFormat()
+    {
+        return true;
     }
 }
