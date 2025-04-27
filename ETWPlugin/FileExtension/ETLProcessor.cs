@@ -10,6 +10,7 @@ using FindNeedleCoreUtils;
 using findneedle.WDK;
 using Newtonsoft.Json;
 using FindNeedlePluginLib.Interfaces;
+using Windows.Media.PlayTo;
 
 namespace findneedle.Implementations.FileExtensions;
 public class ETLProcessor : IFileExtensionProcessor, IPluginDescription
@@ -56,7 +57,16 @@ public void DoPreProcessing()
     {
         var getLock = 50;
 
-        currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath);
+        if (inputfile.EndsWith(".txt"))
+        {
+            currentResult.ProcessedFile = inputfile;
+            currentResult.outputfile = inputfile;
+            currentResult.summaryfile = inputfile;
+        }
+        else
+        {
+            currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath);
+        }
         while (getLock > 0)
         {
             try
