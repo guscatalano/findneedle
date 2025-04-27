@@ -11,6 +11,8 @@
 	  <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
   <NuGetAudit>false</NuGetAudit>
   <Platforms>AnyCPU;x64;x86</Platforms>
+  <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+
 
   </PropertyGroup>
 
