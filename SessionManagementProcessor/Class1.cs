@@ -24,15 +24,27 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     }
     public string GetOutputText()
     {
-        return "Output text";
+        var txt = "";
+        foreach(var msg in wmsgs)
+        {
+            txt += msg.Value.GetMessage();
+        }
+        return txt;
     }
+
+    public Dictionary<DateTime, ISearchResult> wmsgs = new();
+
     public void ProcessResults(List<ISearchResult> results)
     {
         foreach(var ret in results)
         {
-            if (ret.GetMessage().Contains("winlogon"))
+            if (ret.GetMessage().Contains("WMsgMessageHandler"))
             {
-
+                wmsgs.Add(ret.GetLogTime(), ret);
+            }
+            if (ret.GetMessage().Contains("StateFn:"))
+            {
+                wmsgs.Add(ret.GetLogTime(), ret);
             }
         }
     }
