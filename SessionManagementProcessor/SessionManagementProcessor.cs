@@ -13,6 +13,7 @@ public struct KeyPoint
     public ISearchResult? matchedLine;
     public string? umlText;
     public Func<string, string>? umlTextDelegate;
+    public Func<Tuple<string, string>, string>? umlTextDelegateComplex;
 }
 
 public class SessionManagementProcessor : IResultProcessor, IPluginDescription
@@ -42,31 +43,32 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 
     private readonly List<KeyPoint> keyHandlers = new();
 
-    public void AddSimpleKeypoint(string textToMatch, Func<string, string> textToUMLDelegate)
-    {
-        KeyPoint key = new KeyPoint() { textToMatch = textToMatch };
-        key.umlTextDelegate = textToUMLDelegate;
-        keyHandlers.Add(key);
-    }
-
+  
 
     public void GenerateKeyPoints()
     {
-        KeyPoint wmsgHandler = new KeyPoint() { textToMatch = "- WMsgMessageHandler: ", textToUnmatch="dwMessage" };
-        wmsgHandler.umlTextDelegate = (string msg) =>
+        keyHandlers.Add(new KeyPoint()
         {
-            return "LSM -> Winlogon : " + msg.Substring(msg.IndexOf(wmsgHandler.textToMatch) + wmsgHandler.textToMatch.Length);
-        };
-        keyHandlers.Add(wmsgHandler);
+            textToMatch = "- WMsgMessageHandler: ",
+            textToUnmatch = "dwMessage",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> Winlogon : " + msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
+            }
+        });
 
-
-        KeyPoint stateHandler = new KeyPoint() { textToMatch = "StateFn:" };
-        stateHandler.umlTextDelegate = (string msg) =>
+        keyHandlers.Add(new KeyPoint()
         {
-            return "Winlogon -> Winlogon : " + msg.Substring(msg.IndexOf(stateHandler.textToMatch) + stateHandler.textToMatch.Length);
-        };
-        keyHandlers.Add(stateHandler);
-
+            textToMatch = "StateFn:",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> Winlogon : " + msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
+            }
+        });
 
 
         KeyPoint connectHandler = new KeyPoint() { textToMatch = "CTSSession::ConnectToTerminal on session ID " };
@@ -197,12 +199,17 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                     {
                         txt += key.umlTextDelegate(msg.Value.GetMessage()) + Environment.NewLine;
                     }
+                    else if (key.umlTextDelegateComplex != null)
+                    {
+                        var result = key.umlTextDelegateComplex(new Tuple<string, string>(msg.Value.GetMessage(), key.textToMatch));
+                        txt += result + Environment.NewLine;
+                    }
+                    else
+                    {
+                        throw new Exception(":(");
+                    }
                 }
             }
-
-
-
-
         }
         txt += "@enduml" + Environment.NewLine;
         return txt;
