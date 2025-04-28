@@ -115,6 +115,7 @@ public class NuSearchQuery : ISearchQuery
         foreach(var proc in _processors)
         {
             proc.ProcessResults(_currentResultList);
+            Console.WriteLine("Output was written to: " + proc.GetOutputFile());
             
         }
     }

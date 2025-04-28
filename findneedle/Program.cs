@@ -32,6 +32,8 @@ internal class Program
             x.RunThrough();
            
         }
+        Console.WriteLine("Done");
+        Console.ReadLine();
 
 
     }
