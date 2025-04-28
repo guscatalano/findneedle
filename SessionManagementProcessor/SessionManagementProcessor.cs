@@ -24,7 +24,9 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         var path = Path.Combine(optionalOutputFolder, "session.pu");
         path = Path.GetFullPath(path);
         File.WriteAllText(path, GeneratePlatUML());
-        return path;
+        PlantUMLGenerator x = new PlantUMLGenerator();
+        var outputpath = x.GenerateUML(path);
+        return outputpath;
     }
     private readonly string msgheader = "- WMsgMessageHandler: ";
     private readonly string stateheader = "StateFn:";
@@ -32,6 +34,13 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     private readonly string connectheader = "CTSSession::ConnectToTerminal on session ID ";
     private readonly string assignheader = "Assign session id ";
     private readonly string loggedonstarted = "msg=pNewTerminal->LoggedOnStarted() took this long, this->CommonData.GetSessionId()=";
+    private readonly string connectionstarted = "Listener was notified of a new connection";
+    private readonly string connectionbroken = "Task started=Broken Connection, Function=CConnectionEx::CRDPCallback::BrokenConnection";
+    private readonly string stackready = "perf=Stack took this long to get ready, StackReadyTime=";
+    private readonly string fastreconnect = "msg=Fast reconnect - adding session, SessionId=";
+    private readonly string connectnotify = "msg=LSM sent us ConnectNotify, m_SessionId=";
+    private readonly string fastreconnectdone = "perf=Fast reconnect time to connect to session, ";
+    private readonly string disconnectstack = "msg=Trying to call DisconnectNotify, SessionId=";
 
     public string GeneratePlatUML()
     {
@@ -68,12 +77,66 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 txt += "LSM -> LSM : Assign Terminal to Session ID " + wmsg + Environment.NewLine;
             }
 
+            if (msg.Key.Equals("fastreconnect"))
+            {
+                var wmsg = msg.Value.GetMessage();
+                wmsg = wmsg.Substring(wmsg.IndexOf(fastreconnect) + fastreconnect.Length);
+                txt += "Termsrv -> LSM : Fast reconnect to Session ID " + wmsg + Environment.NewLine;
+            }
+
             if (msg.Key.Equals("loggedonstarted"))
             {
                 var wmsg = msg.Value.GetMessage();
                 wmsg = wmsg.Substring(wmsg.IndexOf(loggedonstarted) + loggedonstarted.Length);
                 wmsg = wmsg.Substring(0, wmsg.IndexOf(","));
                 txt += "LSM -> LSM : Logged on started Session ID " + wmsg + Environment.NewLine;
+            }
+
+            if (msg.Key.Equals("connectnotify"))
+            {
+                var wmsg = msg.Value.GetMessage();
+                wmsg = wmsg.Substring(wmsg.IndexOf(connectnotify) + connectnotify.Length);
+                txt += "LSM -> Termsrv : ConnectNotify Session ID " + wmsg + Environment.NewLine;
+            }
+
+            if (msg.Key.Equals("disconnectstack"))
+            {
+                var wmsg = msg.Value.GetMessage();
+                wmsg = wmsg.Substring(wmsg.IndexOf(disconnectstack) + disconnectstack.Length);
+                txt += "LSM -> Termsrv : DisconnectNotify Session ID " + wmsg + Environment.NewLine;
+            }
+
+            if (msg.Key.Equals("stackready"))
+            {
+                var wmsg = msg.Value.GetMessage();
+                wmsg = wmsg.Substring(wmsg.IndexOf(stackready) + stackready.Length);
+                wmsg = wmsg.Substring(0, wmsg.IndexOf(","));
+                txt += "Stack -> Termsrv : Stack is ready for connection (took: " + wmsg + " ms)" + Environment.NewLine;
+            }
+
+            if (msg.Key.Equals("fastreconnectdone"))
+            {
+                var wmsg = msg.Value.GetMessage();
+                var sessionid = "";
+                wmsg = wmsg.Substring(wmsg.IndexOf(fastreconnectdone) + fastreconnectdone.Length);
+                sessionid = wmsg.Substring(wmsg.IndexOf(", SessionId="));
+                wmsg = wmsg.Substring(0, wmsg.IndexOf(","));
+                
+                txt += "Termsrv -> Termsrv : Fast reconnect finished to session "+ sessionid +" (took: " + wmsg + " ms)" + Environment.NewLine;
+            }
+
+            if (msg.Key.Equals("connectionstarted"))
+            {
+                var wmsg = msg.Value.GetMessage();
+                wmsg = wmsg.Substring(wmsg.IndexOf("{"));
+                txt += "Stack -> Termsrv : New connection with activityID: " + wmsg + Environment.NewLine;
+            }
+
+
+
+            if (msg.Key.Equals("connectionbroken"))
+            {
+                txt += "Stack -> Termsrv : Connection was broken" + Environment.NewLine;
             }
 
             if (msg.Key.Equals("disconnect"))
@@ -114,9 +177,44 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 keypoints.Add(new KeyValuePair<string, ISearchResult>("connect", ret));
             }
 
+            if (ret.GetMessage().Contains(disconnectstack))
+            {
+                keypoints.Add(new KeyValuePair<string, ISearchResult>("disconnectstack", ret));
+            }
+
             if (ret.GetMessage().Contains(assignheader))
             {
                 keypoints.Add(new KeyValuePair<string, ISearchResult>("assign", ret));
+            }
+
+            if (ret.GetMessage().Contains(connectnotify))
+            {
+                keypoints.Add(new KeyValuePair<string, ISearchResult>("connectnotify", ret));
+            }
+
+            if (ret.GetMessage().Contains(connectionstarted))
+            {
+                keypoints.Add(new KeyValuePair<string, ISearchResult>("connectionstarted", ret));
+            }
+
+            if (ret.GetMessage().Contains(stackready))
+            {
+                keypoints.Add(new KeyValuePair<string, ISearchResult>("stackready", ret));
+            }
+
+            if(ret.GetMessage().Contains(fastreconnect))
+            {
+                keypoints.Add(new KeyValuePair<string, ISearchResult>("fastreconnect", ret));
+            }
+
+            if (ret.GetMessage().Contains(connectionbroken))
+            {
+                keypoints.Add(new KeyValuePair<string, ISearchResult>("connectionbroken", ret));
+            }
+
+            if (ret.GetMessage().Contains(fastreconnectdone))
+            {
+                keypoints.Add(new KeyValuePair<string, ISearchResult>("fastreconnectdone", ret));
             }
 
             if (ret.GetMessage().Contains(msgheader))

@@ -26,6 +26,7 @@
     <ProjectReference Include="..\FakeLoadPlugin\FakeLoadPlugin.csproj" />
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
     <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
+    <ProjectReference Include="..\SessionManagementProcessor\SessionManagementProcessor.csproj" />
     <ProjectReference Include="..\ZipFilePlugin\ZipFilePlugin.csproj" />
   </ItemGroup>
 
