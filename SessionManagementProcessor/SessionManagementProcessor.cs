@@ -38,19 +38,17 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         var outputpath = x.GenerateUML(path);
         return outputpath;
     }
-    private readonly string disconnectheader = "CTSSession::DisconnectSession on session ID ";
-    private readonly string connectheader = "CTSSession::ConnectToTerminal on session ID ";
-    private readonly string assignheader = "Assign session id ";
-    private readonly string loggedonstarted = "msg=pNewTerminal->LoggedOnStarted() took this long, this->CommonData.GetSessionId()=";
-    private readonly string connectionstarted = "Listener was notified of a new connection";
-    private readonly string connectionbroken = "Task started=Broken Connection, Function=CConnectionEx::CRDPCallback::BrokenConnection";
-    private readonly string stackready = "perf=Stack took this long to get ready, StackReadyTime=";
-    private readonly string fastreconnect = "msg=Fast reconnect - adding session, SessionId=";
-    private readonly string connectnotify = "msg=LSM sent us ConnectNotify, m_SessionId=";
-    private readonly string fastreconnectdone = "perf=Fast reconnect time to connect to session, ";
-    private readonly string disconnectstack = "msg=Trying to call DisconnectNotify, SessionId=";
+    
 
-    List<KeyPoint> keyHandlers = new();
+    private readonly List<KeyPoint> keyHandlers = new();
+
+    public void AddSimpleKeypoint(string textToMatch, Func<string, string> textToUMLDelegate)
+    {
+        KeyPoint key = new KeyPoint() { textToMatch = textToMatch };
+        key.umlTextDelegate = textToUMLDelegate;
+        keyHandlers.Add(key);
+    }
+
 
     public void GenerateKeyPoints()
     {
@@ -68,6 +66,121 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
             return "Winlogon -> Winlogon : " + msg.Substring(msg.IndexOf(stateHandler.textToMatch) + stateHandler.textToMatch.Length);
         };
         keyHandlers.Add(stateHandler);
+
+
+
+        KeyPoint connectHandler = new KeyPoint() { textToMatch = "CTSSession::ConnectToTerminal on session ID " };
+        connectHandler.umlTextDelegate = (string msg) =>
+        {
+            msg = msg.Substring(msg.IndexOf(connectHandler.textToMatch) + connectHandler.textToMatch.Length);
+            msg = msg.Substring(0, msg.IndexOf(" "));
+            return "LSM -> LSM : Connect Terminal to Session ID " + msg;
+        };
+        keyHandlers.Add(connectHandler);
+
+        KeyPoint disconnectHandler = new KeyPoint() { textToMatch = "CTSSession::DisconnectSession on session ID " };
+        connectHandler.umlTextDelegate = (string msg) =>
+        {
+            msg = msg.Substring(msg.IndexOf(connectHandler.textToMatch) + connectHandler.textToMatch.Length);
+            msg = msg.Substring(0, msg.IndexOf(" "));
+            return "LSM -> LSM : Disconnect sessionID: " + msg;
+        };
+        keyHandlers.Add(connectHandler);
+
+        {
+            KeyPoint assignHandler = new KeyPoint() { textToMatch = "Assign session id " };
+            assignHandler.umlTextDelegate = (string msg) =>
+            {
+                msg = msg.Substring(msg.IndexOf(assignHandler.textToMatch) + assignHandler.textToMatch.Length);
+                msg = msg.Substring(0, msg.IndexOf(" "));
+                return "LSM -> LSM : Assign Terminal to Session ID " + msg;
+            };
+            keyHandlers.Add(assignHandler);
+        }
+
+        {
+            KeyPoint fastReconnectHanlder = new KeyPoint() { textToMatch = "msg=Fast reconnect - adding session, SessionId=" };
+            fastReconnectHanlder.umlTextDelegate = (string msg) =>
+            {
+                msg = msg.Substring(msg.IndexOf(fastReconnectHanlder.textToMatch) + fastReconnectHanlder.textToMatch.Length);
+                return "Termsrv -> LSM : Fast reconnect to Session ID " + msg;
+            };
+            keyHandlers.Add(fastReconnectHanlder);
+        }
+        {
+            KeyPoint loggedOnStartedHandler = new KeyPoint() { textToMatch = "msg=pNewTerminal->LoggedOnStarted() took this long, this->CommonData.GetSessionId()=" };
+            loggedOnStartedHandler.umlTextDelegate = (string msg) =>
+            {
+                msg = msg.Substring(msg.IndexOf(loggedOnStartedHandler.textToMatch) + loggedOnStartedHandler.textToMatch.Length);
+                return "Termsrv -> LSM : Fast reconnect to Session ID " + msg;
+            };
+            keyHandlers.Add(loggedOnStartedHandler);
+        }
+
+        {
+            KeyPoint connectnotify = new KeyPoint() { textToMatch = "msg=LSM sent us ConnectNotify, m_SessionId=" };
+            connectnotify.umlTextDelegate = (string msg) =>
+            {
+                msg = msg.Substring(msg.IndexOf(connectnotify.textToMatch) + connectnotify.textToMatch.Length);
+                return "LSM -> Termsrv : ConnectNotify Session ID " + msg;
+            };
+            keyHandlers.Add(connectnotify);
+        }
+
+        {
+            KeyPoint disconnectstack = new KeyPoint() { textToMatch = "msg=Trying to call DisconnectNotify, SessionId=" };
+            disconnectstack.umlTextDelegate = (string msg) =>
+            {
+                msg = msg.Substring(msg.IndexOf(disconnectstack.textToMatch) + disconnectstack.textToMatch.Length);
+                return "LSM -> Termsrv : DisconnectNotify Session ID " + msg;
+            };
+            keyHandlers.Add(disconnectstack);
+        }
+
+        {
+            KeyPoint stackready = new KeyPoint() { textToMatch = "perf=Stack took this long to get ready, StackReadyTime=" };
+            stackready.umlTextDelegate = (string msg) =>
+            {
+                msg = msg.Substring(msg.IndexOf(stackready.textToMatch) + stackready.textToMatch.Length);
+                msg = msg.Substring(0, msg.IndexOf(","));
+                return "Stack -> Termsrv : Stack is ready for connection (took: " + msg + " ms)";
+            };
+            keyHandlers.Add(stackready);
+        }
+
+        {
+            KeyPoint fastreconnectdone = new KeyPoint() { textToMatch = "perf=Fast reconnect time to connect to session, "};
+            fastreconnectdone.umlTextDelegate = (string msg) =>
+            {
+                var sessionid = "";
+                msg = msg.Substring(msg.IndexOf(fastreconnectdone.textToMatch) + fastreconnectdone.textToMatch.Length);
+                sessionid = msg.Substring(msg.IndexOf(", SessionId="));
+                msg = msg.Substring(0, msg.IndexOf(","));
+                return "Termsrv -> Termsrv : Fast reconnect finished to session " + sessionid + " (took: " + msg + " ms)";
+            };
+            keyHandlers.Add(fastreconnectdone);
+        }
+
+        {
+            KeyPoint connectionstarted = new KeyPoint() { textToMatch = "Listener was notified of a new connection" };
+            connectionstarted.umlTextDelegate = (string msg) =>
+            {
+                msg = msg.Substring(msg.IndexOf("{"));
+                return "Stack -> Termsrv : New connection with activityID: " + msg;
+            };
+            keyHandlers.Add(connectionstarted);
+        }
+
+        {
+            KeyPoint connectionbroken = new KeyPoint() { textToMatch = "Task started=Broken Connection, Function=CConnectionEx::CRDPCallback::BrokenConnection" };
+            connectionbroken.umlTextDelegate = (string msg) =>
+            {
+                return "Stack -> Termsrv : Connection was broken";
+            };
+            keyHandlers.Add(connectionbroken);
+        }
+
+      
     }
 
     public string GeneratePlatUML()
@@ -88,89 +201,8 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
             }
 
 
-            if (msg.Key.Equals("connect"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(connectheader) + connectheader.Length);
-                wmsg = wmsg.Substring(0, wmsg.IndexOf(" "));
-                txt += "LSM -> LSM : Connect Terminal to Session ID " + wmsg + Environment.NewLine;
-            }
 
-            if (msg.Key.Equals("assign"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(assignheader) + assignheader.Length);
-                wmsg = wmsg.Substring(0, wmsg.IndexOf(" "));
-                txt += "LSM -> LSM : Assign Terminal to Session ID " + wmsg + Environment.NewLine;
-            }
 
-            if (msg.Key.Equals("fastreconnect"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(fastreconnect) + fastreconnect.Length);
-                txt += "Termsrv -> LSM : Fast reconnect to Session ID " + wmsg + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("loggedonstarted"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(loggedonstarted) + loggedonstarted.Length);
-                wmsg = wmsg.Substring(0, wmsg.IndexOf(","));
-                txt += "LSM -> LSM : Logged on started Session ID " + wmsg + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("connectnotify"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(connectnotify) + connectnotify.Length);
-                txt += "LSM -> Termsrv : ConnectNotify Session ID " + wmsg + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("disconnectstack"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(disconnectstack) + disconnectstack.Length);
-                txt += "LSM -> Termsrv : DisconnectNotify Session ID " + wmsg + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("stackready"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(stackready) + stackready.Length);
-                wmsg = wmsg.Substring(0, wmsg.IndexOf(","));
-                txt += "Stack -> Termsrv : Stack is ready for connection (took: " + wmsg + " ms)" + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("fastreconnectdone"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                var sessionid = "";
-                wmsg = wmsg.Substring(wmsg.IndexOf(fastreconnectdone) + fastreconnectdone.Length);
-                sessionid = wmsg.Substring(wmsg.IndexOf(", SessionId="));
-                wmsg = wmsg.Substring(0, wmsg.IndexOf(","));
-
-                txt += "Termsrv -> Termsrv : Fast reconnect finished to session " + sessionid + " (took: " + wmsg + " ms)" + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("connectionstarted"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf("{"));
-                txt += "Stack -> Termsrv : New connection with activityID: " + wmsg + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("connectionbroken"))
-            {
-                txt += "Stack -> Termsrv : Connection was broken" + Environment.NewLine;
-            }
-
-            if (msg.Key.Equals("disconnect"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(disconnectheader) + disconnectheader.Length); //just get the sessionid
-                wmsg = wmsg.Substring(0, wmsg.IndexOf(" "));
-                txt += "LSM -> LSM : " + "Disconnect sessionID: " + wmsg + Environment.NewLine;
-            }
         }
         txt += "@enduml" + Environment.NewLine;
         return txt;
@@ -201,60 +233,6 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 }
             }
 
-            if (ret.GetMessage().Contains(disconnectheader))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("disconnect", ret));
-            }
-
-            if (ret.GetMessage().Contains(loggedonstarted))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("loggedonstarted", ret));
-            }
-
-            if (ret.GetMessage().Contains(connectheader))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("connect", ret));
-            }
-
-            if (ret.GetMessage().Contains(disconnectstack))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("disconnectstack", ret));
-            }
-
-            if (ret.GetMessage().Contains(assignheader))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("assign", ret));
-            }
-
-            if (ret.GetMessage().Contains(connectnotify))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("connectnotify", ret));
-            }
-
-            if (ret.GetMessage().Contains(connectionstarted))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("connectionstarted", ret));
-            }
-
-            if (ret.GetMessage().Contains(stackready))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("stackready", ret));
-            }
-
-            if(ret.GetMessage().Contains(fastreconnect))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("fastreconnect", ret));
-            }
-
-            if (ret.GetMessage().Contains(connectionbroken))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("connectionbroken", ret));
-            }
-
-            if (ret.GetMessage().Contains(fastreconnectdone))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("fastreconnectdone", ret));
-            }
 
            
         }
