@@ -5,6 +5,16 @@ using FindNeedlePluginLib.Interfaces;
 
 namespace SessionManagementProcessor;
 
+
+public struct KeyPoint
+{
+    public string textToMatch;
+    public string? textToUnmatch;
+    public ISearchResult? matchedLine;
+    public string? umlText;
+    public Func<string, string>? umlTextDelegate;
+}
+
 public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 {
     public string GetPluginClassName()
@@ -18,7 +28,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     }
 
     public string GetDescription() {
-        return "Djfodjsf"; 
+        return "Processes session management logs into UML";
     }
     public string GetOutputFile(string optionalOutputFolder = "") {
         var path = Path.Combine(optionalOutputFolder, "session.pu");
@@ -28,8 +38,6 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         var outputpath = x.GenerateUML(path);
         return outputpath;
     }
-    private readonly string msgheader = "- WMsgMessageHandler: ";
-    private readonly string stateheader = "StateFn:";
     private readonly string disconnectheader = "CTSSession::DisconnectSession on session ID ";
     private readonly string connectheader = "CTSSession::ConnectToTerminal on session ID ";
     private readonly string assignheader = "Assign session id ";
@@ -42,24 +50,43 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     private readonly string fastreconnectdone = "perf=Fast reconnect time to connect to session, ";
     private readonly string disconnectstack = "msg=Trying to call DisconnectNotify, SessionId=";
 
+    List<KeyPoint> keyHandlers = new();
+
+    public void GenerateKeyPoints()
+    {
+        KeyPoint wmsgHandler = new KeyPoint() { textToMatch = "- WMsgMessageHandler: ", textToUnmatch="dwMessage" };
+        wmsgHandler.umlTextDelegate = (string msg) =>
+        {
+            return "LSM -> Winlogon : " + msg.Substring(msg.IndexOf(wmsgHandler.textToMatch) + wmsgHandler.textToMatch.Length);
+        };
+        keyHandlers.Add(wmsgHandler);
+
+
+        KeyPoint stateHandler = new KeyPoint() { textToMatch = "StateFn:" };
+        stateHandler.umlTextDelegate = (string msg) =>
+        {
+            return "Winlogon -> Winlogon : " + msg.Substring(msg.IndexOf(stateHandler.textToMatch) + stateHandler.textToMatch.Length);
+        };
+        keyHandlers.Add(stateHandler);
+    }
+
     public string GeneratePlatUML()
     {
-
         var txt = "@startuml" + Environment.NewLine;
         foreach (var msg in keypoints)
         {
-            if (msg.Key.Equals("wmsg"))
+            foreach (KeyPoint key in keyHandlers)
             {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(msgheader) + msgheader.Length);
-                txt += "LSM -> Winlogon : " + wmsg + Environment.NewLine;
+                if (msg.Key.Contains(key.textToMatch))
+                {
+                    // Ensure that `umlTextDelegate` is not null before invoking it
+                    if (key.umlTextDelegate != null)
+                    {
+                        txt += key.umlTextDelegate(msg.Value.GetMessage()) + Environment.NewLine;
+                    }
+                }
             }
-            if (msg.Key.Equals("state"))
-            {
-                var wmsg = msg.Value.GetMessage();
-                wmsg = wmsg.Substring(wmsg.IndexOf(stateheader) + stateheader.Length);
-                txt += "Winlogon -> Winlogon : " + wmsg + Environment.NewLine;
-            }
+
 
             if (msg.Key.Equals("connect"))
             {
@@ -121,8 +148,8 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 wmsg = wmsg.Substring(wmsg.IndexOf(fastreconnectdone) + fastreconnectdone.Length);
                 sessionid = wmsg.Substring(wmsg.IndexOf(", SessionId="));
                 wmsg = wmsg.Substring(0, wmsg.IndexOf(","));
-                
-                txt += "Termsrv -> Termsrv : Fast reconnect finished to session "+ sessionid +" (took: " + wmsg + " ms)" + Environment.NewLine;
+
+                txt += "Termsrv -> Termsrv : Fast reconnect finished to session " + sessionid + " (took: " + wmsg + " ms)" + Environment.NewLine;
             }
 
             if (msg.Key.Equals("connectionstarted"))
@@ -131,8 +158,6 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 wmsg = wmsg.Substring(wmsg.IndexOf("{"));
                 txt += "Stack -> Termsrv : New connection with activityID: " + wmsg + Environment.NewLine;
             }
-
-
 
             if (msg.Key.Equals("connectionbroken"))
             {
@@ -160,8 +185,22 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 
     public void ProcessResults(List<ISearchResult> results)
     {
-        foreach(var ret in results)
+        GenerateKeyPoints();
+        foreach (var ret in results)
         {
+
+            foreach(KeyPoint key in keyHandlers)
+            {
+                if (ret.GetMessage().Contains(key.textToMatch))
+                {
+                    if (!string.IsNullOrEmpty(key.textToUnmatch) && ret.GetMessage().Contains(key.textToUnmatch))
+                    {
+                        continue;
+                    }
+                    keypoints.Add(new KeyValuePair<string, ISearchResult>(key.textToMatch, ret));
+                }
+            }
+
             if (ret.GetMessage().Contains(disconnectheader))
             {
                 keypoints.Add(new KeyValuePair<string, ISearchResult>("disconnect", ret));
@@ -217,18 +256,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 keypoints.Add(new KeyValuePair<string, ISearchResult>("fastreconnectdone", ret));
             }
 
-            if (ret.GetMessage().Contains(msgheader))
-            {
-                if (ret.GetMessage().Contains("dwMessage"))
-                {
-                    continue; //bahhh
-                }
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("wmsg", ret));
-            }
-            if (ret.GetMessage().Contains(stateheader))
-            {
-                keypoints.Add(new KeyValuePair<string, ISearchResult>("state", ret));
-            }
+           
         }
     }
 }
