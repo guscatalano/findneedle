@@ -34,5 +34,6 @@ public interface ISearchResult
     public string GetSearchableData();
     public string GetMessage();
 
+
     public string GetResultSource();
 }

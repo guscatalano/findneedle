@@ -35,27 +35,47 @@ public class ProcessLifeTimeTracker
         this.processName = processName;
     }
 
+    public string GetUMLAtTime(DateTime currentLogTime, DateTime lastLogTime)
+    {
+        var ret = "";
+        foreach (var life in lives)
+        {
+            if (life.Value.startTime != null && life.Value.endTime != null)
+            {
+                //The last time we did not get it, and now we passed it.
+                if (lastLogTime < life.Value.startTime && currentLogTime > life.Value.startTime)
+                {
+                    ret += "== LSM started pid: " + life.Value.processID + " == " + Environment.NewLine;
+                }
 
-    public void NewEvent(DateTime time, int pid) 
+                if (lastLogTime <= life.Value.endTime && currentLogTime > life.Value.endTime)
+                {
+                    ret += "== LSM ended pid: " + life.Value.processID + " == " + Environment.NewLine;
+                }
+            }
+        }
+        return ret;
+    }
+
+
+    public void NewEvent(DateTime time, int pid)
     {
         if (lives.ContainsKey(pid))
         {
-            var life = lives[pid];
-            if (life.startTime == null)
-            {
-                life.startTime = time;
-            }
-            else life.endTime ??= time;
+            // Create a copy of the struct, modify it, and then assign it back to the dictionary
+            var processLifeTime = lives[pid];
 
-            if (life.startTime > time)
+            if (processLifeTime.startTime > time)
             {
-                life.startTime = time;
+                processLifeTime.startTime = time;
             }
-            if (life.endTime < time)
+            if (processLifeTime.endTime < time)
             {
-                life.endTime = time;
+                processLifeTime.endTime = time;
             }
-        } 
+
+            lives[pid] = processLifeTime; // Assign the modified struct back to the dictionary
+        }
         else
         {
             lives.Add(pid, new ProcessLifeTime()
@@ -65,7 +85,6 @@ public class ProcessLifeTimeTracker
                 endTime = time
             });
         }
-        
     }
 }
 
@@ -347,12 +366,17 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     public string GeneratePlatUML()
     {
         var txt = "@startuml" + Environment.NewLine;
+
+        DateTime lastLogLine = DateTime.MinValue;
         foreach (var msg in keypoints)
         {
             foreach (KeyPoint key in keyHandlers)
             {
                 if (msg.Key.Contains(key.textToMatch))
                 {
+                    txt += lsmlife.GetUMLAtTime(msg.Value.GetLogTime(), lastLogLine);
+
+
                     // Ensure that `umlTextDelegate` is not null before invoking it
                     if (key.umlTextDelegate != null)
                     {
@@ -367,6 +391,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                     {
                         throw new Exception(":(");
                     }
+                    lastLogLine = msg.Value.GetLogTime();
                 }
             }
         }
@@ -386,6 +411,17 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         GenerateKeyPoints();
         foreach (var ret in results)
         {
+
+            if(ret.GetSource().ToLower().Contains("Microsoft-Windows-TerminalServices-LocalSessionManager".ToLower()))
+            {
+                if (ret.GetSearchableData().Contains("Execution ProcessID"))
+                {
+                    var pid = ret.GetSearchableData().Substring(ret.GetSearchableData().IndexOf("Execution ProcessID") + "Execution ProcessID".Length);
+                    pid = pid.Substring(0, pid.IndexOf(" ")).Replace("=", "").Replace("'", "").Replace("\"", "").Trim();
+                    lsmlife.NewEvent(ret.GetLogTime(), int.Parse(pid));
+                }
+            }   
+            
 
             foreach(KeyPoint key in keyHandlers)
             {
