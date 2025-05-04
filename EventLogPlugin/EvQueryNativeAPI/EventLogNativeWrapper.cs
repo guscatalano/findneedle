@@ -39,7 +39,6 @@ public class EventLogNativeWrapper
             EventLogNativeMethods.EvtQueryFlags.EvtQueryChannelPath | EventLogNativeMethods.EvtQueryFlags.EvtQueryForwardDirection
         );
 
-        var error2 = Marshal.GetLastWin32Error();
         if (queryHandle == IntPtr.Zero)
         {
             var error = Marshal.GetLastWin32Error();

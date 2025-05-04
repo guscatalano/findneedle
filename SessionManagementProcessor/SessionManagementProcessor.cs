@@ -201,79 +201,93 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
             }
         });
 
-
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint loggedOnStartedHandler = new KeyPoint() { textToMatch = "msg=pNewTerminal->LoggedOnStarted() took this long, this->CommonData.GetSessionId()=" };
-            loggedOnStartedHandler.umlTextDelegate = (string msg) =>
+            textToMatch = "msg=pNewTerminal->LoggedOnStarted() took this long, this->CommonData.GetSessionId()=",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
-                msg = msg.Substring(msg.IndexOf(loggedOnStartedHandler.textToMatch) + loggedOnStartedHandler.textToMatch.Length);
-                return "Termsrv -> LSM : Fast reconnect to Session ID " + msg;
-            };
-            keyHandlers.Add(loggedOnStartedHandler);
-        }
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
+                return "Termsrv -> LSM : LoggedOnStarted finished to Session ID " + msg;
+            }
+        });
 
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint connectnotify = new KeyPoint() { textToMatch = "msg=LSM sent us ConnectNotify, m_SessionId=" };
-            connectnotify.umlTextDelegate = (string msg) =>
+            textToMatch = "msg=LSM sent us ConnectNotify, m_SessionId=",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
-                msg = msg.Substring(msg.IndexOf(connectnotify.textToMatch) + connectnotify.textToMatch.Length);
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 return "LSM -> Termsrv : ConnectNotify Session ID " + msg;
-            };
-            keyHandlers.Add(connectnotify);
-        }
+            }
+        });
 
+
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint disconnectstack = new KeyPoint() { textToMatch = "msg=Trying to call DisconnectNotify, SessionId=" };
-            disconnectstack.umlTextDelegate = (string msg) =>
+            textToMatch = "msg=Trying to call DisconnectNotify, SessionId=",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
-                msg = msg.Substring(msg.IndexOf(disconnectstack.textToMatch) + disconnectstack.textToMatch.Length);
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 return "LSM -> Termsrv : DisconnectNotify Session ID " + msg;
-            };
-            keyHandlers.Add(disconnectstack);
-        }
+            }
+        });
 
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint stackready = new KeyPoint() { textToMatch = "perf=Stack took this long to get ready, StackReadyTime=" };
-            stackready.umlTextDelegate = (string msg) =>
+            textToMatch = "perf=Stack took this long to get ready, StackReadyTime=",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
-                msg = msg.Substring(msg.IndexOf(stackready.textToMatch) + stackready.textToMatch.Length);
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 msg = msg.Substring(0, msg.IndexOf(","));
                 return "Stack -> Termsrv : Stack is ready for connection (took: " + msg + " ms)";
-            };
-            keyHandlers.Add(stackready);
-        }
+            }
+        });
 
+
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint fastreconnectdone = new KeyPoint() { textToMatch = "perf=Fast reconnect time to connect to session, "};
-            fastreconnectdone.umlTextDelegate = (string msg) =>
+            textToMatch = "perf=Fast reconnect time to connect to session, ",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
                 var sessionid = "";
-                msg = msg.Substring(msg.IndexOf(fastreconnectdone.textToMatch) + fastreconnectdone.textToMatch.Length);
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 sessionid = msg.Substring(msg.IndexOf(", SessionId="));
                 msg = msg.Substring(0, msg.IndexOf(","));
                 return "Termsrv -> Termsrv : Fast reconnect finished to session " + sessionid + " (took: " + msg + " ms)";
-            };
-            keyHandlers.Add(fastreconnectdone);
-        }
+            }
+        });
 
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint connectionstarted = new KeyPoint() { textToMatch = "Listener was notified of a new connection" };
-            connectionstarted.umlTextDelegate = (string msg) =>
+            textToMatch = "Listener was notified of a new connection",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
                 msg = msg.Substring(msg.IndexOf("{"));
                 return "Stack -> Termsrv : New connection with activityID: " + msg;
-            };
-            keyHandlers.Add(connectionstarted);
-        }
+            }
+        });
 
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint connectionbroken = new KeyPoint() { textToMatch = "Task started=Broken Connection, Function=CConnectionEx::CRDPCallback::BrokenConnection" };
-            connectionbroken.umlTextDelegate = (string msg) =>
+            textToMatch = "Task started=Broken Connection, Function=CConnectionEx::CRDPCallback::BrokenConnection",
+            umlTextDelegate = (string input) =>
             {
                 return "Stack -> Termsrv : Connection was broken";
-            };
-            keyHandlers.Add(connectionbroken);
-        }
+            }
+        });
+
 
       
     }

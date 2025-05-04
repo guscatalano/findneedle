@@ -55,7 +55,7 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
                         numRecordsInMemory++;
                     }
                     succeess++;
-                } catch (Exception e)
+                } catch (Exception)
                 {
                     //skip for now
                     failed++;

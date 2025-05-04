@@ -92,13 +92,13 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation, ICommandLinePa
                     }
                     succeess++;
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     try
                     {
                         searchResults.AddRange(EventLogNativeWrapper.GetEventsAsResults(provider, "*"));
                         
-                    } catch(Exception e2)
+                    } catch(Exception)
                     {
                         //We really couldnt get it
                         //Console.WriteLine(e2.Message);
