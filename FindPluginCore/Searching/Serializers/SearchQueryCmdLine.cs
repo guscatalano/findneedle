@@ -78,7 +78,7 @@ public class SearchQueryCmdLine
 
     public static ISearchQuery ParseFromCommandLine(List<CommandLineArgument> arguments, PluginManager pluginManager, Dictionary<CommandLineRegistration, ICommandLineParser>? parsers = null)
     {
-        //This is a test hook
+        
         parsers ??= GetCommandLineParsers(pluginManager);
 
         ISearchQuery q;
@@ -98,8 +98,12 @@ public class SearchQueryCmdLine
 
         foreach (var argument in arguments)
         {
+            //This is a test hook
+            //Make a new instance per argument, otherwise you can't have multiple
+            parsers ??= GetCommandLineParsers(pluginManager);
             foreach (var parser in parsers)
             {
+                
                 var cmdKeyword = argument.key;
                 var cmdParam = argument.value.Trim(); //Dont to lower just incase, remove begin and end spaces
 

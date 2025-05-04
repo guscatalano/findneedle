@@ -45,12 +45,12 @@ public class ProcessLifeTimeTracker
                 //The last time we did not get it, and now we passed it.
                 if (lastLogTime < life.Value.startTime && currentLogTime > life.Value.startTime)
                 {
-                    ret += "== LSM started pid: " + life.Value.processID + " == " + Environment.NewLine;
+                    ret += "== " + this.processName + " first seen pid: " + life.Value.processID + " == " + Environment.NewLine;
                 }
 
                 if (lastLogTime <= life.Value.endTime && currentLogTime > life.Value.endTime)
                 {
-                    ret += "== LSM ended pid: " + life.Value.processID + " == " + Environment.NewLine;
+                    ret += "== " + this.processName + " last seen pid: " + life.Value.processID + " == " + Environment.NewLine;
                 }
             }
         }
@@ -115,6 +115,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 
     private readonly List<KeyPoint> keyHandlers = new();
     private ProcessLifeTimeTracker lsmlife = new("LSM");
+    private ProcessLifeTimeTracker winlogonlife = new("winlogon");
 
 
     public void GenerateKeyPoints()
@@ -375,7 +376,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 if (msg.Key.Contains(key.textToMatch))
                 {
                     txt += lsmlife.GetUMLAtTime(msg.Value.GetLogTime(), lastLogLine);
-
+                    txt += winlogonlife.GetUMLAtTime(msg.Value.GetLogTime(), lastLogLine);
 
                     // Ensure that `umlTextDelegate` is not null before invoking it
                     if (key.umlTextDelegate != null)
@@ -420,10 +421,19 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                     pid = pid.Substring(0, pid.IndexOf(" ")).Replace("=", "").Replace("'", "").Replace("\"", "").Trim();
                     lsmlife.NewEvent(ret.GetLogTime(), int.Parse(pid));
                 }
-            }   
-            
+            }
+            if (ret.GetSource().ToLower().Contains("Microsoft-Windows-Winlogon".ToLower()))
+            {
+                if (ret.GetSearchableData().Contains("Execution ProcessID"))
+                {
+                    var pid = ret.GetSearchableData().Substring(ret.GetSearchableData().IndexOf("Execution ProcessID") + "Execution ProcessID".Length);
+                    pid = pid.Substring(0, pid.IndexOf(" ")).Replace("=", "").Replace("'", "").Replace("\"", "").Trim();
+                    winlogonlife.NewEvent(ret.GetLogTime(), int.Parse(pid));
+                }
+            }
 
-            foreach(KeyPoint key in keyHandlers)
+
+            foreach (KeyPoint key in keyHandlers)
             {
                 if (ret.GetMessage().Contains(key.textToMatch) || ret.GetSearchableData().Contains(key.textToMatch))
                 {
