@@ -17,6 +17,58 @@ public struct KeyPoint
     public Func<Tuple<string, string>, string>? umlTextDelegateComplex;
 }
 
+public struct ProcessLifeTime
+{
+    public int processID;
+    public DateTime? startTime;
+    public DateTime? endTime;
+}
+
+public class ProcessLifeTimeTracker
+{
+    public string processName;
+    public Dictionary<int, ProcessLifeTime> lives = new();
+
+
+    public ProcessLifeTimeTracker(string processName)
+    {
+        this.processName = processName;
+    }
+
+
+    public void NewEvent(DateTime time, int pid) 
+    {
+        if (lives.ContainsKey(pid))
+        {
+            var life = lives[pid];
+            if (life.startTime == null)
+            {
+                life.startTime = time;
+            }
+            else life.endTime ??= time;
+
+            if (life.startTime > time)
+            {
+                life.startTime = time;
+            }
+            if (life.endTime < time)
+            {
+                life.endTime = time;
+            }
+        } 
+        else
+        {
+            lives.Add(pid, new ProcessLifeTime()
+            {
+                processID = pid,
+                startTime = time,
+                endTime = time
+            });
+        }
+        
+    }
+}
+
 public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 {
     public string GetPluginClassName()
@@ -43,8 +95,8 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     
 
     private readonly List<KeyPoint> keyHandlers = new();
+    private ProcessLifeTimeTracker lsmlife = new("LSM");
 
-  
 
     public void GenerateKeyPoints()
     {
