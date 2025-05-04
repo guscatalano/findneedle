@@ -57,18 +57,12 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
                     succeess++;
                 } catch (Exception e)
                 {
-                    try
-                    {
-                        var ret = EventLogNativeWrapper.GetEvent(provider, "*");
-                    } catch(Exception ex)
-                    {
-                        
-                    }
                     //skip for now
                     failed++;
                 }
             }
             Console.WriteLine("Out of everything, pass: " + succeess + " , failed: " + failed);
+            Console.WriteLine("Note, this API has limited support for Application, System, etc. logs, and may not work for all logs.");
             return;
         }
         eventLog.Log = eventLogName;
@@ -117,7 +111,7 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
         var reg = new CommandLineRegistration()
         {
             handlerType = CommandLineHandlerType.Location,
-            key = "eventlog"
+            key = "eventlogentry"
         };
         return reg;
     }

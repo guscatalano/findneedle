@@ -2,6 +2,7 @@
 using findneedle;
 using findneedle.Interfaces;
 using FindNeedlePluginLib.Interfaces;
+using Windows.System;
 
 namespace SessionManagementProcessor;
 
@@ -69,7 +70,73 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                 return "LSM -> Winlogon : " + msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
             }
         });
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "Begin session arbitration:",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> LSM : " + "Start session arbitration";
+            }
+        });
 
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "End session arbitration:",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> LSM : " + "Stop session arbitration";
+            }
+        });
+
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "Remote Desktop Services: Session logon succeeded",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> LSM : " + "User logged on";
+            }
+        });
+
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "Local multi-user session manager received system shutdown message",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "svchost -> LSM : " + "System shutting down";
+            }
+        });
+
+        
+
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "Remote Desktop Services: Shell start notification received",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> LSM : " + "Shell started";
+            }
+        });
+
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "Remote Desktop Services is not accepting logons because setup is running.",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> LSM : " + "OOBE is running, no remote connections";
+            }
+        });
 
         keyHandlers.Add(new KeyPoint()
         {
@@ -78,7 +145,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
             {
                 var msg = input.Item1;
                 var matchedText = input.Item2;
-                return "LSM -> LSM : " + msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
+                return "LSM -> LSM : Session logoff";
             }
         });
 
@@ -242,7 +309,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 
             foreach(KeyPoint key in keyHandlers)
             {
-                if (ret.GetMessage().Contains(key.textToMatch))
+                if (ret.GetMessage().Contains(key.textToMatch) || ret.GetSearchableData().Contains(key.textToMatch))
                 {
                     if (!string.IsNullOrEmpty(key.textToUnmatch) && ret.GetMessage().Contains(key.textToUnmatch))
                     {

@@ -5,6 +5,8 @@ using System.Diagnostics.Eventing.Reader;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using EventLogPlugin.EvQueryNativeAPI;
+using findneedle.Implementations.Discovery;
 using findneedle.Implementations.Locations.EventLogQueryLocation;
 using FindNeedlePluginLib.Interfaces;
 
@@ -12,11 +14,33 @@ namespace findneedle.Implementations;
 
 
 
-public class LocalEventLogQueryLocation : IEventLogQueryLocation
+public class LocalEventLogQueryLocation : IEventLogQueryLocation, ICommandLineParser
 {
 
-   
 
+    public CommandLineRegistration RegisterCommandHandler()
+    {
+        var reg = new CommandLineRegistration()
+        {
+            handlerType = CommandLineHandlerType.Location,
+            key = "eventlogquery"
+        };
+        return reg;
+    }
+
+
+    public void ParseCommandParameterIntoQuery(string parameter)
+    {
+        if (!string.IsNullOrEmpty(parameter))
+        {
+            eventLogName = parameter;
+        }
+        else
+        {
+            eventLogName = "everything";
+        }
+
+    }
 
     public string eventLogName
     { get; set;
@@ -46,16 +70,58 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation
     public override void LoadInMemory()
     {
 
-        //This can be useful to pre-filter
-        var query = "*"; //"*[System/Level=3 or Level=4]";
-        EventLogQuery eventsQuery = new EventLogQuery(eventLogName, PathType.LogName, query);
-        EventLogReader logReader = new EventLogReader(eventsQuery);
-
-        for (EventRecord eventdetail = logReader.ReadEvent(); eventdetail != null; eventdetail = logReader.ReadEvent())
+        if (eventLogName.Equals("everything", StringComparison.OrdinalIgnoreCase))
         {
-            ISearchResult result = new EventRecordResult(eventdetail, this);
-            searchResults.Add(result);
-            numRecordsInMemory++;
+            List<string> providers = EventLogDiscovery.GetAllEventLogs();
+            var failed = 0;
+            var succeess = 0;
+            foreach (var provider in providers)
+            {
+                try
+                {
+                    eventLogName = provider;
+                    EventLogQuery eventsQuery = new EventLogQuery(eventLogName,
+                                                                  PathType.LogName
+                                                                  );
+                    EventLogReader logReader = new EventLogReader(eventsQuery);
+                    for (EventRecord eventdetail = logReader.ReadEvent(); eventdetail != null; eventdetail = logReader.ReadEvent())
+                    {
+                        ISearchResult result = new EventRecordResult(eventdetail, this);
+                        searchResults.Add(result);
+                        numRecordsInMemory++;
+                    }
+                    succeess++;
+                }
+                catch (Exception e)
+                {
+                    try
+                    {
+                        searchResults.AddRange(EventLogNativeWrapper.GetEventsAsResults(provider, "*"));
+                        
+                    } catch(Exception e2)
+                    {
+                        //We really couldnt get it
+                        //Console.WriteLine(e2.Message);
+                    }
+                    //skip for now
+                    failed++;
+                }
+            }
+            return;
+        }
+        else
+        {
+            //This can be useful to pre-filter
+            var query = "*"; //"*[System/Level=3 or Level=4]";
+            EventLogQuery eventsQuery = new EventLogQuery(eventLogName, PathType.LogName, query);
+            EventLogReader logReader = new EventLogReader(eventsQuery);
+
+            for (EventRecord eventdetail = logReader.ReadEvent(); eventdetail != null; eventdetail = logReader.ReadEvent())
+            {
+                ISearchResult result = new EventRecordResult(eventdetail, this);
+                searchResults.Add(result);
+                numRecordsInMemory++;
+            }
         }
        
     }
@@ -88,5 +154,8 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation
     }
 
     public override void ClearStatistics() => throw new NotImplementedException();
-    public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
+    public override List<ReportFromComponent> ReportStatistics()
+    {
+        return new();
+    }
 }

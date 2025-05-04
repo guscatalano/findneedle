@@ -4,10 +4,25 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using findneedle;
 
 namespace EventLogPlugin.EvQueryNativeAPI;
 public class EventLogNativeWrapper
 {
+
+    public static List<ISearchResult> GetEventsAsResults(string logName, string query)
+    {
+        List<ISearchResult> ret = new();
+
+        var xmls = GetEvent(logName, query);
+        foreach(var xml in xmls)
+        {
+            //Console.WriteLine(xml);
+            var result = new EventLogNativeResult(xml, logName, query);
+            ret.Add(result);
+        }
+        return ret;
+    }
 
     public static List<string> GetEvent(string logName, string query)
     {

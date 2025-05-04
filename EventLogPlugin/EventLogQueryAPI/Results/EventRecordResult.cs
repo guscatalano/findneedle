@@ -15,6 +15,9 @@ public class EventRecordResult : ISearchResult
     readonly IEventLogQueryLocation location;
     readonly string eventdata = "";
     readonly string systemdata = "";
+    readonly string formattedevent = "";
+
+
     public EventRecordResult(EventRecord entry, IEventLogQueryLocation location)
     {
         this.entry = entry;
@@ -41,6 +44,8 @@ public class EventRecordResult : ISearchResult
             {
                 systemdata = doc.Substring(first, last - first);
             }
+
+        formattedevent = entry.FormatDescription(); //Consider passing in the locale
         //}
     }
 
@@ -144,7 +149,7 @@ public class EventRecordResult : ISearchResult
     public string GetSearchableData()
     {
 
-        return string.Join(' ', eventdata, systemdata);
+        return string.Join(' ', eventdata, systemdata, formattedevent);
     }
 
     public void WriteToConsole()

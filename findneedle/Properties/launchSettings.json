@@ -2,7 +2,7 @@
   "profiles": {
     "findneedle": {
       "commandName": "Project",
-      "commandLineArgs": "location_eventlog=everything"
+      "commandLineArgs": "location_eventlogquery=Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"
     }
   }
 }
