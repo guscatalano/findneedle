@@ -149,45 +149,59 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
             }
         });
 
-
-        KeyPoint connectHandler = new KeyPoint() { textToMatch = "CTSSession::ConnectToTerminal on session ID " };
-        connectHandler.umlTextDelegate = (string msg) =>
+        keyHandlers.Add(new KeyPoint()
         {
-            msg = msg.Substring(msg.IndexOf(connectHandler.textToMatch) + connectHandler.textToMatch.Length);
-            msg = msg.Substring(0, msg.IndexOf(" "));
-            return "LSM -> LSM : Connect Terminal to Session ID " + msg;
-        };
-        keyHandlers.Add(connectHandler);
-
-        KeyPoint disconnectHandler = new KeyPoint() { textToMatch = "CTSSession::DisconnectSession on session ID " };
-        connectHandler.umlTextDelegate = (string msg) =>
-        {
-            msg = msg.Substring(msg.IndexOf(connectHandler.textToMatch) + connectHandler.textToMatch.Length);
-            msg = msg.Substring(0, msg.IndexOf(" "));
-            return "LSM -> LSM : Disconnect sessionID: " + msg;
-        };
-        keyHandlers.Add(connectHandler);
-
-        {
-            KeyPoint assignHandler = new KeyPoint() { textToMatch = "Assign session id " };
-            assignHandler.umlTextDelegate = (string msg) =>
+            textToMatch = "CTSSession::ConnectToTerminal on session ID " ,
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
-                msg = msg.Substring(msg.IndexOf(assignHandler.textToMatch) + assignHandler.textToMatch.Length);
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
+                msg = msg.Substring(0, msg.IndexOf(" "));
+                return "LSM -> LSM : Connect Terminal to Session ID " + msg;
+            }
+        });
+
+
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "CTSSession::DisconnectSession on session ID ",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
+                msg = msg.Substring(0, msg.IndexOf(" "));
+                return "LSM -> LSM : Disconnect sessionID: " + msg;
+            }
+        });
+
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "Assign session id ",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 msg = msg.Substring(0, msg.IndexOf(" "));
                 return "LSM -> LSM : Assign Terminal to Session ID " + msg;
-            };
-            keyHandlers.Add(assignHandler);
-        }
+            }
+        });
 
+        keyHandlers.Add(new KeyPoint()
         {
-            KeyPoint fastReconnectHanlder = new KeyPoint() { textToMatch = "msg=Fast reconnect - adding session, SessionId=" };
-            fastReconnectHanlder.umlTextDelegate = (string msg) =>
+            textToMatch = "msg=Fast reconnect - adding session, SessionId=",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
             {
-                msg = msg.Substring(msg.IndexOf(fastReconnectHanlder.textToMatch) + fastReconnectHanlder.textToMatch.Length);
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 return "Termsrv -> LSM : Fast reconnect to Session ID " + msg;
-            };
-            keyHandlers.Add(fastReconnectHanlder);
-        }
+            }
+        });
+
+
         {
             KeyPoint loggedOnStartedHandler = new KeyPoint() { textToMatch = "msg=pNewTerminal->LoggedOnStarted() took this long, this->CommonData.GetSessionId()=" };
             loggedOnStartedHandler.umlTextDelegate = (string msg) =>
