@@ -71,6 +71,18 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         });
 
 
+        keyHandlers.Add(new KeyPoint()
+        {
+            textToMatch = "Remote Desktop Services: Session logoff succeeded:",
+            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            {
+                var msg = input.Item1;
+                var matchedText = input.Item2;
+                return "LSM -> LSM : " + msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
+            }
+        });
+
+
         KeyPoint connectHandler = new KeyPoint() { textToMatch = "CTSSession::ConnectToTerminal on session ID " };
         connectHandler.umlTextDelegate = (string msg) =>
         {

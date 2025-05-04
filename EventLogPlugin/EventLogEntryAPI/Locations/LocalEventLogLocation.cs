@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using EventLogPlugin.EvQueryNativeAPI;
 using findneedle.Implementations.Discovery;
 using findneedle.Implementations.Locations.EventLogQueryLocation;
 using FindNeedlePluginLib.Interfaces;
@@ -39,6 +40,8 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
         if(eventLogName.Equals("everything", StringComparison.OrdinalIgnoreCase))
         {
             List<string> providers = EventLogDiscovery.GetAllEventLogs();
+            var failed = 0;
+            var succeess = 0;
             foreach (var provider in providers)
             {
                 try
@@ -51,11 +54,21 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
                         searchResults.Add(result);
                         numRecordsInMemory++;
                     }
-                } catch (Exception)
+                    succeess++;
+                } catch (Exception e)
                 {
+                    try
+                    {
+                        var ret = EventLogNativeWrapper.GetEvent(provider, "*");
+                    } catch(Exception ex)
+                    {
+                        
+                    }
                     //skip for now
+                    failed++;
                 }
             }
+            Console.WriteLine("Out of everything, pass: " + succeess + " , failed: " + failed);
             return;
         }
         eventLog.Log = eventLogName;
@@ -122,5 +135,7 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
     }
 
     public override void ClearStatistics() => throw new NotImplementedException();
-    public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
+    public override List<ReportFromComponent> ReportStatistics() {
+        return new List<ReportFromComponent>();
+    }
 }
