@@ -1,0 +1,150 @@
+@startuml
+== LSM started pid: 1504 == 
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+LSM -> LSM : OOBE is running, no remote connections
+== winlogon started pid: 1104 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+svchost -> LSM : System shutting down
+LSM -> LSM : Session logoff
+== LSM ended pid: 1504 == 
+== LSM started pid: 2776 == 
+== winlogon ended pid: 1104 == 
+== winlogon started pid: 2908 == 
+svchost -> LSM : System shutting down
+== LSM ended pid: 2776 == 
+== LSM started pid: 2676 == 
+== winlogon ended pid: 2908 == 
+== winlogon started pid: 2812 == 
+svchost -> LSM : System shutting down
+== LSM ended pid: 2676 == 
+== LSM started pid: 2556 == 
+== winlogon started pid: 2692 == 
+== winlogon ended pid: 2812 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+svchost -> LSM : System shutting down
+LSM -> LSM : Session logoff
+== LSM ended pid: 2556 == 
+== LSM started pid: 2704 == 
+== winlogon ended pid: 2692 == 
+== winlogon started pid: 2836 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+svchost -> LSM : System shutting down
+LSM -> LSM : Session logoff
+== LSM ended pid: 2704 == 
+== LSM started pid: 2568 == 
+== winlogon ended pid: 2836 == 
+== winlogon started pid: 2704 == 
+svchost -> LSM : System shutting down
+== LSM ended pid: 2568 == 
+== LSM started pid: 2540 == 
+== winlogon ended pid: 2704 == 
+== winlogon started pid: 2672 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+== LSM ended pid: 2540 == 
+== LSM started pid: 2672 == 
+== winlogon ended pid: 2672 == 
+== winlogon started pid: 2804 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+LSM -> LSM : Session logoff
+svchost -> LSM : System shutting down
+== LSM started pid: 2744 == 
+== winlogon started pid: 2884 == 
+== winlogon started pid: 2880 == 
+== winlogon ended pid: 2880 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+svchost -> LSM : System shutting down
+LSM -> LSM : Session logoff
+== LSM ended pid: 2744 == 
+== LSM started pid: 2760 == 
+== winlogon ended pid: 2884 == 
+== winlogon started pid: 2892 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+LSM -> LSM : Session logoff
+svchost -> LSM : System shutting down
+== LSM ended pid: 2760 == 
+== LSM started pid: 2888 == 
+== winlogon ended pid: 2892 == 
+== winlogon started pid: 2520 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+LSM -> LSM : Session logoff
+svchost -> LSM : System shutting down
+== LSM ended pid: 2888 == 
+== LSM started pid: 2756 == 
+== winlogon ended pid: 2520 == 
+== winlogon started pid: 2400 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+== winlogon started pid: 23752 == 
+LSM -> LSM : Session logoff
+== winlogon ended pid: 2400 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+svchost -> LSM : System shutting down
+LSM -> LSM : Session logoff
+== LSM ended pid: 2756 == 
+== LSM started pid: 2708 == 
+== winlogon ended pid: 23752 == 
+== winlogon started pid: 2848 == 
+svchost -> LSM : System shutting down
+== LSM ended pid: 2708 == 
+== LSM started pid: 2740 == 
+== winlogon ended pid: 2848 == 
+== winlogon started pid: 2876 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+LSM -> LSM : Session logoff
+svchost -> LSM : System shutting down
+== LSM ended pid: 2740 == 
+== winlogon ended pid: 2876 == 
+LSM -> LSM : Start session arbitration
+LSM -> LSM : Stop session arbitration
+LSM -> LSM : User logged on
+LSM -> LSM : Shell started
+@enduml

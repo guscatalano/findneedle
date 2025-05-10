@@ -86,6 +86,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SessionManagementProcessor"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SessionManagementPlugin", "SessionManagementPlugin", "{B4DF507C-CC80-4C54-9FAE-79F016659381}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{ECF94637-DCC1-4B5C-8C4F-260D8B11C1FF}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ExampleOutput", "ExampleOutput", "{D21B0103-2223-49E3-881A-29F37B8B2EC7}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\ExampleOutput\session.png = Documentation\ExampleOutput\session.png
+		Documentation\ExampleOutput\session.pu = Documentation\ExampleOutput\session.pu
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -321,6 +329,7 @@ Global
 		{82A3DF89-70DD-45E7-B885-B4AF96B930F0} = {256A3EA6-6CBB-497F-B03C-C3D60741283C}
 		{35680610-89AE-4B5B-B14D-50FD7D7DC331} = {B4DF507C-CC80-4C54-9FAE-79F016659381}
 		{B4DF507C-CC80-4C54-9FAE-79F016659381} = {519943C1-326B-44D5-B1F0-D60C8F7529DE}
+		{D21B0103-2223-49E3-881A-29F37B8B2EC7} = {ECF94637-DCC1-4B5C-8C4F-260D8B11C1FF}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C989A73E-0520-44CE-A96D-AA9B104EB86A}
