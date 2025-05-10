@@ -13,8 +13,7 @@ public struct KeyPoint
     public string? textToUnmatch;
     public ISearchResult? matchedLine;
     public string? umlText;
-    public Func<string, string>? umlTextDelegate;
-    public Func<Tuple<string, string>, string>? umlTextDelegateComplex;
+    public Func<UmlGenerationParams, string>? umlTextDelegateComplex;
 }
 
 public struct ProcessLifeTime
@@ -88,6 +87,13 @@ public class ProcessLifeTimeTracker
     }
 }
 
+public struct UmlGenerationParams
+{
+    public string msg;
+    public string matchedText;
+    public bool includeTime;
+}
+
 public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 {
     public string GetPluginClassName()
@@ -114,8 +120,8 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     
 
     private readonly List<KeyPoint> keyHandlers = new();
-    private ProcessLifeTimeTracker lsmlife = new("LSM");
-    private ProcessLifeTimeTracker winlogonlife = new("winlogon");
+    private readonly ProcessLifeTimeTracker lsmlife = new("LSM");
+    private readonly ProcessLifeTimeTracker winlogonlife = new("winlogon");
 
 
     public void GenerateKeyPoints()
@@ -124,10 +130,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         {
             textToMatch = "- WMsgMessageHandler: ",
             textToUnmatch = "dwMessage",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> Winlogon : " + msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
             }
         });
@@ -135,20 +141,20 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "StateFn:",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> Winlogon : " + msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
             }
         });
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Begin session arbitration:",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> LSM : " + "Start session arbitration";
             }
         });
@@ -156,10 +162,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "End session arbitration:",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> LSM : " + "Stop session arbitration";
             }
         });
@@ -167,10 +173,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Remote Desktop Services: Session logon succeeded",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> LSM : " + "User logged on";
             }
         });
@@ -178,10 +184,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Local multi-user session manager received system shutdown message",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "svchost -> LSM : " + "System shutting down";
             }
         });
@@ -191,10 +197,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Remote Desktop Services: Shell start notification received",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> LSM : " + "Shell started";
             }
         });
@@ -202,10 +208,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Remote Desktop Services is not accepting logons because setup is running.",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> LSM : " + "OOBE is running, no remote connections";
             }
         });
@@ -213,10 +219,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Remote Desktop Services: Session logoff succeeded:",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 return "LSM -> LSM : Session logoff";
             }
         });
@@ -224,10 +230,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "CTSSession::ConnectToTerminal on session ID " ,
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 msg = msg.Substring(0, msg.IndexOf(" "));
                 return "LSM -> LSM : Connect Terminal to Session ID " + msg;
@@ -238,10 +244,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "CTSSession::DisconnectSession on session ID ",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 msg = msg.Substring(0, msg.IndexOf(" "));
                 return "LSM -> LSM : Disconnect sessionID: " + msg;
@@ -251,10 +257,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Assign session id ",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 msg = msg.Substring(0, msg.IndexOf(" "));
                 return "LSM -> LSM : Assign Terminal to Session ID " + msg;
@@ -264,10 +270,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "msg=Fast reconnect - adding session, SessionId=",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 return "Termsrv -> LSM : Fast reconnect to Session ID " + msg;
             }
@@ -276,10 +282,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "msg=pNewTerminal->LoggedOnStarted() took this long, this->CommonData.GetSessionId()=",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 return "Termsrv -> LSM : LoggedOnStarted finished to Session ID " + msg;
             }
@@ -288,10 +294,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "msg=LSM sent us ConnectNotify, m_SessionId=",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 return "LSM -> Termsrv : ConnectNotify Session ID " + msg;
             }
@@ -301,10 +307,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "msg=Trying to call DisconnectNotify, SessionId=",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 return "LSM -> Termsrv : DisconnectNotify Session ID " + msg;
             }
@@ -313,10 +319,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "perf=Stack took this long to get ready, StackReadyTime=",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 msg = msg.Substring(0, msg.IndexOf(","));
                 return "Stack -> Termsrv : Stack is ready for connection (took: " + msg + " ms)";
@@ -327,10 +333,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "perf=Fast reconnect time to connect to session, ",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 var sessionid = "";
                 msg = msg.Substring(msg.IndexOf(matchedText) + matchedText.Length);
                 sessionid = msg.Substring(msg.IndexOf(", SessionId="));
@@ -342,10 +348,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Listener was notified of a new connection",
-            umlTextDelegateComplex = (Tuple<string, string> input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
-                var msg = input.Item1;
-                var matchedText = input.Item2;
+                var msg = input.msg;
+                var matchedText = input.matchedText;
                 msg = msg.Substring(msg.IndexOf("{"));
                 return "Stack -> Termsrv : New connection with activityID: " + msg;
             }
@@ -354,7 +360,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Task started=Broken Connection, Function=CConnectionEx::CRDPCallback::BrokenConnection",
-            umlTextDelegate = (string input) =>
+            umlTextDelegateComplex = (string input) =>
             {
                 return "Stack -> Termsrv : Connection was broken";
             }
@@ -378,12 +384,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
                     txt += lsmlife.GetUMLAtTime(msg.Value.GetLogTime(), lastLogLine);
                     txt += winlogonlife.GetUMLAtTime(msg.Value.GetLogTime(), lastLogLine);
 
-                    // Ensure that `umlTextDelegate` is not null before invoking it
-                    if (key.umlTextDelegate != null)
-                    {
-                        txt += key.umlTextDelegate(msg.Value.GetMessage()) + Environment.NewLine;
-                    }
-                    else if (key.umlTextDelegateComplex != null)
+                    if (key.umlTextDelegateComplex != null)
                     {
                         var result = key.umlTextDelegateComplex(new Tuple<string, string>(msg.Value.GetMessage(), key.textToMatch));
                         txt += result + Environment.NewLine;
