@@ -360,7 +360,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "Task started=Broken Connection, Function=CConnectionEx::CRDPCallback::BrokenConnection",
-            umlTextDelegateComplex = (string input) =>
+            umlTextDelegateComplex = (UmlGenerationParams input) =>
             {
                 return "Stack -> Termsrv : Connection was broken";
             }
@@ -386,7 +386,12 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 
                     if (key.umlTextDelegateComplex != null)
                     {
-                        var result = key.umlTextDelegateComplex(new Tuple<string, string>(msg.Value.GetMessage(), key.textToMatch));
+                        var result = key.umlTextDelegateComplex(new UmlGenerationParams
+                        {
+                            msg = msg.Value.GetMessage(),
+                            matchedText = key.textToMatch,
+                            includeTime = false
+                        });
                         txt += result + Environment.NewLine;
                     }
                     else

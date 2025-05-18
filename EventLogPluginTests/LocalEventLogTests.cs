@@ -49,7 +49,7 @@ public class LocalEventLogTests
         LocalEventLogLocation loc = new();
         var reg = loc.RegisterCommandHandler();
         Assert.AreEqual(reg.handlerType, CommandLineHandlerType.Location);
-        Assert.IsTrue(reg.key.Equals("eventlog"));
+        Assert.IsTrue(reg.key.Equals("eventlogentry"));
         try
         {
             loc.ParseCommandParameterIntoQuery("everything");
@@ -69,7 +69,7 @@ public class LocalEventLogTests
         LocalEventLogLocation loc = new();
         var reg = loc.RegisterCommandHandler();
         Assert.AreEqual(reg.handlerType, CommandLineHandlerType.Location);
-        Assert.IsTrue(reg.key.Equals("eventlog"));
+        Assert.IsTrue(reg.key.Equals("eventlogentry"));
         try
         {
             loc.ParseCommandParameterIntoQuery("");
@@ -89,7 +89,7 @@ public class LocalEventLogTests
         LocalEventLogLocation loc = new();
         var reg = loc.RegisterCommandHandler();
         Assert.AreEqual(reg.handlerType, CommandLineHandlerType.Location);
-        Assert.IsTrue(reg.key.Equals("eventlog"));
+        Assert.IsTrue(reg.key.Equals("eventlogentry"));
         try
         {
             loc.ParseCommandParameterIntoQuery("blah");
