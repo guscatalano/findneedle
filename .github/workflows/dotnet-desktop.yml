@@ -89,7 +89,7 @@ jobs:
         configuration: [Debug]
     runs-on: windows-latest
     outputs:
-      testresult: ${{ steps.set-output.outputs.testresult }}
+      testresult: ${{ steps.testrun.outcome }}
 
     steps:
     - name: Checkout
