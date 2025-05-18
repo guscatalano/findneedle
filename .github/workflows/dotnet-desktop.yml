@@ -298,7 +298,7 @@ jobs:
         retention-days: 5
 
   actually_release:
-    needs: [create-release]
+    needs: [create-release, run-tests]
     strategy:
       matrix:
         configuration: [Release]
