@@ -27,6 +27,9 @@ public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFil
         if (callbackForParse != null)
         {
             callbackForParse(parameter);
+        } else
+        {
+            somevalue = parameter;
         }
     }
 

@@ -104,6 +104,17 @@ public class SearchQueryCmdLine
             foreach (var parser in parsers)
             {
                 
+                Type t = parser.Value.GetType();
+                var instance = Activator.CreateInstance(t);
+                if(instance == null)
+                {
+                    throw new Exception("Failed to clone parser instance");
+                }
+
+                //Only use parserObj going forward
+                var parserObj = (ICommandLineParser)instance;
+
+
                 var cmdKeyword = argument.key;
                 var cmdParam = argument.value.Trim(); //Dont to lower just incase, remove begin and end spaces
 
@@ -114,19 +125,19 @@ public class SearchQueryCmdLine
                     {
                         cmdParam = cmdParam.Substring(1, cmdParam.Length - 2);
                     }
-                    parser.Value.ParseCommandParameterIntoQuery(cmdParam);
+                    parserObj.ParseCommandParameterIntoQuery(cmdParam);
 
                     //If we didn't throw the object is valid
                     switch (parser.Key.handlerType)
                     {
                         case CommandLineHandlerType.Location:
-                            q.Locations.Add((ISearchLocation)parser.Value);
+                            q.Locations.Add((ISearchLocation)parserObj);
                             break;
                         case CommandLineHandlerType.Filter:
-                            q.Filters.Add((ISearchFilter)parser.Value);
+                            q.Filters.Add((ISearchFilter)parserObj);
                             break;
                          case CommandLineHandlerType.Processor:
-                            q.Processors.Add((IResultProcessor)parser.Value);
+                            q.Processors.Add((IResultProcessor)parserObj);
                              break;
                         default:
                             throw new Exception("Unknown handler type");

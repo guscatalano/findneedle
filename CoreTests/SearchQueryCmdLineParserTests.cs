@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
+using findneedle.Implementations;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Interfaces;
@@ -161,6 +162,14 @@ public class SearchQueryCmdLineParserTests
         var parsers = SetupSimpleFakeParser(registration);
         ISearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.AreEqual(3, q.GetLocations().Count);
+        foreach(var loc in q.GetLocations())
+        {
+            Assert.IsTrue(loc is FakeCmdLineParser);
+            Assert.IsNotNull(((FakeCmdLineParser)loc).somevalue);
+        }
+        Assert.IsTrue(q.GetLocations().FirstOrDefault(x => ((FakeCmdLineParser)x).somevalue.Equals(@"C:\\windows\\explorer.exe")) != null);
+        Assert.IsTrue(q.GetLocations().FirstOrDefault(x => ((FakeCmdLineParser)x).somevalue.Equals(@"C:\\windows\\system32")) != null);
+        Assert.IsTrue(q.GetLocations().FirstOrDefault(x => ((FakeCmdLineParser)x).somevalue.Equals(@"C:\\windows\\system32\\")) != null);
     }
 
 }
