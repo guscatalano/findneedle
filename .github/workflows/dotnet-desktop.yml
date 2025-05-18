@@ -228,9 +228,6 @@ jobs:
       Solution_Name: findneedle.sln              # Replace with your solution name, i.e. MyWpfApp.sln.
 
     steps:
-    - name: envcheckt
-      run: echo "${{needs.create-release.outputs.releasetag}}"
-
     - name: Checkout
       uses: actions/checkout@v4
       with:
