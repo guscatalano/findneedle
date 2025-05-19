@@ -6,7 +6,10 @@ namespace findneedle.Implementations;
 
 public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser, IPluginDescription
 {
-
+    public void Clone(ICommandLineParser parser)
+    {
+        //Keep nothing
+    }
     public string term 
     {
         get; set;

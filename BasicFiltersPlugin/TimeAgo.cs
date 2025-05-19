@@ -13,7 +13,10 @@ namespace findneedle.Implementations;
 
 public class TimeAgoFilter : ISearchFilter, ICommandLineParser, IPluginDescription
 {
-
+    public void Clone(ICommandLineParser parser)
+    {
+        //Keep nothing
+    }
     public DateTime start
     {
         get; set;

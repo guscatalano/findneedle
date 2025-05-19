@@ -19,6 +19,16 @@ public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFil
         get; set;
     }
 
+    public void Clone(ICommandLineParser parser)
+    {
+        if (parser is FakeCmdLineParser p)
+        {
+            somevalue = p.somevalue;
+            wasParseCalled = p.wasParseCalled;
+            callbackForParse = p.callbackForParse;
+        }
+    }
+
     public bool wasParseCalled = false;
     public Action<string>? callbackForParse;
     public void ParseCommandParameterIntoQuery(string parameter) 

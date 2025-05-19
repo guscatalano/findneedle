@@ -12,7 +12,10 @@ public class TimeRangeFilter : ISearchFilter, IPluginDescription, ICommandLinePa
 {
     public DateTime start;
     public DateTime end;
-
+    public void Clone(ICommandLineParser parser)
+    {
+        //Keep nothing
+    }
     public TimeRangeFilter()
     {
         this.start = DateTime.Now;

@@ -55,4 +55,8 @@ public interface ICommandLineParser
      * The 
      */
     void ParseCommandParameterIntoQuery(string parameter);
+
+
+    /* By default we clone, if there is something that needs to be retained, use this */
+    void Clone(ICommandLineParser original);
 }

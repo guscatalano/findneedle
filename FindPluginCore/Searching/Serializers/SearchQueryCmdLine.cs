@@ -110,10 +110,11 @@ public class SearchQueryCmdLine
                 {
                     throw new Exception("Failed to clone parser instance");
                 }
+                
 
                 //Only use parserObj going forward
                 var parserObj = (ICommandLineParser)instance;
-
+                parserObj.Clone(parser.Value); //needed to copy settings
 
                 var cmdKeyword = argument.key;
                 var cmdParam = argument.value.Trim(); //Dont to lower just incase, remove begin and end spaces

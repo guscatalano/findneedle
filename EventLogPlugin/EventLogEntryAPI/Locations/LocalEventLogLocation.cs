@@ -9,7 +9,10 @@ namespace findneedle.Implementations;
 
 public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
 {
-
+    public void Clone(ICommandLineParser parser)
+    {
+        //Keep nothing
+    }
     readonly EventLog eventLog = new();
     public string eventLogName
     {

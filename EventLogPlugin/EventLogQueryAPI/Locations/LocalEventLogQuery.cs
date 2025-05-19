@@ -17,7 +17,10 @@ namespace findneedle.Implementations;
 public class LocalEventLogQueryLocation : IEventLogQueryLocation, ICommandLineParser
 {
 
-
+    public void Clone(ICommandLineParser parser)
+    {
+        //Keep nothing
+    }
     public CommandLineRegistration RegisterCommandHandler()
     {
         var reg = new CommandLineRegistration()

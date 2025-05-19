@@ -54,10 +54,11 @@ public class SearchQueryCmdLineParserTests
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
         ISearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
-        Assert.IsTrue(((FakeCmdLineParser)parsers.First().Value).wasParseCalled);
         Assert.AreEqual(q.Locations.Count(), 0);
         Assert.AreEqual(q.Filters.Count(), 1);
         Assert.AreEqual(q.Processors.Count(), 0);
+        Assert.IsTrue(((FakeCmdLineParser)q.Filters.First()).wasParseCalled);
+
     }
 
     [TestMethod]
@@ -69,10 +70,10 @@ public class SearchQueryCmdLineParserTests
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Location, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
         ISearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
-        Assert.IsTrue(((FakeCmdLineParser)parsers.First().Value).wasParseCalled);
         Assert.AreEqual(q.Locations.Count(), 1);
         Assert.AreEqual(q.Filters.Count(), 0);
         Assert.AreEqual(q.Processors.Count(), 0);
+        Assert.IsTrue(((FakeCmdLineParser)q.Locations.First()).wasParseCalled);
     }
 
     [TestMethod]
@@ -84,16 +85,17 @@ public class SearchQueryCmdLineParserTests
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Processor, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
         ISearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
-        Assert.IsTrue(((FakeCmdLineParser)parsers.First().Value).wasParseCalled);
+        
         Assert.AreEqual(q.Locations.Count(), 0);
         Assert.AreEqual(q.Filters.Count(), 0);
         Assert.AreEqual(q.Processors.Count(), 1);
+        Assert.IsTrue(((FakeCmdLineParser)q.Processors.First()).wasParseCalled);
     }
 
     [TestMethod]
     public void TestParameterPassThrough()
     {
-        var doubleCheckcallback = false;
+        var checkCallback = false;
         var input = new List<CommandLineArgument>();
         input.Add(new CommandLineArgument() { key = "filter_" + SOME_KEY, value = SOME_PARAM });
 
@@ -102,18 +104,18 @@ public class SearchQueryCmdLineParserTests
         var FakeParser = (FakeCmdLineParser)parsers.First().Value;
         FakeParser.callbackForParse = (string parameter) =>
         {
+
             Assert.AreEqual(SOME_PARAM, parameter);
-            doubleCheckcallback = true;
+            checkCallback = true;
         };
         SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
-        Assert.IsTrue(FakeParser.wasParseCalled);
-        Assert.IsTrue(doubleCheckcallback);
+        Assert.IsTrue(checkCallback);
     }
 
     [TestMethod]
     public void TestEmptyParameterPassThrough()
     {
-        var doubleCheckcallback = false;
+        var checkCallback = false;
         var input = new List<CommandLineArgument>();
         input.Add(new CommandLineArgument() { key = "filter_" + SOME_KEY, value = "" });
 
@@ -123,11 +125,10 @@ public class SearchQueryCmdLineParserTests
         FakeParser.callbackForParse = (string parameter) =>
         {
             Assert.IsTrue(string.IsNullOrEmpty(parameter));
-            doubleCheckcallback = true;
+            checkCallback = true;
         };
         SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
-        Assert.IsTrue(FakeParser.wasParseCalled);
-        Assert.IsTrue(doubleCheckcallback);
+        Assert.IsTrue(checkCallback);
     }
 
     [TestMethod]
@@ -139,12 +140,14 @@ public class SearchQueryCmdLineParserTests
         var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Filter, key = SOME_KEY };
         var parsers = SetupSimpleFakeParser(registration);
         var FakeParser = (FakeCmdLineParser)parsers.First().Value;
+        var checkCallback = false;
         FakeParser.callbackForParse = (string parameter) =>
         {
             Assert.AreEqual("something,something", parameter); //We expect it to remove the brackets
+            checkCallback = true;
         };
         SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
-        Assert.IsTrue(FakeParser.wasParseCalled);
+        Assert.IsTrue(checkCallback);
     }
 
 

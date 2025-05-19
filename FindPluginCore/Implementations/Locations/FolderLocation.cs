@@ -17,6 +17,10 @@ namespace findneedle.Implementations;
 
 public class FolderLocation : ISearchLocation, ICommandLineParser
 {
+    public void Clone(ICommandLineParser parser)
+    {
+        //Keep nothing
+    }
     public SearchProgressSink? sink;
     public SearchStatistics? stats;
 
@@ -31,6 +35,18 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         get; set;
     }
 
+    public FolderLocation()
+    {
+        procStats = new ReportFromComponent()
+        {
+            component = this.GetType().Name,
+            step = SearchStep.AtLoad,
+            summary = "statsByFile",
+            metric = new Dictionary<string, dynamic>()
+        };
+    }
+
+
     [JsonConstructorAttribute]
     public FolderLocation(string path = "", bool isFile=false,  int numRecordsInLastResult = 0, int numRecordsInMemory = 0, SearchLocationDepth depth = SearchLocationDepth.Intermediate)
     {
@@ -42,6 +58,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
             metric = new Dictionary<string, dynamic>()
         };
         this.path = path;
+        throw new Exception("hmm, do i need to make this work?");
     }
 
 
