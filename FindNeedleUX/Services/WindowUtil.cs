@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using WinRT.Interop;
 
@@ -15,7 +17,9 @@ namespace FindNeedleUX;
 // windows.  In the future, we would like to support this in platform APIs.
 public class WindowUtil
 {
-
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
     public static Window GetMainWindow()
     {
         return _activeWindows.First(); //should be first window to ever register :)
@@ -82,5 +86,18 @@ public class WindowUtil
 
     private static readonly List<Window> _activeWindows = new();
 
+   
+
+    public static void DisableInput(Window window)
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        EnableWindow(hWnd, false); // Disable input
+    }
+
+    public static void EnableInput(Window window)
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        EnableWindow(hWnd, true); // Enable input
+    }
 
 }

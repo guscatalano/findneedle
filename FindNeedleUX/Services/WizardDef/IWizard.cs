@@ -79,17 +79,22 @@ public class IWizard
         starterElement = sender;
         BasicWizard newWizard = new BasicWizard();
 
+
         WindowUtil.TrackWindow(newWizard);
         var y = WindowUtil.GetWindowForElement(sender);
         var z = y.AppWindow;
-        y.SetExtendedWindowStyle(ExtendedWindowStyle.NoActivate);
+        WindowUtil.DisableInput(y);
+        y.SetExtendedWindowStyle(ExtendedWindowStyle.ControlParent);
+
         //z.Hide();
         wizFrame = newWizard.GetFrame();
         wizFrame.Navigate(w_initialPageType);
         newWizard.SetWindowSize(600, 400);
+        newWizard.SetExtendedWindowStyle(ExtendedWindowStyle.AppWindow); 
         newWizard.Activate();
         //newWizard.AppWindow.boun
         newWizard.Closed += X_Closed;
+        
     }
 
 
@@ -104,6 +109,7 @@ public class IWizard
         w.Activate();
 
         var y = WindowUtil.GetWindowForElement(this.starterElement);
+        WindowUtil.EnableInput(y);
         var z = y.AppWindow;
         y.SetExtendedWindowStyle(ExtendedWindowStyle.AppWindow); //set this back so the taskbar icon doesnt disappear
     }
