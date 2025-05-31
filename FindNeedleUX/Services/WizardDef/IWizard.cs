@@ -98,6 +98,13 @@ public class IWizard
         //Let the parent window update somehow
 
         this.callback("test");
-        WindowUtil.GetWindowForElement(this.starterElement).AppWindow.Show();
+        var w = WindowUtil.GetWindowForElement(this.starterElement);
+        //w.AppWindow.Show();
+        w.AppWindow.Show(true);
+        w.Activate();
+
+        var y = WindowUtil.GetWindowForElement(this.starterElement);
+        var z = y.AppWindow;
+        y.SetExtendedWindowStyle(ExtendedWindowStyle.AppWindow); //set this back so the taskbar icon doesnt disappear
     }
 }

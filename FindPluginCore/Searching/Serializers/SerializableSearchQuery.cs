@@ -124,7 +124,7 @@ public class SearchQueryJsonReader
     {
         if (source.Name == null)
         {
-            throw new ArgumentNullException(nameof(source.Name));
+            //throw new ArgumentNullException(nameof(source.Name));
         }
 
         SearchQuery destination = new();
