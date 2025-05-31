@@ -11,20 +11,20 @@ using System.Runtime.CompilerServices;
 namespace FindNeedleUX.Services;
 public class MainWindowActions
 {
-    private static NavigationView navigationView;
+   // private static NavigationView navigationView;
     public static void DisableNavBar()
     {
-        navigationView.IsEnabled = false;
+       // navigationView.IsEnabled = false;
     }
 
     public static void EnableNavBar()
     {
-        navigationView.IsEnabled = true;
+       // navigationView.IsEnabled = true;
     }
 
     public static void TrackNavBar(NavigationView bar)
     {
-            navigationView = bar;
+            //navigationView = bar;
     }
 
 }

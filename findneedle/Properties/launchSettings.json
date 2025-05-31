@@ -2,7 +2,7 @@
   "profiles": {
     "findneedle": {
       "commandName": "Project",
-      "commandLineArgs": "location_eventlogquery=everything"
+      "commandLineArgs": "location_eventlogquery=Application location_eventlogquery=System"
     }
   }
 }

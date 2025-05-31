@@ -21,9 +21,8 @@ public sealed partial class MainWindow : Window
     {
         this.InitializeComponent();
         WindowUtil.TrackWindow(this);
-        MainWindowActions.TrackNavBar(nvSample);
     }
-
+    /*
     private void NavigationView_SelectionChanged(Microsoft.UI.Xaml.Controls.NavigationView sender, Microsoft.UI.Xaml.Controls.NavigationViewSelectionChangedEventArgs args)
     {
         if (args.IsSettingsSelected)
@@ -42,7 +41,7 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(pageType);
             }
         }
-    }
+    }*/
 
     private void MenuFlyoutItem_Click(object sender, RoutedEventArgs e)
     {
@@ -57,6 +56,36 @@ public sealed partial class MainWindow : Window
                 break;
             case "openworkspace":
                 LoadCommand();
+                break;
+            case "search_location":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
+                break;
+            case "search_filters":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchFiltersPage));
+                break;
+            case "search_processors":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchProcessorsPage));
+                break;
+            case "search_plugins":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.PluginsPage));
+                break;
+            case "results_get":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage));
+                break;
+            case "results_statistics":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage));
+                break;
+            case "results_viewnative":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchResultPage)); //not lightresults probably?
+                break;
+            case "results_viewweb":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
+                break;
+            case "results_viewcommunity":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsVCommunityPage));
+                break;
+            case "systeminfo":
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SystemInfoPage));
                 break;
             default:
                 throw new Exception("bad code");

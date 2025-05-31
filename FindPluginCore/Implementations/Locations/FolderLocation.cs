@@ -47,20 +47,6 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
     }
 
 
-    [JsonConstructorAttribute]
-    public FolderLocation(string path = "", bool isFile=false,  int numRecordsInLastResult = 0, int numRecordsInMemory = 0, SearchLocationDepth depth = SearchLocationDepth.Intermediate)
-    {
-        procStats = new ReportFromComponent()
-        {
-            component = this.GetType().Name,
-            step = SearchStep.AtLoad,
-            summary = "statsByFile",
-            metric = new Dictionary<string, dynamic>()
-        };
-        this.path = path;
-        throw new Exception("hmm, do i need to make this work?");
-    }
-
 
 
     [ExcludeFromCodeCoverage]

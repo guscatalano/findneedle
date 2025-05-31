@@ -9,44 +9,32 @@
     mc:Ignorable="d">
 
     <StackPanel>
-    <MenuBar>
-        <MenuBarItem Title="Workspace">
-            <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
+        <MenuBar>
+            <MenuBarItem Title="Workspace">
+                <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
                 <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
                 <MenuFlyoutItem Text="Save" Click="MenuFlyoutItem_Click" Name="SaveWorkspace"/>
             </MenuBarItem>
             <MenuBarItem Title="SearchQuery">
-                <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="Locations"/>
-                <MenuFlyoutItem Text="Filters" Click="MenuFlyoutItem_Click" Name="Filters"/>
-                <MenuFlyoutItem Text="Processors" Click="MenuFlyoutItem_Click" Name="Processors"/>
-                <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="Plugins"/>
+                <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="search_location"/>
+                <MenuFlyoutItem Text="Filters" Click="MenuFlyoutItem_Click" Name="search_filters"/>
+                <MenuFlyoutItem Text="Processors" Click="MenuFlyoutItem_Click" Name="search_processors"/>
+                <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
             </MenuBarItem>
             <MenuBarItem Title="View Results">
-                <MenuFlyoutItem Text="Get" Click="MenuFlyoutItem_Click" Name="GetResults"/>
-                <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="ResultStatistics"/>
-                <MenuFlyoutItem Text="View Native" Click="MenuFlyoutItem_Click" Name="ViewNative"/>
-                <MenuFlyoutItem Text="View Web" Click="MenuFlyoutItem_Click" Name="ViewWeb"/>
+                <MenuFlyoutItem Text="Get" Click="MenuFlyoutItem_Click" Name="results_get"/>
+                <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
+                <MenuFlyoutItem Text="View Native" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
+                <MenuFlyoutItem Text="View Web" Click="MenuFlyoutItem_Click" Name="results_viewweb"/>
+                <MenuFlyoutItem Text="View Community" Click="MenuFlyoutItem_Click" Name="results_viewcommunity"/>
             </MenuBarItem>
             <MenuBarItem Title="Settings">
-                <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="SystemCheck"/>
+                <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
             </MenuBarItem>
 
         </MenuBar>
-    <NavigationView x:Name="nvSample"  SelectionChanged="NavigationView_SelectionChanged">
-        <NavigationView.MenuItems>
-            <NavigationViewItem Icon="Folder" Content="Locations" Tag="SearchLocationsPage" />
-            <NavigationViewItem Icon="Filter" Content="Filters" Tag="SearchFiltersPage" />
-            <NavigationViewItem Content="Processors" Tag="SearchProcessorsPage" />
-            <NavigationViewItem Content="Plugins" Tag="PluginsPage" />
-            <NavigationViewItem  Content="Run" Tag="RunSearchPage" />
-            <NavigationViewItem  Content="ResultStatistics" Tag="SearchStatisticsPage" />
-            <NavigationViewItem  Content="Results" Tag="SearchResultPage" />
-            <NavigationViewItem  Content="ez Results" Tag="LightResultPage" />
-                <NavigationViewItem  Content="web Results" Tag="ResultsWebPage" />
-                <NavigationViewItem  Content="vcom Results" Tag="ResultsVCommunityPage" />
-                <NavigationViewItem  Content="Info" Tag="SystemInfoPage" />
-            </NavigationView.MenuItems>
+      
         <Frame x:Name="contentFrame"/>
-    </NavigationView>
+   
     </StackPanel>
 </Window>

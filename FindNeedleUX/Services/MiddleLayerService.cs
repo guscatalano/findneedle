@@ -20,7 +20,7 @@ public class MiddleLayerService
 
     public static void AddFolderLocation(string location)
     {
-        Locations.Add(new FolderLocation(location));
+        Locations.Add(new FolderLocation() {  path = location });
     }
 
     public static void AddTimeAgoFilter(TimeAgoUnit unit, int count)
