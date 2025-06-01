@@ -7,7 +7,9 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using WinRT.Interop;
+using WinUIEx;
 
 namespace FindNeedleUX;
 // Helper class to allow the app to find the Window that contains an
@@ -98,6 +100,16 @@ public class WindowUtil
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
         EnableWindow(hWnd, true); // Enable input
+    }
+
+    public static void SizeWindowToContent(Window window)
+    {
+        if (window.Content is FrameworkElement rootElement)
+        {
+            rootElement.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var desired = rootElement.DesiredSize;
+            window.SetWindowSize(desired.Width, desired.Height);
+        }
     }
 
 }

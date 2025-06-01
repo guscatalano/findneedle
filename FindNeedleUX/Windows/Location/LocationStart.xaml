@@ -9,7 +9,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid>
+    <StackPanel MinWidth="300" MinHeight="300">
         <RadioButtons Header="Location Type">
             <RadioButton Content="Folder(s)/File(s)" Checked="RadioButton_Checked" Name="Folder" />
             <RadioButton Content="Local Machine's EventLog" Checked="RadioButton_Checked" Name="EventLog"/>
@@ -17,5 +17,5 @@
             <RadioButton Content="Visual Studio Online Work Item" Checked="RadioButton_Checked" Name="VSO"/>
         </RadioButtons>
         <Button Click="Button_Click" >Next</Button>
-    </Grid>
+    </StackPanel>
 </Page>

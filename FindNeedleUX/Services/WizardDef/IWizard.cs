@@ -89,7 +89,8 @@ public class IWizard
         //z.Hide();
         wizFrame = newWizard.GetFrame();
         wizFrame.Navigate(w_initialPageType);
-        newWizard.SetWindowSize(600, 400);
+        //newWizard.SetWindowSize(600, 400);
+        WindowUtil.SizeWindowToContent(newWizard);
         newWizard.SetExtendedWindowStyle(ExtendedWindowStyle.AppWindow); 
         newWizard.Activate();
         //newWizard.AppWindow.boun
