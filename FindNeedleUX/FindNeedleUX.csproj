@@ -29,10 +29,6 @@
     
     <WindowsAppSDKWinUI>true</WindowsAppSDKWinUI> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
   </PropertyGroup>
-
-  <ItemGroup>
-    <Content Remove="Assets\mtns.csv" />
-  </ItemGroup>
   <ItemGroup>
     <None Remove="Pages\LightResultPage.xaml" />
     <None Remove="Pages\LocationWizard.xaml" />
@@ -104,9 +100,6 @@
     <ProjectReference Include="..\findneedle\findneedle.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="Assets\mtns.csv">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <Page Update="Pages\ResultsVCommunityPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>

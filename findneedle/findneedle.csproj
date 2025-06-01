@@ -12,7 +12,16 @@
   <NuGetAudit>false</NuGetAudit>
   <Platforms>AnyCPU;x64</Platforms>
 <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+<Title>FindNeedle</Title>
+<PackageIcon>StoreLogo.png</PackageIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\FindNeedleUX\Assets\StoreLogo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

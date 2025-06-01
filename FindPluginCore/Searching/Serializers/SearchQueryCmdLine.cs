@@ -11,6 +11,7 @@ using FindNeedlePluginLib.Interfaces;
 using findneedle.Interfaces;
 using FindPluginCore.PluginSubsystem;
 using FindPluginCore.GlobalConfiguration;
+using FindPluginCore.Searching.Serializers;
 
 namespace FindPluginCore.Searching;
 
@@ -81,18 +82,7 @@ public class SearchQueryCmdLine
         
         parsers ??= GetCommandLineParsers(pluginManager);
 
-        ISearchQuery q;
-        switch (pluginManager.GetSearchQueryClass())
-        {
-            case "SearchQuery":
-                q = new SearchQuery();
-                break;
-            case "NuSearchQuery":
-                q = new NuSearchQuery();
-                break;
-            default:
-                throw new Exception("unknown search query class");
-        }
+        ISearchQuery q = SearchQueryFactory.CreateSearchQuery(pluginManager);
 
         q.Processors = pluginManager.GetAllPluginsInstancesOfAType<IResultProcessor>();
 

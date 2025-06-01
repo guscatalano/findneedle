@@ -9,6 +9,7 @@ using findneedle.Implementations;
 using FindNeedleCoreUtils;
 using FindNeedleUX.Services.WizardDef;
 using FindNeedleUX.ViewObjects;
+using FindPluginCore.Searching.Serializers;
 using Microsoft.UI.Xaml.Controls;
 
 namespace FindNeedleUX.Services;
@@ -17,6 +18,7 @@ public class MiddleLayerService
     public static List<ISearchLocation> Locations = new();
     public static List<ISearchFilter> Filters = new();
     public static SearchQuery Query = new();
+    public static SearchQueryUX SearchQueryUX = new();
 
     public static void AddFolderLocation(string location)
     {
@@ -65,9 +67,9 @@ public class MiddleLayerService
 
     public static void UpdateSearchQuery()
     {
-        Query = new SearchQuery();
-        Query.Filters = Filters;
-        Query.Locations = Locations;
+        SearchQueryUX.UpdateSearchQuery();
+        SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Filters, Query.Outputs, Query.SearchStepNotificationSink);
+       
     }
 
     public static List<LogLine> GetLogLines()
@@ -87,9 +89,7 @@ public class MiddleLayerService
         return Query.SearchStepNotificationSink.progressSink;
     }
 
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-    public static async Task<string> RunSearch(bool surfacescan = false)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+    public static Task<string> RunSearch(bool surfacescan = false)
     {
 
         UpdateSearchQuery();
@@ -105,7 +105,7 @@ public class MiddleLayerService
         SearchResults = Query.GetFilteredResults();
         
         SearchStatistics x = Query.GetSearchStatistics();
-        return x.GetSummaryReport();
+        return Task.FromResult(x.GetSummaryReport());
 
 
     }
