@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using FindNeedleUX.Services;
+using FindPluginCore.Searching.Serializers;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -25,16 +27,10 @@ public sealed partial class PluginsPage : Page
     public PluginsPage()
     {
         this.InitializeComponent();
+        PluginsFound.AddRange(MiddleLayerService.SearchQueryUX.GetLoadedPlugins().Select(plugin => new Tuple<string, object>(plugin, null)));
     }
 
-    private List<Tuple<string, FontFamily>> PluginsFound = new List<Tuple<string, FontFamily>>()
-    {
-        new Tuple<string, FontFamily>("Arial", new FontFamily("Arial")),
-        new Tuple<string, FontFamily>("Comic Sans MS", new FontFamily("Comic Sans MS")),
-        new Tuple<string, FontFamily>("Courier New", new FontFamily("Courier New")),
-        new Tuple<string, FontFamily>("Segoe UI", new FontFamily("Segoe UI")),
-        new Tuple<string, FontFamily>("Times New Roman", new FontFamily("Times New Roman"))
-    };
+    private readonly List<Tuple<string, object>> PluginsFound = new();
 
     private void ListBox2_Loaded(object sender, RoutedEventArgs e)
     {

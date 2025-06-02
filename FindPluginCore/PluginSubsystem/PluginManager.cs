@@ -48,6 +48,7 @@ public class PluginManager
             Arguments = plugin,
             WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
             UseShellExecute = false,
+            WindowStyle = ProcessWindowStyle.Hidden,
             RedirectStandardError = GlobalSettings.Debug,
             RedirectStandardOutput = GlobalSettings.Debug
         };
