@@ -265,16 +265,23 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-nuget-
     
-    # Restore the application to populate the obj folder with RuntimeIdentifiers
+    # build it
     - name: Build the application
       run: msbuild $env:Solution_Name /t:Build /p:Configuration=$env:Configuration
       env:
         Configuration: ${{ matrix.configuration }}
 
 
-    # Restore the application to populate the obj folder with RuntimeIdentifiers
+    #  publish the app
     - name: Publish the application
       run: msbuild $env:Solution_Name /t:Publish /p:Configuration=$env:Configuration
+      env:
+        Configuration: ${{ matrix.configuration }}   
+
+
+      # publish specifically the ux
+    - name: Publish the application
+      run: msbuild $env:Solution_Name /t:Publish FindNeedleUX /p:Configuration=$env:Configuration
       env:
         Configuration: ${{ matrix.configuration }}   
 
@@ -283,7 +290,7 @@ jobs:
       uses: thedoctor0/zip-release@0.7.5
       with:
         type: 'zip'
-        directory: 'D:\a\findneedle\findneedle\FindNeedleUX\bin\Release\publish\'
+        directory: 'D:\a\findneedle\findneedle\FindNeedleUX\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish\'
         filename: 'release.zip'
         exclusions: '*.git* /*node_modules/*.editorconfig'
   
@@ -291,7 +298,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: release-bits
-        path: D:\a\findneedle\findneedle\FindNeedleUX\bin\Release\publish\release.zip
+        path: D:\a\findneedle\findneedle\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.26100.0\win-x64\publish\release.zip
         retention-days: 5
 
   actually_release:
