@@ -281,7 +281,7 @@ jobs:
 
       # publish specifically the ux
     - name: Publish the application
-      run: msbuild $env:Solution_Name /t:Publish /p:Configuration=$env:Configuration FindNeedleUX
+      run: msbuild /t:Publish /p:Configuration=$env:Configuration FindNeedleUX
       env:
         Configuration: ${{ matrix.configuration }}   
 
