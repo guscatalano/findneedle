@@ -17,7 +17,7 @@ public class FileIO
         var useAIPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle", fileName);
         if(File.Exists(fileName))
         {
-            return fileName; //If the file is in the current directory, just return it
+            return useDefault; //Expand it, because certain APIs expect it
         }
         else if (File.Exists(useDefault))
         {

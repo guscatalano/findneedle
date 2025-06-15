@@ -83,7 +83,7 @@ public sealed partial class ResultsWebPage : Page
 
     public static string SerializeAndEncodeLogLine(LogLine logLine)
     {
-        List<string> columnsToSend = ["Index", "Time", "Provider", "TaskName", "Message", "Source"];
+        List<string> columnsToSend = ["Index", "Time", "Provider", "TaskName", "Message", "Source", "Level"];
         var dict = new Dictionary<string, object?>();
         foreach (var prop in typeof(LogLine).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
@@ -97,7 +97,10 @@ public sealed partial class ResultsWebPage : Page
             else if (value != null)
                 dict[prop.Name] = HttpUtility.JavaScriptStringEncode(value.ToString());
             else
-                dict[prop.Name] = null;
+            {
+                dict[prop.Name] = "null";
+            }
+                
         }
         return JsonSerializer.Serialize(dict);
     }
