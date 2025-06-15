@@ -290,15 +290,15 @@ jobs:
       uses: thedoctor0/zip-release@0.7.5
       with:
         type: 'zip'
-        directory: 'D:\a\findneedle\findneedle\FindNeedleUX\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish\'
+        directory: '${{ github.workspace }}\FindNeedleUX\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish'
         filename: 'release.zip'
         exclusions: '*.git* /*node_modules/*.editorconfig'
-  
+
     - name: Upload Release bits
       uses: actions/upload-artifact@v4
       with:
         name: release-bits
-        path: D:\a\findneedle\findneedle\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.26100.0\win-x64\publish\release.zip
+        path: ${{ github.workspace }}\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.26100.0\win-x64\publish\release.zip
         retention-days: 5
 
   actually_release:
