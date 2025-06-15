@@ -20,32 +20,28 @@ using FindNeedleUX.Services;
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
 
-namespace FindNeedleUX.Pages
+namespace FindNeedleUX.Pages;
+
+/// <summary>
+/// An empty page that can be used on its own or navigated to within a Frame.
+/// </summary>
+//[ToolkitSample(id: nameof(DataTableVirtualizationSample), "DataTable Virtualization Example", description: $"A sample for showing how to create and use a {nameof(DataTable)} control with many rows.")]
+public sealed partial class ResultsVCommunityPage : Page
 {
-    /// <summary>
-    /// An empty page that can be used on its own or navigated to within a Frame.
-    /// </summary>
-    //[ToolkitSample(id: nameof(DataTableVirtualizationSample), "DataTable Virtualization Example", description: $"A sample for showing how to create and use a {nameof(DataTable)} control with many rows.")]
-    public sealed partial class ResultsVCommunityPage : Page
+    public ResultsVCommunityPage()
     {
-        public ResultsVCommunityPage()
-        {
-            List<LogLine> LogLineList = MiddleLayerService.GetLogLines();
-            LogLineItems = new(LogLineList.ToArray());
+        List<LogLine> LogLineList = MiddleLayerService.GetLogLines();
+        LogLineItems = new(LogLineList.ToArray());
 
-            this.InitializeComponent();
-        }
-
-
-        public ObservableCollection<LogLine> LogLineItems
-        {
-            get; set;
-        }
-
-       
-
+        this.InitializeComponent();
     }
 
 
+    public ObservableCollection<LogLine> LogLineItems
+    {
+        get; set;
+    }
+
+   
 
 }

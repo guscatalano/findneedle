@@ -124,7 +124,7 @@ public class PluginManager
             if (!string.IsNullOrEmpty(configFileToLoad))
             {
                 var whatIcansee = Directory.EnumerateFiles(AppDomain.CurrentDomain.BaseDirectory).ToList();
-                //throw new Exception("Config file was specified and it doesnt exist");
+                throw new Exception("Config file was specified and it doesnt exist. " + whatIcansee.Count);
             }
             config = new PluginConfig();
         }

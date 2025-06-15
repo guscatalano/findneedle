@@ -84,7 +84,9 @@ public sealed partial class ResultsWebPage : Page
     public static string SerializeAndEncodeLogLine(LogLine logLine)
     {
         List<string> columnsToSend = ["Index", "Time", "Provider", "TaskName", "Message", "Source", "Level"];
+#pragma warning disable CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
         var dict = new Dictionary<string, object?>();
+#pragma warning restore CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
         foreach (var prop in typeof(LogLine).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if(columnsToSend.Contains(prop.Name) == false)

@@ -20,7 +20,10 @@ public class SearchQueryUX
     public List<IPluginDescription> GetLoadedPlugins()
     {
         Initialize();
-
+        if (pluginManager == null)
+        {
+            throw new Exception("wtf");
+        }
         return pluginManager.GetAllPluginsInstancesOfAType<IPluginDescription>().ToList();
 
     }
@@ -46,12 +49,20 @@ public class SearchQueryUX
     public void UpdateSearchQuery()
     {
         Initialize();
+        if(pluginManager == null)
+        {
+            throw new Exception("wtf");
+        }
         q = SearchQueryFactory.CreateSearchQuery(pluginManager);
     }
 
     public void UpdateAllParameters(SearchLocationDepth depth, List<ISearchLocation> locations, List<ISearchFilter> filters, 
         List<IResultProcessor> processors, List<ISearchOutput> outputs, SearchStepNotificationSink stepnotifysink)
     {
+        if(q == null)
+        {
+            throw new Exception("wtf");
+        }
         q.Depth = depth;
         q.Filters = filters;
         q.Locations = locations;
@@ -63,7 +74,11 @@ public class SearchQueryUX
     public List<ISearchResult> GetSearchResults()
     {
         Initialize();
+        if(q == null)
+        {
+            throw new Exception("wtf");
+        }
         q.RunThrough();
-        return null;
+        return new();
     }
 }

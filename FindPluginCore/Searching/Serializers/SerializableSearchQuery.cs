@@ -122,10 +122,7 @@ public class SearchQueryJsonReader
 
     public static SearchQuery GetSearchQueryObject(SerializableSearchQuery source)
     {
-        if (source.Name == null)
-        {
-            //throw new ArgumentNullException(nameof(source.Name));
-        }
+        source.Name ??= "null";
 
         SearchQuery destination = new();
         destination.Name = source.Name;

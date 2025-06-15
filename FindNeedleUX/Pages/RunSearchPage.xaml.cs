@@ -51,7 +51,7 @@ public sealed partial class RunSearchPage : Page
         SetControlsTo(false);
         MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
         MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
-        string r = await Task.Run(() => MiddleLayerService.RunSearch());
+        var r = await Task.Run(() => MiddleLayerService.RunSearch());
         summary.Text = r;
         SetControlsTo(true);
 
@@ -62,7 +62,7 @@ public sealed partial class RunSearchPage : Page
         SetControlsTo(false);
         MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
         MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
-        string r = await Task.Run(() => MiddleLayerService.RunSearch(true));
+        var r = await Task.Run(() => MiddleLayerService.RunSearch(true));
         summary.Text = r;
         SetControlsTo(true);
     }

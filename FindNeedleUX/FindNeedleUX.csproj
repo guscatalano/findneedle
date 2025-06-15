@@ -32,7 +32,6 @@
     <ApplicationIcon>Square44x44Logo.scale-200.ico</ApplicationIcon> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
   </PropertyGroup>
   <ItemGroup>
-    <None Remove="Pages\LightResultPage.xaml" />
     <None Remove="Pages\LocationWizard.xaml" />
     <None Remove="Pages\PluginsPage.xaml" />
     <None Remove="Pages\ResultsVCommunityPage.xaml" />
@@ -121,9 +120,6 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Update="Pages\PluginsPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Update="Pages\LightResultPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Update="Pages\SearchStatisticsPage.xaml">

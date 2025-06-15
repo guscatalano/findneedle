@@ -37,6 +37,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
 
     public FolderLocation()
     {
+        path = "invalidpath";
         procStats = new ReportFromComponent()
         {
             component = this.GetType().Name,
