@@ -76,7 +76,7 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage));
                 break;
             case "results_viewnative":
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchResultPage)); //not lightresults probably?
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.LightResultPage)); //not lightresults probably?
                 break;
             case "results_viewweb":
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));

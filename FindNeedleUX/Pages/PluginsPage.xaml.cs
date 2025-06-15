@@ -27,7 +27,7 @@ public sealed partial class PluginsPage : Page
     public PluginsPage()
     {
         this.InitializeComponent();
-        PluginsFound.AddRange(MiddleLayerService.SearchQueryUX.GetLoadedPlugins().Select(plugin => new Tuple<string, object>(plugin, null)));
+        PluginsFound.AddRange(MiddleLayerService.SearchQueryUX.GetLoadedPlugins().Select(plugin => new Tuple<string, object>(plugin.GetPluginFriendlyName(), plugin.GetPluginTextDescription())));
     }
 
     private readonly List<Tuple<string, object>> PluginsFound = new();
@@ -35,5 +35,9 @@ public sealed partial class PluginsPage : Page
     private void ListBox2_Loaded(object sender, RoutedEventArgs e)
     {
         ListBox2.SelectedIndex = 2;
+    }
+    private void ListBox1_Loaded(object sender, RoutedEventArgs e)
+    {
+        ListBox1.SelectedIndex = 2;
     }
 }

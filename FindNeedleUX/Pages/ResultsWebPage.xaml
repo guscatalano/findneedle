@@ -12,19 +12,18 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
-
-        <controls:WebView2 x:Name="MyWebView"  Grid.Row="1" Grid.ColumnSpan="2"
-        Source="https://www.microsoft.com" HorizontalAlignment="Stretch" 
-        VerticalAlignment="Stretch"/>
+        <controls:WebView2 x:Name="MyWebView"
+                       Grid.Row="0"
+                       Grid.Column="0"
+                       Source="https://www.microsoft.com"
+                       HorizontalAlignment="Stretch"
+                       VerticalAlignment="Stretch"/>
     </Grid>
-
 </Page>
 
 

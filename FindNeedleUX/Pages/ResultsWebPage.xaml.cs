@@ -46,6 +46,13 @@ public sealed partial class ResultsWebPage : Page
         try
         {
             await MyWebView.EnsureCoreWebView2Async();
+            MyWebView.NavigationCompleted += (sender, e) =>
+            {
+                if (e.IsSuccess == false)
+                {
+                    Console.WriteLine($"Navigation failed: {e.WebErrorStatus}");
+                }
+            };
 
             MyWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 "appassets", "WebContent", CoreWebView2HostResourceAccessKind.Allow);
@@ -58,7 +65,7 @@ public sealed partial class ResultsWebPage : Page
             //  MyWebView.NavigationCompleted += MyWebView_Loaded;
 
 
-            //MyWebView.CoreWebView2.OpenDevToolsWindow();
+            MyWebView.CoreWebView2.OpenDevToolsWindow();
         }
         catch (Exception)
         {
@@ -83,5 +90,6 @@ public sealed partial class ResultsWebPage : Page
             //Thread.Sleep(1000);
         
         }
+        MyWebView.CoreWebView2.PostWebMessageAsJson("{\"verb\":\"done\",\"data\":\"id: " + 0 + " msg: " + 0 + "\"}");
     }
 }

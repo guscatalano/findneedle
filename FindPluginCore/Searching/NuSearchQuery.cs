@@ -11,7 +11,14 @@ using FindNeedlePluginLib.Interfaces;
 namespace FindPluginCore.Searching;
 public class NuSearchQuery : ISearchQuery
 {
-    public List<ISearchFilter> Filters => _filters;
+    public List<ISearchFilter> Filters
+    {
+        get => [];
+        set
+        {
+
+        }
+    }
     private readonly List<ISearchFilter> _filters;
 
     public List<IResultProcessor> Processors
@@ -21,10 +28,24 @@ public class NuSearchQuery : ISearchQuery
     }
     private List<IResultProcessor> _processors;
 
-    public List<ISearchOutput> Outputs => _outputs;
+    public List<ISearchOutput> Outputs
+    {
+        get => [];
+        set
+        {
+
+        }
+    }
     private readonly List<ISearchOutput> _outputs;
 
-    public List<ISearchLocation> Locations => _locations;
+    public List<ISearchLocation> Locations
+    {
+        get => [];
+        set
+        {
+
+        }
+    }
     private readonly List<ISearchLocation> _locations;
 
     public SearchLocationDepth Depth
@@ -41,6 +62,9 @@ public class NuSearchQuery : ISearchQuery
     private readonly SearchStepNotificationSink _stepnotifysink;
 
     public List<ISearchResult> CurrentResultList => _currentResultList;
+
+    public string Name => throw new NotImplementedException();
+
     private List<ISearchResult> _currentResultList;
 
     public NuSearchQuery()

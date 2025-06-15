@@ -8,6 +8,36 @@ namespace FindNeedleCoreUtils;
 public class FileIO
 {
 
+    public static string FindFullPathToFile(string fileName)
+    {
+        var useDefault = Path.GetFullPath(fileName);
+        var useRelative = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
+
+        //Calling it AI path, cause AI suggested it
+        var useAIPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle", fileName);
+        if(File.Exists(fileName))
+        {
+            return fileName; //If the file is in the current directory, just return it
+        }
+        else if (File.Exists(useDefault))
+        {
+            return useDefault;
+        }
+        else if (File.Exists(useRelative))
+        {
+            return useRelative;
+        }
+        else if (File.Exists(useAIPath))
+        {
+            return useAIPath;
+        }
+        else
+        {
+            //If we get here, we have no idea where the file is
+            throw new FileNotFoundException($"File {fileName} not found in any of the expected locations.");
+        }
+    }
+
     public delegate void GetAllFilesErrorCallback(string path);
 
     public static IEnumerable<string> GetAllFiles(string path, GetAllFilesErrorCallback? errorHandler = null)

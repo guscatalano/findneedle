@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
+using findneedle.Implementations;
 using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
 using FindNeedlePluginLib.Implementations.SearchNotifications;
@@ -16,13 +17,11 @@ public class SearchQueryUX
     private PluginManager? pluginManager;
     private bool initalized = false;
 
-    public List<string> GetLoadedPlugins()
+    public List<IPluginDescription> GetLoadedPlugins()
     {
         Initialize();
 
-        return pluginManager.GetAllPluginsInstancesOfAType<IPluginDescription>()
-            .Select(plugin => plugin.GetPluginTextDescription())
-            .ToList();
+        return pluginManager.GetAllPluginsInstancesOfAType<IPluginDescription>().ToList();
 
     }
 
@@ -35,10 +34,12 @@ public class SearchQueryUX
     {
         if (!initalized)
         {
-            pluginManager = new PluginManager(); // Initialize plugin manager if not already done
+            pluginManager = PluginManager.GetSingleton(); // Initialize plugin manager if not already done
             pluginManager.LoadAllPlugins(true);
             q = SearchQueryFactory.CreateSearchQuery(pluginManager); // Initialize 'q' to ensure it is non-null
             initalized = true;
+
+           
         }
     }
 
@@ -48,11 +49,21 @@ public class SearchQueryUX
         q = SearchQueryFactory.CreateSearchQuery(pluginManager);
     }
 
-    public void UpdateAllParameters(SearchLocationDepth depth, List<ISearchFilter> filters, List<ISearchOutput> outputs, SearchStepNotificationSink stepnotifysink)
+    public void UpdateAllParameters(SearchLocationDepth depth, List<ISearchLocation> locations, List<ISearchFilter> filters, 
+        List<IResultProcessor> processors, List<ISearchOutput> outputs, SearchStepNotificationSink stepnotifysink)
     {
         q.Depth = depth;
-        //q.Filters = filters;
-        //q.Outputs = outputs;
-        //q.SearchStepNotificationSink = stepnotifysink;
+        q.Filters = filters;
+        q.Locations = locations;
+        q.Processors = processors;
+        q.Outputs = outputs;
+        //q. = stepnotifysink;
+    }
+
+    public List<ISearchResult> GetSearchResults()
+    {
+        Initialize();
+        q.RunThrough();
+        return null;
     }
 }

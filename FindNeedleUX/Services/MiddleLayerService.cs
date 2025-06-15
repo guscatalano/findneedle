@@ -6,6 +6,8 @@ using System.IO;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
+using findneedle.Interfaces;
+using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedleUX.Services.WizardDef;
 using FindNeedleUX.ViewObjects;
@@ -22,7 +24,12 @@ public class MiddleLayerService
 
     public static void AddFolderLocation(string location)
     {
-        Locations.Add(new FolderLocation() {  path = location });
+        var folderloc = new FolderLocation() { path = location };
+        //Setup file extension processors
+        var extensions = PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IFileExtensionProcessor>();
+
+        folderloc.SetExtensionProcessorList(extensions);
+        Locations.Add(folderloc);
     }
 
     public static void AddTimeAgoFilter(TimeAgoUnit unit, int count)
@@ -68,7 +75,8 @@ public class MiddleLayerService
     public static void UpdateSearchQuery()
     {
         SearchQueryUX.UpdateSearchQuery();
-        SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Filters, Query.Outputs, Query.SearchStepNotificationSink);
+        SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters, 
+            new List<findneedle.Interfaces.IResultProcessor>(), Query.Outputs, Query.SearchStepNotificationSink);
        
     }
 
@@ -125,6 +133,15 @@ public class MiddleLayerService
         Query = r;
         Filters = Query.Filters;
         Locations = Query.Locations;
+
+        foreach(ISearchLocation loc in Locations)
+        {
+            //Fix up the extension list
+            if (loc is FolderLocation)
+            {
+                ((FolderLocation)loc).SetExtensionProcessorList(PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IFileExtensionProcessor>());
+            }
+        }
     }
 
     public static void NewWorkspace()

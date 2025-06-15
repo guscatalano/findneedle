@@ -215,8 +215,28 @@ public class SearchQuery : ISearchQuery
         Outputs.Add(output);
     }
 
-   
-public string Name
+    public void Step1_LoadAllLocationsInMemory()
+    {
+        LoadAllLocationsInMemory();
+    }
+    public List<ISearchResult> Step2_GetFilteredResults()
+    {
+        return GetFilteredResults();
+    }
+    public void Step3_ResultsToProcessors()
+    {
+        return; 
+    }
+    public void Step4_ProcessAllResultsToOutput()
+    {
+        ProcessAllResultsToOutput();
+    }
+    public void Step5_Done()
+    {
+        return; 
+    }
+
+    public string Name
     {
         get => _name ?? string.Empty;
         set => _name = value;

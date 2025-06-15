@@ -15,6 +15,9 @@
         <ListView Height="600"
               VerticalAlignment="Top"
               Width="Auto"
+                  CanReorderItems="False"
+                  AllowDrop="True"
+                  CanDragItems="False"
     
               ItemsSource="{x:Bind LogLineItems}">
     
@@ -27,15 +30,15 @@
                 </interactivity:Interaction.Behaviors>
                 <controls:DataTable ColumnSpacing="16">
                     <controls:DataColumn Content="Index" />
-                    <controls:DataColumn CanResize="True"
+                    <controls:DataColumn CanResize="True" CanDrag="True"
                                          Content="Time" />
-                    <controls:DataColumn CanResize="True">
+                    <controls:DataColumn CanResize="True" CanDrag="True">
                         <TextBlock FontWeight="SemiBold"
                                    Text="Provider" />
                     </controls:DataColumn>
-                    <controls:DataColumn Content="TaskName" CanResize="True"/>
-                    <controls:DataColumn Content="Source" CanResize="True"/>
-                    <controls:DataColumn Content="Message" CanResize="True"/>
+                    <controls:DataColumn Content="TaskName" CanResize="True" CanDrag="True"/>
+                    <controls:DataColumn Content="Source" CanResize="True" CanDrag="True"/>
+                    <controls:DataColumn Content="Message" CanResize="True" CanDrag="True"/>
                    
                 </controls:DataTable>
             </Border>

@@ -1,16 +1,27 @@
 ﻿<html>
 <head>
     <script>
+        
+        var count = 0;
         window.chrome.webview.addEventListener('message', function (event) {
-            //debugger;
+            let table = window.table;
             const payload = event.data;
             if (payload.verb === 'newresult') {
-                //document.getElementById("results").innerHTML += payload.data + "<br/>";
+                count++;
+                document.getElementById("results").innerHTML = count + "<br/>";
+                table.row.add(payload.data);
+
+
             }  
+            if (payload.verb === 'done') {
+                table.draw(false);
+                document.getElementById("tablediv").style.visibility = "visible";
+                document.getElementById("loader").style.display = "none";
+            }
         } );
 
         function codeAddress() {
-            let table = new DataTable('#myTable', {
+            window.table = new DataTable('#myTable', {
                 // options test
             });
             window.chrome.webview.postMessage('getData');
@@ -19,27 +30,25 @@
     </script>
 </head>
 <body onload="codeAddress()">
+    <div id="loader">Loading... <section id="results"></section></div>
     <link href="datatables.min.css" rel="stylesheet">
+    <div id="tablediv" style="visibility:hidden">
+        <script src="datatables.min.js"></script>
+        <table id="myTable" class="display">
+            <thead>
+                <tr>
+                    <th>Column 1</th>
+                    <th>Column 2</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Row 1 Data 1</td>
+                    <td>Row 1 Data 2</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 
-    <script src="datatables.min.js"></script>
-    <table id="myTable" class="display">
-        <thead>
-            <tr>
-                <th>Column 1</th>
-                <th>Column 2</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Row 1 Data 1</td>
-                <td>Row 1 Data 2</td>
-            </tr>
-            <tr>
-                <td>Row 2 Data 1</td>
-                <td>Row 2 Data 2</td>
-            </tr>
-        </tbody>
-    </table>
-    yay? <section id="results"></section>
 </body>
 </html>

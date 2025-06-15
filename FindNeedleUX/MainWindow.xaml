@@ -8,8 +8,13 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local1="using:FindNeedleUX.ViewObjects"
     mc:Ignorable="d">
 
-    <StackPanel>
-        <MenuBar>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <MenuBar Grid.Row="0">
             <MenuBarItem Title="Workspace">
                 <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
                 <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
@@ -31,10 +36,8 @@
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
             </MenuBarItem>
-
         </MenuBar>
-      
-        <Frame x:Name="contentFrame"/>
-   
-    </StackPanel>
+
+        <Frame x:Name="contentFrame" Grid.Row="1"/>
+    </Grid>
 </Window>

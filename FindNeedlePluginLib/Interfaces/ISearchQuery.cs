@@ -18,18 +18,28 @@ public interface ISearchQuery
 
     List<ISearchLocation> GetLocations();
 
-    List<ISearchFilter> Filters { get; }
-    List<ISearchLocation> Locations { get; }
-    List<IResultProcessor> Processors { get; set;
+    List<ISearchFilter> Filters {
+        get; set; 
     }
-    List<ISearchOutput> Outputs { get; }
+    List<ISearchLocation> Locations {
+        get; set;
+    }
+    List<IResultProcessor> Processors { get; set; }
+    List<ISearchOutput> Outputs {
+        get; set;
+    }
 
     SearchLocationDepth Depth { get; set; }
 
-    string Name => "test";
+    string Name { get; }
+
+    // Step 1: Load all locations in memory
+    void Step1_LoadAllLocationsInMemory();
+    List<ISearchResult> Step2_GetFilteredResults();
+    public void Step3_ResultsToProcessors();
+    public void Step4_ProcessAllResultsToOutput();
+    public void Step5_Done();
 
     //No matter the implementation, this function should run through every step
     void RunThrough();
-
-
 }
