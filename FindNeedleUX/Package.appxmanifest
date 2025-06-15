@@ -32,7 +32,7 @@
   <Applications>
     <Application Id="App"
       Executable="$targetnametoken$.exe"
-      EntryPoint="$targetentrypoint$">
+      EntryPoint="$targetentrypoint$" uap18:TrustLevel="mediumIL" uap18:RuntimeBehavior="win32App">
       <uap:VisualElements
         DisplayName="FindNeedleUX"
         Description="FindNeedleUX"
