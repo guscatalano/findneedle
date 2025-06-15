@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -78,18 +81,55 @@ public sealed partial class ResultsWebPage : Page
         LoadResults();
     }
 
-   
+    public static string SerializeAndEncodeLogLine(LogLine logLine)
+    {
+        List<string> columnsToSend = ["Index", "Time", "Provider", "TaskName", "Message", "Source"];
+        var dict = new Dictionary<string, object?>();
+        foreach (var prop in typeof(LogLine).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if(columnsToSend.Contains(prop.Name) == false)
+            {
+                continue; // Skip properties not in the list
+            }
+            var value = prop.GetValue(logLine);
+            if (value is string str)
+                dict[prop.Name] = HttpUtility.JavaScriptStringEncode(str);
+            else if (value != null)
+                dict[prop.Name] = HttpUtility.JavaScriptStringEncode(value.ToString());
+            else
+                dict[prop.Name] = null;
+        }
+        return JsonSerializer.Serialize(dict);
+    }
 
     private void LoadResults()
     {
         List<LogLine> LogLineList = MiddleLayerService.GetLogLines();
-        // Thread.Sleep(10000);
-        foreach(LogLine logLine in LogLineList) {
-            var encodedline = System.Web.HttpUtility.JavaScriptStringEncode(logLine.Message);
-            MyWebView.CoreWebView2.PostWebMessageAsJson("{\"verb\":\"newresult\",\"data\":\"id: "+logLine.Index + " msg: " + encodedline + "\"}");
-            //Thread.Sleep(1000);
-        
+        foreach (LogLine logLine in LogLineList)
+        {
+            var encodedLogLine = SerializeAndEncodeLogLine(logLine);
+
+            // Deserialize back to an object so it can be embedded as a JSON object, not a string
+            var logLineObj = JsonSerializer.Deserialize<Dictionary<string, object>>(encodedLogLine);
+
+            var message = new
+            {
+                verb = "newresult",
+                data = logLineObj
+            };
+
+            var messageJson = JsonSerializer.Serialize(message);
+            MyWebView.CoreWebView2.PostWebMessageAsJson(messageJson);
         }
-        MyWebView.CoreWebView2.PostWebMessageAsJson("{\"verb\":\"done\",\"data\":\"id: " + 0 + " msg: " + 0 + "\"}");
+
+        var doneMessage = new
+        {
+            verb = "done",
+            data = new
+            {
+                id = 0
+            }
+        };
+        MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(doneMessage));
     }
 }

@@ -6,23 +6,35 @@
         window.chrome.webview.addEventListener('message', function (event) {
             let table = window.table;
             const payload = event.data;
+            
             if (payload.verb === 'newresult') {
+                if (count == 0) {
+                    //debugger;
+                }
                 count++;
                 document.getElementById("results").innerHTML = count + "<br/>";
                 table.row.add(payload.data);
-
+                //table.draw(false);
 
             }  
             if (payload.verb === 'done') {
-                table.draw(false);
+                //table.draw(false);
                 document.getElementById("tablediv").style.visibility = "visible";
                 document.getElementById("loader").style.display = "none";
+                table.draw(false);
             }
         } );
 
         function codeAddress() {
             window.table = new DataTable('#myTable', {
-                // options test
+                columns: [
+                    { title: "Index", data: "Index" },
+                    { title: "Time", data: "Time" },
+                    { title: "Provider", data: "Provider" },
+                    { title: "TaskName", data: "TaskName" },
+                    { title: "Message", data: "Message" },
+                    { title: "Source", data: "Source" }
+                ]
             });
             window.chrome.webview.postMessage('getData');
         }
@@ -32,20 +44,21 @@
 <body onload="codeAddress()">
     <div id="loader">Loading... <section id="results"></section></div>
     <link href="datatables.min.css" rel="stylesheet">
-    <div id="tablediv" style="visibility:hidden">
+    <div id="tablediv" >
         <script src="datatables.min.js"></script>
         <table id="myTable" class="display">
             <thead>
                 <tr>
-                    <th>Column 1</th>
-                    <th>Column 2</th>
+                    <th>Index</th>
+                    <th>Time</th>
+                    <th>Provider</th>
+                    <th>TaskName</th>
+                    <th>Message</th>
+                    <th>Source</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>Row 1 Data 1</td>
-                    <td>Row 1 Data 2</td>
-                </tr>
+             
             </tbody>
         </table>
     </div>
