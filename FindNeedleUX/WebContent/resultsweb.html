@@ -1,12 +1,12 @@
 ﻿<html>
 <head>
     <script>
-        
+
         var count = 0;
         window.chrome.webview.addEventListener('message', function (event) {
             let table = window.table;
             const payload = event.data;
-            
+
             if (payload.verb === 'newresult') {
                 if (count == 0) {
                     //debugger;
@@ -16,14 +16,14 @@
                 table.row.add(payload.data);
                 //table.draw(false);
 
-            }  
+            }
             if (payload.verb === 'done') {
                 //table.draw(false);
                 document.getElementById("tablediv").style.visibility = "visible";
                 document.getElementById("loader").style.display = "none";
                 table.draw(false);
             }
-        } );
+        });
 
         function codeAddress() {
             window.table = new DataTable('#myTable', {
@@ -34,18 +34,59 @@
                     { title: "TaskName", data: "TaskName" },
                     { title: "Message", data: "Message" },
                     { title: "Source", data: "Source" }
-                ]
+                ],
+                colReorder: true,
+                columnDefs: [
+                    { targets: 0, className: 'min-width-message-id' },
+                    { targets: 1, className: 'min-width-message-time' },
+
+                ],
+                lengthChange: true,
+                pageLength: 500,
+                layout: {
+                    topStart: {
+                        pageLength: {
+                            menu: [5, 10, 25, 50,100,500,1000,2000,5000,10000]
+                        }
+                    }
+                }
             });
             window.chrome.webview.postMessage('getData');
+            document.querySelectorAll('a.toggle-vis').forEach((el) => {
+                el.addEventListener('click', function (e) {
+                    e.preventDefault();
+
+                    let columnIdx = e.target.getAttribute('data-column');
+                    let column = window.table.column(columnIdx);
+
+                    // Toggle the visibility
+                    column.visible(!column.visible());
+                });
+            });
         }
-       
+
+
+
     </script>
+    <style>
+        .min-width-message-id {
+            min-width: 100px; /* Adjust as needed */
+            white-space: nowrap;
+        }
+
+        .min-width-message-time {
+            min-width: 160px; /* Adjust as needed */
+            white-space: nowrap;
+        }
+    </style>
 </head>
 <body onload="codeAddress()">
     <div id="loader">Loading... <section id="results"></section></div>
     <link href="datatables.min.css" rel="stylesheet">
-    <div id="tablediv" >
+    Toggle column: <a class="toggle-vis" data-column="0">Index</a> - <a class="toggle-vis" data-column="1">Time</a> - <a class="toggle-vis" data-column="2">Provider</a> - <a class="toggle-vis" data-column="3">TaskName</a> - <a class="toggle-vis" data-column="4">Message</a> - <a class="toggle-vis" data-column="5">Source</a>
+    <div id="tablediv">
         <script src="datatables.min.js"></script>
+
         <table id="myTable" class="display">
             <thead>
                 <tr>
@@ -58,7 +99,6 @@
                 </tr>
             </thead>
             <tbody>
-             
             </tbody>
         </table>
     </div>
