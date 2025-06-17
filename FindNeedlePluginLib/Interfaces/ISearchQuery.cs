@@ -21,7 +21,8 @@ public interface ISearchQuery
     List<ISearchFilter> Filters {
         get; set; 
     }
-    List<ISearchLocation> Locations {
+    List<ISearchLocation> Locations
+    {
         get; set;
     }
     List<IResultProcessor> Processors { get; set; }

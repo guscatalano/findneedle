@@ -46,9 +46,11 @@ public class SearchStatistics
         {
             case SearchStep.AtLoad:
                 LoadedAll(searchQuery);
+                atLoad.Snap();
                 break;
             case SearchStep.AtSearch:
                 Searched(searchQuery);
+                atSearch.Snap();
                 break;
             case SearchStep.AtLaunch:
                 atLaunch.Snap();

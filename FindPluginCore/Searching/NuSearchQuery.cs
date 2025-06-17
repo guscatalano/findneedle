@@ -40,13 +40,13 @@ public class NuSearchQuery : ISearchQuery
 
     public List<ISearchLocation> Locations
     {
-        get => [];
+        get => _locations;
         set
         {
-
+            _locations = value;
         }
     }
-    private readonly List<ISearchLocation> _locations;
+    private List<ISearchLocation> _locations;
 
     public SearchLocationDepth Depth
     {
@@ -130,6 +130,7 @@ public class NuSearchQuery : ISearchQuery
             
             
         }
+        
         return _filteredResults;
     }
 

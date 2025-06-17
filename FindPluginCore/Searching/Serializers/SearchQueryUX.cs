@@ -28,6 +28,16 @@ public class SearchQueryUX
 
     }
 
+    public SearchStatistics GetSearchStatistics()
+    {
+        Initialize();
+        if (q == null)
+        {
+            throw new Exception("wtf");
+        }
+        return q.GetSearchStatistics();
+    }
+
     public SearchQueryUX()
     {
         Initialize();
@@ -78,7 +88,11 @@ public class SearchQueryUX
         {
             throw new Exception("wtf");
         }
-        q.RunThrough();
-        return new();
+        q.Step1_LoadAllLocationsInMemory();
+        var x = q.Step2_GetFilteredResults();
+        q.Step3_ResultsToProcessors();
+        q.Step4_ProcessAllResultsToOutput();
+
+        return x;
     }
 }

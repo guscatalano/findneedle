@@ -108,11 +108,12 @@ public class MiddleLayerService
         {
             Query.SetDepthForAllLocations(SearchLocationDepth.Intermediate);
         }
-        Query.LoadAllLocationsInMemory();
-       
-        SearchResults = Query.GetFilteredResults();
+        SearchResults = SearchQueryUX.GetSearchResults();
+        //Query.LoadAllLocationsInMemory();
+
+        //SearchResults = Query.GetFilteredResults();
         
-        SearchStatistics x = Query.GetSearchStatistics();
+        SearchStatistics x = SearchQueryUX.GetSearchStatistics(); //Query.GetSearchStatistics();
         return Task.FromResult(x.GetSummaryReport());
 
 

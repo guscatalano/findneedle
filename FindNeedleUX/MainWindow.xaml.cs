@@ -146,13 +146,18 @@ public sealed partial class MainWindow : Window
         {
 
             currentSelection = file.Path;
-            //MiddleLayerService.AddFolderLocation(MiddleLayerService.Locations, currentSelection);
+            MiddleLayerService.NewWorkspace();
+            MiddleLayerService.AddFolderLocation(currentSelection);
+            MiddleLayerService.RunSearch().Wait();
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
+
         }
         else
         {
            
 
         }
+        
     }
 
     private async void LoadCommand()
