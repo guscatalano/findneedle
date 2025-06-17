@@ -305,7 +305,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: release-bits
-        path: ${{ github.workspace }}\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.26100.0\win-x64\publish\release.zip
+        path: ${{ github.workspace }}\FindNeedleUX\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish\release.zip
         retention-days: 5
 
   actually_release:
