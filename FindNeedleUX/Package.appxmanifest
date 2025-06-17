@@ -11,7 +11,7 @@
   <Identity
     Name="26052b04-5350-4981-9877-7735213ee6ae"
     Publisher="CN=crimson"
-    Version="1.0.0.0" />
+    Version="0.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="26052b04-5350-4981-9877-7735213ee6ae" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
@@ -38,9 +38,8 @@
         DisplayName="FindNeedleUX"
         Description="FindNeedleUX"
         BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.scale-200.png"
-        Square44x44Logo="Assets\Square44x44Logo.scale-200.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.scale-200.png" />
+        Square44x44Logo="Assets\Square44x44Logo.png" Square150x150Logo="Assets\Square150x150Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"  Square71x71Logo="Assets\SmallTile.png" Square310x310Logo="Assets\LargeTile.png"/>
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
     </Application>

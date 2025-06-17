@@ -29,7 +29,13 @@
     
     <WindowsAppSDKWinUI>true</WindowsAppSDKWinUI>
     
-    <ApplicationIcon>Square44x44Logo.scale-200.ico</ApplicationIcon> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
+    <ApplicationIcon>Square44x44Logo.scale-200.ico</ApplicationIcon>
+    
+    <Title>Find Needle</Title>
+    
+    <Authors>Gus Catalano</Authors>
+    
+    <Version>0.0.1</Version> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Pages\LocationWizard.xaml" />
@@ -66,7 +72,6 @@
     <Content Include="Assets\Square150x150Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <Content Include="Square44x44Logo.scale-200.ico" />
     <Content Include="WebContent\datatables.css">
