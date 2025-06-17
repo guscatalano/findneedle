@@ -154,7 +154,6 @@ public class SearchQueryCmdLineParserTests
     [TestMethod]
     public void TestAddMultipleFileLog()
     {
-
         var input = new List<CommandLineArgument>() {
             new() { key = "location_path", value = @"C:\\windows\\explorer.exe" },
             new() { key = "location_path", value = @"C:\\windows\\system32" },
@@ -165,14 +164,51 @@ public class SearchQueryCmdLineParserTests
         var parsers = SetupSimpleFakeParser(registration);
         ISearchQuery q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
         Assert.AreEqual(3, q.GetLocations().Count);
-        foreach(var loc in q.GetLocations())
+        foreach (var loc in q.GetLocations())
         {
-            Assert.IsTrue(loc is FakeCmdLineParser);
-            Assert.IsNotNull(((FakeCmdLineParser)loc).somevalue);
+            Assert.IsNotNull(loc); // Fix for CS8602
+            Assert.IsInstanceOfType(loc, typeof(FakeCmdLineParser)); // Ensures type safety
+            Assert.IsNotNull(((FakeCmdLineParser)loc).somevalue); // Fix for CS8602
         }
-        Assert.IsTrue(q.GetLocations().FirstOrDefault(x => ((FakeCmdLineParser)x).somevalue.Equals(@"C:\\windows\\explorer.exe")) != null);
-        Assert.IsTrue(q.GetLocations().FirstOrDefault(x => ((FakeCmdLineParser)x).somevalue.Equals(@"C:\\windows\\system32")) != null);
-        Assert.IsTrue(q.GetLocations().FirstOrDefault(x => ((FakeCmdLineParser)x).somevalue.Equals(@"C:\\windows\\system32\\")) != null);
+
+        Assert.IsNotNull(q.GetLocations().FirstOrDefault(static x =>
+        {
+            if(x != null)
+            {
+                var y = (x as FakeCmdLineParser);
+                if(y.somevalue != null)
+                {
+                    return y.somevalue.Equals(@"C:\\windows\\explorer.exe");
+                }
+            }
+            return false;
+        }));
+
+        Assert.IsNotNull(q.GetLocations().FirstOrDefault(static x =>
+        {
+            if (x != null)
+            {
+                var y = (x as FakeCmdLineParser);
+                if (y.somevalue != null)
+                {
+                    return y.somevalue.Equals(@"C:\\windows\\system32");
+                }
+            }
+            return false;
+        }));
+
+        Assert.IsNotNull(q.GetLocations().FirstOrDefault(static x =>
+        {
+            if (x != null)
+            {
+                var y = (x as FakeCmdLineParser);
+                if (y.somevalue != null)
+                {
+                    return y.somevalue.Equals(@"C:\\windows\\system32\\");
+                }
+            }
+            return false;
+        }));
     }
 
 }

@@ -8,7 +8,7 @@ namespace FindNeedleCoreUtils;
 public class FileIO
 {
 
-    public static string FindFullPathToFile(string fileName)
+    public static string FindFullPathToFile(string fileName, bool throwError=false)
     {
         var useDefault = Path.GetFullPath(fileName);
         var useRelative = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
@@ -33,8 +33,15 @@ public class FileIO
         }
         else
         {
-            //If we get here, we have no idea where the file is
-            throw new FileNotFoundException($"File {fileName} not found in any of the expected locations.");
+            if (throwError)
+            {
+                // Outputs all files in the directory where the binary is located
+                var binDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                var files = Directory.GetFiles(binDirectory);
+
+                throw new FileNotFoundException($"File {fileName} not found in any of the expected locations. " + files.Count());
+            }
+            return fileName; //Return the original name, so that it can be used in the code, but it will throw an error if used
         }
     }
 

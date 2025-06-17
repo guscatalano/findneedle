@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -21,7 +22,87 @@ public class TestGlobals
     public static string FAKE_LOAD_PLUGIN_REL_PATH = FAKE_LOAD_PLUGIN;
 
     public const int TEST_DEP_PLUGIN_COUNT = 4;
-    
+
+    public static bool DoesInfoFromPathMatch(string path1, string path2)
+    {
+        var info = GetInfoFromPath(path1);
+        var info2 = GetInfoFromPath(path2);
+        return info["Configuration"] == info2["Configuration"] &&
+               info["Platform"] == info2["Platform"] &&
+               info["TargetRuntime"] == info2["TargetRuntime"] &&
+               info["TargetFramework"] == info2["TargetFramework"];
+    }
+
+    public static Dictionary<string, string> GetInfoFromPath(string path)
+    {
+        Dictionary<string, string> ret = new();
+        if (string.IsNullOrEmpty(path) || !System.IO.Directory.Exists(path))
+        {
+            throw new ArgumentException("Path is null or does not exist: " + path);
+        }
+        var parts = path.Split(System.IO.Path.DirectorySeparatorChar);
+
+        ret["Configuration"] = "unknown"; //Debug/Release
+        ret["Platform"] = "unknown"; //AnyCPU, x64, x86
+        ret["TargetRuntime"] = "unknown"; //win-x64, win-x86, etc.
+        ret["TargetFramework"] = "unknown"; //net8.0-windows10.0.26100.0
+        foreach (var part in parts)
+        {
+            var clean = part.Replace("/", "").Replace("\\", "").Trim().ToLower();
+            switch (clean)
+            {
+                case "release":
+                case "debug":
+                    if (ret["Configuration"] == "unknown")
+                    {
+                        ret["Configuration"] = clean;
+                    }
+                    else
+                    {
+                        throw new Exception("can't tell");
+                    }
+                    break;
+                case "win-x64":
+                case "win-x86":
+                    if (ret["TargetRuntime"] == "unknown")
+                    {
+                        ret["TargetRuntime"] = clean;
+                    }
+                    else
+                    {
+                        throw new Exception("can't tell");
+                    }
+                    break;
+                default:
+                    if (clean.StartsWith("net") && clean.Contains("-windows"))
+                    {
+                        if (ret["TargetFramework"] == "unknown")
+                        {
+                            ret["TargetFramework"] = clean;
+                        }
+                        else
+                        {
+                            throw new Exception("can't tell");
+                        }
+                    }
+                    else if (clean.StartsWith("x64") || clean.StartsWith("x86") || clean.StartsWith("anycpu"))
+                    {
+                        if (ret["Platform"] == "unknown")
+                        {
+                            ret["Platform"] = clean;
+                        }
+                        else
+                        {
+                            throw new Exception("can't tell");
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return ret;
+    }
+
     public static string PickRightParent(string basepath, string searchpath)
     {
         var maxTries = 10;
@@ -37,10 +118,11 @@ public class TestGlobals
         throw new Exception("Can't find " + searchpath);
     }
 
-    public static string PickRightChild(string basepath, string searchExe)
+    public static string PickRightChild(string basepath, string searchExe, string originalPath = "null")
     {
         Exception? lastException = null;
         var tries = 3;
+        List<string> discardedFinds = new();
         while (tries > 0)
         {
             try
@@ -50,11 +132,29 @@ public class TestGlobals
                 var found = false;
                 foreach (var file in files)
                 {
-                    if (file.EndsWith(searchExe) && file.Contains("bin"))
+                    if (file.EndsWith(searchExe) && file.Contains("bin"))  
                     {
+                        var temp = Path.GetFullPath(file).Replace(searchExe, "");
                         if (found)
                         {
+                            
+                            if (temp.Equals(rightFile))
+                            {
+                                continue;// We already found this one, so skip it  
+                            } 
+
+                            
+
+
                             throw new Exception("There are multiple " + searchExe + " in " + basepath + ". Found: " + rightFile + " and " + file);
+                        }
+                        if (!originalPath.Equals("null"))
+                        {
+                            if (DoesInfoFromPathMatch(temp, originalPath) == false)
+                            {
+                                discardedFinds.Add(temp);
+                                continue; // We found a file, but it does not match the base info
+                            }
                         }
                         found = true;
                         rightFile = Path.GetFullPath(file).Replace(searchExe, "");
@@ -66,6 +166,10 @@ public class TestGlobals
                 }
                 else
                 {
+                    if(discardedFinds.Count() > 0)
+                    {
+                        return discardedFinds[0]; // pick one
+                    }
                     throw new Exception("Can't find " + searchExe + " in " + basepath);
                 }
             }
@@ -102,7 +206,7 @@ public class TestGlobals
         }
         System.IO.Directory.CreateDirectory(dest);
         var basePath = PickRightParent(path, "FakeLoadPlugin");
-        var childPath = PickRightChild(Path.Combine(basePath, "FakeLoadPlugin"), "FakeLoadPlugin.exe");
+        var childPath = PickRightChild(Path.Combine(basePath, "FakeLoadPlugin"), "FakeLoadPlugin.exe", path);
         var sourcePath = Path.Combine(basePath, childPath);
         if (!Directory.Exists(sourcePath))
         {
@@ -113,7 +217,7 @@ public class TestGlobals
 
         
         basePath = PickRightParent(path, "TestProcessorPlugin");
-        childPath = PickRightChild(Path.Combine(basePath, "TestProcessorPlugin"), "TestProcessorPlugin.dll");
+        childPath = PickRightChild(Path.Combine(basePath, "TestProcessorPlugin"), "TestProcessorPlugin.dll", path);
 
         sourcePath = Path.Combine(basePath, childPath);
         if (!Directory.Exists(sourcePath))

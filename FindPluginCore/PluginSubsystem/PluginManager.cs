@@ -92,16 +92,13 @@ public class PluginManager
 
     public PluginManager(string configFileToLoad = "")
     {
+        var originalConfig = configFileToLoad;
         if (string.IsNullOrEmpty(configFileToLoad))
         {
             configFileToLoad = LOADER_CONFIG;
         }
 
-        //Try to correct it
-        if(!File.Exists(configFileToLoad) && !string.IsNullOrEmpty(configFileToLoad))
-        {
-            configFileToLoad = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LOADER_CONFIG);
-        }
+        configFileToLoad = FileIO.FindFullPathToFile(configFileToLoad, false); //Error handling happens later.
 
         if (File.Exists(configFileToLoad))
         {
@@ -121,7 +118,7 @@ public class PluginManager
         } 
         else
         {
-            if (!string.IsNullOrEmpty(configFileToLoad))
+            if (!string.IsNullOrEmpty(originalConfig))
             {
                 var whatIcansee = Directory.EnumerateFiles(AppDomain.CurrentDomain.BaseDirectory).ToList();
                 throw new Exception("Config file was specified and it doesnt exist. " + whatIcansee.Count);
