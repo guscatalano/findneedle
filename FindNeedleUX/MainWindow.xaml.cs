@@ -4,6 +4,9 @@ using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -21,6 +24,17 @@ public sealed partial class MainWindow : Window
     {
         this.InitializeComponent();
         WindowUtil.TrackWindow(this);
+        SetWindowIcon("Assets\\appicon.ico");
+    }
+
+    private void SetWindowIcon(string iconPath)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var hIcon = PInvoke.LoadImage(IntPtr.Zero, iconPath, GDI_IMAGE_TYPE.IMAGE_ICON, 0, 0, IMAGE_FLAGS.LR_LOADFROMFILE);
+        if (hIcon != IntPtr.Zero)
+        {
+            PInvoke.SendMessage(new HWND(hwnd), PInvoke.WM_SETICON, (IntPtr)1, hIcon);
+        }
     }
     /*
     private void NavigationView_SelectionChanged(Microsoft.UI.Xaml.Controls.NavigationView sender, Microsoft.UI.Xaml.Controls.NavigationViewSelectionChangedEventArgs args)
@@ -157,4 +171,62 @@ public sealed partial class MainWindow : Window
             MiddleLayerService.SaveWorkspace(file.Path);
         }
     }
+}
+// Add the following public static class to expose the required PInvoke methods and constants.
+
+public static class PInvoke
+{
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    public static extern IntPtr LoadImage(IntPtr hInst, string lpszName, GDI_IMAGE_TYPE uType, int cxDesired, int cyDesired, IMAGE_FLAGS fuLoad);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessage(HWND hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    public const uint WM_SETICON = 0x0080;
+}
+// Update the HWND struct to include a constructor that takes a single argument.
+public struct HWND : IEquatable<HWND>
+{
+    public nint Value;
+
+    // Add this constructor to fix the CS1729 error.
+    public HWND(nint value)
+    {
+        Value = value;
+    }
+
+    public bool Equals(HWND other) => Value == other.Value;
+
+    public override bool Equals(object obj) => obj is HWND other && Equals(other);
+
+    public override int GetHashCode() => Value.GetHashCode();
+
+    public override string ToString() => Value.ToString();
+}
+// To fix the CS0122 errors, the issue is that the `GDI_IMAGE_TYPE` and `IMAGE_FLAGS` enums are inaccessible due to their protection level.  
+// These enums are likely defined as `internal` in the `PInvoke` class.  
+// To resolve this, you can either make these enums `public` in their definition or create new public enums in your code.  
+// Below is the fix by defining public enums in the same file:
+
+public enum GDI_IMAGE_TYPE
+{
+    IMAGE_BITMAP = 0,
+    IMAGE_CURSOR = 2,
+    IMAGE_ICON = 1
+}
+
+public enum IMAGE_FLAGS
+{
+    LR_CREATEDIBSECTION = 8192,
+    LR_DEFAULTCOLOR = 0,
+    LR_DEFAULTSIZE = 64,
+    LR_LOADFROMFILE = 16,
+    LR_LOADMAP3DCOLORS = 4096,
+    LR_LOADTRANSPARENT = 32,
+    LR_MONOCHROME = 1,
+    LR_SHARED = 32768,
+    LR_VGACOLOR = 128,
+    LR_COPYDELETEORG = 8,
+    LR_COPYFROMRESOURCE = 16384,
+    LR_COPYRETURNORG = 4
 }

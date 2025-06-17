@@ -9,15 +9,15 @@
   IgnorableNamespaces="uap rescap uap18">
 
   <Identity
-    Name="26052b04-5350-4981-9877-7735213ee6ae"
-    Publisher="CN=crimson"
-    Version="0.0.1.0" />
+    Name="GusCatalano.FindNeedle"
+    Publisher="CN=119E0257-3B74-437C-A728-AC7C50256853"
+    Version="0.0.2.0" />
 
-  <mp:PhoneIdentity PhoneProductId="26052b04-5350-4981-9877-7735213ee6ae" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="c494a556-d8a1-4461-9f9f-fd1df415a91e" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>FindNeedleUX</DisplayName>
-    <PublisherDisplayName>crimson</PublisherDisplayName>
+    <DisplayName>Find Needle</DisplayName>
+    <PublisherDisplayName>Gus Catalano</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -35,7 +35,7 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$" uap18:TrustLevel="mediumIL" uap18:RuntimeBehavior="win32App">
       <uap:VisualElements
-        DisplayName="FindNeedleUX"
+        DisplayName="Find Needle"
         Description="FindNeedleUX"
         BackgroundColor="transparent"
         Square44x44Logo="Assets\Square44x44Logo.png" Square150x150Logo="Assets\Square150x150Logo.png">

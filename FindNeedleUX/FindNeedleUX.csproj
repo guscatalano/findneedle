@@ -15,7 +15,7 @@
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
     <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
-    <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
+    <AppxSymbolPackageEnabled>True</AppxSymbolPackageEnabled>
     <GenerateTestArtifacts>True</GenerateTestArtifacts>
     <AppxBundle>Never</AppxBundle>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
@@ -35,9 +35,12 @@
     
     <Authors>Gus Catalano</Authors>
     
-    <Version>0.0.1</Version> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
+    <Version>0.0.1</Version>
+    
+    <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="Assets\appicon.ico" />
     <None Remove="Pages\LocationWizard.xaml" />
     <None Remove="Pages\PluginsPage.xaml" />
     <None Remove="Pages\ResultsVCommunityPage.xaml" />
@@ -116,6 +119,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\findneedle\findneedle.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Update="Assets\appicon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Pages\ResultsVCommunityPage.xaml">
