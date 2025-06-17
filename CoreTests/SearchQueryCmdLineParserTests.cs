@@ -168,44 +168,33 @@ public class SearchQueryCmdLineParserTests
         {
             Assert.IsNotNull(loc); // Fix for CS8602
             Assert.IsInstanceOfType(loc, typeof(FakeCmdLineParser)); // Ensures type safety
-            Assert.IsNotNull(((FakeCmdLineParser)loc).somevalue); // Fix for CS8602
+            var fakeParser = loc as FakeCmdLineParser;
+            Assert.IsNotNull(fakeParser?.somevalue); // Fix for CS8602
         }
 
         Assert.IsNotNull(q.GetLocations().FirstOrDefault(static x =>
         {
-            if(x != null)
+            if (x is FakeCmdLineParser y && y.somevalue != null)
             {
-                var y = (x as FakeCmdLineParser);
-                if(y.somevalue != null)
-                {
-                    return y.somevalue.Equals(@"C:\\windows\\explorer.exe");
-                }
+                return y.somevalue.Equals(@"C:\\windows\\explorer.exe");
             }
             return false;
         }));
 
         Assert.IsNotNull(q.GetLocations().FirstOrDefault(static x =>
         {
-            if (x != null)
+            if (x is FakeCmdLineParser y && y.somevalue != null)
             {
-                var y = (x as FakeCmdLineParser);
-                if (y.somevalue != null)
-                {
-                    return y.somevalue.Equals(@"C:\\windows\\system32");
-                }
+                return y.somevalue.Equals(@"C:\\windows\\system32");
             }
             return false;
         }));
 
         Assert.IsNotNull(q.GetLocations().FirstOrDefault(static x =>
         {
-            if (x != null)
+            if (x is FakeCmdLineParser y && y.somevalue != null)
             {
-                var y = (x as FakeCmdLineParser);
-                if (y.somevalue != null)
-                {
-                    return y.somevalue.Equals(@"C:\\windows\\system32\\");
-                }
+                return y.somevalue.Equals(@"C:\\windows\\system32\\");
             }
             return false;
         }));
