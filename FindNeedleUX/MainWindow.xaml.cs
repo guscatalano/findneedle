@@ -101,11 +101,58 @@ public sealed partial class MainWindow : Window
             case "systeminfo":
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SystemInfoPage));
                 break;
+            case "openlogfile":
+                QuickFileOpen();
+                
+                break;
+            case "openlogfolder":
+                break;
             default:
                 throw new Exception("bad code");
         }
 
 
+    }
+
+    private async void QuickFileOpen()
+    {
+
+
+        // Retrieve the window handle (HWND) of the current WinUI 3 window.
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+        var currentSelection = "None";
+
+        var picker = new FileOpenPicker()
+        {
+            ViewMode = PickerViewMode.List,
+            FileTypeFilter = { ".txt", ".etl", ".log", ".zip", ".evtx" },
+        };
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+        var file = await picker.PickSingleFileAsync();
+        // var files = await picker.PickMultipleFilesAsync();
+
+        // Initialize the file picker with the window handle (HWND).
+        // WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
+
+        // Set options for your file picker
+        // openPicker.ViewMode = PickerViewMode.Thumbnail;
+        //  openPicker.FileTypeFilter.Add("*");
+
+        // Open the picker for the user to pick a file
+        //  var file = await openPicker.PickSingleFileAsync();
+        if (file != null)
+        {
+
+            currentSelection = file.Path;
+            //MiddleLayerService.AddFolderLocation(MiddleLayerService.Locations, currentSelection);
+        }
+        else
+        {
+           
+
+        }
     }
 
     private async void LoadCommand()

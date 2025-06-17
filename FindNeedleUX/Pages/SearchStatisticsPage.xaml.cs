@@ -71,8 +71,15 @@ public sealed partial class SearchStatisticsPage : Page
         treeeee.AllowDrop = false;
         TreeViewNode parent = new TreeViewNode();
         treeeee.RootNodes.Add(parent);
+
+        var middlestats = MiddleLayerService.GetStats();
         
-        var z = MiddleLayerService.GetStats().componentReports[SearchStep.AtLoad];
+
+        if (!middlestats.componentReports.ContainsKey(SearchStep.AtLoad))
+        {
+            return newItem;
+        }
+        var z = middlestats.componentReports[SearchStep.AtLoad];
         switch (index % 3)
         {
             case 0:

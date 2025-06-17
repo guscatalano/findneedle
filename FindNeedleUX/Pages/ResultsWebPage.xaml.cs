@@ -68,7 +68,7 @@ public sealed partial class ResultsWebPage : Page
             //  MyWebView.NavigationCompleted += MyWebView_Loaded;
 
 
-            MyWebView.CoreWebView2.OpenDevToolsWindow();
+            //MyWebView.CoreWebView2.OpenDevToolsWindow();
         }
         catch (Exception)
         {

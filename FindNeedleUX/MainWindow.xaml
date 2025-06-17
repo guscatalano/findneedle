@@ -16,6 +16,10 @@
         </Grid.RowDefinitions>
 
         <MenuBar Grid.Row="0">
+            <MenuBarItem Title="Quick">
+                <MenuFlyoutItem Text="Open Log File" Click="MenuFlyoutItem_Click" Name="openlogfile" />
+                <MenuFlyoutItem Text="Open Folder with logs" Click="MenuFlyoutItem_Click" Name="openlogfolder"/>
+            </MenuBarItem>
             <MenuBarItem Title="Workspace">
                 <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
                 <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
