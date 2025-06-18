@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -115,10 +116,41 @@ public sealed partial class MainWindow : Window
 
     }
 
+    private void ShowProgressBar(bool show)
+    {
+        ProgressPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateProgressBar(int percent)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            SearchProgressBar.Value = percent;
+        });
+    }
+
+    private void UpdateProgressText(string text)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            SearchProgressText.Text = text;
+        });
+    }
+
+    private async Task RunSearchWithProgress(bool surfaceScan = false)
+    {
+        ShowProgressBar(true);
+        SearchProgressBar.Value = 0;
+        SearchProgressText.Text = "Starting search...";
+        var sink = MiddleLayerService.GetProgressEventSink();
+        sink.RegisterForNumericProgress(UpdateProgressBar);
+        sink.RegisterForTextProgress(UpdateProgressText);
+        await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan).Wait());
+        ShowProgressBar(false);
+    }
+
     private async void QuickFileOpen()
     {
-
-
         // Retrieve the window handle (HWND) of the current WinUI 3 window.
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
 
@@ -149,7 +181,7 @@ public sealed partial class MainWindow : Window
             currentSelection = file.Path;
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(currentSelection);
-            MiddleLayerService.RunSearch().Wait();
+            await RunSearchWithProgress();
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
 
         }
@@ -176,7 +208,7 @@ public sealed partial class MainWindow : Window
             var folderPath = folder.Path;
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(folderPath);
-            MiddleLayerService.RunSearch().Wait();
+            await RunSearchWithProgress();
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
         }
     }
