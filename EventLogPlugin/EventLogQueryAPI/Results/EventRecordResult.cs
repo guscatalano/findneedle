@@ -53,7 +53,18 @@ public class EventRecordResult : ISearchResult
             sb.AppendLine($"[FormatDescription unavailable: {ex.Message}]");
             sb.AppendLine($"Provider: {entry.ProviderName}");
             sb.AppendLine($"EventId: {entry.Id}");
-            sb.AppendLine($"Level: {entry.LevelDisplayName ?? entry.Level.ToString()}");
+
+            string levelString;
+            try
+            {
+                levelString = entry.LevelDisplayName ?? entry.Level.ToString();
+            }
+            catch
+            {
+                levelString = entry.Level?.ToString() ?? "Unknown";
+            }
+            sb.AppendLine($"Level: {levelString}");
+
             sb.AppendLine($"TimeCreated: {entry.TimeCreated}");
             sb.AppendLine($"Raw XML: {doc}");
             formatted = sb.ToString();
