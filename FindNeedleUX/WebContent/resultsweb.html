@@ -7,6 +7,11 @@
             let table = window.table;
             const payload = event.data;
 
+            if (payload.verb === 'setTheme') {
+                document.body.style.backgroundColor = payload.data.background;
+                document.body.style.color = payload.data.foreground;
+            }
+
             if (payload.verb === 'newresult') {
                 if (count == 0) {
                     //debugger;

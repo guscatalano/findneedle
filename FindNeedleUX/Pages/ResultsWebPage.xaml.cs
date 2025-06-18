@@ -19,10 +19,6 @@ using Microsoft.UI.Xaml.Navigation;
 using Microsoft.Web.WebView2.Core;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
-using Windows.UI.Core;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace FindNeedleUX.Pages;
 /// <summary>
@@ -61,19 +57,33 @@ public sealed partial class ResultsWebPage : Page
                 "appassets", "WebContent", CoreWebView2HostResourceAccessKind.Allow);
 
             MyWebView.Source = new Uri("http://appassets/resultsweb.html");
-            //LoadResults();
             MyWebView.CoreWebView2.Settings.IsWebMessageEnabled = true;
-       
             MyWebView.CoreWebView2.WebMessageReceived += MessageReceived;
-            //  MyWebView.NavigationCompleted += MyWebView_Loaded;
 
-
-            //MyWebView.CoreWebView2.OpenDevToolsWindow();
+            // Send theme colors to the web page
+            var backgroundBrush = Application.Current.Resources["ApplicationPageBackgroundThemeBrush"] as SolidColorBrush;
+            var foregroundBrush = Application.Current.Resources["TextFillColorPrimaryBrush"] as SolidColorBrush;
+            string bgHex = backgroundBrush != null ? ColorToHex(backgroundBrush) : "#FFFFFF";
+            string fgHex = foregroundBrush != null ? ColorToHex(foregroundBrush) : "#000000";
+            var colorMessage = new {
+                verb = "setTheme",
+                data = new {
+                    background = bgHex,
+                    foreground = fgHex
+                }
+            };
+            MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(colorMessage));
         }
         catch (Exception)
         {
            
         }
+    }
+
+    private static string ColorToHex(SolidColorBrush brush)
+    {
+        var color = brush.Color;
+        return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 
     private void MessageReceived(CoreWebView2 sender, CoreWebView2WebMessageReceivedEventArgs args)
