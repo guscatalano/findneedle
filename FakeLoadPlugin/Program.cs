@@ -29,7 +29,15 @@ public class Program
             WriteToConsoleAndFile("Wrote descriptor successfully to: " + outputfile);
         } catch(Exception e)
         {
-            WriteToConsoleAndFile("Crashed: " + e);
+            try
+            {
+                WriteToConsoleAndFile("Crashed: " + e);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("Failed to write to file: " + ex);
+                Environment.Exit(-5);
+            }
         }
     }
 
