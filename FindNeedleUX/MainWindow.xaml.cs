@@ -106,6 +106,7 @@ public sealed partial class MainWindow : Window
                 
                 break;
             case "openlogfolder":
+                QuickFolderOpen();
                 break;
             default:
                 throw new Exception("bad code");
@@ -158,6 +159,26 @@ public sealed partial class MainWindow : Window
 
         }
         
+    }
+
+    private async void QuickFolderOpen()
+    {
+        // Retrieve the window handle (HWND) of the current WinUI 3 window.
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+        var picker = new global::Windows.Storage.Pickers.FolderPicker();
+        picker.FileTypeFilter.Add("*"); // Required, even for folders
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder != null)
+        {
+            var folderPath = folder.Path;
+            MiddleLayerService.NewWorkspace();
+            MiddleLayerService.AddFolderLocation(folderPath);
+            MiddleLayerService.RunSearch().Wait();
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
+        }
     }
 
     private async void LoadCommand()

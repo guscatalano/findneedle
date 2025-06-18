@@ -23,30 +23,42 @@ public class EventRecordResult : ISearchResult
         this.entry = entry;
         this.location = location;
 
-        //Hard to set in the event log one
-        //if (location.GetSearchDepth() != SearchLocationDepth.Shallow)
-        //{
-            var doc = entry.ToXml();
+        var doc = entry.ToXml();
 
-            //Parse eventdata
-            var first = doc.IndexOf("<EventData>") + "<EventData>".Length;
-            var last = doc.IndexOf("</EventData>");
-            if (first > 0 && last > 0)
-            {
-                eventdata = doc.Substring(first, last - first);
-            }
+        //Parse eventdata
+        var first = doc.IndexOf("<EventData>") + "<EventData>".Length;
+        var last = doc.IndexOf("</EventData>");
+        if (first > 0 && last > 0)
+        {
+            eventdata = doc.Substring(first, last - first);
+        }
 
+        //Parse system data
+        first = doc.IndexOf("<System>") + "<System>".Length;
+        last = doc.IndexOf("</System>");
+        if (first > 0 && last > 0)
+        {
+            systemdata = doc.Substring(first, last - first);
+        }
 
-            //Parse system data
-            first = doc.IndexOf("<System>") + "<System>".Length;
-            last = doc.IndexOf("</System>");
-            if (first > 0 && last > 0)
-            {
-                systemdata = doc.Substring(first, last - first);
-            }
-
-        formattedevent = entry.FormatDescription(); //Consider passing in the locale
-        //}
+        // Try to get formatted event, fallback to details if it fails
+        var formatted = string.Empty;
+        try
+        {
+            formatted = entry.FormatDescription(); //Consider passing in the locale
+        }
+        catch (Exception ex)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"[FormatDescription unavailable: {ex.Message}]");
+            sb.AppendLine($"Provider: {entry.ProviderName}");
+            sb.AppendLine($"EventId: {entry.Id}");
+            sb.AppendLine($"Level: {entry.LevelDisplayName ?? entry.Level.ToString()}");
+            sb.AppendLine($"TimeCreated: {entry.TimeCreated}");
+            sb.AppendLine($"Raw XML: {doc}");
+            formatted = sb.ToString();
+        }
+        formattedevent = formatted;
     }
 
 
