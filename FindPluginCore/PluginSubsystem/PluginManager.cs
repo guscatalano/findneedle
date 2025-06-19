@@ -177,22 +177,7 @@ public class PluginManager
         {
             foreach (var pluginModuleDescriptor in config.entries)
             {
-                /*
-                var useDefault = Path.GetFullPath(pluginModuleDescriptor.path);
-                var useRelative = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, pluginModuleDescriptor.path);
-                if (File.Exists(useDefault))
-                {
-                    pluginModuleDescriptor.path = useDefault;
-                }
-                else if (File.Exists(useRelative))
-                {
-                    pluginModuleDescriptor.path = useRelative;
-                }
-                else if (pluginModuleDescriptor.path.StartsWith("..") || pluginModuleDescriptor.path.StartsWith("."))
-                {
-                    pluginModuleDescriptor.path = Path.GetFullPath(pluginModuleDescriptor.path);
-                }
-                */
+                
                 pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
                 if (!File.Exists(pluginModuleDescriptor.path))
                 {

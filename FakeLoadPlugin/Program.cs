@@ -6,16 +6,35 @@ using FindNeedlePluginLib.Interfaces;
 
 namespace FakeLoadPlugin;
 
-
 public class Program
 {
     static readonly string OUTPUT_FILE = "fakeloadplugin_output.txt";
+    static readonly string APPDATA_SUBFOLDER = "FindNeedlePlugin";
+
+    static string GetAppDataFolder()
+    {
+        var prepend = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var folder = Path.Combine(prepend, APPDATA_SUBFOLDER);
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    static string GetOutputFilePath()
+    {
+        return Path.Combine(GetAppDataFolder(), OUTPUT_FILE);
+    }
+
+    static string GetOutputFilePath(string filename)
+    {
+        return Path.Combine(GetAppDataFolder(), filename);
+    }
 
     [ExcludeFromCodeCoverage]
     static void Main(string[] args)
     {
-        File.WriteAllText(OUTPUT_FILE, "Starting at " + DateTime.Now.ToString() + Environment.NewLine); //Clear log file
-        if(args.Count() == 0)
+        var logPath = GetOutputFilePath();
+        File.WriteAllText(logPath, "Starting at " + DateTime.Now.ToString() + Environment.NewLine); //Clear log file
+        if (args.Count() == 0)
         {
             WriteToConsoleAndFile("No arguments were passed");
             Environment.Exit(-1);
@@ -24,10 +43,11 @@ public class Program
         {
             var sourcefile = args[0];
             var descriptor = LoadPluginModule(sourcefile);
-            var outputfile = sourcefile + ".json";
+            var outputfile = GetOutputFilePath(Path.GetFileName(sourcefile) + ".json");
             IPluginDescription.WriteDescriptionFile(descriptor, sourcefile, outputfile);
             WriteToConsoleAndFile("Wrote descriptor successfully to: " + outputfile);
-        } catch(Exception e)
+        }
+        catch (Exception e)
         {
             try
             {
@@ -45,7 +65,8 @@ public class Program
     public static void WriteToConsoleAndFile(string text)
     {
         Console.WriteLine(text);
-        File.AppendAllText(OUTPUT_FILE, text + Environment.NewLine);
+        var logPath = GetOutputFilePath();
+        File.AppendAllText(logPath, text + Environment.NewLine);
     }
 
     public static List<PluginDescription> LoadPluginModule(string file)
@@ -54,7 +75,7 @@ public class Program
         var dll = Assembly.LoadFile(file);
         var types = dll.GetTypes();
         List<PluginDescription> foundTypes = new List<PluginDescription>();
-        
+
         foreach (var type in types)
         {
             var instantiate = false;
@@ -67,8 +88,8 @@ public class Program
             WriteToConsoleAndFile("Found class: " + type.FullName);
             foreach (var possibleInterface in type.GetInterfaces())
             {
-                
-                if(possibleInterface.FullName == null)
+
+                if (possibleInterface.FullName == null)
                 {
                     continue;
                 }
@@ -83,27 +104,27 @@ public class Program
                 implementedInterfacesShort.Add(possibleInterface.Name);
             }
 
-            if (instantiate)    
+            if (instantiate)
             {
                 var Plugin = dll.CreateInstance(type.FullName);
                 if (Plugin != null)
                 {
                     WriteToConsoleAndFile("Friendly Name: " + ((IPluginDescription)Plugin).GetPluginFriendlyName());
                     WriteToConsoleAndFile("Description: " + ((IPluginDescription)Plugin).GetPluginTextDescription());
-                    foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, 
+                    foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin,
                         file, implementedInterfaces, implementedInterfacesShort));
-                } 
+                }
                 else
                 {
                     WriteToConsoleAndFile("Failed to create instance of " + type.FullName);
                     foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName,
                     file, implementedInterfaces, implementedInterfacesShort, "Could not instantiate (missing binary?)"));
                 }
-            } 
+            }
             else
             {
                 WriteToConsoleAndFile("Skipping " + type.FullName + " because it has no IPluginDescription");
-                foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName, 
+                foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName,
                     file, implementedInterfaces, implementedInterfacesShort, "No IPluginDescription"));
             }
         }

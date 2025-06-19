@@ -11,7 +11,6 @@ using FindNeedlePluginLib.Interfaces;
 
 namespace FindPluginCore.PluginSubsystem;
 
-
 public class InMemoryPluginModule
 {
     public List<PluginDescription> description;
@@ -20,12 +19,18 @@ public class InMemoryPluginModule
     public Exception? LoadException = null;
     public string LoadExceptionString = "";
 
-   
+    private static string GetAppDataDescriptorFile(string pluginPath)
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var folder = Path.Combine(appData, "FindNeedlePlugin");
+        Directory.CreateDirectory(folder);
+        var fileName = Path.GetFileName(pluginPath) + ".json";
+        return Path.Combine(folder, fileName);
+    }
 
     private List<PluginDescription> LoadPluginDescriptors(string path, PluginManager pluginManager)
     {
-
-        var descriptorFile = path + ".json";
+        var descriptorFile = GetAppDataDescriptorFile(path);
         pluginManager.CallFakeLoadPlugin(path);
         if (File.Exists(descriptorFile))
         {
@@ -61,7 +66,6 @@ public class InMemoryPluginModule
             description = new List<PluginDescription>();
         }
     }
-    
 
     public InMemoryPluginObject<object> GetObjectForTypeGeneric(PluginDescription desc)
     {
@@ -72,5 +76,4 @@ public class InMemoryPluginModule
     {
         return new InMemoryPluginObject<T>(this, desc);
     }
-
 }
