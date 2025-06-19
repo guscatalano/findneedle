@@ -45,7 +45,7 @@ public class PluginManager
         ProcessStartInfo ps = new()
         {
             FileName = GetFakeLoadPluginPath(),
-            Arguments = plugin,
+            Arguments = "\""+plugin+"\"",
             WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
             UseShellExecute = false,
             WindowStyle = ProcessWindowStyle.Hidden,
