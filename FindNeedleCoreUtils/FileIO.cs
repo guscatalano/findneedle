@@ -7,6 +7,13 @@ using System.Threading.Tasks;
 namespace FindNeedleCoreUtils;
 public class FileIO
 {
+    public static string GetAppDataFindNeedlePluginFolder()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var folder = Path.Combine(appData, "FindNeedlePlugin");
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
 
     public static string FindFullPathToFile(string fileName, bool throwError=false)
     {

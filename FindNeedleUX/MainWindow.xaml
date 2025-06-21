@@ -41,6 +41,7 @@
             </MenuBarItem>
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
+                <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
             </MenuBarItem>
         </MenuBar>
 

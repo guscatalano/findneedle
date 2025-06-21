@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using FindNeedlePluginLib.Interfaces;
+using FindNeedleCoreUtils;
 
 namespace FakeLoadPlugin;
 
@@ -13,10 +14,7 @@ public class Program
 
     static string GetAppDataFolder()
     {
-        var prepend = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var folder = Path.Combine(prepend, APPDATA_SUBFOLDER);
-        Directory.CreateDirectory(folder);
-        return folder;
+        return FileIO.GetAppDataFindNeedlePluginFolder();
     }
 
     static string GetOutputFilePath()

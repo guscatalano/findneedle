@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
+using FindPluginCore;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
@@ -37,26 +38,6 @@ public sealed partial class MainWindow : Window
             PInvoke.SendMessage(new HWND(hwnd), PInvoke.WM_SETICON, (IntPtr)1, hIcon);
         }
     }
-    /*
-    private void NavigationView_SelectionChanged(Microsoft.UI.Xaml.Controls.NavigationView sender, Microsoft.UI.Xaml.Controls.NavigationViewSelectionChangedEventArgs args)
-    {
-        if (args.IsSettingsSelected)
-        {
-            // contentFrame.Navigate(typeof(SampleSettingsPage));
-        }
-        else
-        {
-            var selectedItem = (Microsoft.UI.Xaml.Controls.NavigationViewItem)args.SelectedItem;
-            if (selectedItem != null)
-            {
-                var selectedItemTag = ((string)selectedItem.Tag);
-                sender.Header = selectedItemTag;
-                var pageName = "FindNeedleUX.Pages." + selectedItemTag;
-                Type pageType = Type.GetType(pageName);
-                contentFrame.Navigate(pageType);
-            }
-        }
-    }*/
 
     private void MenuFlyoutItem_Click(object sender, RoutedEventArgs e)
     {
@@ -65,55 +46,72 @@ public sealed partial class MainWindow : Window
         {
             case "newworkspace":
                 MiddleLayerService.NewWorkspace();
+                Logger.Instance.Log("Navigated: NewWorkspace (workspace reset)");
                 break;
             case "saveworkspace":
                 SaveCommand();
+                Logger.Instance.Log("Navigated: SaveWorkspace");
                 break;
             case "openworkspace":
                 LoadCommand();
+                Logger.Instance.Log("Navigated: OpenWorkspace");
                 break;
             case "search_location":
+                Logger.Instance.Log("Navigated: SearchLocationsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
                 break;
             case "search_filters":
+                Logger.Instance.Log("Navigated: SearchFiltersPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchFiltersPage));
                 break;
             case "search_processors":
+                Logger.Instance.Log("Navigated: SearchProcessorsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchProcessorsPage));
                 break;
             case "search_plugins":
+                Logger.Instance.Log("Navigated: PluginsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.PluginsPage));
                 break;
             case "results_get":
+                Logger.Instance.Log("Navigated: RunSearchPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage));
                 break;
             case "results_statistics":
+                Logger.Instance.Log("Navigated: SearchStatisticsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage));
                 break;
             case "results_viewnative":
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchResultPage)); 
+                Logger.Instance.Log("Navigated: SearchResultPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchResultPage));
                 break;
             case "results_viewweb":
+                Logger.Instance.Log("Navigated: ResultsWebPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
                 break;
             case "results_viewcommunity":
+                Logger.Instance.Log("Navigated: ResultsVCommunityPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsVCommunityPage));
                 break;
             case "systeminfo":
+                Logger.Instance.Log("Navigated: SystemInfoPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SystemInfoPage));
                 break;
+            case "logs":
+                Logger.Instance.Log("Navigated: LogsPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.LogsPage));
+                break;
             case "openlogfile":
+                Logger.Instance.Log("Opened log file picker");
                 QuickFileOpen();
-                
                 break;
             case "openlogfolder":
+                Logger.Instance.Log("Opened log folder picker");
                 QuickFolderOpen();
                 break;
             default:
+                Logger.Instance.Log($"Navigation error: unknown menu item {selectedFlyoutItem.Name}");
                 throw new Exception("bad code");
         }
-
-
     }
 
     private void ShowProgressBar(bool show)

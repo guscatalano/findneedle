@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle.PluginSubsystem;
 using FindNeedlePluginLib.Interfaces;
+using FindNeedleCoreUtils;
+using FindPluginCore;
 
 namespace FindPluginCore.PluginSubsystem;
 
@@ -21,9 +23,7 @@ public class InMemoryPluginModule
 
     private static string GetAppDataDescriptorFile(string pluginPath)
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var folder = Path.Combine(appData, "FindNeedlePlugin");
-        Directory.CreateDirectory(folder);
+        var folder = FileIO.GetAppDataFindNeedlePluginFolder();
         var fileName = Path.GetFileName(pluginPath) + ".json";
         return Path.Combine(folder, fileName);
     }
@@ -31,19 +31,31 @@ public class InMemoryPluginModule
     private List<PluginDescription> LoadPluginDescriptors(string path, PluginManager pluginManager)
     {
         var descriptorFile = GetAppDataDescriptorFile(path);
-        pluginManager.CallFakeLoadPlugin(path);
-        if (File.Exists(descriptorFile))
+        Logger.Instance.Log($"InMemoryPluginModule: Loading plugin descriptors for {path}");
+        try
         {
-            return IPluginDescription.ReadDescriptionFile(descriptorFile);
+            pluginManager.CallFakeLoadPlugin(path);
+            if (File.Exists(descriptorFile))
+            {
+                Logger.Instance.Log($"InMemoryPluginModule: Descriptor file found for {path}");
+                return IPluginDescription.ReadDescriptionFile(descriptorFile);
+            }
+            else
+            {
+                Logger.Instance.Log($"InMemoryPluginModule: Descriptor file NOT found for {path}");
+                throw new Exception("Plugin loader failed to load " + path);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            throw new Exception("Plugin loader failed to load " + path);
+            Logger.Instance.Log($"InMemoryPluginModule: Exception in LoadPluginDescriptors for {path}: {ex}");
+            throw;
         }
     }
 
     public InMemoryPluginModule(string fullpath, PluginManager pluginManager, bool loadInMemory = true)
     {
+        Logger.Instance.Log($"InMemoryPluginModule: Creating for {fullpath}, loadInMemory={loadInMemory}");
         try
         {
             description = LoadPluginDescriptors(fullpath, pluginManager);
@@ -51,11 +63,13 @@ public class InMemoryPluginModule
             {
                 dll = Assembly.LoadFile(fullpath);
                 LoadedSuccessfully = true;
+                Logger.Instance.Log($"InMemoryPluginModule: Loaded assembly for {fullpath}");
             }
             else
             {
                 LoadedSuccessfully = false;
                 LoadExceptionString = "Constructor called with loadInMemory=false";
+                Logger.Instance.Log($"InMemoryPluginModule: Not loading assembly for {fullpath} (loadInMemory=false)");
             }
         }
         catch (Exception e)
@@ -64,6 +78,7 @@ public class InMemoryPluginModule
             LoadException = e;
             LoadExceptionString = e.Message;
             description = new List<PluginDescription>();
+            Logger.Instance.Log($"InMemoryPluginModule: Exception in constructor for {fullpath}: {e}");
         }
     }
 

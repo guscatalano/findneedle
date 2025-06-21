@@ -36,47 +36,55 @@ public class PluginManager
 
     public string CallFakeLoadPlugin(string plugin)
     {
-        var entryAssembly = Assembly.GetEntryAssembly();
-        if (entryAssembly == null)
+        try
         {
-            throw new Exception("Entry assembly is null");
-        }
-
-        ProcessStartInfo ps = new()
-        {
-            FileName = GetFakeLoadPluginPath(),
-            Arguments = "\""+plugin+"\"",
-            WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
-            UseShellExecute = false,
-            WindowStyle = ProcessWindowStyle.Hidden,
-            RedirectStandardError = GlobalSettings.Debug,
-            RedirectStandardOutput = GlobalSettings.Debug
-        };
-        var eOut = "Output is disabled";
-        Process p = new Process();
-        p.StartInfo = ps;
-        if (GlobalSettings.Debug)
-        {
-            eOut = "";
-            p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) =>
+            var entryAssembly = Assembly.GetEntryAssembly();
+            if (entryAssembly == null)
             {
-                eOut += e.Data;
-            });
-            p.OutputDataReceived += new DataReceivedEventHandler((sender, e) =>
-            {
-                eOut += e.Data;
-            });
-            p.EnableRaisingEvents = true;
-        }
-        p.Start();
-        if (GlobalSettings.Debug)
-        {
-            p.BeginOutputReadLine();
-            p.BeginErrorReadLine();
-        }
+                throw new Exception("Entry assembly is null");
+            }
 
-        p.WaitForExit();
-        return eOut;
+            ProcessStartInfo ps = new()
+            {
+                FileName = GetFakeLoadPluginPath(),
+                Arguments = "\"" + plugin + "\"",
+                WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
+                UseShellExecute = false,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                RedirectStandardError = GlobalSettings.Debug,
+                RedirectStandardOutput = GlobalSettings.Debug
+            };
+            var eOut = "Output is disabled";
+            Process p = new Process();
+            p.StartInfo = ps;
+            if (GlobalSettings.Debug)
+            {
+                eOut = "";
+                p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) =>
+                {
+                    eOut += e.Data;
+                });
+                p.OutputDataReceived += new DataReceivedEventHandler((sender, e) =>
+                {
+                    eOut += e.Data;
+                });
+                p.EnableRaisingEvents = true;
+            }
+            p.Start();
+            if (GlobalSettings.Debug)
+            {
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+            }
+
+            p.WaitForExit();
+            return eOut;
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in CallFakeLoadPlugin: {ex}");
+            throw;
+        }
     }
 
     private readonly string loadedConfig = "";
@@ -86,63 +94,75 @@ public class PluginManager
 
     public void PrintToConsole()
     {
-        Console.WriteLine("Loaded ("+ loadedPluginsModules.Count+") plugin modules.");
+        FindPluginCore.Logger.Instance.Log($"Loaded ({loadedPluginsModules.Count}) plugin modules.");
     }
 
 
     public PluginManager(string configFileToLoad = "")
     {
-        var originalConfig = configFileToLoad;
-        if (string.IsNullOrEmpty(configFileToLoad))
+        try
         {
-            configFileToLoad = LOADER_CONFIG;
-        }
-
-        configFileToLoad = FileIO.FindFullPathToFile(configFileToLoad, false); //Error handling happens later.
-
-        if (File.Exists(configFileToLoad))
-        {
-            var json = File.ReadAllText(configFileToLoad);
-           
-
-            var options = new JsonSerializerOptions
+            var originalConfig = configFileToLoad;
+            if (string.IsNullOrEmpty(configFileToLoad))
             {
-                IncludeFields = true,
-
-            };
-            config = JsonSerializer.Deserialize<PluginConfig>(json, options);
-            if (config == null)
-            {
-                throw new Exception("Failed to deserialize");
+                configFileToLoad = LOADER_CONFIG;
             }
-        } 
-        else
-        {
-            if (!string.IsNullOrEmpty(originalConfig))
-            {
-                var whatIcansee = Directory.EnumerateFiles(AppDomain.CurrentDomain.BaseDirectory).ToList();
-                throw new Exception("Config file was specified and it doesnt exist. " + whatIcansee.Count);
-            }
-            config = new PluginConfig();
-        }
-        loadedConfig = configFileToLoad;
 
+            configFileToLoad = FileIO.FindFullPathToFile(configFileToLoad, false); //Error handling happens later.
+
+            if (File.Exists(configFileToLoad))
+            {
+                var json = File.ReadAllText(configFileToLoad);
+                var options = new JsonSerializerOptions
+                {
+                    IncludeFields = true,
+                };
+                config = JsonSerializer.Deserialize<PluginConfig>(json, options);
+                if (config == null)
+                {
+                    throw new Exception("Failed to deserialize");
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(originalConfig))
+                {
+                    var whatIcansee = Directory.EnumerateFiles(AppDomain.CurrentDomain.BaseDirectory).ToList();
+                    throw new Exception("Config file was specified and it doesnt exist. " + whatIcansee.Count);
+                }
+                config = new PluginConfig();
+            }
+            loadedConfig = configFileToLoad;
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in PluginManager constructor: {ex}");
+            throw;
+        }
     }
 
     public void SaveToFile(string configFileToSave = "")
     {
-        if (string.IsNullOrEmpty(configFileToSave))
+        try
         {
-            configFileToSave = loadedConfig;
+            if (string.IsNullOrEmpty(configFileToSave))
+            {
+                configFileToSave = loadedConfig;
+            }
+            var output = JsonSerializer.Serialize(config, new JsonSerializerOptions
+            {
+                IncludeFields = true,
+            });
+            File.WriteAllText(configFileToSave, output);
         }
-        var output = JsonSerializer.Serialize(config, new JsonSerializerOptions
+        catch (Exception ex)
         {
-            IncludeFields = true,
-        });
-        File.WriteAllText(configFileToSave, output);
+            FindPluginCore.Logger.Instance.Log($"Exception in SaveToFile: {ex}");
+            throw;
+        }
     }
 
-  
+
 
     public List<T> GetAllPluginsInstancesOfAType<T>()
     {
@@ -152,7 +172,7 @@ public class PluginManager
             foreach (var plugin in pluginModule.description)
             {
                 //Skip it if it doesnt implement the interface we need
-                if(plugin.ImplementedInterfaces.FirstOrDefault(x => x.Equals(typeof(T).FullName)) == null)
+                if (plugin.ImplementedInterfaces.FirstOrDefault(x => x.Equals(typeof(T).FullName)) == null)
                 {
                     continue;
                 }
@@ -173,21 +193,32 @@ public class PluginManager
 
     public void LoadAllPlugins(bool loadIntoAssembly = true)
     {
-        if (config != null)
+        FindPluginCore.Logger.Instance.Log($"Starting to load plugins. Config entries: {(config?.entries.Count ?? 0)}");
+        try
         {
-            foreach (var pluginModuleDescriptor in config.entries)
+            if (config != null)
             {
-                
-                pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
-                if (!File.Exists(pluginModuleDescriptor.path))
+                foreach (var pluginModuleDescriptor in config.entries)
                 {
-                    throw new Exception("Can't find plugin module for " + pluginModuleDescriptor.path);
-                }
-                
+                    FindPluginCore.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
+                    pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
+                    if (!File.Exists(pluginModuleDescriptor.path))
+                    {
+                        FindPluginCore.Logger.Instance.Log($"ERROR: Can't find plugin module for {pluginModuleDescriptor.path}");
+                        throw new Exception($"Can't find plugin module for {pluginModuleDescriptor.path}");
+                    }
 
-                InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);
-                loadedPluginsModules.Add(loadedPluginModule);
+                    InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);
+                    loadedPluginsModules.Add(loadedPluginModule);
+                    FindPluginCore.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.path}");
+                }
+                FindPluginCore.Logger.Instance.Log($"Finished loading plugins. Total loaded: {loadedPluginsModules.Count}");
             }
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in LoadAllPlugins: {ex}");
+            throw;
         }
     }
 
@@ -195,27 +226,43 @@ public class PluginManager
 
     public string GetFakeLoadPluginPath()
     {
-        config ??= new PluginConfig();
-        if (String.IsNullOrEmpty(config.PathToFakeLoadPlugin))
+        try
         {
-            config.PathToFakeLoadPlugin = FAKE_LOADER;
+            config ??= new PluginConfig();
+            if (String.IsNullOrEmpty(config.PathToFakeLoadPlugin))
+            {
+                config.PathToFakeLoadPlugin = FAKE_LOADER;
+            }
+            config.PathToFakeLoadPlugin = FileIO.FindFullPathToFile(config.PathToFakeLoadPlugin);
+            if (!File.Exists(config.PathToFakeLoadPlugin))
+            {
+                throw new Exception("can't find fake loader for plugins");
+            }
+            return config.PathToFakeLoadPlugin;
         }
-        config.PathToFakeLoadPlugin = FileIO.FindFullPathToFile(config.PathToFakeLoadPlugin);
-        if (!File.Exists(config.PathToFakeLoadPlugin))
+        catch (Exception ex)
         {
-            throw new Exception("can't find fake loader for plugins");
+            FindPluginCore.Logger.Instance.Log($"Exception in GetFakeLoadPluginPath: {ex}");
+            throw;
         }
-        return config.PathToFakeLoadPlugin;
     }
 
     public string GetSearchQueryClass()
     {
-        config ??= new PluginConfig();
-        if (String.IsNullOrEmpty(config.SearchQueryClass))
+        try
         {
-            config.SearchQueryClass = "SearchQuery"; //Use old one by default
+            config ??= new PluginConfig();
+            if (String.IsNullOrEmpty(config.SearchQueryClass))
+            {
+                config.SearchQueryClass = "SearchQuery"; //Use old one by default
+            }
+            return config.SearchQueryClass;
         }
-        return config.SearchQueryClass;
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in GetSearchQueryClass: {ex}");
+            throw;
+        }
     }
     public static List<string> EnumerateFilesInCurrentDirectory()
     {

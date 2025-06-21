@@ -10,10 +10,10 @@
 
   <Identity
     Name="GusCatalano.FindNeedle"
-    Publisher="CN=crimson"
-    Version="0.0.10.0" />
+    Publisher="CN=119E0257-3B74-437C-A728-AC7C50256853"
+    Version="0.0.14.0" />
 
-  <mp:PhoneIdentity PhoneProductId="c494a556-d8a1-4461-9f9f-fd1df415a91e" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="a5ccfec6-6bb6-4c2a-a580-faa784b3c5c0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>Find Needle</DisplayName>
