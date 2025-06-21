@@ -11,9 +11,9 @@
   <Identity
     Name="GusCatalano.FindNeedle"
     Publisher="CN=119E0257-3B74-437C-A728-AC7C50256853"
-    Version="0.0.14.0" />
+    Version="0.0.25.0" />
 
-  <mp:PhoneIdentity PhoneProductId="a5ccfec6-6bb6-4c2a-a580-faa784b3c5c0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="a03c8d46-df2d-43de-8e1f-59c7f0280eb5" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>Find Needle</DisplayName>

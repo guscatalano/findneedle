@@ -39,7 +39,9 @@
     
     <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
     
-    <PackageCertificateThumbprint>20D7B5B2404BCAD6C29C9F4375582C5D897A7B01</PackageCertificateThumbprint> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
+    <PackageCertificateThumbprint>735D3C00542E608B9F30374C33E3BFD5846B15D1</PackageCertificateThumbprint>
+    
+    <AppxBundlePlatforms>x64</AppxBundlePlatforms> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Assets\appicon.ico" />

@@ -20,7 +20,7 @@ public sealed partial class LocationStart : Page
         this.InitializeComponent();
         WizardSelectionService.GetCurrentWizard().RegisterCurrentPage(this);
     }
-    private void Button_Click(object sender, RoutedEventArgs e)
+    private async void Button_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -28,7 +28,7 @@ public sealed partial class LocationStart : Page
         }
         catch (Exception)
         {
-            ShowErrorDialogAsync("Page doesn't exist yet...");
+            await ShowErrorDialogAsync("Page doesn't exist yet...");
         }
     }
 

@@ -9,12 +9,21 @@
     mc:Ignorable="d">
 
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Margin="10" Grid.Row="0">
+            <ToggleSwitch x:Name="DebugToggleSwitch" Header="Debug Logging" Toggled="DebugToggleSwitch_Toggled"/>
+            <TextBlock x:Name="DebugStatusText" Margin="10,0,0,0" VerticalAlignment="Center"/>
+        </StackPanel>
         <ListView x:Name="LogListView"
            SelectionMode="Extended"
            IsItemClickEnabled="False"
            Margin="10"
            FontFamily="Consolas"
            FontSize="14"
+           Grid.Row="1"
            ItemsSource="{x:Bind LogLines, Mode=OneWay}">
             <ListView.ItemTemplate>
                 <DataTemplate>

@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using FindPluginCore;
+using FindPluginCore.GlobalConfiguration;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -36,11 +37,25 @@ public sealed partial class LogsPage : Page
             LogLines.Add(line);
         }
         Logger.Instance.LogCallback = AddLogLine;
+        DebugToggleSwitch.IsOn = GlobalSettings.Debug;
+        UpdateDebugStatusText();
     }
 
     public void AddLogLine(string line)
     {
         LogLines.Add(line);
         LogListView.ScrollIntoView(line);
+    }
+
+    private void DebugToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        GlobalSettings.ToggleDebug();
+        UpdateDebugStatusText();
+        Logger.Instance.Log($"Debug logging toggled: {GlobalSettings.Debug}");
+    }
+
+    private void UpdateDebugStatusText()
+    {
+        DebugStatusText.Text = $"Debug is {(GlobalSettings.Debug ? "ON" : "OFF")}";
     }
 }

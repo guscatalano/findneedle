@@ -38,15 +38,20 @@ public class PluginManager
     {
         try
         {
+            FindPluginCore.Logger.Instance.Log($"CallFakeLoadPlugin called with plugin: {plugin}");
             var entryAssembly = Assembly.GetEntryAssembly();
             if (entryAssembly == null)
             {
+                FindPluginCore.Logger.Instance.Log("Entry assembly is null");
                 throw new Exception("Entry assembly is null");
             }
 
+            var fakeLoaderPath = GetFakeLoadPluginPath();
+            FindPluginCore.Logger.Instance.Log($"Using FakeLoadPlugin path: {fakeLoaderPath}");
+
             ProcessStartInfo ps = new()
             {
-                FileName = GetFakeLoadPluginPath(),
+                FileName = fakeLoaderPath,
                 Arguments = "\"" + plugin + "\"",
                 WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
                 UseShellExecute = false,
@@ -62,14 +67,17 @@ public class PluginManager
                 eOut = "";
                 p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) =>
                 {
-                    eOut += e.Data;
+                    if (e.Data != null)
+                        eOut += e.Data + "\n";
                 });
                 p.OutputDataReceived += new DataReceivedEventHandler((sender, e) =>
                 {
-                    eOut += e.Data;
+                    if (e.Data != null)
+                        eOut += e.Data + "\n";
                 });
                 p.EnableRaisingEvents = true;
             }
+            FindPluginCore.Logger.Instance.Log($"Starting FakeLoadPlugin process for plugin: {plugin}");
             p.Start();
             if (GlobalSettings.Debug)
             {
@@ -78,6 +86,11 @@ public class PluginManager
             }
 
             p.WaitForExit();
+            FindPluginCore.Logger.Instance.Log($"FakeLoadPlugin process exited for plugin: {plugin} with code {p.ExitCode}");
+            if (GlobalSettings.Debug)
+            {
+                FindPluginCore.Logger.Instance.Log($"FakeLoadPlugin output: {eOut}");
+            }
             return eOut;
         }
         catch (Exception ex)

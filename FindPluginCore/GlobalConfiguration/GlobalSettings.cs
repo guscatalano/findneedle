@@ -17,4 +17,10 @@ public class GlobalSettings
         get => _debug;
         set => _debug = value;
     }
+
+    // Toggle the debug flag
+    public static void ToggleDebug()
+    {
+        _debug = !_debug;
+    }
 }
