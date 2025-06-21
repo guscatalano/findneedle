@@ -32,6 +32,7 @@ public class PluginListItemViewModel
     public string Name { get; set; }
     public string Description { get; set; }
     public string ModulePath { get; set; }
+    public string ClassName { get; set; }
     public PluginDescription Plugin { get; set; }
 }
 
@@ -39,6 +40,9 @@ public class ModuleViewModel
 {
     public string ModulePath { get; set; }
     public ObservableCollection<PluginListItemViewModel> Plugins { get; set; } = new();
+    public bool LoadedSuccessfully { get; set; }
+    public Exception LoadException { get; set; }
+    public string LoadExceptionString { get; set; }
 }
 
 public sealed partial class PluginsPage : Page
@@ -49,8 +53,11 @@ public sealed partial class PluginsPage : Page
     public ModuleViewModel SelectedModule { get; set; }
     public ObservableCollection<PluginListItemViewModel> PluginsInSelectedModule { get; set; } = new();
     public PluginListItemViewModel SelectedPlugin { get; set; }
+#pragma warning disable CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
     private PluginConfig? loadedConfig;
+#pragma warning restore CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
     private string loadedConfigPath = "";
+    private bool hideInvalidPlugins = true;
 
     public PluginsPage()
     {
@@ -66,35 +73,34 @@ public sealed partial class PluginsPage : Page
             foreach (var module in allModules)
             {
                 string modulePath = "Unknown";
-                try
+                if (module.dll != null)
+                    modulePath = module.dll.Location;
+                var moduleVM = new ModuleViewModel {
+                    ModulePath = modulePath,
+                    LoadedSuccessfully = module.LoadedSuccessfully,
+                    LoadException = module.LoadException,
+                    LoadExceptionString = module.LoadExceptionString
+                };
+                foreach (var plugin in module.description)
                 {
-                    if (module.dll != null)
-                        modulePath = module.dll.Location;
-                    var moduleVM = new ModuleViewModel { ModulePath = modulePath };
-                    foreach (var plugin in module.description)
+                    try
                     {
-                        try
+                        moduleVM.Plugins.Add(new PluginListItemViewModel
                         {
-                            moduleVM.Plugins.Add(new PluginListItemViewModel
-                            {
-                                Name = plugin.FriendlyName,
-                                Description = plugin.TextDescription,
-                                ModulePath = modulePath,
-                                Plugin = plugin
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            FindPluginCore.Logger.Instance.Log($"Exception loading plugin in PluginsPage constructor: {ex}");
-                        }
+                            Name = plugin.FriendlyName,
+                            Description = plugin.TextDescription,
+                            ModulePath = modulePath,
+                            ClassName = plugin.ClassName,
+                            Plugin = plugin
+                        });
                     }
-                    if (moduleVM.Plugins.Count > 0)
-                        ModulesFound.Add(moduleVM);
+                    catch (Exception ex)
+                    {
+                        FindPluginCore.Logger.Instance.Log($"Exception loading plugin in PluginsPage constructor: {ex}");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    FindPluginCore.Logger.Instance.Log($"Exception loading module in PluginsPage constructor: {ex}");
-                }
+                if (moduleVM.Plugins.Count > 0)
+                    ModulesFound.Add(moduleVM);
             }
             if (ModulesFound.Count > 0)
             {
@@ -119,22 +125,49 @@ public sealed partial class PluginsPage : Page
             PluginsInSelectedModule.Clear();
             if (SelectedModule != null)
             {
-                foreach (var plugin in SelectedModule.Plugins)
+                var plugins = hideInvalidPlugins
+                    ? SelectedModule.Plugins.Where(p => p.Plugin.validPlugin)
+                    : SelectedModule.Plugins;
+                foreach (var plugin in plugins)
                     PluginsInSelectedModule.Add(plugin);
+                // Always select the first plugin if available
                 if (PluginsInSelectedModule.Count > 0)
+                {
                     SelectedPlugin = PluginsInSelectedModule[0];
+                    // Explicitly set ComboBox selection to ensure UI updates
+                    if (PluginSelectorComboBox != null)
+                        PluginSelectorComboBox.SelectedItem = SelectedPlugin;
+                }
                 else
+                {
                     SelectedPlugin = null;
+                    if (PluginSelectorComboBox != null)
+                        PluginSelectorComboBox.SelectedItem = null;
+                }
             }
             else
             {
                 SelectedPlugin = null;
+                if (PluginSelectorComboBox != null)
+                    PluginSelectorComboBox.SelectedItem = null;
             }
         }
         catch (Exception ex)
         {
             FindPluginCore.Logger.Instance.Log($"Exception in UpdatePluginsInSelectedModule: {ex}");
         }
+    }
+
+    private void HideInvalidPluginsCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        hideInvalidPlugins = true;
+        UpdatePluginsInSelectedModule();
+    }
+
+    private void HideInvalidPluginsCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        hideInvalidPlugins = false;
+        UpdatePluginsInSelectedModule();
     }
 
     private void ModuleSelectorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -166,16 +199,36 @@ public sealed partial class PluginsPage : Page
     {
         try
         {
+            // Update plugin description/module info
             if (SelectedPlugin != null && PluginDescriptionTextBlock != null)
             {
                 PluginDescriptionTextBlock.Text = SelectedPlugin.Description ?? string.Empty;
                 if (PluginModuleTextBlock != null)
                     PluginModuleTextBlock.Text = SelectedPlugin.ModulePath ?? string.Empty;
+                if (PluginClassNameTextBlock != null)
+                    PluginClassNameTextBlock.Text = SelectedPlugin.ClassName ?? string.Empty;
             }
             else
             {
                 if (PluginDescriptionTextBlock != null) PluginDescriptionTextBlock.Text = string.Empty;
                 if (PluginModuleTextBlock != null) PluginModuleTextBlock.Text = string.Empty;
+                if (PluginClassNameTextBlock != null) PluginClassNameTextBlock.Text = string.Empty;
+            }
+            // Update module status info
+            if (SelectedModule != null)
+            {
+                if (ModuleLoadedStatusTextBlock != null)
+                    ModuleLoadedStatusTextBlock.Text = $"LoadedSuccessfully: {SelectedModule.LoadedSuccessfully}";
+                if (ModuleLoadExceptionTextBlock != null)
+                    ModuleLoadExceptionTextBlock.Text = $"LoadException: {SelectedModule.LoadException?.ToString() ?? "(none)"}";
+                if (ModuleLoadExceptionStringTextBlock != null)
+                    ModuleLoadExceptionStringTextBlock.Text = $"LoadExceptionString: {SelectedModule.LoadExceptionString ?? "(none)"}";
+            }
+            else
+            {
+                if (ModuleLoadedStatusTextBlock != null) ModuleLoadedStatusTextBlock.Text = string.Empty;
+                if (ModuleLoadExceptionTextBlock != null) ModuleLoadExceptionTextBlock.Text = string.Empty;
+                if (ModuleLoadExceptionStringTextBlock != null) ModuleLoadExceptionStringTextBlock.Text = string.Empty;
             }
         }
         catch (Exception ex)

@@ -9,52 +9,56 @@
     mc:Ignorable="d"  
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">  
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="3*"/>
-            <ColumnDefinition Width="5*"/>
-        </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <!-- Plugin Selector and Description Panel -->
-        <StackPanel Grid.Column="0" Grid.Row="0" Orientation="Vertical" Margin="10">
-            <TextBlock Text="Select a Module" FontWeight="Bold"/>
-            <ComboBox x:Name="ModuleSelectorComboBox"
-                      ItemsSource="{x:Bind ModulesFound}"
-                      DisplayMemberPath="ModulePath"
-                      SelectedItem="{x:Bind SelectedModule, Mode=TwoWay}"
-                      Width="400"
-                      Margin="0,0,0,5"/>
-            <TextBlock Text="Select a Plugin" FontWeight="Bold"/>
-            <ComboBox x:Name="PluginSelectorComboBox"
-                      ItemsSource="{x:Bind PluginsInSelectedModule}"
-                      DisplayMemberPath="Name"
-                      SelectedItem="{x:Bind SelectedPlugin, Mode=TwoWay}"
-                      Width="300"
-                      Margin="0,0,0,5"/>
-            <TextBlock Text="Description:" FontWeight="Bold"/>
-            <TextBlock x:Name="PluginDescriptionTextBlock" TextWrapping="Wrap" Width="300" Margin="0,0,0,2"/>
-            <TextBlock Text="Module:" FontWeight="Bold"/>
-            <TextBlock x:Name="PluginModuleTextBlock" TextWrapping="Wrap" Width="300" Margin="0,0,0,10"/>
-            <TextBlock Text="PluginConfig Entries" FontWeight="Bold"/>
-            <ListView x:Name="PluginConfigListView" ItemsSource="{x:Bind PluginConfigEntries, Mode=TwoWay}" SelectionMode="Single" Height="200" SelectedItem="{x:Bind SelectedPluginConfigEntry, Mode=TwoWay}">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="local:PluginConfigEntryViewModel">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{x:Bind Name, Mode=TwoWay}" Width="180" Margin="0,0,5,0"/>
-                            <TextBox Text="{x:Bind Path, Mode=TwoWay}" Width="340" Margin="0,0,5,0"/>
-                            <CheckBox IsChecked="{x:Bind Enabled, Mode=TwoWay}" Content="Enabled"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                <Button Content="Add" Click="AddPluginConfigEntry_Click" Margin="0,0,5,0"/>
-                <Button Content="Remove" Click="RemovePluginConfigEntry_Click" Margin="0,0,5,0"/>
-                <Button Content="Save" Click="SavePluginConfig_Click"/>
+    <TabView>
+        <!-- Tab 1: Current Plugins -->
+        <TabViewItem Header="Current Plugins" IsClosable="False">
+            <StackPanel Orientation="Vertical" Margin="16,16,16,16">
+                <TextBlock Text="Select a Module" FontWeight="Bold"/>
+                <ComboBox x:Name="ModuleSelectorComboBox"
+                          ItemsSource="{x:Bind ModulesFound}"
+                          DisplayMemberPath="ModulePath"
+                          SelectedItem="{x:Bind SelectedModule, Mode=TwoWay}"
+                          Margin="0,0,0,10"/>
+                <CheckBox x:Name="HideInvalidPluginsCheckBox" Content="Hide Invalid Plugins" IsChecked="True" Margin="0,0,0,10" Checked="HideInvalidPluginsCheckBox_Checked" Unchecked="HideInvalidPluginsCheckBox_Unchecked"/>
+                <TextBlock Text="Select a Plugin" FontWeight="Bold"/>
+                <ComboBox x:Name="PluginSelectorComboBox"
+                          ItemsSource="{x:Bind PluginsInSelectedModule}"
+                          DisplayMemberPath="Name"
+                          SelectedItem="{x:Bind SelectedPlugin, Mode=TwoWay}"
+                          Margin="0,0,0,10"/>
+                <TextBlock Text="Description:" FontWeight="Bold"/>
+                <TextBlock x:Name="PluginDescriptionTextBlock" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                <TextBlock Text="Module:" FontWeight="Bold"/>
+                <TextBlock x:Name="PluginModuleTextBlock" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                <TextBlock Text="Module Status:" FontWeight="Bold"/>
+                <TextBlock x:Name="ModuleLoadedStatusTextBlock" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                <TextBlock x:Name="ModuleLoadExceptionTextBlock" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                <TextBlock x:Name="ModuleLoadExceptionStringTextBlock" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                <TextBlock Text="Class Name:" FontWeight="Bold"/>
+                <TextBlock x:Name="PluginClassNameTextBlock" TextWrapping="Wrap" Margin="0,0,0,10"/>
             </StackPanel>
-        </StackPanel>
-    </Grid>  
+        </TabViewItem>
+        <!-- Tab 2: PluginConfig Entries -->
+        <TabViewItem Header="PluginConfig Entries" IsClosable="False">
+            <StackPanel Orientation="Vertical" Margin="16">
+                <TextBlock Text="PluginConfig Entries" FontWeight="Bold"/>
+                <ListView x:Name="PluginConfigListView" ItemsSource="{x:Bind PluginConfigEntries, Mode=TwoWay}" SelectionMode="Single" Height="200" SelectedItem="{x:Bind SelectedPluginConfigEntry, Mode=TwoWay}">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="local:PluginConfigEntryViewModel">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox Text="{x:Bind Name, Mode=TwoWay}" Width="180" Margin="0,0,5,0"/>
+                                <TextBox Text="{x:Bind Path, Mode=TwoWay}" Width="340" Margin="0,0,5,0"/>
+                                <CheckBox IsChecked="{x:Bind Enabled, Mode=TwoWay}" Content="Enabled"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                    <Button Content="Add" Click="AddPluginConfigEntry_Click" Margin="0,0,5,0"/>
+                    <Button Content="Remove" Click="RemovePluginConfigEntry_Click" Margin="0,0,5,0"/>
+                    <Button Content="Save" Click="SavePluginConfig_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </TabViewItem>
+    </TabView>
 </Page>
