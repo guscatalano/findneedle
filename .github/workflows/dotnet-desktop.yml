@@ -310,7 +310,6 @@ jobs:
         retention-days: 5
 
   make_msix:
-    needs: [create-release, run-tests]
     strategy:
       matrix:
         configuration: [Release]
