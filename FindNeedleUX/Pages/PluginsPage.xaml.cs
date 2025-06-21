@@ -55,70 +55,132 @@ public sealed partial class PluginsPage : Page
     public PluginsPage()
     {
         this.InitializeComponent();
-        var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
-        var allModules = manager.loadedPluginsModules;
-        foreach (var module in allModules)
+
+        // Ensure plugins are loaded before populating UI
+        MiddleLayerService.SearchQueryUX.Initialize();
+
+        try
         {
-            string modulePath = "Unknown";
-            if (module.dll != null)
-                modulePath = module.dll.Location;
-            var moduleVM = new ModuleViewModel { ModulePath = modulePath };
-            foreach (var plugin in module.description)
+            var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
+            var allModules = manager.loadedPluginsModules;
+            foreach (var module in allModules)
             {
-                moduleVM.Plugins.Add(new PluginListItemViewModel
+                string modulePath = "Unknown";
+                try
                 {
-                    Name = plugin.FriendlyName,
-                    Description = plugin.TextDescription,
-                    ModulePath = modulePath,
-                    Plugin = plugin
-                });
+                    if (module.dll != null)
+                        modulePath = module.dll.Location;
+                    var moduleVM = new ModuleViewModel { ModulePath = modulePath };
+                    foreach (var plugin in module.description)
+                    {
+                        try
+                        {
+                            moduleVM.Plugins.Add(new PluginListItemViewModel
+                            {
+                                Name = plugin.FriendlyName,
+                                Description = plugin.TextDescription,
+                                ModulePath = modulePath,
+                                Plugin = plugin
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            FindPluginCore.Logger.Instance.Log($"Exception loading plugin in PluginsPage constructor: {ex}");
+                        }
+                    }
+                    if (moduleVM.Plugins.Count > 0)
+                        ModulesFound.Add(moduleVM);
+                }
+                catch (Exception ex)
+                {
+                    FindPluginCore.Logger.Instance.Log($"Exception loading module in PluginsPage constructor: {ex}");
+                }
             }
-            if (moduleVM.Plugins.Count > 0)
-                ModulesFound.Add(moduleVM);
+            if (ModulesFound.Count > 0)
+            {
+                SelectedModule = ModulesFound[0];
+                UpdatePluginsInSelectedModule();
+            }
+            LoadPluginConfig();
+            UpdatePluginDescription();
+            ModuleSelectorComboBox.SelectionChanged += ModuleSelectorComboBox_SelectionChanged;
+            PluginSelectorComboBox.SelectionChanged += PluginSelectorComboBox_SelectionChanged;
         }
-        if (ModulesFound.Count > 0)
+        catch (Exception ex)
         {
-            SelectedModule = ModulesFound[0];
-            PluginsInSelectedModule = SelectedModule.Plugins;
-            if (PluginsInSelectedModule.Count > 0)
-                SelectedPlugin = PluginsInSelectedModule[0];
+            FindPluginCore.Logger.Instance.Log($"Exception in PluginsPage constructor: {ex}");
         }
-        LoadPluginConfig();
-        UpdatePluginDescription();
-        ModuleSelectorComboBox.SelectionChanged += ModuleSelectorComboBox_SelectionChanged;
-        PluginSelectorComboBox.SelectionChanged += PluginSelectorComboBox_SelectionChanged;
+    }
+
+    private void UpdatePluginsInSelectedModule()
+    {
+        try
+        {
+            PluginsInSelectedModule.Clear();
+            if (SelectedModule != null)
+            {
+                foreach (var plugin in SelectedModule.Plugins)
+                    PluginsInSelectedModule.Add(plugin);
+                if (PluginsInSelectedModule.Count > 0)
+                    SelectedPlugin = PluginsInSelectedModule[0];
+                else
+                    SelectedPlugin = null;
+            }
+            else
+            {
+                SelectedPlugin = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in UpdatePluginsInSelectedModule: {ex}");
+        }
     }
 
     private void ModuleSelectorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (SelectedModule != null)
+        try
         {
-            PluginsInSelectedModule = SelectedModule.Plugins;
-            if (PluginsInSelectedModule.Count > 0)
-                SelectedPlugin = PluginsInSelectedModule[0];
-            else
-                SelectedPlugin = null;
+            UpdatePluginsInSelectedModule();
             UpdatePluginDescription();
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in ModuleSelectorComboBox_SelectionChanged: {ex}");
         }
     }
 
     private void PluginSelectorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        UpdatePluginDescription();
+        try
+        {
+            UpdatePluginDescription();
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in PluginSelectorComboBox_SelectionChanged: {ex}");
+        }
     }
 
     private void UpdatePluginDescription()
     {
-        if (SelectedPlugin != null && PluginDescriptionTextBlock != null)
+        try
         {
-            PluginDescriptionTextBlock.Text = SelectedPlugin.Description ?? string.Empty;
-            if (PluginModuleTextBlock != null)
-                PluginModuleTextBlock.Text = SelectedPlugin.ModulePath ?? string.Empty;
+            if (SelectedPlugin != null && PluginDescriptionTextBlock != null)
+            {
+                PluginDescriptionTextBlock.Text = SelectedPlugin.Description ?? string.Empty;
+                if (PluginModuleTextBlock != null)
+                    PluginModuleTextBlock.Text = SelectedPlugin.ModulePath ?? string.Empty;
+            }
+            else
+            {
+                if (PluginDescriptionTextBlock != null) PluginDescriptionTextBlock.Text = string.Empty;
+                if (PluginModuleTextBlock != null) PluginModuleTextBlock.Text = string.Empty;
+            }
         }
-        else
+        catch (Exception ex)
         {
-            if (PluginDescriptionTextBlock != null) PluginDescriptionTextBlock.Text = string.Empty;
-            if (PluginModuleTextBlock != null) PluginModuleTextBlock.Text = string.Empty;
+            FindPluginCore.Logger.Instance.Log($"Exception in UpdatePluginDescription: {ex}");
         }
     }
 
@@ -140,40 +202,61 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            // Optionally log or show error
+            FindPluginCore.Logger.Instance.Log($"Exception in LoadPluginConfig: {ex}");
         }
     }
 
     private void AddPluginConfigEntry_Click(object sender, RoutedEventArgs e)
     {
-        PluginConfigEntries.Add(new PluginConfigEntryViewModel { Name = "", Path = "", Enabled = true });
+        try
+        {
+            PluginConfigEntries.Add(new PluginConfigEntryViewModel { Name = "", Path = "", Enabled = true });
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in AddPluginConfigEntry_Click: {ex}");
+        }
     }
 
     private void RemovePluginConfigEntry_Click(object sender, RoutedEventArgs e)
     {
-        if (SelectedPluginConfigEntry != null)
+        try
         {
-            PluginConfigEntries.Remove(SelectedPluginConfigEntry);
-            SelectedPluginConfigEntry = null;
+            if (SelectedPluginConfigEntry != null)
+            {
+                PluginConfigEntries.Remove(SelectedPluginConfigEntry);
+                SelectedPluginConfigEntry = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in RemovePluginConfigEntry_Click: {ex}");
         }
     }
 
     private void SavePluginConfig_Click(object sender, RoutedEventArgs e)
     {
-        if (loadedConfig == null) return;
-        loadedConfig.entries.Clear();
-        foreach (var vm in PluginConfigEntries)
-        {
-            loadedConfig.entries.Add(new PluginConfigEntry { name = vm.Name, path = vm.Path, enabled = vm.Enabled });
-        }
         try
         {
-            var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
-            manager.SaveToFile(loadedConfigPath);
+            if (loadedConfig == null) return;
+            loadedConfig.entries.Clear();
+            foreach (var vm in PluginConfigEntries)
+            {
+                loadedConfig.entries.Add(new PluginConfigEntry { name = vm.Name, path = vm.Path, enabled = vm.Enabled });
+            }
+            try
+            {
+                var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
+                manager.SaveToFile(loadedConfigPath);
+            }
+            catch (Exception ex)
+            {
+                FindPluginCore.Logger.Instance.Log($"Exception in SavePluginConfig_Click (SaveToFile): {ex}");
+            }
         }
         catch (Exception ex)
         {
-            // Optionally log or show error
+            FindPluginCore.Logger.Instance.Log($"Exception in SavePluginConfig_Click: {ex}");
         }
     }
 }
