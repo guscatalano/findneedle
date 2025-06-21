@@ -126,7 +126,10 @@ public sealed class PluginManagerTests
         var appDataFolder = FindNeedleCoreUtils.FileIO.GetAppDataFindNeedlePluginFolder();
         var outputfile = Path.Combine(appDataFolder, "fakeloadplugin_output.txt");
         Assert.IsTrue(File.Exists(outputfile));
-        Assert.IsTrue(File.ReadAllText(outputfile).Contains(output)); //We do contains, cause file contains the start time
+        var textfile = File.ReadAllText(outputfile);
+        // Normalize line endings to '\n' for both file content and output
+        string NormalizeLineEndings(string s) => s.Replace("\r\n", "\n").Replace("\r", "\n");
+        Assert.IsTrue(NormalizeLineEndings(textfile).Contains(NormalizeLineEndings(output))); //We do contains, cause file contains the start time
     }
 
     [TestMethod]

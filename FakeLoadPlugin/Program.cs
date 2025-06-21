@@ -31,7 +31,9 @@ public class Program
     static void Main(string[] args)
     {
         var logPath = GetOutputFilePath();
-        File.WriteAllText(logPath, "Starting at " + DateTime.Now.ToString() + Environment.NewLine); //Clear log file
+        var startMsg = "Starting at " + DateTime.Now.ToString() + Environment.NewLine;
+        File.WriteAllText(logPath, ""); //Clear log file
+        WriteToConsoleAndFile(startMsg);
         if (args.Count() == 0)
         {
             WriteToConsoleAndFile("No arguments were passed");
