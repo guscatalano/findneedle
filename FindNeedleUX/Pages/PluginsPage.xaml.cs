@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindPluginCore.PluginSubsystem;
 using FindPluginCore.Searching.Serializers;
@@ -34,6 +35,9 @@ public class PluginListItemViewModel
     public string ModulePath { get; set; }
     public string ClassName { get; set; }
     public PluginDescription Plugin { get; set; }
+    public List<string> ImplementedInterfaces { get; set; }
+    public string ImplementedInterfacesDisplay => ImplementedInterfaces != null && ImplementedInterfaces.Count > 0 ? string.Join(", ", ImplementedInterfaces) : "(none)";
+    public bool IsDummy { get; set; } = false;
 }
 
 public class ModuleViewModel
@@ -43,6 +47,8 @@ public class ModuleViewModel
     public bool LoadedSuccessfully { get; set; }
     public Exception LoadException { get; set; }
     public string LoadExceptionString { get; set; }
+    public int PluginCount => Plugins.Count;
+    public string DisplayName => $"{ModulePath} ({PluginCount} plugins)";
 }
 
 public sealed partial class PluginsPage : Page
@@ -62,59 +68,108 @@ public sealed partial class PluginsPage : Page
     public PluginsPage()
     {
         this.InitializeComponent();
+        ShowInitProgress(true);
+        SetMainContentEnabled(false);
+        // Run plugin initialization async so UI can update
+        _ = InitializeAsync();
+    }
 
-        // Ensure plugins are loaded before populating UI
-        MiddleLayerService.SearchQueryUX.Initialize();
-
+    private async Task InitializeAsync()
+    {
         try
         {
-            var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
-            var allModules = manager.loadedPluginsModules;
-            foreach (var module in allModules)
+            await Task.Run(() =>
             {
-                string modulePath = "Unknown";
-                if (module.dll != null)
-                    modulePath = module.dll.Location;
-                var moduleVM = new ModuleViewModel {
-                    ModulePath = modulePath,
-                    LoadedSuccessfully = module.LoadedSuccessfully,
-                    LoadException = module.LoadException,
-                    LoadExceptionString = module.LoadExceptionString
-                };
-                foreach (var plugin in module.description)
-                {
-                    try
-                    {
-                        moduleVM.Plugins.Add(new PluginListItemViewModel
-                        {
-                            Name = plugin.FriendlyName,
-                            Description = plugin.TextDescription,
-                            ModulePath = modulePath,
-                            ClassName = plugin.ClassName,
-                            Plugin = plugin
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        FindPluginCore.Logger.Instance.Log($"Exception loading plugin in PluginsPage constructor: {ex}");
-                    }
-                }
-                if (moduleVM.Plugins.Count > 0)
-                    ModulesFound.Add(moduleVM);
-            }
-            if (ModulesFound.Count > 0)
-            {
-                SelectedModule = ModulesFound[0];
-                UpdatePluginsInSelectedModule();
-            }
-            LoadPluginConfig();
-            UpdatePluginDescription();
-            ModuleSelectorComboBox.SelectionChanged += ModuleSelectorComboBox_SelectionChanged;
-            PluginSelectorComboBox.SelectionChanged += PluginSelectorComboBox_SelectionChanged;
+                // Ensure plugins are loaded before populating UI
+                MiddleLayerService.SearchQueryUX.Initialize();
+            });
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in PluginsPage constructor: {ex}");
+            FindPluginCore.Logger.Instance.Log($"Exception in PluginsPage InitializeAsync: {ex}");
+        }
+        finally
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                ShowInitProgress(false);
+                SetMainContentEnabled(true);
+                // Now run the rest of the constructor logic
+                try
+                {
+                    var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
+                    var allModules = manager.loadedPluginsModules;
+                    ModulesFound.Clear();
+                    foreach (var module in allModules)
+                    {
+                        string modulePath = "Unknown";
+                        try
+                        {
+                            if (module.dll != null)
+                                modulePath = module.dll.Location;
+                            var moduleVM = new ModuleViewModel { ModulePath = modulePath, LoadedSuccessfully = module.LoadedSuccessfully, LoadException = module.LoadException, LoadExceptionString = module.LoadExceptionString };
+                            foreach (var plugin in module.description)
+                            {
+                                try
+                                {
+                                    moduleVM.Plugins.Add(new PluginListItemViewModel
+                                    {
+                                        Name = plugin.FriendlyName,
+                                        Description = plugin.TextDescription,
+                                        ModulePath = modulePath,
+                                        ClassName = plugin.ClassName,
+                                        Plugin = plugin,
+                                        ImplementedInterfaces = plugin.ImplementedInterfacesShort
+                                    });
+                                }
+                                catch (Exception ex)
+                                {
+                                    FindPluginCore.Logger.Instance.Log($"Exception loading plugin in PluginsPage constructor: {ex}");
+                                }
+                            }
+                            if (moduleVM.Plugins.Count > 0)
+                                ModulesFound.Add(moduleVM);
+                        }
+                        catch (Exception ex)
+                        {
+                            FindPluginCore.Logger.Instance.Log($"Exception loading module in PluginsPage constructor: {ex}");
+                        }
+                    }
+                    if (ModulesFound.Count > 0)
+                    {
+                        SelectedModule = ModulesFound[0];
+                        if (ModuleSelectorComboBox != null)
+                            ModuleSelectorComboBox.SelectedItem = SelectedModule;
+                        UpdatePluginsInSelectedModule();
+                    }
+                    LoadPluginConfig();
+                    UpdatePluginDescription();
+                    ModuleSelectorComboBox.SelectionChanged += ModuleSelectorComboBox_SelectionChanged;
+                    PluginSelectorComboBox.SelectionChanged += PluginSelectorComboBox_SelectionChanged;
+                }
+                catch (Exception ex)
+                {
+                    FindPluginCore.Logger.Instance.Log($"Exception in PluginsPage constructor: {ex}");
+                }
+            });
+        }
+    }
+
+    private void ShowInitProgress(bool show)
+    {
+        if (InitProgressBar != null)
+            InitProgressBar.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SetMainContentEnabled(bool enabled)
+    {
+        if (MainContentPanel != null)
+        {
+            foreach (var child in MainContentPanel.Children)
+            {
+                if (child is Control ctrl)
+                    ctrl.IsEnabled = enabled;
+            }
         }
     }
 
@@ -128,13 +183,29 @@ public sealed partial class PluginsPage : Page
                 var plugins = hideInvalidPlugins
                     ? SelectedModule.Plugins.Where(p => p.Plugin.validPlugin)
                     : SelectedModule.Plugins;
+                bool any = false;
                 foreach (var plugin in plugins)
+                {
                     PluginsInSelectedModule.Add(plugin);
+                    any = true;
+                }
+                if (!any)
+                {
+                    PluginsInSelectedModule.Add(new PluginListItemViewModel
+                    {
+                        Name = "No valid plugins found",
+                        Description = string.Empty,
+                        ModulePath = SelectedModule.ModulePath,
+                        ClassName = string.Empty,
+                        Plugin = default,
+                        ImplementedInterfaces = new List<string>(),
+                        IsDummy = true
+                    });
+                }
                 // Always select the first plugin if available
                 if (PluginsInSelectedModule.Count > 0)
                 {
                     SelectedPlugin = PluginsInSelectedModule[0];
-                    // Explicitly set ComboBox selection to ensure UI updates
                     if (PluginSelectorComboBox != null)
                         PluginSelectorComboBox.SelectedItem = SelectedPlugin;
                 }
@@ -202,17 +273,27 @@ public sealed partial class PluginsPage : Page
             // Update plugin description/module info
             if (SelectedPlugin != null && PluginDescriptionTextBlock != null)
             {
-                PluginDescriptionTextBlock.Text = SelectedPlugin.Description ?? string.Empty;
+                if (!SelectedPlugin.IsDummy && !SelectedPlugin.Plugin.validPlugin)
+                {
+                    PluginDescriptionTextBlock.Text = "This plugin needs to implement IPluginDescription";
+                }
+                else
+                {
+                    PluginDescriptionTextBlock.Text = SelectedPlugin.Description ?? string.Empty;
+                }
                 if (PluginModuleTextBlock != null)
                     PluginModuleTextBlock.Text = SelectedPlugin.ModulePath ?? string.Empty;
                 if (PluginClassNameTextBlock != null)
                     PluginClassNameTextBlock.Text = SelectedPlugin.ClassName ?? string.Empty;
+                if (PluginInterfacesTextBlock != null)
+                    PluginInterfacesTextBlock.Text = SelectedPlugin.ImplementedInterfacesDisplay;
             }
             else
             {
                 if (PluginDescriptionTextBlock != null) PluginDescriptionTextBlock.Text = string.Empty;
                 if (PluginModuleTextBlock != null) PluginModuleTextBlock.Text = string.Empty;
                 if (PluginClassNameTextBlock != null) PluginClassNameTextBlock.Text = string.Empty;
+                if (PluginInterfacesTextBlock != null) PluginInterfacesTextBlock.Text = string.Empty;
             }
             // Update module status info
             if (SelectedModule != null)
@@ -229,6 +310,11 @@ public sealed partial class PluginsPage : Page
                 if (ModuleLoadedStatusTextBlock != null) ModuleLoadedStatusTextBlock.Text = string.Empty;
                 if (ModuleLoadExceptionTextBlock != null) ModuleLoadExceptionTextBlock.Text = string.Empty;
                 if (ModuleLoadExceptionStringTextBlock != null) ModuleLoadExceptionStringTextBlock.Text = string.Empty;
+            }
+            // Disable plugin ComboBox if only dummy entry
+            if (PluginSelectorComboBox != null)
+            {
+                PluginSelectorComboBox.IsEnabled = !(PluginsInSelectedModule.Count == 1 && PluginsInSelectedModule[0].IsDummy);
             }
         }
         catch (Exception ex)
@@ -310,6 +396,27 @@ public sealed partial class PluginsPage : Page
         catch (Exception ex)
         {
             FindPluginCore.Logger.Instance.Log($"Exception in SavePluginConfig_Click: {ex}");
+        }
+    }
+
+    private void ReloadPlugin_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (SelectedModule != null)
+            {
+                // Example: reload the module (actual implementation may vary)
+                // You may want to call PluginManager to reload the module by path
+                var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
+                // This is a placeholder for actual reload logic
+                // manager.ReloadModule(SelectedModule.ModulePath);
+                FindPluginCore.Logger.Instance.Log($"Reload requested for module: {SelectedModule.ModulePath}");
+                // Optionally, refresh the UI after reload
+            }
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in ReloadPlugin_Click: {ex}");
         }
     }
 }
