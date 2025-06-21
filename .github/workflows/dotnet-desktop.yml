@@ -47,6 +47,10 @@ on:
   pull_request:
     branches: [ "master" ]
 
+env:
+  Solution_Name: findneedle.sln
+  FindNeedleUX_Project: FindNeedleUX/FindNeedleUX.csproj
+
 jobs:
   create-release:
     needs: [build, run-tests, test-publish]
@@ -225,9 +229,6 @@ jobs:
     runs-on: windows-latest  # For a list of available runner types, refer to
                              # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
 
-    env:
-      Solution_Name: findneedle.sln              # Replace with your solution name, i.e. MyWpfApp.sln.
-
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -308,6 +309,70 @@ jobs:
         path: ${{ github.workspace }}\FindNeedleUX\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish\release.zip
         retention-days: 5
 
+  make_msix:
+    needs: [create-release, run-tests]
+    strategy:
+      matrix:
+        configuration: [Release]
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: ${{ runner.os }}-nuget-
+
+    # Install the .NET Core workload
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@v2
+
+
+    # Restore the application to populate the obj folder with RuntimeIdentifiers
+    - name: Restore the application
+      run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
+      env:
+        Configuration: ${{ matrix.configuration }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore NuGet packages
+      run: dotnet restore ${{ env.FindNeedleUX_Project }}
+
+    - name: Build solution in Release mode
+      run: dotnet build ${{ env.FindNeedleUX_Project }} -c Release
+
+    - name: Create MSIX package
+      run: |
+        msbuild ${{ env.FindNeedleUX_Project }} /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true
+
+    - name: Upload MSIX artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: FindNeedleUX-MSIX
+        path: |
+          **/AppPackages/**/*.msix
+          **/AppPackages/**/*.msixbundle
+
+
   actually_release:
     needs: [create-release, run-tests]
     strategy:
@@ -316,9 +381,6 @@ jobs:
 
     runs-on: windows-latest  # For a list of available runner types, refer to
                            # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
-
-    env:
-      Solution_Name: findneedle.sln              # Replace with your solution name, i.e. MyWpfApp.sln.
 
     steps:
     - name: Check Test Results
