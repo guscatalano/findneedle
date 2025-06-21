@@ -122,11 +122,9 @@ public sealed class PluginManagerTests
         Assert.IsNotEmpty(output);
         Assert.IsFalse(output.Equals("Output is disabled"));
 
-        var entryAssembly = Assembly.GetEntryAssembly();
-        Assert.IsNotNull(entryAssembly);
-        var workingDir = Path.GetDirectoryName(entryAssembly.Location);
-        Assert.IsNotNull(workingDir);
-        var outputfile = Path.Combine(workingDir, "fakeloadplugin_output.txt");
+        // Use FileIO to get the AppData path for the output file
+        var appDataFolder = FindNeedleCoreUtils.FileIO.GetAppDataFindNeedlePluginFolder();
+        var outputfile = Path.Combine(appDataFolder, "fakeloadplugin_output.txt");
         Assert.IsTrue(File.Exists(outputfile));
         Assert.IsTrue(File.ReadAllText(outputfile).Contains(output)); //We do contains, cause file contains the start time
     }
