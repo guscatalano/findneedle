@@ -186,6 +186,9 @@ jobs:
 
   build-release:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        platform: [x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -199,22 +202,21 @@ jobs:
           restore-keys: ${{ runner.os }}-nuget-
       - name: Restore dependencies
         run: dotnet restore ${{ env.Solution_Name }}
-      - name: Build solution (Release)
-        run: dotnet build ${{ env.Solution_Name }} --configuration Release --no-restore
-      - name: Build solution (Release, AnyCPU)
-        run: dotnet build ${{ env.Solution_Name }} --configuration Release --no-restore /p:Platform=AnyCPU
-      - name: Build solution (Release, x64)
-        run: dotnet build ${{ env.Solution_Name }} --configuration Release --no-restore /p:Platform=x64
-      - name: Publish FindNeedleUX (Release only)
-        run: dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish
-      - name: Archive Release (Release only)
+      - name: Build solution (Release, ${{ matrix.platform }})
+        run: dotnet build ${{ env.Solution_Name }} --configuration Release --no-restore /p:Platform=${{ matrix.platform }}
+      - name: Publish FindNeedleUX (Release only, x64)
+        if: matrix.platform == 'x64'
+        run: dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:Platform=x64
+      - name: Archive Release (Release only, x64)
+        if: matrix.platform == 'x64'
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: 'zip'
           directory: '${{ github.workspace }}/publish'
           filename: 'release.zip'
           exclusions: '*.git* /*node_modules/*.editorconfig'
-      - name: Upload Release bits (Release only)
+      - name: Upload Release bits (Release only, x64)
+        if: matrix.platform == 'x64'
         uses: actions/upload-artifact@v4
         with:
           name: release-bits
