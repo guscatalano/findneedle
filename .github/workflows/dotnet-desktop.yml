@@ -174,14 +174,21 @@ jobs:
           dotnet-version: 8.0.x
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v2
+      - name: Debug: Print working directory and files
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -alR
+        shell: bash
       - name: Restore all test projects
         run: |
+          cd "$GITHUB_WORKSPACE"
           for proj in $(echo '${{ needs.discover-test-projects.outputs.test_projects }}' | jq -r '.[]'); do
             dotnet restore "$proj"
           done
         shell: bash
       - name: Build all test projects with error logging
         run: |
+          cd "$GITHUB_WORKSPACE"
           set -e
           for proj in $(echo '${{ needs.discover-test-projects.outputs.test_projects }}' | jq -r '.[]'); do
             echo "Building $proj..."
