@@ -639,3 +639,19 @@ jobs:
         run: |
           Write-Host "Searching for coverage.cobertura.xml files in workspace after test run:"
           Get-ChildItem -Path ${{ github.workspace }} -Filter coverage.cobertura.xml -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+      - name: Diagnostic - List all files in TestResults after test run
+        shell: pwsh
+        run: |
+          $projDir = Split-Path "${{ matrix.test_project }}" -Parent
+          $testResultsDir = Join-Path $projDir "bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64/TestResults"
+          Write-Host "Listing all files in $testResultsDir (if exists):"
+          if (Test-Path $testResultsDir) {
+            Get-ChildItem -Path $testResultsDir -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+            Write-Host "\nContents of .log and .xml files in $testResultsDir:"
+            Get-ChildItem -Path $testResultsDir -Recurse -Include *.log,*.xml -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"
+              Get-Content $_.FullName | Write-Host
+            }
+          } else {
+            Write-Host "TestResults directory does not exist."
+          }
