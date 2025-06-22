@@ -200,6 +200,14 @@ jobs:
         name: test-results-${{ matrix.test_project }}
         path: ${{ github.workspace }}/**/TestResults/**/*.trx
         retention-days: 5
+      if: ${{ !contains(matrix.test_project, '/') }}
+    - name: Upload Test Result Files (safe name)
+      if: ${{ contains(matrix.test_project, '/') }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.test_project }}
+        path: ${{ github.workspace }}/**/TestResults/**/*.trx
+        retention-days: 5
 
     - name: Upload Coverage XML
       uses: actions/upload-artifact@v4
@@ -303,6 +311,7 @@ jobs:
         retention-days: 5
 
   make_msix_signed:
+    needs: [build]
     strategy:
       matrix:
         configuration: [Release]
@@ -324,10 +333,12 @@ jobs:
         dotnet-version: 8.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
-    - name: Restore the application
-      run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
-      env:
-        Configuration: ${{ matrix.configuration }}
+    - name: Download published output from build
+      uses: actions/download-artifact@v4
+      with:
+        name: release-bits
+        path: ${{ github.workspace }}/publish
+    # Remove redundant restore/build steps, keep only MSIX-specific build/packaging
     - name: Decode certificate from secret
       run: |
           [System.IO.File]::WriteAllBytes(
@@ -343,8 +354,6 @@ jobs:
         $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
         echo "thumbprint=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       shell: pwsh
-    - name: Build solution in Release mode
-      run: dotnet build ${{ env.FindNeedleUX_Project }} -c Release
     - name: Create MSIX package (signed)
       run: |
         msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
@@ -374,6 +383,7 @@ jobs:
           **/AppPackages/**/*.msixbundle
 
   make_msix_unsigned:
+    needs: [build]
     strategy:
       matrix:
         configuration: [Release]
@@ -395,12 +405,12 @@ jobs:
         dotnet-version: 8.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
-    - name: Restore the application
-      run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
-      env:
-        Configuration: ${{ matrix.configuration }}
-    - name: Build solution in Release mode
-      run: dotnet build ${{ env.FindNeedleUX_Project }} -c Release
+    - name: Download published output from build
+      uses: actions/download-artifact@v4
+      with:
+        name: release-bits
+        path: ${{ github.workspace }}/publish
+    # Remove redundant restore/build steps, keep only MSIX-specific build/packaging
     - name: Create MSIX package (unsigned)
       run: |
         msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false
