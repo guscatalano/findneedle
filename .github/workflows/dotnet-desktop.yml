@@ -486,6 +486,27 @@ jobs:
     - name: Debug Release Tag
       run: "echo Release tag: ${{needs.create-release.outputs.releasetag}}"
 
+    - name: Ensure release and tag do not already exist
+      run: |
+        # Install GitHub CLI if not present
+        if ! command -v gh > /dev/null; then
+          sudo apt-get update && sudo apt-get install -y gh
+        fi
+        TAG="${{needs.create-release.outputs.releasetag}}"
+        if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          echo "Release with tag $TAG exists. Deleting..."
+          gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY"
+        fi
+        if git rev-parse "$TAG" >/dev/null 2>&1; then
+          echo "Tag $TAG exists. Deleting..."
+          git push --delete origin "$TAG" || true
+          git tag -d "$TAG" || true
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      shell: bash
+
     - name: Create Release
       id: create_release
       uses:  comnoco/create-release-action@v2.0.5
