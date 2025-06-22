@@ -261,10 +261,10 @@ jobs:
         dotnet-version: 9.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
-    - name: Download test build outputs
+    - name: Download build outputs
       uses: actions/download-artifact@v4
       with:
-        name: test-build-output
+        name: build-output-Debug
         path: ./
     - name: Fail if test project does not exist
       shell: pwsh
@@ -386,8 +386,15 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore ${{ env.Solution_Name }}
 
-    - name: Build solution
+    - name: Build solution (including tests)
       run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
+    - name: Upload all build outputs
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-output-${{ matrix.configuration }}
+        path: |
+          **/bin/${{ matrix.configuration }}/
+        retention-days: 2
 
     - name: Publish FindNeedleUX (Release only)
       if: matrix.configuration == 'Release'
