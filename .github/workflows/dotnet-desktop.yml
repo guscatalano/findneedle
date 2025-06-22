@@ -171,7 +171,7 @@ jobs:
       - name: Install .NET Core
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 9.0.x
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v2
       - name: Debug Print working directory and files
@@ -179,29 +179,6 @@ jobs:
           echo "Current directory: $(pwd)"
           ls -alR
         shell: bash
-      - name: Remove .NET 9 SDKs from PATH and system
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          try {
-            $dotnetRoots = (& dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }) | Sort-Object -Unique
-            if ($dotnetRoots) {
-              foreach ($root in $dotnetRoots) {
-                Write-Host "Removing .NET 9 SDKs from $root"
-                Get-ChildItem "$root" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '9.0*' } | ForEach-Object {
-                  try {
-                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                  } catch {}
-                }
-              }
-            } else {
-              Write-Host ".NET 9 SDKs not found."
-            }
-          } catch {
-            Write-Host "Non-fatal error while removing .NET 9 SDKs: $_"
-          }
-        env:
-          DOTNET_ROLL_FORWARD: LatestMajor
       - name: Restore all test projects
         shell: pwsh
         run: |
@@ -281,7 +258,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 9.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
     - name: Download test build outputs
@@ -289,28 +266,6 @@ jobs:
       with:
         name: test-build-output
         path: ./
-    - name: Remove .NET 9 SDKs from PATH and system
-      shell: pwsh
-      run: |
-        try {
-          $dotnetRoots = (& dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }) | Sort-Object -Unique
-          if ($dotnetRoots) {
-            foreach ($root in $dotnetRoots) {
-              Write-Host "Removing .NET 9 SDKs from $root"
-              Get-ChildItem "$root" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '9.0*' } | ForEach-Object {
-                try {
-                  Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-                } catch {}
-              }
-            }
-          } else {
-            Write-Host ".NET 9 SDKs not found."
-          }
-        } catch {
-          Write-Host "Non-fatal error while removing .NET 9 SDKs: $_"
-        }
-      env:
-        DOTNET_ROLL_FORWARD: LatestMajor
     - name: Fail if test project does not exist
       shell: pwsh
       run: |
@@ -475,7 +430,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 9.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
     - name: Download published output from build
@@ -549,7 +504,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 9.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
     - name: Download published output from build
