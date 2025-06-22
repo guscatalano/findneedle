@@ -208,7 +208,7 @@ jobs:
           $testProjects = Get-Content test-projects.json | ConvertFrom-Json
           foreach ($proj in $testProjects) {
             Write-Host "Building test project: $proj"
-            dotnet build $proj --configuration Debug --framework net9.0-windows10.0.26100.0 --runtime win-x64 --output (Join-Path (Split-Path $proj -Parent) 'bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64') /p:Platform=x64
+            dotnet build $proj --configuration Debug --framework net9.0-windows10.0.26100.0 /p:Platform=x64
           }
       - name: Diagnostic - List all discovered test project bin folders after build
         shell: pwsh
