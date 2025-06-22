@@ -648,6 +648,42 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Calculate total test duration and write to file
+        shell: pwsh
+        run: |
+          $trxFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.trx -Recurse -ErrorAction SilentlyContinue
+          $totalSeconds = 0
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file.FullName
+            $results = $xml.TestRun.Results.UnitTestResult
+            foreach ($result in $results) {
+              $duration = $result.duration
+              if ($duration) {
+                $ts = [System.TimeSpan]::Parse($duration)
+                $totalSeconds += $ts.TotalSeconds
+              }
+            }
+          }
+          $totalTime = [System.TimeSpan]::FromSeconds($totalSeconds)
+          $summary = "Total test time: $($totalTime.ToString())"
+          $summary | Out-File .github/badges/test-duration.txt -NoNewline
+
+      - name: Commit and push test duration
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git fetch origin master
+          git checkout master
+          git add .github/badges/test-duration.txt
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update test duration [skip ci]"
+            git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   run-tests:
     needs: [discover-test-projects, build-debug]
     if: needs.build-debug.result == 'success'
