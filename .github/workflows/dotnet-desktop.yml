@@ -55,6 +55,7 @@ env:
   Solution_Name: findneedle.sln
   FindNeedleUX_Project: FindNeedleUX/FindNeedleUX.csproj
   GH_TOKEN: ${{ github.token }}
+  MAX_TAGS: 5
 
 jobs:
   create-release:
@@ -93,10 +94,11 @@ jobs:
           Expand-Archive ghcli.zip -DestinationPath ghcli
           $env:Path += ";$pwd\ghcli\gh_2.49.0_windows_amd64\bin"
         }
+        $maxTags = $env:MAX_TAGS
         $tags = git tag --sort=-creatordate
         $tagCount = ($tags | Measure-Object -Line).Lines
-        if ($tagCount -gt 50) {
-          $tagsToDelete = $tags | Select-Object -Skip 50
+        if ($tagCount -gt $maxTags) {
+          $tagsToDelete = $tags | Select-Object -Skip $maxTags
           foreach ($tag in $tagsToDelete) {
             Write-Host "Deleting old tag: $tag"
             git tag -d $tag
@@ -109,7 +111,7 @@ jobs:
             }
           }
         } else {
-          Write-Host "Tag count ($tagCount) is 50 or less. No tags or releases deleted."
+          Write-Host "Tag count ($tagCount) is $maxTags or less. No tags or releases deleted."
         }
       shell: pwsh
 
@@ -489,7 +491,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: FindNeedleUX-MSIX/**/*.msix
+        asset_path: FindNeedleUX-MSIX/**/*.msix*
         asset_name: FindNeedleUX-signed.msix
         asset_content_type: application/vnd.ms-appx
 
@@ -499,7 +501,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: FindNeedleUX-MSIX-unsigned/**/*.msix
+        asset_path: FindNeedleUX-MSIX-unsigned/**/*.msix*
         asset_name: FindNeedleUX-unsigned.msix
         asset_content_type: application/vnd.ms-appx
 
@@ -590,6 +592,9 @@ jobs:
     needs: test-publish
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
+    concurrency:
+      group: badges-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -613,11 +618,26 @@ jobs:
           git fetch origin master
           git checkout master
           git add .github/badges/coverage.svg
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "Update coverage badge [skip ci]"
-            git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
+          ATTEMPT=1
+          MAX_ATTEMPTS=3
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            if git diff --cached --quiet; then
+              echo "No changes to commit."
+              break
+            else
+              git commit -m "Update coverage badge [skip ci]" || true
+              git pull --rebase origin master || true
+              git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master && break
+              echo "Push failed (attempt $ATTEMPT/$MAX_ATTEMPTS), retrying after rebase..."
+              ATTEMPT=$((ATTEMPT+1))
+              sleep 3
+              git fetch origin master
+              git rebase origin/master || git rebase --skip || true
+            fi
+          done
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+            echo "Failed to push coverage badge after $MAX_ATTEMPTS attempts." >&2
+            exit 1
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -639,11 +659,26 @@ jobs:
           git fetch origin master
           git checkout master
           git add .github/badges/test-status.svg
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "Update test status badge [skip ci]"
-            git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
+          ATTEMPT=1
+          MAX_ATTEMPTS=3
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            if git diff --cached --quiet; then
+              echo "No changes to commit."
+              break
+            else
+              git commit -m "Update test status badge [skip ci]" || true
+              git pull --rebase origin master || true
+              git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master && break
+              echo "Push failed (attempt $ATTEMPT/$MAX_ATTEMPTS), retrying after rebase..."
+              ATTEMPT=$((ATTEMPT+1))
+              sleep 3
+              git fetch origin master
+              git rebase origin/master || git rebase --skip || true
+            fi
+          done
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+            echo "Failed to push test status badge after $MAX_ATTEMPTS attempts." >&2
+            exit 1
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -661,6 +696,10 @@ jobs:
               if ($duration) {
                 $ts = [System.TimeSpan]::Parse($duration)
                 $totalSeconds += $ts.TotalSeconds
+              } elseif ($result.startTime -and $result.endTime) {
+                $start = [datetime]::Parse($result.startTime)
+                $end = [datetime]::Parse($result.endTime)
+                $totalSeconds += ($end - $start).TotalSeconds
               }
             }
           }
@@ -668,18 +707,45 @@ jobs:
           $summary = "Total test time: $($totalTime.ToString())"
           $summary | Out-File .github/badges/test-duration.txt -NoNewline
 
-      - name: Commit and push test duration
+      - name: Generate test duration badge
+        shell: pwsh
+        run: |
+          $durationText = Get-Content .github/badges/test-duration.txt -Raw
+          $duration = $durationText -replace 'Total test time: ', ''
+          # Format for badge (e.g., 01:23:45 or 83s)
+          $badgeValue = $duration.Trim()
+          if ($badgeValue -eq '00:00:00') { $badgeValue = '0s' }
+          $color = '#007ec6'
+          $svg = "<svg xmlns='http://www.w3.org/2000/svg' width='140' height='20'><linearGradient id='b' x2='0' y2='100%'><stop offset='0' stop-color='#bbb' stop-opacity='.1'/><stop offset='1' stop-opacity='.1'/></linearGradient><rect rx='3' width='140' height='20' fill='#555'/><rect rx='3' x='80' width='60' height='20' fill='$color'/><path fill='$color' d='M80 0h4v20h-4z'/><rect rx='3' width='140' height='20' fill='url(#b)'/><g fill='#fff' text-anchor='middle' font-family='Verdana,Geneva,DejaVu Sans,sans-serif' font-size='11'><text x='40' y='15' fill='#010101' fill-opacity='.3'>test duration</text><text x='40' y='14'>test duration</text><text x='110' y='15' fill='#010101' fill-opacity='.3'>$badgeValue</text><text x='110' y='14'>$badgeValue</text></g></svg>"
+          $svg | Out-File .github/badges/test-duration.svg -NoNewline
+
+      - name: Commit and push test duration badge
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git fetch origin master
           git checkout master
-          git add .github/badges/test-duration.txt
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "Update test duration [skip ci]"
-            git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
+          git add .github/badges/test-duration.svg
+          ATTEMPT=1
+          MAX_ATTEMPTS=3
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            if git diff --cached --quiet; then
+              echo "No changes to commit."
+              break
+            else
+              git commit -m "Update test duration badge [skip ci]" || true
+              git pull --rebase origin master || true
+              git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master && break
+              echo "Push failed (attempt $ATTEMPT/$MAX_ATTEMPTS), retrying after rebase..."
+              ATTEMPT=$((ATTEMPT+1))
+              sleep 3
+              git fetch origin master
+              git rebase origin/master || git rebase --skip || true
+            fi
+          done
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+            echo "Failed to push test duration badge after $MAX_ATTEMPTS attempts." >&2
+            exit 1
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
