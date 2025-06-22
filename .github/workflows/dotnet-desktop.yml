@@ -170,7 +170,7 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore ${{ env.Solution_Name }}
       - name: Build solution (Debug)
-        run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore
+        run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore /p:Platform=x64 --runtime win-x64
       - name: Upload all build outputs (Debug)
         uses: actions/upload-artifact@v4
         with:
@@ -474,7 +474,7 @@ jobs:
       - name: Run tests and collect coverage
         id: testrun
         run: |
-          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
+          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage" --runtime win-x64 /p:Platform=x64
       - name: Set Safe Artifact Name
         id: safe_name
         run: |
