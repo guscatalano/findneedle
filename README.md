@@ -2,6 +2,7 @@
 
 [![Code Coverage](https://github.com/guscatalano/findneedle/raw/master/.github/badges/coverage.svg)](https://github.com/guscatalano/findneedle/actions/workflows/dotnet-desktop.yml)
 ![Test Status](https://github.com/guscatalano/findneedle/raw/master/.github/badges/test-status.svg)
+![Test Duration](https://github.com/guscatalano/findneedle/raw/master/.github/badges/test-duration.svg)
 
 **A tool to quickly search through logs in Windows.**
 
