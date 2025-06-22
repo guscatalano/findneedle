@@ -629,3 +629,13 @@ jobs:
           name: coverage-${{ steps.safe_name.outputs.safe_name }}
           path: ${{ github.workspace }}/**/TestResults/**/coverage.cobertura.xml
           retention-days: 5
+      - name: Diagnostic - List all coverage.cobertura.xml files in workspace
+        shell: pwsh
+        run: |
+          Write-Host "Searching for all coverage.cobertura.xml files in workspace:"
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter coverage.cobertura.xml -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+      - name: Diagnostic - List all coverage.cobertura.xml files after test run
+        shell: pwsh
+        run: |
+          Write-Host "Searching for coverage.cobertura.xml files in workspace after test run:"
+          Get-ChildItem -Path ${{ github.workspace }} -Filter coverage.cobertura.xml -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
