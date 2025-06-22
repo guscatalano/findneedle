@@ -214,7 +214,7 @@ jobs:
               Write-Host "Warning: Test project $normproj does not exist, skipping build."
             }
           }
-          $json = $builtProjects | ConvertTo-Json
+          $json = $builtProjects | ConvertTo-Json -Compress
           Write-Host "Built test projects: $json"
           echo "built_test_projects=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       - name: Upload test build outputs
