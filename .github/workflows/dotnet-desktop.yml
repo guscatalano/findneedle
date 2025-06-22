@@ -50,6 +50,7 @@ on:
 env:
   Solution_Name: findneedle.sln
   FindNeedleUX_Project: FindNeedleUX/FindNeedleUX.csproj
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   create-release:
