@@ -426,6 +426,16 @@ jobs:
       with:
         name: release-bits
 
+    - name: Download signed MSIX artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: FindNeedleUX-MSIX
+
+    - name: Download unsigned MSIX artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: FindNeedleUX-MSIX-unsigned
+
     - name: Debug Release Tag
       run: "echo Release tag: ${{needs.create-release.outputs.releasetag}}"
 
@@ -469,9 +479,29 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release-bits/release.zip
+        asset_path: release.zip
         asset_name: release.zip
         asset_content_type: application/zip
+
+    - name: Upload Signed MSIX Artifact
+      uses: sekwah41/upload-release-assets@v1.1.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: FindNeedleUX-MSIX/*.msix
+        asset_name: FindNeedleUX-signed.msix
+        asset_content_type: application/vnd.ms-appx
+
+    - name: Upload Unsigned MSIX Artifact
+      uses: sekwah41/upload-release-assets@v1.1.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: FindNeedleUX-MSIX-unsigned/*.msix
+        asset_name: FindNeedleUX-unsigned.msix
+        asset_content_type: application/vnd.ms-appx
 
 
   test-publish:
