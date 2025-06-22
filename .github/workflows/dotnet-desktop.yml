@@ -202,13 +202,13 @@ jobs:
         with:
           name: test-projects-list
           path: .
-      - name: Build all discovered test projects (Debug, x64, net9.0-windows10.0.26100.0)
+      - name: Build all discovered test projects (Debug, x64, net8.0-windows10.0.19041.0)
         shell: pwsh
         run: |
           $testProjects = Get-Content test-projects.json | ConvertFrom-Json
           foreach ($proj in $testProjects) {
             Write-Host "Building test project: $proj"
-            dotnet build $proj --configuration Debug --framework net9.0-windows10.0.26100.0
+            dotnet build $proj --configuration Debug --framework net8.0-windows10.0.19041.0
           }
       - name: Diagnostic - List all discovered test project bin folders after build
         shell: pwsh
@@ -228,7 +228,7 @@ jobs:
         run: |
           for %%f in (*Tests\*.csproj) do (
             echo Building %%f ...
-            dotnet build "%%f" --configuration Debug --framework net9.0-windows10.0.26100.0 --runtime win-x64 --output "%%~dpfbin\x64\Debug\net9.0-windows10.0.26100.0\win-x64" /p:Platform=x64
+            dotnet build "%%f" --configuration Debug --framework net8.0-windows10.0.19041.0 --runtime win-x64 --output "%%~dpfbin\x64\Debug\net8.0-windows10.0.19041.0\win-x64" /p:Platform=x64
             echo Result for %%f: %ERRORLEVEL%
           )
         shell: cmd
@@ -298,7 +298,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.x
+        dotnet-version: 8.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
     - name: Download published output from build
@@ -372,7 +372,7 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.x
+        dotnet-version: 8.0.x
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
     - name: Download published output from build
@@ -562,7 +562,7 @@ jobs:
       - name: Install .NET Core
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 8.0.x
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v2
       - name: Download build outputs
@@ -582,7 +582,7 @@ jobs:
         run: |
           $projName = [System.IO.Path]::GetFileNameWithoutExtension("${{ matrix.test_project }}")
           $projDir = Split-Path -Parent "${{ matrix.test_project }}"
-          $dllPath = Join-Path $projDir "bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64"
+          $dllPath = Join-Path $projDir "bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64"
           Write-Host "Listing DLLs in $dllPath for $projName"
           if (Test-Path $dllPath) {
             Get-ChildItem -Path $dllPath -Filter "*.dll" | ForEach-Object { $_.FullName }
@@ -595,7 +595,7 @@ jobs:
           $projPath = "${{ matrix.test_project }}"
           $projDir = Split-Path $projPath -Parent
           $dllName = (Split-Path $projPath -LeafBase) + ".dll"
-          $outDir = Join-Path $projDir "bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64"
+          $outDir = Join-Path $projDir "bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64"
           Write-Host "Looking for test DLL: $dllName in ${outDir}"
           if (Test-Path $outDir) {
             Get-ChildItem -Path $outDir -Filter $dllName -Recurse | ForEach-Object { $_.FullName }
@@ -608,7 +608,7 @@ jobs:
         id: testrun
         continue-on-error: true
         run: |
-          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
+          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage" --framework net8.0-windows10.0.19041.0
       - name: Set Safe Artifact Name
         id: safe_name
         shell: pwsh
@@ -643,7 +643,7 @@ jobs:
         shell: pwsh
         run: |
           $projDir = Split-Path "${{ matrix.test_project }}" -Parent
-          $testResultsDir = Join-Path $projDir "bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64/TestResults"
+          $testResultsDir = Join-Path $projDir "bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64/TestResults"
           Write-Host "Listing all files in $testResultsDir (if exists):"
           if (Test-Path $testResultsDir) {
             Get-ChildItem -Path $testResultsDir -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
