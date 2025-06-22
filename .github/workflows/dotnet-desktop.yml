@@ -181,13 +181,24 @@ jobs:
         shell: bash
       - name: Remove .NET 9 SDKs from PATH and system
         shell: pwsh
+        continue-on-error: true
         run: |
-          $dotnetRoot = & dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }
-          if ($dotnetRoot) {
-            Write-Host "Removing .NET 9 SDKs from $dotnetRoot"
-            Get-ChildItem "$dotnetRoot" -Directory | Where-Object { $_.Name -like '9.0*' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          } else {
-            Write-Host ".NET 9 SDKs not found."
+          try {
+            $dotnetRoots = (& dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }) | Sort-Object -Unique
+            if ($dotnetRoots) {
+              foreach ($root in $dotnetRoots) {
+                Write-Host "Removing .NET 9 SDKs from $root"
+                Get-ChildItem "$root" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '9.0*' } | ForEach-Object {
+                  try {
+                    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                  } catch {}
+                }
+              }
+            } else {
+              Write-Host ".NET 9 SDKs not found."
+            }
+          } catch {
+            Write-Host "Non-fatal error while removing .NET 9 SDKs: $_"
           }
         env:
           DOTNET_ROLL_FORWARD: LatestMajor
@@ -281,12 +292,22 @@ jobs:
     - name: Remove .NET 9 SDKs from PATH and system
       shell: pwsh
       run: |
-        $dotnetRoot = & dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }
-        if ($dotnetRoot) {
-          Write-Host "Removing .NET 9 SDKs from $dotnetRoot"
-          Get-ChildItem "$dotnetRoot" -Directory | Where-Object { $_.Name -like '9.0*' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        } else {
-          Write-Host ".NET 9 SDKs not found."
+        try {
+          $dotnetRoots = (& dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }) | Sort-Object -Unique
+          if ($dotnetRoots) {
+            foreach ($root in $dotnetRoots) {
+              Write-Host "Removing .NET 9 SDKs from $root"
+              Get-ChildItem "$root" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '9.0*' } | ForEach-Object {
+                try {
+                  Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                } catch {}
+              }
+            }
+          } else {
+            Write-Host ".NET 9 SDKs not found."
+          }
+        } catch {
+          Write-Host "Non-fatal error while removing .NET 9 SDKs: $_"
         }
       env:
         DOTNET_ROLL_FORWARD: LatestMajor
