@@ -146,6 +146,7 @@ jobs:
           TEST_PROJECTS=$(find . -type f -name "*.csproj" | grep -i 'Tests/' | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "Found test projects: $TEST_PROJECTS"
           echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
+          echo "::notice::Discovered test projects: $TEST_PROJECTS"
       - name: Set matrix output
         id: set-matrix
         run: |
