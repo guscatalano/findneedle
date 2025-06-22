@@ -438,6 +438,19 @@ jobs:
       with:
         name: FindNeedleUX-MSIX-unsigned
 
+    - name: Unzip unsigned MSIX artifact if zipped
+      shell: pwsh
+      run: |
+        $zipPath = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.zip'
+        $destDir = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned'
+        if (Test-Path $zipPath) {
+          Write-Host "Extracting $zipPath to $destDir ..."
+          if (!(Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
+          Expand-Archive -Path $zipPath -DestinationPath $destDir -Force
+        } else {
+          Write-Host "No FindNeedleUX-MSIX-unsigned.zip found, skipping extraction."
+        }
+
     - name: List all files in FindNeedleUX-MSIX-unsigned after download
       shell: pwsh
       run: |
@@ -450,6 +463,11 @@ jobs:
         foreach ($file in $files) {
           Copy-Item $file.FullName -Destination FindNeedleUX-MSIX-unsigned -Force
         }
+    - name: List all files in FindNeedleUX-MSIX-unsigned after flattening
+      shell: pwsh
+      run: |
+        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after flattening:"
+        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
     - name: Debug Release Tag
       run: "echo Release tag: ${{needs.create-release.outputs.releasetag}}"
 
