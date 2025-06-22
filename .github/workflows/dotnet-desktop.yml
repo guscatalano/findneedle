@@ -179,28 +179,46 @@ jobs:
           echo "Current directory: $(pwd)"
           ls -alR
         shell: bash
+      - name: Remove .NET 9 SDKs from PATH and system
+        shell: pwsh
+        run: |
+          $dotnetRoot = & dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }
+          if ($dotnetRoot) {
+            Write-Host "Removing .NET 9 SDKs from $dotnetRoot"
+            Get-ChildItem "$dotnetRoot" -Directory | Where-Object { $_.Name -like '9.0*' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          } else {
+            Write-Host ".NET 9 SDKs not found."
+          }
+        env:
+          DOTNET_ROLL_FORWARD: LatestMajor
       - name: Restore all test projects
+        shell: pwsh
         run: |
-          for proj in $(echo '${{ needs.discover-test-projects.outputs.test_projects }}' | jq -r '.[]'); do
-            if [ -f "$proj" ]; then
-              dotnet restore "$proj"
-            else
-              echo "Warning: Test project $proj does not exist, skipping restore."
-            fi
-          done
-        shell: bash
+          $testProjects = ConvertFrom-Json @'${{ needs.discover-test-projects.outputs.test_projects }}'@
+          foreach ($proj in $testProjects) {
+            $normproj = $proj -replace '^\\./', '' -replace '/', '\\'
+            $resolved = Get-ChildItem -Path . -Recurse -Filter (Split-Path $normproj -Leaf) | Where-Object { $_.FullName -like "*${normproj.Replace('\\','*')}" } | Select-Object -First 1
+            if ($resolved) {
+              Write-Host "Restoring $($resolved.FullName)"
+              dotnet restore "$($resolved.FullName)"
+            } else {
+              Write-Host "Warning: Test project $normproj does not exist, skipping restore."
+            }
+          }
       - name: Build all test projects with error logging
+        shell: pwsh
         run: |
-          set -e
-          for proj in $(echo '${{ needs.discover-test-projects.outputs.test_projects }}' | jq -r '.[]'); do
-            if [ -f "$proj" ]; then
-              echo "Building $proj..."
-              dotnet build "$proj" --configuration Debug --no-restore --output "$(dirname $proj)/bin/Debug" 2>&1 | tee "$(dirname $proj)/build.log"
-            else
-              echo "Warning: Test project $proj does not exist, skipping build."
-            fi
-          done
-        shell: bash
+          $testProjects = ConvertFrom-Json @'${{ needs.discover-test-projects.outputs.test_projects }}'@
+          foreach ($proj in $testProjects) {
+            $normproj = $proj -replace '^\\./', '' -replace '/', '\\'
+            $resolved = Get-ChildItem -Path . -Recurse -Filter (Split-Path $normproj -Leaf) | Where-Object { $_.FullName -like "*${normproj.Replace('\\','*')}" } | Select-Object -First 1
+            if ($resolved) {
+              Write-Host "Building $($resolved.FullName)"
+              dotnet build "$($resolved.FullName)" --configuration Debug --no-restore --output "$(Split-Path $($resolved.FullName) -Parent)\bin\Debug" 2>&1 | Tee-Object -FilePath "$(Split-Path $($resolved.FullName) -Parent)\build.log"
+            } else {
+              Write-Host "Warning: Test project $normproj does not exist, skipping build."
+            }
+          }
       - name: Upload test build outputs
         uses: actions/upload-artifact@v4
         with:
@@ -250,6 +268,18 @@ jobs:
       with:
         name: test-build-output
         path: ./
+    - name: Remove .NET 9 SDKs from PATH and system
+      shell: pwsh
+      run: |
+        $dotnetRoot = & dotnet --list-sdks | Select-String '9.0.' | ForEach-Object { $_.ToString().Split('[')[1].Trim('] ') }
+        if ($dotnetRoot) {
+          Write-Host "Removing .NET 9 SDKs from $dotnetRoot"
+          Get-ChildItem "$dotnetRoot" -Directory | Where-Object { $_.Name -like '9.0*' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        } else {
+          Write-Host ".NET 9 SDKs not found."
+        }
+      env:
+        DOTNET_ROLL_FORWARD: LatestMajor
     - name: Run tests and collect coverage
       id: testrun
       run: |
