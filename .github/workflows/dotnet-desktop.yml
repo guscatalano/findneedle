@@ -572,7 +572,7 @@ jobs:
     - name: Fail if no unsigned MSIX files found
       shell: pwsh
       run: |
-        $files = Get-ChildItem -Path 'FindNeedleUX-MSIX-unsigned' -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue
+        $files = Get-ChildItem -Path '.' -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue
         Write-Host "Found $($files.Count) files in FindNeedleUX-MSIX-unsigned/*.msix*"
         if ($files.Count -eq 0) {
           Write-Host "::error::No unsigned MSIX files found to upload!"
@@ -584,7 +584,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: FindNeedleUX-MSIX-unsigned/*.msix*
+        asset_path: '**/*.msix*'
         asset_name: FindNeedleUX-unsigned.msix
         asset_content_type: application/vnd.ms-appx
         
