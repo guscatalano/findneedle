@@ -170,36 +170,47 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Cache NuGet packages
         uses: actions/cache@v3
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
-
       - name: Restore dependencies
         run: dotnet restore ${{ env.Solution_Name }}
-
-      - name: Build solution (Debug, parallel)
-        run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore /m
-
-      # Revert to the previous approach: publish only test projects, not all projects
+      - name: Build solution (Debug)
+        run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore
+      - name: Publish all projects (Debug, x64)
+        run: |
+          for %%f in (*.csproj) do (
+            for /f "usebackq tokens=*" %%t in (`powershell -Command "try { (Select-String -Path '%%f' -Pattern '<TargetFramework>(.+)</TargetFramework>' | Select-Object -First 1).Matches[0].Groups[1].Value } catch { '' }"`) do (
+              if not "%%t"=="" dotnet publish "%%f" --configuration Debug --framework %%t --output "%%~dpfbin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            )
+          )
+          for %%f in (*\*.csproj) do (
+            for /f "usebackq tokens=*" %%t in (`powershell -Command "try { (Select-String -Path '%%f' -Pattern '<TargetFramework>(.+)</TargetFramework>' | Select-Object -First 1).Matches[0].Groups[1].Value } catch { '' }"`) do (
+              if not "%%t"=="" dotnet publish "%%f" --configuration Debug --framework %%t --output "%%~dpfbin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            )
+          )
+          for %%f in (*\*\*.csproj) do (
+            for /f "usebackq tokens=*" %%t in (`powershell -Command "try { (Select-String -Path '%%f' -Pattern '<TargetFramework>(.+)</TargetFramework>' | Select-Object -First 1).Matches[0].Groups[1].Value } catch { '' }"`) do (
+              if not "%%t"=="" dotnet publish "%%f" --configuration Debug --framework %%t --output "%%~dpfbin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            )
+          )
+        shell: cmd
       - name: Download discovered test project list
         uses: actions/download-artifact@v4
         with:
           name: test-projects-list
           path: .
-
-      - name: Publish test projects (Debug, x64)
+      - name: Build all discovered test projects (Debug, x64, net8.0-windows10.0.19041.0)
         shell: pwsh
         run: |
           $testProjects = Get-Content test-projects.json | ConvertFrom-Json
           foreach ($proj in $testProjects) {
-            Write-Host "Publishing $proj"
-            dotnet publish $proj --configuration Debug --output "$(Split-Path $proj -Parent)\bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            Write-Host "Building test project: $proj"
+            dotnet build $proj --configuration Debug --framework net8.0-windows10.0.19041.0
           }
-
       - name: Diagnostic - List all discovered test project bin folders after build
         shell: pwsh
         run: |
@@ -209,15 +220,26 @@ jobs:
             Write-Host "Project: $proj"
             Get-ChildItem -Path $bindir -Recurse -ErrorAction SilentlyContinue | Write-Host
           }
-
-      - name: Upload published outputs for test projects (Debug)
+      - name: Diagnostic - List all test project csproj files
+        run: |
+          echo Listing all test project csproj files:
+          dir /b /s *.csproj | findstr /i Tests
+        shell: cmd
+      - name: Diagnostic - Build each test project and echo output
+        run: |
+          for %%f in (*Tests\*.csproj) do (
+            echo Building %%f ...
+            dotnet build "%%f" --configuration Debug --framework net8.0-windows10.0.19041.0 --runtime win-x64 --output "%%~dpfbin\x64\Debug\net8.0-windows10.0.19041.0\win-x64" /p:Platform=x64
+            echo Result for %%f: %ERRORLEVEL%
+          )
+        shell: cmd
+      - name: Upload all build outputs (Debug)
         uses: actions/upload-artifact@v4
         with:
           name: build-output-Debug
-          path: |
-            ${{ github.workspace }}/**/bin/x64/Debug/publish
+          path: .
           retention-days: 2
-
+          
   build-release:
     runs-on: windows-latest
     strategy:
