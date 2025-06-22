@@ -40,6 +40,24 @@ public sealed partial class ResultsWebPage : Page
         }
     }
 
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        // Dispose and release the WebView2 control when navigating away
+        try
+        {
+            if (MyWebView != null)
+            {
+                MyWebView.CoreWebView2?.Stop();
+                MyWebView.Source = null;
+                // No Dispose method, so set Source to null and remove event handlers
+                MyWebView.NavigationCompleted -= null; // Remove all handlers if possible
+                MyWebView.CoreWebView2.WebMessageReceived -= MessageReceived;
+            }
+        }
+        catch { }
+    }
+
     private async void Init()
     {
         try

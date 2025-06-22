@@ -1,4 +1,4 @@
-﻿<html>
+﻿<html id="htmlRoot">
 <head>
     <script>
 
@@ -8,8 +8,16 @@
             const payload = event.data;
 
             if (payload.verb === 'setTheme') {
+
                 document.body.style.backgroundColor = payload.data.background;
                 document.body.style.color = payload.data.foreground;
+                // Set data-bs-theme on html node for dark mode
+                var htmlNode = document.getElementById('htmlRoot');
+                if (payload.data.background && payload.data.background.toLowerCase() !== '#ffffff' && payload.data.background.toLowerCase() !== '#fff') {
+                    htmlNode.setAttribute('data-bs-theme', 'dark');
+                } else {
+                    htmlNode.setAttribute('data-bs-theme', 'light');
+                }
             }
 
             if (payload.verb === 'newresult') {
@@ -25,12 +33,14 @@
             if (payload.verb === 'done') {
                 //table.draw(false);
                 document.getElementById("tablediv").style.visibility = "visible";
+                document.getElementById("tablediv").style.display = "block";
                 document.getElementById("loader").style.display = "none";
                 table.draw(false);
             }
         });
 
         function codeAddress() {
+            document.getElementById("tablediv").style.display = "none";
             window.table = new DataTable('#myTable', {
                 columns: [
                     { title: "Index", data: "Index" },
@@ -95,7 +105,7 @@
     <link href="datatables.min.css" rel="stylesheet">
     <button onclick="redrawTable()">Redraw Table</button>
     Toggle column: <a class="toggle-vis" data-column="0">Index</a> - <a class="toggle-vis" data-column="1">Time</a> - <a class="toggle-vis" data-column="2">Provider</a> - <a class="toggle-vis" data-column="3">TaskName</a> - <a class="toggle-vis" data-column="4">Message</a> - <a class="toggle-vis" data-column="5">Source</a>
-    <div id="tablediv">
+    <div id="tablediv" style="display:none;">
         <script src="datatables.min.js"></script>
         <table id="myTable" class="display">
             <thead>
