@@ -205,6 +205,7 @@ jobs:
 
   run-tests:
     needs: [discover-test-projects, build-tests]
+    if: needs.build-tests.result == 'success'
     strategy:
       matrix:
         test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
@@ -402,6 +403,8 @@ jobs:
         name: release-bits
         path: ${{ github.workspace }}/publish
     # Remove redundant restore/build steps, keep only MSIX-specific build/packaging
+    - name: Restore NuGet packages for MSIX packaging
+      run: dotnet restore ${{ env.FindNeedleUX_Project }}
     - name: Decode certificate from secret
       run: |
           [System.IO.File]::WriteAllBytes(
@@ -474,6 +477,8 @@ jobs:
         name: release-bits
         path: ${{ github.workspace }}/publish
     # Remove redundant restore/build steps, keep only MSIX-specific build/packaging
+    - name: Restore NuGet packages for MSIX packaging
+      run: dotnet restore ${{ env.FindNeedleUX_Project }}
     - name: Create MSIX package (unsigned)
       run: |
         msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false
