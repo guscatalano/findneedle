@@ -888,15 +888,4 @@ jobs:
               Get-Content $file.FullName | Write-Host
             }
           }
-      - name: Diagnostic - List all files in FindNeedleUX-MSIX-unsigned before upload
-        run: |
-          echo "Listing all files in FindNeedleUX-MSIX-unsigned before upload:"
-          find FindNeedleUX-MSIX-unsigned || true
-          ls -lR FindNeedleUX-MSIX-unsigned || true
-      - name: Upload MSIX artifact (unsigned)
-        uses: actions/upload-artifact@v4
-        with:
-          name: FindNeedleUX-MSIX-unsigned
-          path: |
-            **/AppPackages/**/*.msix
-            **/AppPackages/**/*.msixbundle
+     
