@@ -153,6 +153,14 @@ jobs:
             exit 1
           fi
           echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
+      - name: Write discovered test projects to file
+        run: |
+          echo '${{ steps.find-tests.outputs.test_projects }}' > test-projects.json
+      - name: Upload discovered test project list
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-projects-list
+          path: test-projects.json
 
   build-debug:
     runs-on: windows-latest
