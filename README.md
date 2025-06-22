@@ -73,4 +73,4 @@ Processors take the raw input data and apply transformations or analyses. This c
 #### Outputs
 
 Outputs handle the final presentation or export of processed data.
-
+
