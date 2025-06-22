@@ -133,7 +133,7 @@ jobs:
   discover-test-projects:
     runs-on: ubuntu-latest
     outputs:
-      test_projects: ${{ steps.set-matrix.outputs.test_projects }}
+      test_projects: ${{ steps.find-tests.outputs.test_projects }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -145,12 +145,12 @@ jobs:
           # Find all .csproj files that look like test projects (by convention, in folders ending with 'Tests')
           TEST_PROJECTS=$(find . -type f -name "*.csproj" | grep -i 'Tests/' | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "Found test projects: $TEST_PROJECTS"
-          echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
           echo "::notice::Discovered test projects: $TEST_PROJECTS"
-      - name: Set matrix output
-        id: set-matrix
-        run: |
-          echo "test_projects=${{ steps.find-tests.outputs.test_projects }}" >> $GITHUB_OUTPUT
+          if [ "$TEST_PROJECTS" = "[]" ]; then
+            echo "::error::No test projects discovered. Failing the job."
+            exit 1
+          fi
+          echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
 
   run-tests:
     needs: discover-test-projects
