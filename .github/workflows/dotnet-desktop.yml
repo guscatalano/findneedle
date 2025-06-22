@@ -173,7 +173,19 @@ jobs:
         run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore
       - name: Publish all projects (Debug, x64)
         run: |
-          for %%f in (*.csproj *\*.csproj *\*\*.csproj) do (
+          for %%f in (*.csproj) do (
+            for /f "usebackq tokens=*" %%t in (`powershell -Command "Select-String -Path '%%f' -Pattern '<TargetFramework>(.+)</TargetFramework>' | ForEach-Object { $_.Matches[0].Groups[1].Value }"") do (
+              set "projdir=%%~dpf"
+              dotnet publish "%%f" --configuration Debug --framework %%t --output "%%projdir%bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            )
+          )
+          for %%f in (*\*.csproj) do (
+            for /f "usebackq tokens=*" %%t in (`powershell -Command "Select-String -Path '%%f' -Pattern '<TargetFramework>(.+)</TargetFramework>' | ForEach-Object { $_.Matches[0].Groups[1].Value }"") do (
+              set "projdir=%%~dpf"
+              dotnet publish "%%f" --configuration Debug --framework %%t --output "%%projdir%bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            )
+          )
+          for %%f in (*\*\*.csproj) do (
             for /f "usebackq tokens=*" %%t in (`powershell -Command "Select-String -Path '%%f' -Pattern '<TargetFramework>(.+)</TargetFramework>' | ForEach-Object { $_.Matches[0].Groups[1].Value }"") do (
               set "projdir=%%~dpf"
               dotnet publish "%%f" --configuration Debug --framework %%t --output "%%projdir%bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
@@ -268,7 +280,10 @@ jobs:
       shell: pwsh
     - name: Create MSIX package (signed)
       run: |
-        msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
+        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish \
+          /p:UapAppxPackageBuildMode=StoreUpload \
+          /p:GenerateAppxPackageOnBuild=true \
+          /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
       shell: pwsh
     - name: Remove signing certificate from cert store
       if: always()
@@ -327,7 +342,10 @@ jobs:
       run: dotnet restore ${{ env.FindNeedleUX_Project }}
     - name: Create MSIX package (unsigned)
       run: |
-        msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false
+        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish \
+          /p:UapAppxPackageBuildMode=StoreUpload \
+          /p:GenerateAppxPackageOnBuild=true \
+          /p:AppxPackageSigningEnabled=false
       shell: pwsh
     - name: Upload MSIX artifact (unsigned)
       uses: actions/upload-artifact@v4
@@ -444,7 +462,7 @@ jobs:
 
   run-tests:
     needs: [discover-test-projects, build-debug]
-    if: always()
+    if: needs.build-debug.result == 'success'
     strategy:
       matrix:
         test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
