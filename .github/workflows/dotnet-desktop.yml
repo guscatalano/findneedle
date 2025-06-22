@@ -57,8 +57,8 @@ env:
 
 jobs:
   create-release:
-    needs: [build-release, run-tests]
-    if: needs.run-tests.result == 'success'
+    needs: [build-release, test-publish]
+    if: needs.test-publish.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
@@ -397,7 +397,7 @@ jobs:
 
 
   actually_release:
-    needs: [create-release]
+    needs: [create-release, test-publish]
     if: needs.create-release.result == 'success'
     strategy:
       matrix:
