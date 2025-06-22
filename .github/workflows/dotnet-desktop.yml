@@ -205,9 +205,11 @@ jobs:
       - name: Restore all test projects
         shell: pwsh
         run: |
-          $testProjects = ConvertFrom-Json @'${{ needs.discover-test-projects.outputs.test_projects }}'@
+          $testProjects = ConvertFrom-Json @'
+${{ needs.discover-test-projects.outputs.test_projects }}
+'@
           foreach ($proj in $testProjects) {
-            $normproj = $proj -replace '^\\./', '' -replace '/', '\\'
+            $normproj = $proj -replace '^\./', '' -replace '/', '\\'
             $resolved = Get-ChildItem -Path . -Recurse -Filter (Split-Path $normproj -Leaf) | Where-Object { $_.FullName -like "*${normproj.Replace('\\','*')}" } | Select-Object -First 1
             if ($resolved) {
               Write-Host "Restoring $($resolved.FullName)"
@@ -220,10 +222,12 @@ jobs:
         id: build_tests
         shell: pwsh
         run: |
-          $testProjects = ConvertFrom-Json @'${{ needs.discover-test-projects.outputs.test_projects }}'@
+          $testProjects = ConvertFrom-Json @'
+${{ needs.discover-test-projects.outputs.test_projects }}
+'@
           $builtProjects = @()
           foreach ($proj in $testProjects) {
-            $normproj = $proj -replace '^\./', '' -replace '/', '\'
+            $normproj = $proj -replace '^\./', '' -replace '/', '\\'
             $resolved = Get-ChildItem -Path . -Recurse -Filter (Split-Path $normproj -Leaf) | Where-Object { $_.FullName -like "*${normproj.Replace('\\','*')}" } | Select-Object -First 1
             if ($resolved) {
               Write-Host "Building $($resolved.FullName)"
