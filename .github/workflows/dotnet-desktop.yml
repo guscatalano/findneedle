@@ -441,16 +441,21 @@ jobs:
     - name: Unzip unsigned MSIX artifact if zipped
       shell: pwsh
       run: |
-        $zipPath = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.zip'
+        $rootZip = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.zip'
+        $dirZip = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned/FindNeedleUX-MSIX-unsigned.zip'
         $destDir = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned'
-        if (Test-Path $zipPath) {
-          Write-Host "Extracting $zipPath to $destDir ..."
+        if (Test-Path $rootZip) {
+          Write-Host "Extracting $rootZip to $destDir ..."
           if (!(Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
-          Expand-Archive -Path $zipPath -DestinationPath $destDir -Force
+          Expand-Archive -Path $rootZip -DestinationPath $destDir -Force
+          Remove-Item $rootZip -Force
+        } elseif (Test-Path $dirZip) {
+          Write-Host "Extracting $dirZip to $destDir ..."
+          Expand-Archive -Path $dirZip -DestinationPath $destDir -Force
+          Remove-Item $dirZip -Force
         } else {
-          Write-Host "No FindNeedleUX-MSIX-unsigned.zip found, skipping extraction."
+          Write-Host "No FindNeedleUX-MSIX-unsigned.zip found in root or artifact directory, skipping extraction."
         }
-
     - name: List all files in FindNeedleUX-MSIX-unsigned after download
       shell: pwsh
       run: |
