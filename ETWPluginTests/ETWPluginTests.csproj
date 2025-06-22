@@ -25,7 +25,9 @@
 
 
 <ItemGroup>
-     
+     <Content Include="..\LogETWApp\bin\$(Configuration)\$(TargetFramework)\LogETWApp.exe" Link="TestDependencies\LogETWApp.exe">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="..\LogETWApp\bin\$(Configuration)\$(TargetFramework)\LogETWApp.dll" Link="TestDependencies\LogETWApp.dll">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
