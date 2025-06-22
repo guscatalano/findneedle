@@ -501,7 +501,12 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v2.16.1
         if: always()
         with:
-          trx_files: "**/*.trx"
+          trx_files: |
+            **/*.trx
+            */**/TestResults/*.trx
+            */**/merged-results/*.trx
+            */**/TestResults/**/*.trx
+            */**/merged-results/**/*.trx
 
   update-badges:
     needs: test-publish
