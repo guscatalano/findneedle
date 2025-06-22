@@ -387,7 +387,7 @@ jobs:
       run: dotnet restore ${{ env.Solution_Name }}
 
     - name: Build solution
-      run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore --no-build-tests
+      run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
 
     - name: Publish FindNeedleUX (Release only)
       if: matrix.configuration == 'Release'
