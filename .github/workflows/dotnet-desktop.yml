@@ -199,6 +199,18 @@ jobs:
           name: build-output-Debug
           path: .
           retention-days: 2
+      - name: List test DLLs after build (diagnostic)
+        run: |
+          echo "Listing test DLLs in all test project output directories after build:"
+          for %%f in (*Tests/*.csproj) do (
+            set "proj=%%~dpf"
+            set "dllname=%%~nf.dll"
+            set "outdir=%%~dpfbin\x64\Debug\net9.0-windows10.0.26100.0\win-x64"
+            echo Checking for !dllname! in !outdir! ...
+            dir /b /s "!outdir!\!dllname!"
+            dir /b /s "!outdir!"
+          )
+        shell: cmd
 
   build-release:
     runs-on: windows-latest
@@ -549,6 +561,33 @@ jobs:
           if (-not (Test-Path "${{ matrix.test_project }}")) {
             Write-Host "Test project ${{ matrix.test_project }} was not built or does not exist. Failing."
             exit 1
+          }
+      - name: List test DLLs in output directory
+        shell: pwsh
+        run: |
+          $projName = [System.IO.Path]::GetFileNameWithoutExtension("${{ matrix.test_project }}")
+          $projDir = Split-Path -Parent "${{ matrix.test_project }}"
+          $dllPath = Join-Path $projDir "bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64"
+          Write-Host "Listing DLLs in $dllPath for $projName"
+          if (Test-Path $dllPath) {
+            Get-ChildItem -Path $dllPath -Filter "*.dll" | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "Directory $dllPath does not exist!"
+          }
+      - name: List test DLLs before running tests (diagnostic)
+        shell: pwsh
+        run: |
+          $projPath = "${{ matrix.test_project }}"
+          $projDir = Split-Path $projPath -Parent
+          $dllName = (Split-Path $projPath -LeafBase) + ".dll"
+          $outDir = Join-Path $projDir "bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64"
+          Write-Host "Looking for test DLL: $dllName in $outDir"
+          if (Test-Path $outDir) {
+            Get-ChildItem -Path $outDir -Filter $dllName -Recurse | ForEach-Object { $_.FullName }
+            Write-Host "Directory listing for $outDir:"
+            Get-ChildItem -Path $outDir -Recurse | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "Output directory $outDir does not exist."
           }
       - name: Run tests and collect coverage
         id: testrun
