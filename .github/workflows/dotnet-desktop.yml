@@ -622,11 +622,12 @@ jobs:
           dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage" --runtime win-x64 /p:Platform=x64
       - name: Set Safe Artifact Name
         id: safe_name
+        shell: pwsh
         run: |
-          SAFE_NAME="${{ matrix.test_project }}"
-          SAFE_NAME="${SAFE_NAME//\//-}"
-          SAFE_NAME="${SAFE_NAME//\\/-}"
-          echo "safe_name=$SAFE_NAME" >> $GITHUB_OUTPUT
+          $SAFE_NAME = "${{ matrix.test_project }}"
+          $SAFE_NAME = $SAFE_NAME -replace '/', '-'
+          $SAFE_NAME = $SAFE_NAME -replace '\\', '-'
+          echo "safe_name=$SAFE_NAME" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       - name: Upload Test Result Files
         uses: actions/upload-artifact@v4
         with:
