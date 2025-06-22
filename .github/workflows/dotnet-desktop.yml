@@ -327,7 +327,8 @@ jobs:
 
 
   actually_release:
-    needs: [create-release, build-release]
+    needs: [create-release, run-tests, build-release]
+    if: needs.run-tests.result == 'success'
     strategy:
       matrix:
         configuration: [Release]
@@ -394,7 +395,7 @@ jobs:
 
 
   update-badges:
-    needs: build-debug
+    needs: run-tests
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
     steps:
