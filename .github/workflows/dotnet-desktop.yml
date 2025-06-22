@@ -72,8 +72,9 @@ jobs:
         fetch-depth: 0
 
     # Remove older tags and releases if there are more than 50
-    - name: Remove older tags and releases if more than 50 exist
-      if: github.ref == 'refs/heads/master'
+    - name: Remove older tags and releases if more than 50 exist (skip if workflow changed)
+      if: github.ref == 'refs/heads/master' && !contains(steps.get_changed_files.outputs.changed_files, '.github/workflows/dotnet-desktop.yml')
+      id: remove_old_tags
       run: |
         $ErrorActionPreference = 'Stop'
         # Install GitHub CLI if not present
@@ -102,7 +103,9 @@ jobs:
         }
       shell: pwsh
 
-    - name: Create an incremental release
+    # Only create a release/tag if workflow file was not changed
+    - name: Create an incremental release (skip if workflow changed)
+      if: github.ref == 'refs/heads/master' && !contains(steps.get_changed_files.outputs.changed_files, '.github/workflows/dotnet-desktop.yml')
       uses: aurestic/incrementarl-create-release@master
       with:
         flag_branch: true
@@ -111,6 +114,13 @@ jobs:
         update_odoo_module_version: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # Get changed files for this commit
+    - name: Get changed files
+      id: get_changed_files
+      uses: tj-actions/changed-files@v44
+      with:
+        separator: ','
       
     - name: 'Get Previous tag'
       id: currenttag
