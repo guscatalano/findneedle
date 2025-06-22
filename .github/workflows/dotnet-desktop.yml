@@ -438,23 +438,39 @@ jobs:
       with:
         name: FindNeedleUX-MSIX-unsigned
 
-    - name: Unzip unsigned MSIX artifact if zipped
+    # No unzip step needed: actions/download-artifact@v4 extracts the artifact automatically if it is a zip or folder.
+    # The .msix and .msixbundle files should be present inside FindNeedleUX-MSIX-unsigned after download.
+    - name: List all files in FindNeedleUX-MSIX-unsigned after download
       shell: pwsh
       run: |
-        $rootZip = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.zip'
-        $dirZip = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned/FindNeedleUX-MSIX-unsigned.zip'
-        $destDir = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned'
-        if (Test-Path $rootZip) {
-          Write-Host "Extracting $rootZip to $destDir ..."
-          if (!(Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
-          Expand-Archive -Path $rootZip -DestinationPath $destDir -Force
-          Remove-Item $rootZip -Force
-        } elseif (Test-Path $dirZip) {
-          Write-Host "Extracting $dirZip to $destDir ..."
-          Expand-Archive -Path $dirZip -DestinationPath $destDir -Force
-          Remove-Item $dirZip -Force
-        } else {
-          Write-Host "No FindNeedleUX-MSIX-unsigned.zip found in root or artifact directory, skipping extraction."
+        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after download:"
+        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
+    - name: Diagnostic - List all files and folders in workspace after unsigned MSIX download
+      shell: pwsh
+      run: |
+        Write-Host "Listing all files and folders in current directory after unsigned MSIX artifact download:"
+        Get-ChildItem -Path . -Recurse | ForEach-Object { $_.FullName }
+    # Handle both directory and single file artifact cases
+    - name: Ensure FindNeedleUX-MSIX-unsigned directory exists and contains MSIX files
+      shell: pwsh
+      run: |
+        $artifactDir = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned'
+        $artifactFile = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.msix'
+        $artifactZip = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.zip'
+        if (!(Test-Path $artifactDir)) {
+          if (Test-Path $artifactFile) {
+            Write-Host "Found single MSIX file, creating directory and moving file."
+            New-Item -ItemType Directory -Path $artifactDir | Out-Null
+            Move-Item $artifactFile -Destination $artifactDir
+          } elseif (Test-Path $artifactZip) {
+            Write-Host "Found single zip file, extracting to directory."
+            New-Item -ItemType Directory -Path $artifactDir | Out-Null
+            Expand-Archive -Path $artifactZip -DestinationPath $artifactDir -Force
+            Remove-Item $artifactZip -Force
+          } else {
+            Write-Host "::error::No FindNeedleUX-MSIX-unsigned directory, .msix, or .zip file found after download!"
+            exit 1
+          }
         }
     - name: List all files in FindNeedleUX-MSIX-unsigned after download
       shell: pwsh
