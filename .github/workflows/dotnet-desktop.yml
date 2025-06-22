@@ -570,6 +570,10 @@ jobs:
         with:
           name: build-output-Debug
           path: .
+      - name: Restore NuGet packages for test project
+        shell: pwsh
+        run: |
+          dotnet restore ${{ matrix.test_project }}
       - name: Fail if test project does not exist
         shell: pwsh
         run: |
