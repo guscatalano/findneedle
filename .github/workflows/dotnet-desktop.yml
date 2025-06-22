@@ -179,17 +179,28 @@ jobs:
           for proj in $(echo ${{ needs.discover-test-projects.outputs.test_projects }} | jq -r '.[]'); do
             dotnet restore "$proj"
           done
-      - name: Build all test projects
+        shell: bash
+      - name: Build all test projects with error logging
         run: |
+          set -e
           for proj in $(echo ${{ needs.discover-test-projects.outputs.test_projects }} | jq -r '.[]'); do
-            dotnet build "$proj" --configuration Debug --no-restore --output "$(dirname $proj)/bin/Debug"
+            echo "Building $proj..."
+            dotnet build "$proj" --configuration Debug --no-restore --output "$(dirname $proj)/bin/Debug" 2>&1 | tee "$(dirname $proj)/build.log"
           done
+        shell: bash
       - name: Upload test build outputs
         uses: actions/upload-artifact@v4
         with:
           name: test-build-output
           path: |
             **/bin/Debug/
+          retention-days: 2
+      - name: Upload test build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build-logs
+          path: '**/build.log'
           retention-days: 2
 
   run-tests:
