@@ -287,10 +287,7 @@ jobs:
       shell: pwsh
     - name: Create MSIX package (signed)
       run: |
-        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish \
-          /p:UapAppxPackageBuildMode=StoreUpload \
-          /p:GenerateAppxPackageOnBuild=true \
-          /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
+        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
       shell: pwsh
     - name: Remove signing certificate from cert store
       if: always()
@@ -349,10 +346,7 @@ jobs:
       run: dotnet restore ${{ env.FindNeedleUX_Project }}
     - name: Create MSIX package (unsigned)
       run: |
-        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish \
-          /p:UapAppxPackageBuildMode=StoreUpload \
-          /p:GenerateAppxPackageOnBuild=true \
-          /p:AppxPackageSigningEnabled=false
+        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false
       shell: pwsh
     - name: Upload MSIX artifact (unsigned)
       uses: actions/upload-artifact@v4
