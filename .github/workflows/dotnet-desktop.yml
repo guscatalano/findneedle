@@ -171,9 +171,9 @@ jobs:
         run: dotnet restore ${{ env.Solution_Name }}
       - name: Build solution (Debug)
         run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore
-      - name: Publish all test projects (Debug, x64)
+      - name: Publish all projects (Debug, x64)
         run: |
-          for %f in (BasicFiltersTests\*.csproj BasicOutputsTests\*.csproj CoreTests\*.csproj ETWPluginTests\*.csproj EventLogPluginTests\*.csproj WatsonPluginTests\*.csproj ZipFilePluginTests\*.csproj) do dotnet publish "%f" --configuration Debug --output "$(dirname %f)\bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+          for %f in (*.csproj *\*.csproj *\*\*.csproj) do dotnet publish "%f" --configuration Debug --output "%~dpf\bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
         shell: cmd
       - name: Upload all build outputs (Debug)
         uses: actions/upload-artifact@v4
