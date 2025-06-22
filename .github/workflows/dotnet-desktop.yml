@@ -619,7 +619,7 @@ jobs:
       - name: Run tests and collect coverage
         id: testrun
         run: |
-          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage" --runtime win-x64 /p:Platform=x64
+          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
       - name: Set Safe Artifact Name
         id: safe_name
         shell: pwsh
