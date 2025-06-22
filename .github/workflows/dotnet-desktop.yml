@@ -238,18 +238,6 @@ jobs:
           name: build-output-Debug
           path: .
           retention-days: 2
-      - name: List test DLLs after build (diagnostic)
-        run: |
-          echo "Listing test DLLs in all test project output directories after build:"
-          for %%f in (*Tests/*.csproj) do (
-            set "proj=%%~dpf"
-            set "dllname=%%~nf.dll"
-            set "outdir=%%~dpfbin\x64\Debug\net9.0-windows10.0.26100.0\win-x64"
-            echo Checking for !dllname! in !outdir! ...
-            dir /b /s "!outdir!\!dllname!"
-            dir /b /s "!outdir!"
-          )
-        shell: cmd
 
   build-release:
     runs-on: windows-latest
