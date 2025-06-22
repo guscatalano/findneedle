@@ -70,6 +70,37 @@ jobs:
       with:
         fetch-depth: 0
 
+    # Remove older tags and releases if there are more than 50
+    - name: Remove older tags and releases if more than 50 exist
+      if: github.ref == 'refs/heads/master'
+      run: |
+        $ErrorActionPreference = 'Stop'
+        # Install GitHub CLI if not present
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+          Invoke-WebRequest -Uri "https://github.com/cli/cli/releases/download/v2.49.0/gh_2.49.0_windows_amd64.zip" -OutFile "ghcli.zip"
+          Expand-Archive ghcli.zip -DestinationPath ghcli
+          $env:Path += ";$pwd\ghcli\gh_2.49.0_windows_amd64\bin"
+        }
+        $tags = git tag --sort=-creatordate
+        $tagCount = ($tags | Measure-Object -Line).Lines
+        if ($tagCount -gt 50) {
+          $tagsToDelete = $tags | Select-Object -Skip 50
+          foreach ($tag in $tagsToDelete) {
+            Write-Host "Deleting old tag: $tag"
+            git tag -d $tag
+            git push --delete origin $tag
+            try {
+              gh release delete $tag --yes
+              Write-Host "Deleted release for tag: $tag"
+            } catch {
+              Write-Host "No release found for tag: $tag or failed to delete."
+            }
+          }
+        } else {
+          Write-Host "Tag count ($tagCount) is 50 or less. No tags or releases deleted."
+        }
+      shell: pwsh
+
     - name: Create an incremental release
       uses: aurestic/incrementarl-create-release@master
       with:
