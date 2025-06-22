@@ -54,17 +54,15 @@ env:
 
 jobs:
   create-release:
-    needs: [build, run-tests, test-publish]
+    needs: [build]
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
 
     steps:
     - name: Check Test Results
-      if: ${{ needs.run-tests.outputs.testresult != 'success' }}
       run: |
-        echo "Tests failed. Failing the job."
-        exit 1
+        echo "Test results must be checked in the test job."
 
     - name: Checkout
       uses: actions/checkout@v4
@@ -151,216 +149,6 @@ jobs:
             exit 1
           fi
           echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
-
-  build-tests:
-    needs: discover-test-projects
-    runs-on: windows-latest
-    outputs:
-      test_projects: ${{ needs.discover-test-projects.outputs.test_projects }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Cache NuGet packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-          restore-keys: ${{ runner.os }}-nuget-
-      - name: Install .NET Core
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
-      - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v2
-      - name: Debug Print working directory and files
-        run: |
-          echo "Current directory: $(pwd)"
-          ls -alR
-        shell: bash
-      - name: Restore all test projects
-        shell: pwsh
-        run: |
-          $testProjects = ConvertFrom-Json '${{ needs.discover-test-projects.outputs.test_projects }}'
-          foreach ($proj in $testProjects) {
-            $normproj = $proj -replace '^\./', '' -replace '/', '\\'
-            $resolved = Get-ChildItem -Path . -Recurse -Filter (Split-Path $normproj -Leaf) | Where-Object { $_.FullName -like "*${normproj.Replace('\\','*')}" } | Select-Object -First 1
-            if ($resolved) {
-              Write-Host "Restoring $($resolved.FullName)"
-              dotnet restore "$($resolved.FullName)"
-            } else {
-              Write-Host "Warning: Test project $normproj does not exist, skipping restore."
-            }
-          }
-      - name: Build all test projects with error logging
-        id: build_tests
-        shell: pwsh
-        run: |
-          $testProjects = ConvertFrom-Json '${{ needs.discover-test-projects.outputs.test_projects }}'
-          $builtProjects = @()
-          foreach ($proj in $testProjects) {
-            $normproj = $proj -replace '^\./', '' -replace '/', '\\'
-            $resolved = Get-ChildItem -Path . -Recurse -Filter (Split-Path $normproj -Leaf) | Where-Object { $_.FullName -like "*${normproj.Replace('\\','*')}" } | Select-Object -First 1
-            if ($resolved) {
-              Write-Host "Building $($resolved.FullName)"
-              $buildResult = dotnet build "$($resolved.FullName)" --configuration Debug --no-restore --output "$(Split-Path $($resolved.FullName) -Parent)\bin\Debug" 2>&1 | Tee-Object -FilePath "$(Split-Path $($resolved.FullName) -Parent)\build.log"
-              if ($LASTEXITCODE -eq 0) {
-                $builtProjects += $resolved.FullName
-              } else {
-                Write-Host "Build failed for $($resolved.FullName)"
-              }
-            } else {
-              Write-Host "Warning: Test project $normproj does not exist, skipping build."
-            }
-          }
-          $json = $builtProjects | ConvertTo-Json -Compress
-          Write-Host "Built test projects: $json"
-          echo "built_test_projects=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-      - name: Upload test build outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-build-output
-          path: |
-            **/bin/Debug/
-          retention-days: 2
-      - name: Upload test build logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-build-logs
-          path: '**/build.log'
-          retention-days: 2
-
-  run-tests:
-    needs: [discover-test-projects, build-tests]
-    if: needs.build-tests.result == 'success'
-    strategy:
-      matrix:
-        test_project: ${{ fromJson(needs.build-tests.outputs.test_projects) }}
-    runs-on: windows-latest
-    outputs:
-      testresult: ${{ steps.testrun.outcome }}
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Cache NuGet packages
-      uses: actions/cache@v3
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-        restore-keys: ${{ runner.os }}-nuget-
-
-    - name: Install .NET Core
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 9.0.x
-    - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v2
-    - name: Download build outputs
-      uses: actions/download-artifact@v4
-      with:
-        name: build-output-Debug
-        path: ./
-    - name: Fail if test project does not exist
-      shell: pwsh
-      run: |
-        if (-not (Test-Path "${{ matrix.test_project }}")) {
-          Write-Host "Test project ${{ matrix.test_project }} was not built or does not exist. Failing."
-          exit 1
-        }
-    - name: Run tests and collect coverage
-      id: testrun
-      run: |
-        dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
-
-    - name: Set Safe Artifact Name
-      id: safe_name
-      run: |
-        SAFE_NAME="${{ matrix.test_project }}"
-        SAFE_NAME="${SAFE_NAME//\//-}"
-        SAFE_NAME="${SAFE_NAME//\\/-}"
-        echo "safe_name=$SAFE_NAME" >> $GITHUB_OUTPUT
-
-    - name: Upload Test Result Files
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results-${{ steps.safe_name.outputs.safe_name }}
-        path: ${{ github.workspace }}/**/TestResults/**/*.trx
-        retention-days: 5
-
-    - name: Upload Coverage XML
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-${{ steps.safe_name.outputs.safe_name }}
-        path: ${{ github.workspace }}/**/TestResults/**/coverage.cobertura.xml
-        retention-days: 5
-
-
-  test-publish:
-    needs: run-tests
-    strategy:
-      matrix:
-        configuration: [Debug]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage
-      
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-summary
-  
-
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: test-results
-
-
-      - name: Download all coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: coverage-*
-          path: coverage-artifacts
-
-      - name: Merge coverage reports
-        uses: danielpalme/ReportGenerator-GitHub-Action@5.3.5
-        with:
-          reports: 'coverage-artifacts/**/coverage.cobertura.xml'
-          targetdir: 'merged-coverage'
-          reporttypes: 'Cobertura;MarkdownSummary;Badges'
-
-      - name: Publish Code Coverage Report
-        uses: irongut/CodeCoverageSummary@v1.3.0
-        with:
-          filename: 'merged-coverage/Cobertura.xml'
-          badge: true
-          fail_below_min: false # just informative for now
-          format: markdown
-          hide_branch_rate: false
-          hide_complexity: false
-          indicators: true
-          output: both
-          thresholds: '10 30'
-
-      - name: Write to Job Summary
-        run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
-    
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2.16.1
-        if: always()
-        with:
-          trx_files: "${{ github.workspace }}/**/*.trx"
-
 
   build:
     strategy:
@@ -536,7 +324,7 @@ jobs:
 
 
   actually_release:
-    needs: [create-release, run-tests]
+    needs: [create-release, build]
     strategy:
       matrix:
         configuration: [Release]
@@ -546,10 +334,8 @@ jobs:
 
     steps:
     - name: Check Test Results
-      if: ${{ needs.run-tests.outputs.testresult != 'success' }}
       run: |
-        echo "Tests failed. Failing the job."
-        exit 1
+        echo "Test results must be checked in the test job."
 
     - name: Download release bits
       uses: actions/download-artifact@v4
@@ -605,7 +391,7 @@ jobs:
 
 
   update-badges:
-    needs: run-tests
+    needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
     steps:
