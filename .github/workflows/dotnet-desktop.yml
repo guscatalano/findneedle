@@ -438,56 +438,28 @@ jobs:
       with:
         name: FindNeedleUX-MSIX-unsigned
 
+    # Copy all .msix/.msixbundle files from AppPackages to the root of FindNeedleUX-MSIX-unsigned
+    - name: Copy unsigned MSIX files to artifact root
+      shell: pwsh
+      run: |
+        $srcPattern = Join-Path 'FindNeedleUX-MSIX-unsigned' '*/AppPackages/*/*.msix*'
+        $files = Get-ChildItem -Path $srcPattern -Recurse -ErrorAction SilentlyContinue
+        foreach ($file in $files) {
+          Copy-Item $file.FullName -Destination 'FindNeedleUX-MSIX-unsigned' -Force
+        }
+
+    - name: List all files in FindNeedleUX-MSIX-unsigned after copying
+      shell: pwsh
+      run: |
+        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after copying MSIX files to root:"
+        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
+
     # No unzip step needed: actions/download-artifact@v4 extracts the artifact automatically if it is a zip or folder.
     # The .msix and .msixbundle files should be present inside FindNeedleUX-MSIX-unsigned after download.
     - name: List all files in FindNeedleUX-MSIX-unsigned after download
       shell: pwsh
       run: |
         Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after download:"
-        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
-    - name: Diagnostic - List all files and folders in workspace after unsigned MSIX download
-      shell: pwsh
-      run: |
-        Write-Host "Listing all files and folders in current directory after unsigned MSIX artifact download:"
-        Get-ChildItem -Path . -Recurse | ForEach-Object { $_.FullName }
-    # Handle both directory and single file artifact cases
-    - name: Ensure FindNeedleUX-MSIX-unsigned directory exists and contains MSIX files
-      shell: pwsh
-      run: |
-        $artifactDir = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned'
-        $artifactFile = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.msix'
-        $artifactZip = Join-Path $PWD 'FindNeedleUX-MSIX-unsigned.zip'
-        if (!(Test-Path $artifactDir)) {
-          if (Test-Path $artifactFile) {
-            Write-Host "Found single MSIX file, creating directory and moving file."
-            New-Item -ItemType Directory -Path $artifactDir | Out-Null
-            Move-Item $artifactFile -Destination $artifactDir
-          } elseif (Test-Path $artifactZip) {
-            Write-Host "Found single zip file, extracting to directory."
-            New-Item -ItemType Directory -Path $artifactDir | Out-Null
-            Expand-Archive -Path $artifactZip -DestinationPath $artifactDir -Force
-            Remove-Item $artifactZip -Force
-          } else {
-            Write-Host "::error::No FindNeedleUX-MSIX-unsigned directory, .msix, or .zip file found after download!"
-            exit 1
-          }
-        }
-    - name: List all files in FindNeedleUX-MSIX-unsigned after download
-      shell: pwsh
-      run: |
-        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after download:"
-        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
-    - name: Flatten unsigned MSIX files to artifact root
-      shell: pwsh
-      run: |
-        $files = Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue
-        foreach ($file in $files) {
-          Copy-Item $file.FullName -Destination FindNeedleUX-MSIX-unsigned -Force
-        }
-    - name: List all files in FindNeedleUX-MSIX-unsigned after flattening
-      shell: pwsh
-      run: |
-        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after flattening:"
         Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
     - name: Debug Release Tag
       run: "echo Release tag: ${{needs.create-release.outputs.releasetag}}"
