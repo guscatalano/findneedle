@@ -184,20 +184,21 @@ jobs:
       - name: Build solution (Debug, parallel)
         run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore /m
 
-      - name: Publish all projects (Debug, x64)
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path . -Recurse -Filter *.csproj | ForEach-Object {
-            $proj = $_.FullName
-            Write-Host "Publishing $proj"
-            dotnet publish $proj --configuration Debug --output "$($_.DirectoryName)\bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
-          }
-
+      # Revert to the previous approach: publish only test projects, not all projects
       - name: Download discovered test project list
         uses: actions/download-artifact@v4
         with:
           name: test-projects-list
           path: .
+
+      - name: Publish test projects (Debug, x64)
+        shell: pwsh
+        run: |
+          $testProjects = Get-Content test-projects.json | ConvertFrom-Json
+          foreach ($proj in $testProjects) {
+            Write-Host "Publishing $proj"
+            dotnet publish $proj --configuration Debug --output "$(Split-Path $proj -Parent)\bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+          }
 
       - name: Diagnostic - List all discovered test project bin folders after build
         shell: pwsh
