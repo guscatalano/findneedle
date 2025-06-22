@@ -25,22 +25,17 @@
 	  <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
-  <PropertyGroup>
-    
-    <WindowsAppSDKWinUI>true</WindowsAppSDKWinUI>
-    
-    <ApplicationIcon>Square44x44Logo.scale-200.ico</ApplicationIcon>
-    
-    <Title>Find Needle</Title>
-    
-    <Authors>Gus Catalano</Authors>
-    
-    <Version>0.0.1</Version>
-    
+  <PropertyGroup Condition="'$(AppxPackageSigningEnabled)' != 'false'">
     <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
-    
     <PackageCertificateThumbprint>735D3C00542E608B9F30374C33E3BFD5846B15D1</PackageCertificateThumbprint>
-    
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <WindowsAppSDKWinUI>true</WindowsAppSDKWinUI>
+    <ApplicationIcon>Square44x44Logo.scale-200.ico</ApplicationIcon>
+    <Title>Find Needle</Title>
+    <Authors>Gus Catalano</Authors>
+    <Version>0.0.1</Version>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms> <!-- Workaround for https://github.com/unoplatform/uno/discussions/13569 -->				
   </PropertyGroup>
   <ItemGroup>
