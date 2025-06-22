@@ -189,9 +189,40 @@ jobs:
             )
           )
         shell: cmd
-      - name: Build all test projects (Debug, x64, net9.0-windows10.0.26100.0)
+      - name: Download discovered test project list
+        uses: actions/download-artifact@v4
+        with:
+          name: test-projects-list
+          path: .
+      - name: Build all discovered test projects (Debug, x64, net9.0-windows10.0.26100.0)
+        shell: pwsh
         run: |
-          for %%f in (*Tests/*.csproj) do dotnet build "%%f" --configuration Debug --framework net9.0-windows10.0.26100.0 --runtime win-x64 --output "%%~dpfbin\x64\Debug\net9.0-windows10.0.26100.0\win-x64" /p:Platform=x64
+          $testProjects = Get-Content test-projects.json | ConvertFrom-Json
+          foreach ($proj in $testProjects) {
+            Write-Host "Building test project: $proj"
+            dotnet build $proj --configuration Debug --framework net9.0-windows10.0.26100.0 --runtime win-x64 --output (Join-Path (Split-Path $proj -Parent) 'bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64') /p:Platform=x64
+          }
+      - name: Diagnostic - List all discovered test project bin folders after build
+        shell: pwsh
+        run: |
+          $testProjects = Get-Content test-projects.json | ConvertFrom-Json
+          foreach ($proj in $testProjects) {
+            $bindir = Join-Path (Split-Path $proj -Parent) 'bin'
+            Write-Host "Project: $proj"
+            Get-ChildItem -Path $bindir -Recurse -ErrorAction SilentlyContinue | Write-Host
+          }
+      - name: Diagnostic - List all test project csproj files
+        run: |
+          echo Listing all test project csproj files:
+          dir /b /s *Tests\*.csproj
+        shell: cmd
+      - name: Diagnostic - Build each test project and echo output
+        run: |
+          for %%f in (*Tests\*.csproj) do (
+            echo Building %%f ...
+            dotnet build "%%f" --configuration Debug --framework net9.0-windows10.0.26100.0 --runtime win-x64 --output "%%~dpfbin\x64\Debug\net9.0-windows10.0.26100.0\win-x64" /p:Platform=x64
+            echo Result for %%f: %ERRORLEVEL%
+          )
         shell: cmd
       - name: Upload all build outputs (Debug)
         uses: actions/upload-artifact@v4
