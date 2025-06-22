@@ -438,6 +438,18 @@ jobs:
       with:
         name: FindNeedleUX-MSIX-unsigned
 
+    - name: List all files in FindNeedleUX-MSIX-unsigned after download
+      shell: pwsh
+      run: |
+        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after download:"
+        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
+    - name: Flatten unsigned MSIX files to artifact root
+      shell: pwsh
+      run: |
+        $files = Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue
+        foreach ($file in $files) {
+          Copy-Item $file.FullName -Destination FindNeedleUX-MSIX-unsigned -Force
+        }
     - name: Debug Release Tag
       run: "echo Release tag: ${{needs.create-release.outputs.releasetag}}"
 
@@ -474,6 +486,15 @@ jobs:
         prerelease: true
   
   
+    - name: Fail if no release.zip found
+      shell: pwsh
+      run: |
+        $files = Get-ChildItem -Path '.' -Recurse -Include release.zip -ErrorAction SilentlyContinue
+        Write-Host "Found $($files.Count) release.zip files."
+        if ($files.Count -eq 0) {
+          Write-Host "::error::No release.zip file found to upload!"
+          exit 1
+        }
     - name: Upload Release Asset
       id: upload-release-asset 
       uses: sekwah41/upload-release-assets@v1.1.0
@@ -485,24 +506,43 @@ jobs:
         asset_name: release.zip
         asset_content_type: application/zip
 
-    - name: Upload Signed MSIX Artifact
-      uses: sekwah41/upload-release-assets@v1.1.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: FindNeedleUX-MSIX/**/*.msix*
-        asset_name: FindNeedleUX-signed.msix
-        asset_content_type: application/vnd.ms-appx
-
+   
+    - name: Fail if no unsigned MSIX files found
+      shell: pwsh
+      run: |
+        $files = Get-ChildItem -Path 'FindNeedleUX-MSIX-unsigned' -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue
+        Write-Host "Found $($files.Count) files in FindNeedleUX-MSIX-unsigned/*.msix*"
+        if ($files.Count -eq 0) {
+          Write-Host "::error::No unsigned MSIX files found to upload!"
+          exit 1
+        }
     - name: Upload Unsigned MSIX Artifact
       uses: sekwah41/upload-release-assets@v1.1.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: FindNeedleUX-MSIX-unsigned/**/*.msix*
+        asset_path: FindNeedleUX-MSIX-unsigned/*.msix*
         asset_name: FindNeedleUX-unsigned.msix
+        asset_content_type: application/vnd.ms-appx
+        
+    - name: Fail if no signed MSIX files found
+      shell: pwsh
+      run: |
+        $files = Get-ChildItem -Path 'FindNeedleUX-MSIX' -Recurse -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue
+        Write-Host "Found $($files.Count) files in FindNeedleUX-MSIX/**/*.msix*"
+        if ($files.Count -eq 0) {
+          Write-Host "::error::No signed MSIX files found to upload!"
+          exit 1
+        }
+    - name: Upload Signed MSIX Artifact
+      uses: sekwah41/upload-release-assets@v1.1.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: FindNeedleUX-MSIX/*.msix*
+        asset_name: FindNeedleUX-signed.msix
         asset_content_type: application/vnd.ms-appx
 
 
