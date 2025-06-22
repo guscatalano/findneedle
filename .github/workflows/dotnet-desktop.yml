@@ -693,13 +693,30 @@ jobs:
             $results = $xml.TestRun.Results.UnitTestResult
             foreach ($result in $results) {
               $duration = $result.duration
+              $startTime = $result.startTime
+              $endTime = $result.endTime
+              Write-Host "File: $($file.FullName) | duration: $duration | startTime: $startTime | endTime: $endTime"
               if ($duration) {
-                $ts = [System.TimeSpan]::Parse($duration)
-                $totalSeconds += $ts.TotalSeconds
-              } elseif ($result.startTime -and $result.endTime) {
-                $start = [datetime]::Parse($result.startTime)
-                $end = [datetime]::Parse($result.endTime)
-                $totalSeconds += ($end - $start).TotalSeconds
+                try {
+                  $ts = [System.TimeSpan]::Parse($duration)
+                  $totalSeconds += $ts.TotalSeconds
+                } catch {
+                  if ($duration -match '^[0-9.]+$') {
+                    $totalSeconds += [double]$duration
+                  } else {
+                    Write-Host "Could not parse duration: $duration"
+                  }
+                }
+              } elseif ($startTime -and $endTime) {
+                try {
+                  $start = [datetime]::Parse($startTime)
+                  $end = [datetime]::Parse($endTime)
+                  $totalSeconds += ($end - $start).TotalSeconds
+                } catch {
+                  Write-Host "Could not parse startTime/endTime: $startTime / $endTime"
+                }
+              } else {
+                Write-Host "No duration or start/end time for this result."
               }
             }
           }
