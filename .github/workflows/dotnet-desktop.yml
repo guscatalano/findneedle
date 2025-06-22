@@ -130,10 +130,32 @@ jobs:
         fallback: 1.0.0 # Optional fallback tag to use when no tag can be found
         #workingDirectory: another/path/where/a/git/repo/is/checked/out # Optional alternative working directory
 
+  discover-test-projects:
+    runs-on: ubuntu-latest
+    outputs:
+      test_projects: ${{ steps.set-matrix.outputs.test_projects }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Find all test projects
+        id: find-tests
+        run: |
+          # Find all .csproj files that look like test projects (by convention, in folders ending with 'Tests')
+          TEST_PROJECTS=$(find . -type f -name "*.csproj" | grep -i 'Tests/' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Found test projects: $TEST_PROJECTS"
+          echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
+      - name: Set matrix output
+        id: set-matrix
+        run: |
+          echo "test_projects=${{ steps.find-tests.outputs.test_projects }}" >> $GITHUB_OUTPUT
+
   run-tests:
+    needs: discover-test-projects
     strategy:
       matrix:
-        configuration: [Debug]
+        test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
     runs-on: windows-latest
     outputs:
       testresult: ${{ steps.testrun.outcome }}
@@ -151,7 +173,6 @@ jobs:
         key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
         restore-keys: ${{ runner.os }}-nuget-
 
-    # Install the .NET Core workload
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
@@ -162,57 +183,28 @@ jobs:
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
     
-    - name: Execute unit tests and collect coverage
+    - name: Restore dependencies
+      run: dotnet restore ${{ matrix.test_project }}
+
+    - name: Build test project
+      run: dotnet build ${{ matrix.test_project }} --configuration Debug --no-restore
+
+    - name: Run tests and collect coverage
       id: testrun
-      run: dotnet test --configuration $env:Configuration --logger trx --collect:"XPlat Code Coverage"
-      continue-on-error: true
-      env:
-        Configuration: ${{ matrix.configuration }}
-    
-    - name: Set success or failure into testresult
-      id: set-output
-      run: echo "testresult=${{ steps.testrun.outcome }}" >> $GITHUB_OUTPUT
-
-    - name: Combine Coverage Reports # This is because one report is produced per project, and we want one result for all of them.
-      uses: danielpalme/ReportGenerator-GitHub-Action@5.2.4
-      with:
-        reports: "**/*.cobertura.xml" # REQUIRED # The coverage reports that should be parsed (separated by semicolon). Globbing is supported.
-        targetdir: "${{ github.workspace }}" # REQUIRED # The directory where the generated report should be saved.
-        reporttypes: "Html;Cobertura;MarkdownSummaryGithub;Badges" # The output formats and scope (separated by semicolon) Values: Badges, Clover, Cobertura, CsvSummary, Html, Html_Dark, Html_Light, Html_BlueRed, HtmlChart, HtmlInline, HtmlInline_AzurePipelines, HtmlInline_AzurePipelines_Dark, HtmlInline_AzurePipelines_Light, HtmlSummary, JsonSummary, Latex, LatexSummary, lcov, MarkdownSummary, MarkdownSummaryGithub, MarkdownDeltaSummary, MHtml, PngChart, SonarQube, TeamCitySummary, TextSummary, TextDeltaSummary, Xml, XmlSummary
-        verbosity: "Verbose" # The verbosity level of the log messages. Values: Verbose, Info, Warning, Error, Off
-        title: "Code Coverage" # Optional title.
-        tag: "${{ github.run_number }}_${{ github.run_id }}" # Optional tag or build version.
-        customSettings: "" # Optional custom settings (separated by semicolon). See: https://github.com/danielpalme/ReportGenerator/wiki/Settings.
-        toolpath: "reportgeneratortool" # Default directory for installing the dotnet tool.
-  
-    
-    - name: Upload Combined Coverage XML
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage
-        path: ${{ github.workspace }}/Cobertura.xml
-        retention-days: 5
-    
-    - name: Upload Combined Coverage markdown
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-summary
-        path: ${{ github.workspace }}/SummaryGithub.md 
-        retention-days: 5
-    
-    - name: Upload Combined Coverage bacges
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-badge
-        path: ${{ github.workspace }}/badge*.svg
-        retention-days: 5
-
+      run: dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
 
     - name: Upload Test Result Files
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
-        path: ${{ github.workspace }}/**/TestResults/**/*
+        name: test-results-${{ matrix.test_project }}
+        path: ${{ github.workspace }}/**/TestResults/**/*.trx
+        retention-days: 5
+
+    - name: Upload Coverage XML
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-${{ matrix.test_project }}
+        path: ${{ github.workspace }}/**/TestResults/**/coverage.cobertura.xml
         retention-days: 5
 
 
@@ -309,66 +301,32 @@ jobs:
         path: ${{ github.workspace }}/publish/release.zip
         retention-days: 5
 
-  make_msix:
+  make_msix_signed:
     strategy:
       matrix:
         configuration: [Release]
     runs-on: windows-latest
-
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
     - name: Cache NuGet packages
       uses: actions/cache@v3
       with:
         path: ~/.nuget/packages
         key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
         restore-keys: ${{ runner.os }}-nuget-
-
-    # Install the .NET Core workload
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
-
-    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
-
-
-    # Restore the application to populate the obj folder with RuntimeIdentifiers
     - name: Restore the application
       run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
       env:
         Configuration: ${{ matrix.configuration }}
-
-    - name: Cache NuGet packages
-      uses: actions/cache@v3
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
-
-    - name: Restore NuGet packages
-      run: dotnet restore ${{ env.FindNeedleUX_Project }}
-
-    - name: Create MSIX package (signed)
-      run: |
-        msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true
-      shell: pwsh
-
-    - name: Upload MSIX artifact (signed)
-      uses: actions/upload-artifact@v4
-      with:
-        name: FindNeedleUX-MSIX
-        path: |
-          **/AppPackages/**/*.msix
-          **/AppPackages/**/*.msixbundle
-
     - name: Decode certificate from secret
       run: |
           [System.IO.File]::WriteAllBytes(
@@ -376,7 +334,6 @@ jobs:
             [System.Convert]::FromBase64String("${{ secrets.SIGNINGCERTIFICATEENCODED }}")
           )
       shell: pwsh
-
     - name: Import signing certificate to cert store
       id: import_cert
       run: |
@@ -385,15 +342,12 @@ jobs:
         $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
         echo "thumbprint=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       shell: pwsh
-
     - name: Build solution in Release mode
       run: dotnet build ${{ env.FindNeedleUX_Project }} -c Release
-
     - name: Create MSIX package (signed)
       run: |
         msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
       shell: pwsh
-
     - name: Remove signing certificate from cert store
       if: always()
       run: |
@@ -410,7 +364,6 @@ jobs:
           Write-Host "No thumbprint found, skipping cert removal."
         }
       shell: pwsh
-
     - name: Upload MSIX artifact (signed)
       uses: actions/upload-artifact@v4
       with:
@@ -419,11 +372,38 @@ jobs:
           **/AppPackages/**/*.msix
           **/AppPackages/**/*.msixbundle
 
+  make_msix_unsigned:
+    strategy:
+      matrix:
+        configuration: [Release]
+    runs-on: windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: ${{ runner.os }}-nuget-
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@v2
+    - name: Restore the application
+      run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
+      env:
+        Configuration: ${{ matrix.configuration }}
+    - name: Build solution in Release mode
+      run: dotnet build ${{ env.FindNeedleUX_Project }} -c Release
     - name: Create MSIX package (unsigned)
       run: |
         msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false
       shell: pwsh
-
     - name: Upload MSIX artifact (unsigned)
       uses: actions/upload-artifact@v4
       with:

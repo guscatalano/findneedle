@@ -1,5 +1,7 @@
 # findneedle
 
+[![Code Coverage](https://github.com/guscatalano/findneedle/raw/master/.github/badges/coverage.svg)](https://github.com/guscatalano/findneedle/actions/workflows/dotnet-desktop.yml)
+
 **A tool to quickly search through logs in Windows.**
 
 ---
