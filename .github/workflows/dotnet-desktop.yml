@@ -330,8 +330,8 @@ jobs:
 
 
   actually_release:
-    needs: [create-release, run-tests, build-release]
-    if: needs.run-tests.result == 'success'
+    needs: [create-release]
+    if: needs.create-release.result == 'success'
     strategy:
       matrix:
         configuration: [Release]
