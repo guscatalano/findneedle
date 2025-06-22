@@ -206,19 +206,29 @@ jobs:
             }
           }
       - name: Build all test projects with error logging
+        id: build_tests
         shell: pwsh
         run: |
           $testProjects = ConvertFrom-Json @'${{ needs.discover-test-projects.outputs.test_projects }}'@
+          $builtProjects = @()
           foreach ($proj in $testProjects) {
-            $normproj = $proj -replace '^\\./', '' -replace '/', '\\'
+            $normproj = $proj -replace '^\./', '' -replace '/', '\'
             $resolved = Get-ChildItem -Path . -Recurse -Filter (Split-Path $normproj -Leaf) | Where-Object { $_.FullName -like "*${normproj.Replace('\\','*')}" } | Select-Object -First 1
             if ($resolved) {
               Write-Host "Building $($resolved.FullName)"
-              dotnet build "$($resolved.FullName)" --configuration Debug --no-restore --output "$(Split-Path $($resolved.FullName) -Parent)\bin\Debug" 2>&1 | Tee-Object -FilePath "$(Split-Path $($resolved.FullName) -Parent)\build.log"
+              $buildResult = dotnet build "$($resolved.FullName)" --configuration Debug --no-restore --output "$(Split-Path $($resolved.FullName) -Parent)\bin\Debug" 2>&1 | Tee-Object -FilePath "$(Split-Path $($resolved.FullName) -Parent)\build.log"
+              if ($LASTEXITCODE -eq 0) {
+                $builtProjects += $resolved.FullName
+              } else {
+                Write-Host "Build failed for $($resolved.FullName)"
+              }
             } else {
               Write-Host "Warning: Test project $normproj does not exist, skipping build."
             }
           }
+          $json = $builtProjects | ConvertTo-Json
+          Write-Host "Built test projects: $json"
+          echo "built_test_projects=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       - name: Upload test build outputs
         uses: actions/upload-artifact@v4
         with:
@@ -239,7 +249,7 @@ jobs:
     if: needs.build-tests.result == 'success'
     strategy:
       matrix:
-        test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
+        test_project: ${{ fromJson(needs.build-tests.outputs.test_projects) }}
     runs-on: windows-latest
     outputs:
       testresult: ${{ steps.testrun.outcome }}
@@ -280,6 +290,13 @@ jobs:
         }
       env:
         DOTNET_ROLL_FORWARD: LatestMajor
+    - name: Fail if test project does not exist
+      shell: pwsh
+      run: |
+        if (-not (Test-Path "${{ matrix.test_project }}")) {
+          Write-Host "Test project ${{ matrix.test_project }} was not built or does not exist. Failing."
+          exit 1
+        }
     - name: Run tests and collect coverage
       id: testrun
       run: |
