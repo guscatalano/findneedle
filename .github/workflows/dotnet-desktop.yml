@@ -57,7 +57,8 @@ env:
 
 jobs:
   create-release:
-    needs: [build-release]
+    needs: [build-release, run-tests]
+    if: needs.run-tests.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
