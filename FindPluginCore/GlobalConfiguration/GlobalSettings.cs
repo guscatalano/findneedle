@@ -18,6 +18,14 @@ public class GlobalSettings
         set => _debug = value;
     }
 
+    // Default result viewer setting
+    private static string _defaultResultViewer = "resultswebpage";
+    public static string DefaultResultViewer
+    {
+        get => _defaultResultViewer;
+        set => _defaultResultViewer = value?.ToLower() ?? "resultswebpage";
+    }
+
     // Toggle the debug flag
     public static void ToggleDebug()
     {

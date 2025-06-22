@@ -51,6 +51,13 @@ public sealed partial class ResultsWebPage : Page
                 {
                     Console.WriteLine($"Navigation failed: {e.WebErrorStatus}");
                 }
+                // Always send theme after navigation completes
+                SendThemeToWebView();
+                // Show devtools if debug mode is on
+                if (FindPluginCore.GlobalConfiguration.GlobalSettings.Debug)
+                {
+                    try { MyWebView.CoreWebView2.OpenDevToolsWindow(); } catch { }
+                }
             };
 
             MyWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
@@ -59,25 +66,32 @@ public sealed partial class ResultsWebPage : Page
             MyWebView.Source = new Uri("http://appassets/resultsweb.html");
             MyWebView.CoreWebView2.Settings.IsWebMessageEnabled = true;
             MyWebView.CoreWebView2.WebMessageReceived += MessageReceived;
-
-            // Send theme colors to the web page
-            var backgroundBrush = Application.Current.Resources["ApplicationPageBackgroundThemeBrush"] as SolidColorBrush;
-            var foregroundBrush = Application.Current.Resources["TextFillColorPrimaryBrush"] as SolidColorBrush;
-            string bgHex = backgroundBrush != null ? ColorToHex(backgroundBrush) : "#FFFFFF";
-            string fgHex = foregroundBrush != null ? ColorToHex(foregroundBrush) : "#000000";
-            var colorMessage = new {
-                verb = "setTheme",
-                data = new {
-                    background = bgHex,
-                    foreground = fgHex
-                }
-            };
-            MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(colorMessage));
         }
         catch (Exception)
         {
            
         }
+    }
+
+    private void SendThemeToWebView()
+    {
+        // Send theme colors to the web page
+        var backgroundBrush = Application.Current.Resources["ApplicationPageBackgroundThemeBrush"] as SolidColorBrush;
+        var foregroundBrush = Application.Current.Resources["TextFillColorPrimaryBrush"] as SolidColorBrush;
+        string bgHex = backgroundBrush != null ? ColorToHex(backgroundBrush) : "#FFFFFF";
+        string fgHex = foregroundBrush != null ? ColorToHex(foregroundBrush) : "#000000";
+        var colorMessage = new {
+            verb = "setTheme",
+            data = new {
+                background = bgHex,
+                foreground = fgHex
+            }
+        };
+        try
+        {
+            MyWebView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(colorMessage));
+        }
+        catch { }
     }
 
     private static string ColorToHex(SolidColorBrush brush)
@@ -146,5 +160,6 @@ public sealed partial class ResultsWebPage : Page
             }
         };
         MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(doneMessage));
+        SendThemeToWebView();
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindPluginCore;
+using FindPluginCore.GlobalConfiguration; // Add this for settings
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
@@ -20,7 +21,12 @@ namespace FindNeedleUX;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-
+    private static readonly Dictionary<string, Type> ResultViewerPages = new()
+    {
+        { "resultswebpage", typeof(FindNeedleUX.Pages.ResultsWebPage) },
+        { "resultsvcommunitypage", typeof(FindNeedleUX.Pages.ResultsVCommunityPage) },
+        { "searchresultpage", typeof(FindNeedleUX.Pages.SearchResultPage) }
+    };
 
     public MainWindow()
     {
@@ -162,33 +168,20 @@ public sealed partial class MainWindow : Window
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
 
         var file = await picker.PickSingleFileAsync();
-        // var files = await picker.PickMultipleFilesAsync();
-
-        // Initialize the file picker with the window handle (HWND).
-        // WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
-
-        // Set options for your file picker
-        // openPicker.ViewMode = PickerViewMode.Thumbnail;
-        //  openPicker.FileTypeFilter.Add("*");
-
-        // Open the picker for the user to pick a file
-        //  var file = await openPicker.PickSingleFileAsync();
         if (file != null)
         {
-
             currentSelection = file.Path;
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(currentSelection);
             await RunSearchWithProgress();
-            contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
-
+            // Use the default result viewer setting
+            var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+            if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
+            {
+                viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
+            }
+            contentFrame.Navigate(viewerType);
         }
-        else
-        {
-           
-
-        }
-        
     }
 
     private async void QuickFolderOpen()
@@ -207,15 +200,19 @@ public sealed partial class MainWindow : Window
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(folderPath);
             await RunSearchWithProgress();
-            contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
+            // Use the default result viewer setting
+            var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+            if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
+            {
+                viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
+            }
+            contentFrame.Navigate(viewerType);
         }
     }
 
     private async void LoadCommand()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-
-
 
         var picker = new FileOpenPicker()
         {
@@ -225,17 +222,6 @@ public sealed partial class MainWindow : Window
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
 
         var file = await picker.PickSingleFileAsync();
-        // var files = await picker.PickMultipleFilesAsync();
-
-        // Initialize the file picker with the window handle (HWND).
-        // WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
-
-        // Set options for your file picker
-        // openPicker.ViewMode = PickerViewMode.Thumbnail;
-        //  openPicker.FileTypeFilter.Add("*");
-
-        // Open the picker for the user to pick a file
-        //  var file = await openPicker.PickSingleFileAsync();
         if (file != null)
         {
             MiddleLayerService.OpenWorkspace(file.Path);
@@ -244,12 +230,8 @@ public sealed partial class MainWindow : Window
 
     private async void SaveCommand()
     {
-
-
         // Retrieve the window handle (HWND) of the current WinUI 3 window.
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-
-
 
         var picker = new FileSavePicker();
         picker.SuggestedStartLocation = PickerLocationId.Desktop;
@@ -258,23 +240,13 @@ public sealed partial class MainWindow : Window
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
 
         var file = await picker.PickSaveFileAsync();
-        // var files = await picker.PickMultipleFilesAsync();
-
-        // Initialize the file picker with the window handle (HWND).
-        // WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
-
-        // Set options for your file picker
-        // openPicker.ViewMode = PickerViewMode.Thumbnail;
-        //  openPicker.FileTypeFilter.Add("*");
-
-        // Open the picker for the user to pick a file
-        //  var file = await openPicker.PickSingleFileAsync();
         if (file != null)
         {
             MiddleLayerService.SaveWorkspace(file.Path);
         }
     }
 }
+
 // Add the following public static class to expose the required PInvoke methods and constants.
 
 public static class PInvoke
@@ -287,6 +259,7 @@ public static class PInvoke
 
     public const uint WM_SETICON = 0x0080;
 }
+
 // Update the HWND struct to include a constructor that takes a single argument.
 public struct HWND : IEquatable<HWND>
 {
@@ -306,6 +279,7 @@ public struct HWND : IEquatable<HWND>
 
     public override string ToString() => Value.ToString();
 }
+
 // To fix the CS0122 errors, the issue is that the `GDI_IMAGE_TYPE` and `IMAGE_FLAGS` enums are inaccessible due to their protection level.  
 // These enums are likely defined as `internal` in the `PInvoke` class.  
 // To resolve this, you can either make these enums `public` in their definition or create new public enums in your code.  

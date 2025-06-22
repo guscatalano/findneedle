@@ -71,7 +71,11 @@
             });
         }
 
-
+        function redrawTable() {
+            if (window.table) {
+                window.table.draw(false);
+            }
+        }
 
     </script>
     <style>
@@ -89,10 +93,10 @@
 <body onload="codeAddress()">
     <div id="loader">Loading... <section id="results"></section></div>
     <link href="datatables.min.css" rel="stylesheet">
+    <button onclick="redrawTable()">Redraw Table</button>
     Toggle column: <a class="toggle-vis" data-column="0">Index</a> - <a class="toggle-vis" data-column="1">Time</a> - <a class="toggle-vis" data-column="2">Provider</a> - <a class="toggle-vis" data-column="3">TaskName</a> - <a class="toggle-vis" data-column="4">Message</a> - <a class="toggle-vis" data-column="5">Source</a>
     <div id="tablediv">
         <script src="datatables.min.js"></script>
-
         <table id="myTable" class="display">
             <thead>
                 <tr>

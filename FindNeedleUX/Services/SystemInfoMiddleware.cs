@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using FindPluginCore.GlobalConfiguration; // Add for settings
 
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
@@ -9,6 +10,7 @@ public class SystemInfoMiddleware
         string dotnetInfo = $".NET Runtime: {RuntimeInformation.FrameworkDescription}";
         string wdkRootPath = "WDK Root Path: ";
         string tracefmtPath = "Tracefmt: ";
+        string defaultViewer = $"Default Result Viewer: {GlobalSettings.DefaultResultViewer}";
         try
         {
             // Use reflection to load WDKFinder if available
@@ -49,6 +51,6 @@ public class SystemInfoMiddleware
             wdkRootPath += $"Error: {ex.Message}";
             tracefmtPath += $"Error: {ex.Message}";
         }
-        return $"{dotnetInfo}\n{wdkRootPath}\n{tracefmtPath}";
+        return $"{dotnetInfo}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}";
     }
 }
