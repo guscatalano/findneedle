@@ -42,7 +42,7 @@ public class EventRecordResult : ISearchResult
         }
 
         // Try to get formatted event, fallback to details if it fails
-        var formatted = string.Empty;
+        string? formatted;
         try
         {
             formatted = entry.FormatDescription(); //Consider passing in the locale
@@ -57,11 +57,11 @@ public class EventRecordResult : ISearchResult
             string levelString;
             try
             {
-                levelString = entry.LevelDisplayName ?? entry.Level.ToString();
+                levelString = entry.LevelDisplayName ?? entry.Level?.ToString() ?? "Unknown";
             }
             catch
             {
-                levelString = entry.Level?.ToString() ?? "Unknown";
+                levelString = entry.Level?.ToString() ?? "Unknown*";
             }
             sb.AppendLine($"Level: {levelString}");
 

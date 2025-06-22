@@ -102,7 +102,7 @@ public sealed partial class PluginsPage : Page
                     ModulesFound.Clear();
                     foreach (var module in allModules)
                     {
-                        string modulePath = "Unknown";
+                        var modulePath = "Unknown";
                         try
                         {
                             if (module.dll != null)
@@ -183,7 +183,7 @@ public sealed partial class PluginsPage : Page
                 var plugins = hideInvalidPlugins
                     ? SelectedModule.Plugins.Where(p => p.Plugin.validPlugin)
                     : SelectedModule.Plugins;
-                bool any = false;
+                var any = false;
                 foreach (var plugin in plugins)
                 {
                     PluginsInSelectedModule.Add(plugin);

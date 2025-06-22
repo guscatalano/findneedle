@@ -10,7 +10,6 @@ namespace FakeLoadPlugin;
 public class Program
 {
     static readonly string OUTPUT_FILE = "fakeloadplugin_output.txt";
-    static readonly string APPDATA_SUBFOLDER = "FindNeedlePlugin";
 
     static string GetAppDataFolder()
     {
