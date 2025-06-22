@@ -1,7 +1,5 @@
 # findneedle
 
-![Test Status](https://github.com/guscatalano/findneedle/actions/workflows/dotnet-desktop.yml/badge.svg?branch=master)
-
 **A tool to quickly search through logs in Windows.**
 
 ---
@@ -75,4 +73,4 @@ Processors take the raw input data and apply transformations or analyses. This c
 #### Outputs
 
 Outputs handle the final presentation or export of processed data.
-
+
