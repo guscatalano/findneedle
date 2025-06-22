@@ -647,7 +647,8 @@ jobs:
           Write-Host "Listing all files in $testResultsDir (if exists):"
           if (Test-Path $testResultsDir) {
             Get-ChildItem -Path $testResultsDir -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
-            Write-Host "\nContents of .log and .xml files in $testResultsDir:"
+            Write-Host ""
+            Write-Host "Contents of .log and .xml files in ${testResultsDir}:"
             Get-ChildItem -Path $testResultsDir -Recurse -Include *.log,*.xml -ErrorAction SilentlyContinue | ForEach-Object {
               Write-Host "--- $($_.FullName) ---"
               Get-Content $_.FullName | Write-Host
