@@ -222,7 +222,7 @@ jobs:
       - name: Diagnostic - List all test project csproj files
         run: |
           echo Listing all test project csproj files:
-          dir /b /s *Tests\*.csproj
+          dir /b /s *.csproj | findstr /i Tests
         shell: cmd
       - name: Diagnostic - Build each test project and echo output
         run: |
