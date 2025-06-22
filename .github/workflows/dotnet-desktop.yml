@@ -425,3 +425,65 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  run-tests:
+    needs: [discover-test-projects, build]
+    if: needs.build.result == 'success'
+    strategy:
+      matrix:
+        test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
+    runs-on: windows-latest
+    outputs:
+      testresult: ${{ steps.testrun.outcome }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v2
+      - name: Download build outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-Debug
+          path: ./
+      - name: Fail if test project does not exist
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${{ matrix.test_project }}")) {
+            Write-Host "Test project ${{ matrix.test_project }} was not built or does not exist. Failing."
+            exit 1
+          }
+      - name: Run tests and collect coverage
+        id: testrun
+        run: |
+          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
+      - name: Set Safe Artifact Name
+        id: safe_name
+        run: |
+          SAFE_NAME="${{ matrix.test_project }}"
+          SAFE_NAME="${SAFE_NAME//\//-}"
+          SAFE_NAME="${SAFE_NAME//\\/-}"
+          echo "safe_name=$SAFE_NAME" >> $GITHUB_OUTPUT
+      - name: Upload Test Result Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ steps.safe_name.outputs.safe_name }}
+          path: ${{ github.workspace }}/**/TestResults/**/*.trx
+          retention-days: 5
+      - name: Upload Coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ steps.safe_name.outputs.safe_name }}
+          path: ${{ github.workspace }}/**/TestResults/**/coverage.cobertura.xml
+          retention-days: 5
