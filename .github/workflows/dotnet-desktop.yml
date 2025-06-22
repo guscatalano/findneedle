@@ -77,13 +77,26 @@ jobs:
           separator: ','
       - name: Check if only workflow file changed
         id: only_workflow
+        shell: bash
         run: |
           changed="${{ steps.changed_files.outputs.all_changed_files }}"
-          if [[ "$changed" =~ ^(\.github/workflows/dotnet-desktop.yml,?)*$ ]]; then
-            echo "only_workflow_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "only_workflow_changed=false" >> $GITHUB_OUTPUT
-          fi
+          # Split on comma or newline, trim whitespace, remove empty
+          files=()
+          IFS=',\n' read -ra rawfiles <<< "$changed"
+          for f in "${rawfiles[@]}"; do
+            f_trimmed="$(echo "$f" | xargs)"
+            if [[ -n "$f_trimmed" ]]; then
+              files+=("$f_trimmed")
+            fi
+          done
+          only_workflow=true
+          for f in "${files[@]}"; do
+            if [[ "$f" != ".github/workflows/dotnet-desktop.yml" ]]; then
+              only_workflow=false
+              break
+            fi
+          done
+          echo "only_workflow_changed=$only_workflow" >> $GITHUB_OUTPUT
       - name: Lowercase commit message and PR title
         id: commit_lower
         run: |
