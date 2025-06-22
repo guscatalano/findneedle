@@ -317,7 +317,7 @@ jobs:
   build:
     strategy:
       matrix:
-        configuration: [Release]
+        configuration: [Release, Debug]
 
     runs-on: windows-latest  # For a list of available runner types, refer to
                              # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
@@ -341,10 +341,12 @@ jobs:
     - name: Build solution
       run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
 
-    - name: Publish FindNeedleUX
+    - name: Publish FindNeedleUX (Release only)
+      if: matrix.configuration == 'Release'
       run: dotnet publish ${{ env.FindNeedleUX_Project }} --configuration ${{ matrix.configuration }} --output ${{ github.workspace }}/publish
 
-    - name: Archive Release
+    - name: Archive Release (Release only)
+      if: matrix.configuration == 'Release'
       uses: thedoctor0/zip-release@0.7.5
       with:
         type: 'zip'
@@ -352,7 +354,8 @@ jobs:
         filename: 'release.zip'
         exclusions: '*.git* /*node_modules/*.editorconfig'
 
-    - name: Upload Release bits
+    - name: Upload Release bits (Release only)
+      if: matrix.configuration == 'Release'
       uses: actions/upload-artifact@v4
       with:
         name: release-bits
