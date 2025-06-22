@@ -152,8 +152,48 @@ jobs:
           fi
           echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
 
-  run-tests:
+  build-tests:
     needs: discover-test-projects
+    runs-on: windows-latest
+    outputs:
+      test_projects: ${{ needs.discover-test-projects.outputs.test_projects }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v2
+      - name: Restore all test projects
+        run: |
+          for proj in $(echo ${{ needs.discover-test-projects.outputs.test_projects }} | jq -r '.[]'); do
+            dotnet restore "$proj"
+          done
+      - name: Build all test projects
+        run: |
+          for proj in $(echo ${{ needs.discover-test-projects.outputs.test_projects }} | jq -r '.[]'); do
+            dotnet build "$proj" --configuration Debug --no-restore --output "$(dirname $proj)/bin/Debug"
+          done
+      - name: Upload test build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build-output
+          path: |
+            **/bin/Debug/
+          retention-days: 2
+
+  run-tests:
+    needs: [discover-test-projects, build-tests]
     strategy:
       matrix:
         test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
@@ -178,41 +218,37 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
-    
-
-    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
-    
-    - name: Restore dependencies
-      run: dotnet restore ${{ matrix.test_project }}
-
-    - name: Build test project
-      run: dotnet build ${{ matrix.test_project }} --configuration Debug --no-restore
-
+    - name: Download test build outputs
+      uses: actions/download-artifact@v4
+      with:
+        name: test-build-output
+        path: ./
     - name: Run tests and collect coverage
       id: testrun
-      run: dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
+      run: |
+        dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage"
+
+    - name: Set Safe Artifact Name
+      id: safe_name
+      run: |
+        SAFE_NAME="${{ matrix.test_project }}"
+        SAFE_NAME="${SAFE_NAME//\//-}"
+        SAFE_NAME="${SAFE_NAME//\\/-}"
+        echo "safe_name=$SAFE_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload Test Result Files
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.test_project }}
-        path: ${{ github.workspace }}/**/TestResults/**/*.trx
-        retention-days: 5
-      if: ${{ !contains(matrix.test_project, '/') }}
-    - name: Upload Test Result Files (safe name)
-      if: ${{ contains(matrix.test_project, '/') }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results-${{ matrix.test_project }}
+        name: test-results-${{ steps.safe_name.outputs.safe_name }}
         path: ${{ github.workspace }}/**/TestResults/**/*.trx
         retention-days: 5
 
     - name: Upload Coverage XML
       uses: actions/upload-artifact@v4
       with:
-        name: coverage-${{ matrix.test_project }}
+        name: coverage-${{ steps.safe_name.outputs.safe_name }}
         path: ${{ github.workspace }}/**/TestResults/**/coverage.cobertura.xml
         retention-days: 5
 
@@ -242,10 +278,23 @@ jobs:
           name: test-results
 
 
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage-artifacts
+
+      - name: Merge coverage reports
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.3.5
+        with:
+          reports: 'coverage-artifacts/**/coverage.cobertura.xml'
+          targetdir: 'merged-coverage'
+          reporttypes: 'Cobertura;MarkdownSummary;Badges'
+
       - name: Publish Code Coverage Report
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
-          filename: "Cobertura.xml"
+          filename: 'merged-coverage/Cobertura.xml'
           badge: true
           fail_below_min: false # just informative for now
           format: markdown
@@ -253,7 +302,7 @@ jobs:
           hide_complexity: false
           indicators: true
           output: both
-          thresholds: "10 30"
+          thresholds: '10 30'
 
       - name: Write to Job Summary
         run: cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
