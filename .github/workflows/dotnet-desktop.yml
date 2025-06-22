@@ -241,13 +241,13 @@ jobs:
             Write-Host "Found publish folder: $($_.FullName)"
             Get-ChildItem -Path $_.FullName -Recurse | ForEach-Object { Write-Host $_.FullName }
           }
-      - name: Upload published outputs for test projects (Debug)
+      - name: Upload all build outputs (Debug)
         uses: actions/upload-artifact@v4
         with:
           name: build-output-Debug
-          path: |
-            **/bin/x64/Debug/publish/**
+          path: .
           retention-days: 2
+          
 
   build-release:
     runs-on: windows-latest
