@@ -358,8 +358,10 @@ jobs:
 
     - name: Decode certificate from secret
       run: |
-        echo "${{ secrets.SIGNINGCERTIFICATEENCODED }}" | Out-File -Encoding ascii SigningCertificate_Encoded.txt
-        [System.Convert]::FromBase64String((Get-Content SigningCertificate_Encoded.txt -Raw)) | Set-Content -Encoding Byte SigningCertificate.pfx
+          [System.IO.File]::WriteAllBytes(
+            "SigningCertificate.pfx",
+            [System.Convert]::FromBase64String("${{ secrets.SIGNINGCERTIFICATEENCODED }}")
+          )
       shell: pwsh
 
     - name: Build solution in Release mode
