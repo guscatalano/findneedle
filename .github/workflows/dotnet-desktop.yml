@@ -748,13 +748,17 @@ jobs:
               $endTime = $result.endTime
               Write-Host "File: $($file.FullName) | duration: $duration | startTime: $startTime | endTime: $endTime"
               if ($duration) {
+                $parsed = $false
                 try {
                   $ts = [System.TimeSpan]::Parse($duration)
                   $totalSeconds += $ts.TotalSeconds
-                } catch {
-                  if ($duration -match '^[0-9.]+$') {
+                  $parsed = $true
+                } catch {}
+                if (-not $parsed) {
+                  try {
                     $totalSeconds += [double]$duration
-                  } else {
+                    $parsed = $true
+                  } catch {
                     Write-Host "Could not parse duration: $duration"
                   }
                 }
