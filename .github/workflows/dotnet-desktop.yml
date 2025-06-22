@@ -356,14 +356,15 @@ jobs:
     - name: Restore NuGet packages
       run: dotnet restore ${{ env.FindNeedleUX_Project }}
 
-    - name: Create MSIX package (unsigned)
+    - name: Create MSIX package (signed)
       run: |
-        msbuild ${{ env.FindNeedleUX_Project }} /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true
+        msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true
+      shell: pwsh
 
-    - name: Upload MSIX artifact (unsigned)
+    - name: Upload MSIX artifact (signed)
       uses: actions/upload-artifact@v4
       with:
-        name: FindNeedleUX-MSIX-unsigned
+        name: FindNeedleUX-MSIX
         path: |
           **/AppPackages/**/*.msix
           **/AppPackages/**/*.msixbundle
@@ -390,7 +391,7 @@ jobs:
 
     - name: Create MSIX package (signed)
       run: |
-        msbuild ${{ env.FindNeedleUX_Project }} /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
+        msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
       shell: pwsh
 
     - name: Remove signing certificate from cert store
@@ -410,10 +411,23 @@ jobs:
         }
       shell: pwsh
 
-    - name: Upload MSIX artifact
+    - name: Upload MSIX artifact (signed)
       uses: actions/upload-artifact@v4
       with:
         name: FindNeedleUX-MSIX
+        path: |
+          **/AppPackages/**/*.msix
+          **/AppPackages/**/*.msixbundle
+
+    - name: Create MSIX package (unsigned)
+      run: |
+        msbuild ${{ env.FindNeedleUX_Project }} /m /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false
+      shell: pwsh
+
+    - name: Upload MSIX artifact (unsigned)
+      uses: actions/upload-artifact@v4
+      with:
+        name: FindNeedleUX-MSIX-unsigned
         path: |
           **/AppPackages/**/*.msix
           **/AppPackages/**/*.msixbundle
