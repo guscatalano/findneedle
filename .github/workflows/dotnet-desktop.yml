@@ -58,6 +58,30 @@ env:
   MAX_TAGS: 5
 
 jobs:
+  detect-workflow-only-change:
+    runs-on: ubuntu-latest
+    outputs:
+      only_workflow_changed: ${{ steps.only_workflow.outputs.only_workflow_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Get changed files
+        id: changed_files
+        uses: tj-actions/changed-files@v46
+        with:
+          separator: ','
+      - name: Check if only workflow file changed
+        id: only_workflow
+        run: |
+          changed="${{ steps.changed_files.outputs.all_changed_files }}"
+          if [[ "$changed" =~ ^(\.github/workflows/dotnet-desktop.yml,?)*$ ]]; then
+            echo "only_workflow_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "only_workflow_changed=false" >> $GITHUB_OUTPUT
+          fi
+
   create-release:
     needs: [build-release, test-publish]
     if: needs.test-publish.result == 'success'
@@ -167,6 +191,8 @@ jobs:
 
   build-debug:
     runs-on: windows-latest
+    needs: detect-workflow-only-change
+    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -558,8 +584,8 @@ jobs:
 
 
   test-publish:
-    needs: run-tests
-    if: always()
+    needs: [run-tests, detect-workflow-only-change]
+    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' && always()
     strategy:
       matrix:
         configuration: [Debug]
@@ -822,8 +848,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   run-tests:
-    needs: [discover-test-projects, build-debug]
-    if: needs.build-debug.result == 'success'
+    needs: [discover-test-projects, build-debug, detect-workflow-only-change]
+    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' && needs.build-debug.result == 'success'
     strategy:
       matrix:
         test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
@@ -959,3 +985,26 @@ jobs:
               Get-Content $file.FullName | Write-Host
             }
           }
+      - name: detect-workflow-only-change
+        runs-on: ubuntu-latest
+        outputs:
+          only_workflow_changed: ${{ steps.only_workflow.outputs.only_workflow_changed }}
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+          - name: Get changed files
+            id: changed_files
+            uses: tj-actions/changed-files@v46
+            with:
+              separator: ','
+          - name: Check if only workflow file changed
+            id: only_workflow
+            run: |
+              changed="${{ steps.changed_files.outputs.all_changed_files }}"
+              if [[ "$changed" =~ ^(\.github/workflows/dotnet-desktop.yml,?)*$ ]]; then
+                echo "only_workflow_changed=true" >> $GITHUB_OUTPUT
+              else
+                echo "only_workflow_changed=false" >> $GITHUB_OUTPUT
+              fi
