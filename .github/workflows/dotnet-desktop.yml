@@ -509,25 +509,34 @@ jobs:
         asset_name: release.zip
         asset_content_type: application/zip
 
-    - name: Copy coverage badge to .github/badges/coverage.svg
-      if: github.ref == 'refs/heads/master'
-      run: |
-        mkdir -p .github/badges
-        cp badge_linecoverage.svg .github/badges/coverage.svg
 
-    - name: Commit and push coverage badge
-      if: github.ref == 'refs/heads/master'
-      run: |
-        git config --global user.name "github-actions"
-        git config --global user.email "github-actions@github.com"
-        git fetch origin master
-        git checkout master
-        git add .github/badges/coverage.svg
-        if git diff --cached --quiet; then
-          echo "No changes to commit."
-        else
-          git commit -m "Update coverage badge [skip ci]"
-          git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
-        fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  update-badges:
+    needs: run-tests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Copy coverage badge to .github/badges/coverage.svg
+        run: |
+          mkdir -p .github/badges
+          cp badge_linecoverage.svg .github/badges/coverage.svg
+
+      - name: Commit and push coverage badge
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git fetch origin master
+          git checkout master
+          git add .github/badges/coverage.svg
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update coverage badge [skip ci]"
+            git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
