@@ -1,5 +1,8 @@
 # findneedle
 
+![Test Status](https://github.com/guscatalano/findneedle/actions/workflows/dotnet-desktop.yml/badge.svg?branch=master)
+![Coverage](./badge.svg)
+
 **A tool to quickly search through logs in Windows.**
 
 ---
@@ -26,16 +29,13 @@
 ### Installation
 
 1. **Clone the repository:**  
-   Download or clone this repository by running:  
-   `git clone https://github.com/guscatalano/findneedle.git`  
-   Then navigate into the directory:  
+   `git clone https://github.com/guscatalano/findneedle.git`
+2. **Navigate into the directory:**  
    `cd findneedle`
-
-2. **Build or open the project:**
-   - Open the project in your preferred IDE (such as Visual Studio or Visual Studio Code).
+3. **Build or open the project:**
+   - Open in Visual Studio or Visual Studio Code.
    - Build the solution using the .NET Core SDK.
-
-3. **Run the application:**
+4. **Run the application:**  
    - Launch the executable, or run via `dotnet run` as appropriate for your project.
 
 #### Or, get it directly from the Microsoft Store:
@@ -75,24 +75,5 @@ Processors take the raw input data and apply transformations or analyses. This c
 
 #### Outputs
 
-Outputs handle the final presentation or export of processed data. This could mean displaying search results in the UI, writing them to a file, or exporting them to another system.
-
-- **Customizing Components:**  
-  Each component type (Input, Processor, Output) can be extended via plugins. This allows for a highly customizable and modular workflow. For example, you could write a plugin processor to anonymize sensitive data, or a custom output to format results for a specific dashboard.
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes
-4. Open a pull request
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
-## Author
-
-- [guscatalano](https://github.com/guscatalano)
+Outputs handle the final presentation or export of processed data.
+
