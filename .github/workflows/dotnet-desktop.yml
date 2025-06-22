@@ -176,14 +176,14 @@ jobs:
         uses: microsoft/setup-msbuild@v2
       - name: Restore all test projects
         run: |
-          for proj in $(echo ${{ needs.discover-test-projects.outputs.test_projects }} | jq -r '.[]'); do
+          for proj in $(echo '${{ needs.discover-test-projects.outputs.test_projects }}' | jq -r '.[]'); do
             dotnet restore "$proj"
           done
         shell: bash
       - name: Build all test projects with error logging
         run: |
           set -e
-          for proj in $(echo ${{ needs.discover-test-projects.outputs.test_projects }} | jq -r '.[]'); do
+          for proj in $(echo '${{ needs.discover-test-projects.outputs.test_projects }}' | jq -r '.[]'); do
             echo "Building $proj..."
             dotnet build "$proj" --configuration Debug --no-restore --output "$(dirname $proj)/bin/Debug" 2>&1 | tee "$(dirname $proj)/build.log"
           done
