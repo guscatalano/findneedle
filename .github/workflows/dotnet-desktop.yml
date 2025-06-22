@@ -468,6 +468,7 @@ jobs:
 
   test-publish:
     needs: run-tests
+    if: always()
     strategy:
       matrix:
         configuration: [Debug]
