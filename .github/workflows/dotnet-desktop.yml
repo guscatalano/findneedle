@@ -498,6 +498,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Download coverage badge artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-badge
+
       - name: Copy coverage badge to .github/badges/coverage.svg
         run: |
           mkdir -p .github/badges
