@@ -174,7 +174,10 @@ jobs:
       - name: Publish all projects (Debug, x64)
         run: |
           for %%f in (*.csproj *\*.csproj *\*\*.csproj) do (
-            set "projdir=%%~dpf" && dotnet publish "%%f" --configuration Debug --output "%%projdir%bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            for /f "usebackq tokens=*" %%t in (`powershell -Command "Select-String -Path '%%f' -Pattern '<TargetFramework>(.+)</TargetFramework>' | ForEach-Object { $_.Matches[0].Groups[1].Value }"") do (
+              set "projdir=%%~dpf"
+              dotnet publish "%%f" --configuration Debug --framework %%t --output "%%projdir%bin\x64\Debug\publish" --runtime win-x64 /p:Platform=x64
+            )
           )
         shell: cmd
       - name: Upload all build outputs (Debug)
