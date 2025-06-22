@@ -277,7 +277,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
     - name: Cache NuGet packages
       uses: actions/cache@v3
       with:
@@ -285,63 +285,20 @@ jobs:
         key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
         restore-keys: ${{ runner.os }}-nuget-
 
-    # Install the .NET Core workload
-    - name: Install .NET Core
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.Solution_Name }}
 
-    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
-    - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v2
+    - name: Build solution
+      run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
 
+    - name: Publish FindNeedleUX
+      run: dotnet publish ${{ env.FindNeedleUX_Project }} --configuration ${{ matrix.configuration }} --output ${{ github.workspace }}/publish
 
-    # Restore the application to popujlate the obj folder with RuntimeIdentifiers
-    - name: Restore the application
-      run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
-      env:
-        Configuration: ${{ matrix.configuration }}
-
-    - name: Cache NuGet packages
-      uses: actions/cache@v3
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
-    
-    # clean the solution
-    - name: Clean the application
-      run: msbuild $env:Solution_Name /t:Clean /p:Configuration=$env:Configuration
-      env:
-        Configuration: ${{ matrix.configuration }}
-    
-    # build it
-    - name: Build the application
-      run: msbuild $env:Solution_Name /t:Build /p:Configuration=$env:Configuration
-      env:
-        Configuration: ${{ matrix.configuration }}
-
-
-    #  publish the app
-    - name: Publish the application
-      run: msbuild $env:Solution_Name /t:Publish /p:Configuration=$env:Configuration
-      env:
-        Configuration: ${{ matrix.configuration }}   
-
-
-      # publish specifically the ux
-    - name: Publish the application
-      run: msbuild /t:Publish /p:Configuration=$env:Configuration FindNeedleUX
-      env:
-        Configuration: ${{ matrix.configuration }}   
-
-    
     - name: Archive Release
       uses: thedoctor0/zip-release@0.7.5
       with:
         type: 'zip'
-        directory: '${{ github.workspace }}\FindNeedleUX\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish'
+        directory: '${{ github.workspace }}/publish'
         filename: 'release.zip'
         exclusions: '*.git* /*node_modules/*.editorconfig'
 
@@ -349,7 +306,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: release-bits
-        path: ${{ github.workspace }}\FindNeedleUX\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish\release.zip
+        path: ${{ github.workspace }}/publish/release.zip
         retention-days: 5
 
   make_msix:
