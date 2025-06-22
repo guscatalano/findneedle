@@ -489,7 +489,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: FindNeedleUX-MSIX/*.msix
+        asset_path: FindNeedleUX-MSIX/**/*.msix
         asset_name: FindNeedleUX-signed.msix
         asset_content_type: application/vnd.ms-appx
 
@@ -499,7 +499,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: FindNeedleUX-MSIX-unsigned/*.msix
+        asset_path: FindNeedleUX-MSIX-unsigned/**/*.msix
         asset_name: FindNeedleUX-unsigned.msix
         asset_content_type: application/vnd.ms-appx
 
@@ -617,6 +617,32 @@ jobs:
             echo "No changes to commit."
           else
             git commit -m "Update coverage badge [skip ci]"
+            git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download test status badge artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: test-status-badge
+
+      - name: Copy test status badge to .github/badges/test-status.svg
+        run: |
+          mkdir -p .github/badges
+          cp test-status-percentage.svg .github/badges/test-status.svg
+
+      - name: Commit and push test status badge
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git fetch origin master
+          git checkout master
+          git add .github/badges/test-status.svg
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update test status badge [skip ci]"
             git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
           fi
         env:
