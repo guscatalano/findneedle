@@ -501,7 +501,7 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v2.16.1
         if: always()
         with:
-          trx_files: "${{ github.workspace }}/**/*.trx"
+          trx_files: "**/*.trx"
 
   update-badges:
     needs: test-publish
