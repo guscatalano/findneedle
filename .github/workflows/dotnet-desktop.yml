@@ -54,7 +54,7 @@ env:
 
 jobs:
   create-release:
-    needs: [build]
+    needs: [build-release]
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
@@ -150,63 +150,66 @@ jobs:
           fi
           echo "test_projects=$TEST_PROJECTS" >> $GITHUB_OUTPUT
 
-  build:
-    strategy:
-      matrix:
-        configuration: [Release, Debug]
-
-    runs-on: windows-latest  # For a list of available runner types, refer to
-                             # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
-
+  build-debug:
+    runs-on: windows-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.Solution_Name }}
+      - name: Build solution (Debug)
+        run: dotnet build ${{ env.Solution_Name }} --configuration Debug --no-restore
+      - name: Upload all build outputs (Debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-Debug
+          path: |
+            **/bin/Debug/
+          retention-days: 2
 
-    - name: Cache NuGet packages
-      uses: actions/cache@v3
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-        restore-keys: ${{ runner.os }}-nuget-
-
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.Solution_Name }}
-
-    - name: Build solution (including tests)
-      run: dotnet build ${{ env.Solution_Name }} --configuration ${{ matrix.configuration }} --no-restore
-    - name: Upload all build outputs
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-output-${{ matrix.configuration }}
-        path: |
-          **/bin/${{ matrix.configuration }}/
-        retention-days: 2
-
-    - name: Publish FindNeedleUX (Release only)
-      if: matrix.configuration == 'Release'
-      run: dotnet publish ${{ env.FindNeedleUX_Project }} --configuration ${{ matrix.configuration }} --output ${{ github.workspace }}/publish
-
-    - name: Archive Release (Release only)
-      if: matrix.configuration == 'Release'
-      uses: thedoctor0/zip-release@0.7.5
-      with:
-        type: 'zip'
-        directory: '${{ github.workspace }}/publish'
-        filename: 'release.zip'
-        exclusions: '*.git* /*node_modules/*.editorconfig'
-
-    - name: Upload Release bits (Release only)
-      if: matrix.configuration == 'Release'
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-bits
-        path: ${{ github.workspace }}/publish/release.zip
-        retention-days: 5
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.Solution_Name }}
+      - name: Build solution (Release)
+        run: dotnet build ${{ env.Solution_Name }} --configuration Release --no-restore
+      - name: Publish FindNeedleUX (Release only)
+        run: dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish
+      - name: Archive Release (Release only)
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: 'zip'
+          directory: '${{ github.workspace }}/publish'
+          filename: 'release.zip'
+          exclusions: '*.git* /*node_modules/*.editorconfig'
+      - name: Upload Release bits (Release only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bits
+          path: ${{ github.workspace }}/publish/release.zip
+          retention-days: 5
 
   make_msix_signed:
-    needs: [build]
+    needs: [build-release]
     strategy:
       matrix:
         configuration: [Release]
@@ -280,7 +283,7 @@ jobs:
           **/AppPackages/**/*.msixbundle
 
   make_msix_unsigned:
-    needs: [build]
+    needs: [build-release]
     strategy:
       matrix:
         configuration: [Release]
@@ -324,7 +327,7 @@ jobs:
 
 
   actually_release:
-    needs: [create-release, build]
+    needs: [create-release, build-release]
     strategy:
       matrix:
         configuration: [Release]
@@ -391,7 +394,7 @@ jobs:
 
 
   update-badges:
-    needs: build
+    needs: build-debug
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
     steps:
@@ -427,8 +430,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   run-tests:
-    needs: [discover-test-projects, build]
-    if: needs.build.result == 'success'
+    needs: [discover-test-projects, build-debug]
+    if: always()
     strategy:
       matrix:
         test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
