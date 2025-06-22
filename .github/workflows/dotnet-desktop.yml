@@ -399,6 +399,18 @@ jobs:
     - name: Restore NuGet packages
       run: dotnet restore ${{ env.FindNeedleUX_Project }}
 
+    - name: Create MSIX package (unsigned)
+      run: |
+        msbuild ${{ env.FindNeedleUX_Project }} /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true
+
+    - name: Upload MSIX artifact (unsigned)
+      uses: actions/upload-artifact@v4
+      with:
+        name: FindNeedleUX-MSIX-unsigned
+        path: |
+          **/AppPackages/**/*.msix
+          **/AppPackages/**/*.msixbundle
+
     - name: Decode certificate from secret
       run: |
           [System.IO.File]::WriteAllBytes(
@@ -407,13 +419,40 @@ jobs:
           )
       shell: pwsh
 
+    - name: Import signing certificate to cert store
+      id: import_cert
+      run: |
+        $pfxPath = "${{ github.workspace }}/FindNeedleUX/SigningCertificate.pfx"
+        $securePassword = ConvertTo-SecureString "${{ secrets.SIGNINGCERTIFICATEPASSWORD }}" -AsPlainText -Force
+        $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
+        echo "thumbprint=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      shell: pwsh
+
     - name: Build solution in Release mode
       run: dotnet build ${{ env.FindNeedleUX_Project }} -c Release
 
     - name: Create MSIX package (signed)
       run: |
-        msbuild ${{ env.FindNeedleUX_Project }} /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateKeyFile=${{ github.workspace }}/FindNeedleUX/SigningCertificate.pfx /p:PackageCertificatePassword=${{ secrets.SIGNINGCERTIFICATEPASSWORD }}
-      
+        msbuild ${{ env.FindNeedleUX_Project }} /p:Configuration=Release /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }}
+      shell: pwsh
+
+    - name: Remove signing certificate from cert store
+      if: always()
+      run: |
+        $thumb = "${{ steps.import_cert.outputs.thumbprint }}"
+        if ($thumb) {
+          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $thumb }
+          if ($cert) {
+            Remove-Item -Path $cert.PSPath -Force
+            Write-Host "Removed certificate with thumbprint $thumb from store."
+          } else {
+            Write-Host "Certificate with thumbprint $thumb not found in store."
+          }
+        } else {
+          Write-Host "No thumbprint found, skipping cert removal."
+        }
+      shell: pwsh
+
     - name: Upload MSIX artifact
       uses: actions/upload-artifact@v4
       with:
@@ -465,7 +504,30 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} # Thijs pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: release-bits/release.zip
         asset_name: release.zip
         asset_content_type: application/zip
+
+    - name: Copy coverage badge to .github/badges/coverage.svg
+      if: github.ref == 'refs/heads/master'
+      run: |
+        mkdir -p .github/badges
+        cp badge_linecoverage.svg .github/badges/coverage.svg
+
+    - name: Commit and push coverage badge
+      if: github.ref == 'refs/heads/master'
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git fetch origin master
+        git checkout master
+        git add .github/badges/coverage.svg
+        if git diff --cached --quiet; then
+          echo "No changes to commit."
+        else
+          git commit -m "Update coverage badge [skip ci]"
+          git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" master
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
