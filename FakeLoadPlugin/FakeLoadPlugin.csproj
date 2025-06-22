@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <SelfContained>true</SelfContained>
 	  <PlatformTarget>AnyCPU</PlatformTarget>
-	  <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
+	  <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
 	  <Platforms>AnyCPU;x64</Platforms>
     <NuGetAudit>false</NuGetAudit>
 	  <PublishSingleFile>true</PublishSingleFile>
