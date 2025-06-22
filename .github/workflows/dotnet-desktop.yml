@@ -94,7 +94,7 @@ jobs:
 
   create-release:
     needs: [build-release, test-publish]
-    if: needs.test-publish.result == 'success'
+    if: needs.test-publish.result == 'success' || needs.test-publish.result == 'skipped'
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
