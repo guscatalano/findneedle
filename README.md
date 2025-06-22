@@ -1,7 +1,6 @@
 # findneedle
 
 ![Test Status](https://github.com/guscatalano/findneedle/actions/workflows/dotnet-desktop.yml/badge.svg?branch=master)
-![Coverage](./badge.svg)
 
 **A tool to quickly search through logs in Windows.**
 
