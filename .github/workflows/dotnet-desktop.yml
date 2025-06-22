@@ -581,13 +581,13 @@ jobs:
           $projDir = Split-Path $projPath -Parent
           $dllName = (Split-Path $projPath -LeafBase) + ".dll"
           $outDir = Join-Path $projDir "bin/x64/Debug/net9.0-windows10.0.26100.0/win-x64"
-          Write-Host "Looking for test DLL: $dllName in $outDir"
+          Write-Host "Looking for test DLL: $dllName in ${outDir}"
           if (Test-Path $outDir) {
             Get-ChildItem -Path $outDir -Filter $dllName -Recurse | ForEach-Object { $_.FullName }
-            Write-Host "Directory listing for $outDir:"
+            Write-Host "Directory listing for ${outDir}:"
             Get-ChildItem -Path $outDir -Recurse | ForEach-Object { $_.FullName }
           } else {
-            Write-Host "Output directory $outDir does not exist."
+            Write-Host "Output directory ${outDir} does not exist."
           }
       - name: Run tests and collect coverage
         id: testrun
