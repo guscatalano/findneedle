@@ -76,7 +76,7 @@ jobs:
     # Get changed files for this commit (must be before any step that uses its output)
     - name: Get changed files
       id: get_changed_files
-      uses: tj-actions/changed-files@v44
+      uses: tj-actions/changed-files@v46
       with:
         separator: ','
 
