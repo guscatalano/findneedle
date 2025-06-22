@@ -210,11 +210,12 @@ jobs:
             Get-ChildItem -Path $bindir -Recurse -ErrorAction SilentlyContinue | Write-Host
           }
 
-      - name: Upload all build outputs (Debug)
+      - name: Upload published outputs for test projects (Debug)
         uses: actions/upload-artifact@v4
         with:
           name: build-output-Debug
-          path: .
+          path: |
+            ${{ github.workspace }}/**/bin/x64/Debug/publish
           retention-days: 2
 
   build-release:
