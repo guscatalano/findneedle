@@ -44,7 +44,11 @@ public sealed partial class LogsPage : Page
     public void AddLogLine(string line)
     {
         LogLines.Add(line);
-        LogListView.ScrollIntoView(line);
+        try
+        {
+            LogListView.ScrollIntoView(line);
+        }
+        catch { }
     }
 
     private void DebugToggleSwitch_Toggled(object sender, RoutedEventArgs e)

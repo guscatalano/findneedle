@@ -233,13 +233,14 @@ jobs:
             echo Result for %%f: %ERRORLEVEL%
           )
         shell: cmd
-      - name: Upload all build outputs (Debug)
+      - name: Upload published outputs for test projects (Debug)
         uses: actions/upload-artifact@v4
         with:
           name: build-output-Debug
-          path: .
+          path: |
+            ${{ github.workspace }}/**/bin/x64/Debug/publish
           retention-days: 2
-          
+
   build-release:
     runs-on: windows-latest
     strategy:
@@ -519,7 +520,11 @@ jobs:
             */**/merged-results/*.trx
             */**/TestResults/**/*.trx
             */**/merged-results/**/*.trx
-
+      - name: Upload coverage badge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-badge
+          path: merged-coverage/badge_linecoverage.svg
 
   update-badges:
     needs: test-publish
