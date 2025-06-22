@@ -174,7 +174,7 @@ jobs:
           dotnet-version: 8.0.x
       - name: Setup MSBuild.exe
         uses: microsoft/setup-msbuild@v2
-      - name: Debug: Print working directory and files
+      - name: Debug Print working directory and files
         run: |
           echo "Current directory: $(pwd)"
           ls -alR
