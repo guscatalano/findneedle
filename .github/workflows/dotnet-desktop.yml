@@ -189,9 +189,9 @@ jobs:
             )
           )
         shell: cmd
-      - name: Build all test projects (Debug, x64)
+      - name: Build all test projects (Debug, x64, net9.0-windows10.0.26100.0)
         run: |
-          for %%f in (*Tests/*.csproj) do dotnet build "%%f" --configuration Debug --no-restore --framework net9.0 --runtime win-x64 /p:Platform=x64
+          for %%f in (*Tests/*.csproj) do dotnet build "%%f" --configuration Debug --framework net9.0-windows10.0.26100.0 --runtime win-x64 --output "%%~dpfbin\x64\Debug\net9.0-windows10.0.26100.0\win-x64" /p:Platform=x64
         shell: cmd
       - name: Upload all build outputs (Debug)
         uses: actions/upload-artifact@v4
