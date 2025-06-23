@@ -329,6 +329,8 @@ jobs:
       matrix:
         configuration: [Release]
     runs-on: windows-latest
+    outputs:
+      releasetag: ${{ needs.set-msix-version.outputs.releasetag }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -410,6 +412,8 @@ jobs:
       matrix:
         configuration: [Release]
     runs-on: windows-latest
+    outputs:
+      releasetag: ${{ needs.set-msix-version.outputs.releasetag }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -456,8 +460,8 @@ jobs:
 
 
   actually_release:
-    needs: [create-release, test-publish]
-    if: needs.create-release.result == 'success'
+    needs: [make_msix_signed, make_msix_unsigned, test-publish]
+    if: needs.make_msix_signed.result == 'success' && needs.make_msix_unsigned.result == 'success'
     strategy:
       matrix:
         configuration: [Release]
@@ -506,7 +510,7 @@ jobs:
         Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after download:"
         Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
     - name: Debug Release Tag
-      run: "echo Release tag: ${{needs.create-release.outputs.releasetag}}"
+      run: "echo Release tag: ${{needs.make_msix_signed.outputs.releasetag}}"
 
     - name: Ensure release and tag do not already exist
       run: |
@@ -514,7 +518,7 @@ jobs:
         if ! command -v gh > /dev/null; then
           sudo apt-get update && sudo apt-get install -y gh
         fi
-        TAG="${{needs.create-release.outputs.releasetag}}"
+        TAG="${{needs.make_msix_signed.outputs.releasetag}}"
         if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
           echo "Release with tag $TAG exists. Deleting..."
           gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY"
@@ -535,8 +539,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{needs.create-release.outputs.releasetag}}
-        release_name: Find Needle Beta ${{needs.create-release.outputs.releasetag}}
+        tag_name: ${{needs.make_msix_signed.outputs.releasetag}}
+        release_name: Find Needle Beta ${{needs.make_msix_signed.outputs.releasetag}}
         draft: false
         prerelease: true
   
