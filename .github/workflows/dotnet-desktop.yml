@@ -818,7 +818,9 @@ jobs:
 
   run-tests:
     needs: [discover-test-projects, build-debug]
-    if: always()
+    strategy:
+      matrix:
+        test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
     runs-on: windows-latest
     outputs:
       testresult: ${{ steps.testrun.outcome }}
