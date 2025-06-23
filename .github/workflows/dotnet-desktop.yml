@@ -106,8 +106,8 @@ jobs:
           echo "pr_title_lower=${prtitle,,}" >> $GITHUB_OUTPUT
 
   create-release:
-    needs: [build-release, test-publish]
-    if: needs.test-publish.result == 'success' || needs.test-publish.result == 'skipped'
+    needs: [build-release, test-publish, skip-tests]
+    if: needs.test-publish.result == 'success' || needs.test-publish.result == 'skipped' || needs.skip-tests.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
