@@ -182,12 +182,20 @@ jobs:
         fallback: 1.0.0 # Optional fallback tag to use when no tag can be found
         #workingDirectory: another/path/where/a/git/repo/is/checked/out # Optional alternative working directory
 
+  skip-tests:
+    needs: detect-workflow-only-change
+    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'true' && !contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') && !(github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip Tests
+        run: echo "Skipping tests because only the workflow file was changed."
+
   discover-test-projects:
+    needs: detect-workflow-only-change
+    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
     runs-on: ubuntu-latest
     outputs:
       test_projects: ${{ steps.find-tests.outputs.test_projects }}
-    needs: detect-workflow-only-change
-    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -608,9 +616,6 @@ jobs:
   test-publish:
     needs: [run-tests, detect-workflow-only-change]
     if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
-    strategy:
-      matrix:
-        configuration: [Debug]
     runs-on: ubuntu-latest
 
     steps:
@@ -872,9 +877,6 @@ jobs:
   run-tests:
     needs: [discover-test-projects, build-debug, detect-workflow-only-change]
     if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
-    strategy:
-      matrix:
-        test_project: ${{ fromJson(needs.discover-test-projects.outputs.test_projects) }}
     runs-on: windows-latest
     outputs:
       testresult: ${{ steps.testrun.outcome }}
