@@ -401,14 +401,12 @@ jobs:
         dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false
       shell: pwsh
     - name: Upload MSIX artifact (unsigned)
-      uses: sekwah41/upload-release-assets@v1.1.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: actions/upload-artifact@v4
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: '**/AppPackages/**/*.msix'
-        asset_name: FindNeedleUX-unsigned.msix
-        asset_content_type: application/vnd.ms-appx
+        name: FindNeedleUX-MSIX-unsigned
+        path: |
+          **/AppPackages/**/*.msix
+          **/AppPackages/**/*.msixbundle
 
 
   actually_release:
