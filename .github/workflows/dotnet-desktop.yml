@@ -59,55 +59,9 @@ env:
 
 jobs:
 
-  detect-workflow-only-change:
-    runs-on: ubuntu-latest
-    outputs:
-      only_workflow_changed: ${{ steps.only_workflow.outputs.only_workflow_changed }}
-      commit_message_lower: ${{ steps.commit_lower.outputs.commit_message_lower }}
-      pr_title_lower: ${{ steps.commit_lower.outputs.pr_title_lower }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Get changed files
-        id: changed_files
-        uses: tj-actions/changed-files@v46
-        with:
-          separator: ','
-      - name: Check if only workflow file changed
-        id: only_workflow
-        shell: bash
-        run: |
-          changed="${{ steps.changed_files.outputs.all_changed_files }}"
-          # Split on comma or newline, trim whitespace, remove empty
-          files=()
-          IFS=',\n' read -ra rawfiles <<< "$changed"
-          for f in "${rawfiles[@]}"; do
-            f_trimmed="$(echo "$f" | xargs)"
-            if [[ -n "$f_trimmed" ]]; then
-              files+=("$f_trimmed")
-            fi
-          done
-          only_workflow=true
-          for f in "${files[@]}"; do
-            if [[ "$f" != ".github/workflows/dotnet-desktop.yml" ]]; then
-              only_workflow=false
-              break
-            fi
-          done
-          echo "only_workflow_changed=$only_workflow" >> $GITHUB_OUTPUT
-      - name: Lowercase commit message and PR title
-        id: commit_lower
-        run: |
-          msg="${{ github.event.head_commit.message }}"
-          prtitle="${{ github.event.pull_request.title }}"
-          echo "commit_message_lower=${msg,,}" >> $GITHUB_OUTPUT
-          echo "pr_title_lower=${prtitle,,}" >> $GITHUB_OUTPUT
-
   create-release:
-    needs: [build-release, test-publish, skip-tests]
-    if: needs.test-publish.result == 'success' || needs.test-publish.result == 'skipped' || needs.skip-tests.result == 'success'
+    needs: [build-release, test-publish]
+    if: needs.test-publish.result == 'success' 
     runs-on: ubuntu-latest
     outputs:
       releasetag: ${{ steps.currenttag.outputs.tag }}
@@ -182,17 +136,7 @@ jobs:
         fallback: 1.0.0 # Optional fallback tag to use when no tag can be found
         #workingDirectory: another/path/where/a/git/repo/is/checked/out # Optional alternative working directory
 
-  skip-tests:
-    needs: detect-workflow-only-change
-    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'true' && !contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') && !(github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Skip Tests
-        run: echo "Skipping tests because only the workflow file was changed."
-
   discover-test-projects:
-    needs: detect-workflow-only-change
-    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
     runs-on: ubuntu-latest
     outputs:
       test_projects: ${{ steps.find-tests.outputs.test_projects }}
@@ -224,8 +168,6 @@ jobs:
 
   build-debug:
     runs-on: windows-latest
-    needs: detect-workflow-only-change
-    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -614,8 +556,8 @@ jobs:
 
 
   test-publish:
-    needs: [run-tests, detect-workflow-only-change]
-    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
+    needs: [run-tests, discover-test-projects, build-debug]
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
@@ -875,8 +817,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   run-tests:
-    needs: [discover-test-projects, build-debug, detect-workflow-only-change]
-    if: needs.detect-workflow-only-change.outputs.only_workflow_changed == 'false' || contains(needs.detect-workflow-only-change.outputs.commit_message_lower, 'test') || (github.event_name == 'pull_request' && contains(needs.detect-workflow-only-change.outputs.pr_title_lower, 'test'))
+    needs: [discover-test-projects, build-debug]
+    if: always()
     runs-on: windows-latest
     outputs:
       testresult: ${{ steps.testrun.outcome }}
