@@ -297,6 +297,10 @@ jobs:
     outputs:
       releasetag: ${{ steps.setver.outputs.releasetag }}
     steps:
+      - name: Debug - Print release tag
+        shell: pwsh
+        run: |
+          Write-Host "Release tag from create-release: '${{ needs.create-release.outputs.releasetag }}'"
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -308,7 +312,7 @@ jobs:
           $manifest = "FindNeedleUX/Package.appxmanifest"
           $tag = "${{ needs.create-release.outputs.releasetag }}"
           $version = $tag.TrimStart('v')
-          if ($version -notmatch '^(\\d+)\.(\\d+)\.(\\d+)(\.(\\d+))?$') {
+          if ($version -notmatch '^(\d+)\.(\d+)\.(\d+)(\.(\d+))?$') {
             $version = "1.0.0.0"
           } elseif ($version -notmatch '\.\d+$') {
             $version = "$version.0"
