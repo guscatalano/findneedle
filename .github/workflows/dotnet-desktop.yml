@@ -324,7 +324,23 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add $manifest
           git commit -m "Update AppxManifest version to $version [skip ci]" || true
-          git push
+          $maxAttempts = 3
+          $attempt = 1
+          while ($attempt -le $maxAttempts) {
+            try {
+              git pull --rebase origin master
+              git push
+              break
+            } catch {
+              if ($attempt -eq $maxAttempts) {
+                Write-Host "Failed to push after $maxAttempts attempts."
+                exit 1
+              }
+              Write-Host "Push failed (attempt $attempt/$maxAttempts), retrying after rebase..."
+              $attempt++
+              Start-Sleep -Seconds 2
+            }
+          }
           echo "releasetag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
   make_msix_signed:
