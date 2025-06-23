@@ -502,11 +502,8 @@ jobs:
     - name: List all files in FindNeedleUX-MSIX-unsigned after copying
       shell: pwsh
       run: |
-        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after copying MSIX files to root:"
-        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
-
-    # No unzip step needed: actions/download-artifact@v4 extracts the artifact automatically if it is a zip or folder.
-    # The .msix and .msixbundle files should be present inside FindNeedleUX-MSIX-unsigned after download.
+        Write-Host "Listing all .msix and .msixbundle files in the entire workspace after copying MSIX files to root of FindNeedleUX-MSIX-unsigned:"
+        Get-ChildItem -Path $env:GITHUB_WORKSPACE -Include *.msix,*.msixbundle -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
     - name: List all files in FindNeedleUX-MSIX-unsigned after download
       shell: pwsh
       run: |
