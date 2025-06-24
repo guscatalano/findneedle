@@ -152,6 +152,7 @@ jobs:
     # Get Previous tag (now the one we just created)
     - name: 'Get Previous tag'
       id: currenttag
+      shell: pwsh
       run: |
         echo "tag=${{ steps.nextver.outputs.next_tag }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
@@ -1062,4 +1063,3 @@ jobs:
               Get-Content $file.FullName | Write-Host
             }
           }
-       
