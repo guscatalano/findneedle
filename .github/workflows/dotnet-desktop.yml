@@ -315,8 +315,8 @@ jobs:
           # Extract only numeric version segments, ignore any branch prefix
           $versionParts = $tag -split '[^0-9]+'
           $versionParts = $versionParts | Where-Object { $_ -ne '' }
-          while ($versionParts.Count -lt 4) { $versionParts += '0' }
-          if ($versionParts.Count -gt 4) { $versionParts = $versionParts[0..3] }
+          while ($versionParts.Count -lt 3) { $versionParts += '0' }
+          if ($versionParts.Count -gt 3) { $versionParts = $versionParts[0..2] }
           $version = $versionParts -join '.'
           echo "version=$version"
           [xml]$xml = Get-Content $manifest
@@ -397,11 +397,12 @@ jobs:
       run: |
         $tag = "${{ needs.set-msix-version.outputs.releasetag }}"
         $version = $tag.TrimStart('v')
-        if ($version -notmatch '^(\d+)\.(\d+)\.(\d+)(\.(\d+))?$') {
-          $version = "1.0.0.0"
-        } elseif ($version -notmatch '\.\d+$') {
-          $version = "$version.0"
-        }
+        # Normalize to 3-segment version (e.g., 1.0.0)
+        $versionParts = $version -split '[^0-9]+'
+        $versionParts = $versionParts | Where-Object { $_ -ne '' }
+        while ($versionParts.Count -lt 3) { $versionParts += '0' }
+        if ($versionParts.Count -gt 3) { $versionParts = $versionParts[0..2] }
+        $version = $versionParts -join '.'
         dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }} /p:AppxPackageVersion=$version
       shell: pwsh
     - name: Remove signing certificate from cert store
@@ -465,11 +466,12 @@ jobs:
       run: |
         $tag = "${{ needs.set-msix-version.outputs.releasetag }}"
         $version = $tag.TrimStart('v')
-        if ($version -notmatch '^(\d+)\.(\d+)\.(\d+)(\.(\d+))?$') {
-          $version = "1.0.0.0"
-        } elseif ($version -notmatch '\.\d+$') {
-          $version = "$version.0"
-        }
+        # Normalize to 3-segment version (e.g., 1.0.0)
+        $versionParts = $version -split '[^0-9]+'
+        $versionParts = $versionParts | Where-Object { $_ -ne '' }
+        while ($versionParts.Count -lt 3) { $versionParts += '0' }
+        if ($versionParts.Count -gt 3) { $versionParts = $versionParts[0..2] }
+        $version = $versionParts -join '.'
         dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false /p:AppxPackageVersion=$version
       shell: pwsh
     - name: Upload MSIX artifact (unsigned)
@@ -539,13 +541,14 @@ jobs:
         $tag = $tag.TrimStart('v')
         $versionParts = $tag -split '[^0-9]+'
         $versionParts = $versionParts | Where-Object { $_ -ne '' }
-        while ($versionParts.Count -lt 4) { $versionParts += '0' }
-        if ($versionParts.Count -gt 4) { $versionParts = $versionParts[0..3] }
+        while ($versionParts.Count -lt 3) { $versionParts += '0' }
+        if ($versionParts.Count -gt 3) { $versionParts = $versionParts[0..2] }
         $version = $versionParts -join '.'
         echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "tag=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     - name: Debug Release Tag
-      run: "echo Release tag: ${{steps.normver.outputs.version}}"
+      run: "echo Release tag: ${{steps.normver.outputs.tag}}"
 
     - name: Ensure release and tag do not already exist
       run: |
@@ -553,7 +556,7 @@ jobs:
         if ! command -v gh > /dev/null; then
           sudo apt-get update && sudo apt-get install -y gh
         fi
-        TAG="${{steps.normver.outputs.version}}"
+        TAG="${{steps.normver.outputs.tag}}"
         if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
           echo "Release with tag $TAG exists. Deleting..."
           gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY"
@@ -574,7 +577,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{steps.normver.outputs.version}}
+        tag_name: ${{steps.normver.outputs.tag}}
         release_name: Find Needle Beta ${{steps.normver.outputs.version}}
         draft: false
         prerelease: true
