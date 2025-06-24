@@ -11,6 +11,7 @@ public class SystemInfoMiddleware
     public static string GetPanelText()
     {
         string dotnetInfo = $".NET Runtime: {RuntimeInformation.FrameworkDescription}";
+        string osVersion = $"Windows Version: {GetWindowsVersion()}";
         string wdkRootPath = "WDK Root Path: ";
         string tracefmtPath = "Tracefmt: ";
         string defaultViewer = $"Default Result Viewer: {GlobalSettings.DefaultResultViewer}";
@@ -59,7 +60,20 @@ public class SystemInfoMiddleware
             wdkRootPath += $"Error: {ex.Message}";
             tracefmtPath += $"Error: {ex.Message}";
         }
-        return $"{dotnetInfo}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{buildTimeLine}";
+        return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{buildTimeLine}";
+    }
+
+    private static string GetWindowsVersion()
+    {
+        try
+        {
+            var os = Environment.OSVersion;
+            return $"{os.VersionString}";
+        }
+        catch
+        {
+            return "Unknown";
+        }
     }
 
     private static (string version, string source) GetAppVersionAndSource()
