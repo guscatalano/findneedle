@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.IO;
 using FindPluginCore.GlobalConfiguration; // Add for settings
 using Windows.ApplicationModel; // Correct namespace for Package
 
@@ -17,6 +18,7 @@ public class SystemInfoMiddleware
         (appVersion, versionSource) = GetAppVersionAndSource();
         string versionLine = $"App Version: {appVersion}";
         string versionSourceLine = $"Version Source: {versionSource}";
+        string buildTimeLine = $"Build Time: {GetBuildTime()}";
         try
         {
             // Use reflection to load WDKFinder if available
@@ -57,7 +59,7 @@ public class SystemInfoMiddleware
             wdkRootPath += $"Error: {ex.Message}";
             tracefmtPath += $"Error: {ex.Message}";
         }
-        return $"{dotnetInfo}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}";
+        return $"{dotnetInfo}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{buildTimeLine}";
     }
 
     private static (string version, string source) GetAppVersionAndSource()
@@ -74,6 +76,21 @@ public class SystemInfoMiddleware
             var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
             var version = assembly.GetName().Version;
             return (version != null ? version.ToString() : "Unknown", "Assembly");
+        }
+    }
+
+    private static string GetBuildTime()
+    {
+        try
+        {
+            var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+            var filePath = assembly.Location;
+            var lastWrite = File.GetLastWriteTime(filePath);
+            return lastWrite.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+        catch
+        {
+            return "Unknown";
         }
     }
 }
