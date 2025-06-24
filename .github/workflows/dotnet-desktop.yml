@@ -312,29 +312,11 @@ jobs:
           $manifest = "FindNeedleUX/Package.appxmanifest"
           $tag = "${{ needs.create-release.outputs.releasetag }}"
           $tag = $tag.TrimStart('v')
-          # Remove any branch prefix (e.g. master.1.145 or vmaster.1.145 -> 1.0.0.145)
-          if ($tag -match '^[a-zA-Z]+\.(\d+)\.(\d+)$') {
-            $major = $matches[1]
-            $build = $matches[2]
-            $version = "1.0.0.$build"
-          } elseif ($tag -match '^[a-zA-Z]+\.(\d+)\.(\d+)\.(\d+)$') {
-            $major = $matches[1]
-            $minor = $matches[2]
-            $build = $matches[3]
-            $version = "$major.$minor.$build.0"
-          } elseif ($tag -match '^(\d+)\.(\d+)\.(\d+)$') {
-            $major = $matches[1]
-            $minor = $matches[2]
-            $build = $matches[3]
-            $version = "$major.$minor.$build.0"
-          } elseif ($tag -match '^(\d+)\.(\d+)\.(\d+)\.(\d+)$') {
-            $version = $tag
-          } else {
-            # fallback: pad with .0 to 4 segments
-            $parts = $tag -split '\.'
-            while ($parts.Count -lt 4) { $parts += '0' }
-            $version = $parts -join '.'
-          }
+          # Extract only numeric version segments, ignore any branch prefix
+          $versionParts = $tag -split '[^0-9]+'
+          $versionParts = $versionParts | Where-Object { $_ -ne '' }
+          while ($versionParts.Count -lt 4) { $versionParts += '0' }
+          $version = $versionParts[0..3] -join '.'
           echo "version=$version"
           [xml]$xml = Get-Content $manifest
           $xml.Package.Identity.Version = $version
