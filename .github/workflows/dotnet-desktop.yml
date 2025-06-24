@@ -129,7 +129,7 @@ jobs:
           $latest = $tags[0]
         }
         Write-Host "Latest tag: $latest"
-        $ver = $latest.TrimStart('v')
+        $ver = ([string]$latest).TrimStart('v')
         $parts = $ver -split '\.'
         while ($parts.Count -lt 3) { $parts += '0' }
         if ($parts.Count -gt 3) { $parts = $parts[0..2] }
@@ -1062,3 +1062,4 @@ jobs:
               Get-Content $file.FullName | Write-Host
             }
           }
+       
