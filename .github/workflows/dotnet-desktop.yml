@@ -603,6 +603,35 @@ jobs:
         GITHUB_REPOSITORY: ${{ github.repository }}
       shell: bash
 
+    - name: Gather commit messages since last tag
+      id: relnotes
+      shell: pwsh
+      run: |
+        $tags = git tag --list '*.*.*'
+        $versions = @()
+        foreach ($tag in $tags) {
+          try { $ver = [Version]$tag; $versions += $ver } catch {}
+        }
+        if ($versions.Count -eq 0) {
+          $prev = ''
+        } else {
+          $latest = $versions | Sort-Object -Descending | Select-Object -First 2
+          if ($latest.Count -gt 1) {
+            $prev = $latest[1].ToString()
+          } else {
+            $prev = ''
+          }
+        }
+        if ($prev) {
+          $log = git log $prev..HEAD --pretty=format:"* %s"
+        } else {
+          $log = git log --pretty=format:"* %s"
+        }
+        $log | Out-File release_notes.txt -Encoding utf8
+        echo "notes<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Get-Content release_notes.txt | ForEach-Object { $_ | Out-File -FilePath $env:GITHUB_OUTPUT -Append }
+        echo "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -611,6 +640,7 @@ jobs:
       with:
         tag_name: ${{steps.normver.outputs.tag}}
         release_name: Find Needle Beta ${{steps.normver.outputs.version}}
+        body: ${{ steps.relnotes.outputs.notes }}
         draft: false
         prerelease: true
   
