@@ -136,7 +136,7 @@ jobs:
         $major = [int]$parts[0]
         $minor = [int]$parts[1]
         $patch = [int]$parts[2] + 1
-        $next = "v$major.$minor.$patch"
+        $next = "$major.$minor.$patch"
         echo "next_tag=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         echo "next_version=$major.$minor.$patch" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
@@ -146,8 +146,13 @@ jobs:
       shell: pwsh
       run: |
         $tag = "${{ steps.nextver.outputs.next_tag }}"
-        git tag $tag
-        git push origin $tag
+        if (-not (git tag --list $tag)) {
+          git tag $tag
+          git push origin $tag
+          Write-Host "Created and pushed tag $tag"
+        } else {
+          Write-Host "Tag $tag already exists, skipping creation."
+        }
 
     # Get Previous tag (now the one we just created)
     - name: 'Get Previous tag'
