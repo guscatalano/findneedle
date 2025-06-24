@@ -2,6 +2,7 @@ using FindNeedleUX.Services;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
 using FindPluginCore.GlobalConfiguration;
+using System.Diagnostics;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -43,5 +44,25 @@ public sealed partial class SystemInfoPage : Page
                 this.sysout.Text = SystemInfoMiddleware.GetPanelText(); // Refresh info
             }
         }
+    }
+
+    private void StoreLink_Click(object sender, RoutedEventArgs e)
+    {
+        var url = SystemInfoMiddleware.StoreUrl;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private void MsStoreLink_Click(object sender, RoutedEventArgs e)
+    {
+        var url = SystemInfoMiddleware.MsStoreUrl;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch { }
     }
 }

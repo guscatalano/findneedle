@@ -17,5 +17,13 @@
             <ComboBoxItem Content="ResultsVCommunityPage" Tag="resultsvcommunitypage"/>
             <ComboBoxItem Content="SearchResultPage" Tag="searchresultpage"/>
         </ComboBox>
+        <TextBlock Margin="10,10,0,0">
+            <Run Text="Store Page: "/>
+            <Hyperlink NavigateUri="https://www.microsoft.com/store/productId/9NWLTBV4NRDL?ocid=libraryshare" Click="StoreLink_Click">https://www.microsoft.com/store/productId/9NWLTBV4NRDL?ocid=libraryshare</Hyperlink>
+        </TextBlock>
+        <TextBlock Margin="10,0,0,0">
+            <Run Text="MS-Store Link: "/>
+            <Hyperlink NavigateUri="ms-windows-store://pdp/?productid=9NWLTBV4NRDL" Click="MsStoreLink_Click">ms-windows-store://pdp/?productid=9NWLTBV4NRDL</Hyperlink>
+        </TextBlock>
     </StackPanel>
 </Page>

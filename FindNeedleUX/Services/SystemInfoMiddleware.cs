@@ -8,6 +8,9 @@ using Windows.ApplicationModel; // Correct namespace for Package
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
 {
+    public static string StoreUrl => "https://www.microsoft.com/store/productId/9NWLTBV4NRDL?ocid=libraryshare";
+    public static string MsStoreUrl => "ms-windows-store://pdp/?productid=9NWLTBV4NRDL";
+
     public static string GetPanelText()
     {
         string dotnetInfo = $".NET Runtime: {RuntimeInformation.FrameworkDescription}";
@@ -20,6 +23,9 @@ public class SystemInfoMiddleware
         string versionLine = $"App Version: {appVersion}";
         string versionSourceLine = $"Version Source: {versionSource}";
         string buildTimeLine = $"Build Time: {GetBuildTime()}";
+        string msStoreVersionLine = $"MS-Store Version: {GetMsStoreVersion()}";
+        string storeLine = $"Store Page: {StoreUrl}";
+        string msStoreLine = $"MS-Store Link: {MsStoreUrl}";
         try
         {
             // Use reflection to load WDKFinder if available
@@ -60,7 +66,7 @@ public class SystemInfoMiddleware
             wdkRootPath += $"Error: {ex.Message}";
             tracefmtPath += $"Error: {ex.Message}";
         }
-        return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{buildTimeLine}";
+        return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{msStoreVersionLine}\n{buildTimeLine}\n{storeLine}\n{msStoreLine}";
     }
 
     private static string GetWindowsVersion()
@@ -90,6 +96,19 @@ public class SystemInfoMiddleware
             var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
             var version = assembly.GetName().Version;
             return (version != null ? version.ToString() : "Unknown", "Assembly");
+        }
+    }
+
+    private static string GetMsStoreVersion()
+    {
+        try
+        {
+            var v = Package.Current.Id.Version;
+            return $"{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+        }
+        catch
+        {
+            return "N/A";
         }
     }
 
