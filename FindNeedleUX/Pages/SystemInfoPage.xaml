@@ -25,5 +25,13 @@
             <Run Text="MS-Store Link: "/>
             <Hyperlink NavigateUri="ms-windows-store://pdp/?productid=9NWLTBV4NRDL" Click="MsStoreLink_Click">ms-windows-store://pdp/?productid=9NWLTBV4NRDL</Hyperlink>
         </TextBlock>
+        <TextBlock Margin="10,0,0,0">
+            <Run Text="GitHub Releases: "/>
+            <Hyperlink NavigateUri="https://github.com/guscatalano/findneedle/releases" Click="GithubReleasesLink_Click">https://github.com/guscatalano/findneedle/releases</Hyperlink>
+        </TextBlock>
+        <TextBlock Margin="10,0,0,0">
+            <Run Text="GitHub: "/>
+            <Hyperlink NavigateUri="https://github.com/guscatalano/findneedle" Click="GithubLink_Click">https://github.com/guscatalano/findneedle</Hyperlink>
+        </TextBlock>
     </StackPanel>
 </Page>

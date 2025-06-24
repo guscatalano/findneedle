@@ -3,6 +3,7 @@
 
 using Microsoft.UI.Xaml;
 using FindPluginCore;
+using FindNeedleUX.Services;
 
 namespace FindNeedleUX
 {
@@ -19,6 +20,8 @@ namespace FindNeedleUX
         {
             this.InitializeComponent();
             Logger.Instance.Log("Application launched");
+            // Precompute system info at app startup
+            _ = SystemInfoMiddleware.GetPanelText();
         }
 
         /// <summary>

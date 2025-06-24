@@ -10,6 +10,8 @@ public class SystemInfoMiddleware
 {
     public static string StoreUrl => "https://www.microsoft.com/store/productId/9NWLTBV4NRDL?ocid=libraryshare";
     public static string MsStoreUrl => "ms-windows-store://pdp/?productid=9NWLTBV4NRDL";
+    public static string GithubReleasesUrl => "https://github.com/guscatalano/findneedle/releases";
+    public static string GithubUrl => "https://github.com/guscatalano/findneedle";
 
     public static string GetPanelText()
     {
@@ -26,6 +28,8 @@ public class SystemInfoMiddleware
         string msStoreVersionLine = $"MS-Store Version: {GetMsStoreVersion()}";
         string storeLine = $"Store Page: {StoreUrl}";
         string msStoreLine = $"MS-Store Link: {MsStoreUrl}";
+        string githubReleasesLine = $"GitHub Releases: {GithubReleasesUrl}";
+        string githubLine = $"GitHub: {GithubUrl}";
         try
         {
             // Use reflection to load WDKFinder if available
@@ -66,7 +70,7 @@ public class SystemInfoMiddleware
             wdkRootPath += $"Error: {ex.Message}";
             tracefmtPath += $"Error: {ex.Message}";
         }
-        return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{msStoreVersionLine}\n{buildTimeLine}\n{storeLine}\n{msStoreLine}";
+        return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{msStoreVersionLine}\n{buildTimeLine}\n{storeLine}\n{msStoreLine}\n{githubReleasesLine}\n{githubLine}";
     }
 
     private static string GetWindowsVersion()

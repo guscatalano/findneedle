@@ -65,4 +65,24 @@ public sealed partial class SystemInfoPage : Page
         }
         catch { }
     }
+
+    private void GithubReleasesLink_Click(object sender, RoutedEventArgs e)
+    {
+        var url = SystemInfoMiddleware.GithubReleasesUrl;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private void GithubLink_Click(object sender, RoutedEventArgs e)
+    {
+        var url = SystemInfoMiddleware.GithubUrl;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch { }
+    }
 }
