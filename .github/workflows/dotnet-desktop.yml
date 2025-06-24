@@ -316,7 +316,8 @@ jobs:
           $versionParts = $tag -split '[^0-9]+'
           $versionParts = $versionParts | Where-Object { $_ -ne '' }
           while ($versionParts.Count -lt 4) { $versionParts += '0' }
-          $version = $versionParts[0..3] -join '.'
+          if ($versionParts.Count -gt 4) { $versionParts = $versionParts[0..3] }
+          $version = $versionParts -join '.'
           echo "version=$version"
           [xml]$xml = Get-Content $manifest
           $xml.Package.Identity.Version = $version
@@ -530,8 +531,21 @@ jobs:
       run: |
         Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after download:"
         Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
+    - name: Normalize Release Version
+      id: normver
+      shell: pwsh
+      run: |
+        $tag = "${{needs.make_msix_signed.outputs.releasetag}}"
+        $tag = $tag.TrimStart('v')
+        $versionParts = $tag -split '[^0-9]+'
+        $versionParts = $versionParts | Where-Object { $_ -ne '' }
+        while ($versionParts.Count -lt 4) { $versionParts += '0' }
+        if ($versionParts.Count -gt 4) { $versionParts = $versionParts[0..3] }
+        $version = $versionParts -join '.'
+        echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
     - name: Debug Release Tag
-      run: "echo Release tag: ${{needs.make_msix_signed.outputs.releasetag}}"
+      run: "echo Release tag: ${{steps.normver.outputs.version}}"
 
     - name: Ensure release and tag do not already exist
       run: |
@@ -539,7 +553,7 @@ jobs:
         if ! command -v gh > /dev/null; then
           sudo apt-get update && sudo apt-get install -y gh
         fi
-        TAG="${{needs.make_msix_signed.outputs.releasetag}}"
+        TAG="${{steps.normver.outputs.version}}"
         if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
           echo "Release with tag $TAG exists. Deleting..."
           gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY"
@@ -560,8 +574,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{needs.make_msix_signed.outputs.releasetag}}
-        release_name: Find Needle Beta ${{needs.make_msix_signed.outputs.releasetag}}
+        tag_name: ${{steps.normver.outputs.version}}
+        release_name: Find Needle Beta ${{steps.normver.outputs.version}}
         draft: false
         prerelease: true
   
@@ -603,7 +617,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: '**/AppPackages/**/*.msix'
-        asset_name: FindNeedleUX-unsigned-${{ needs.make_msix_signed.outputs.releasetag }}.msix
+        asset_name: FindNeedleUX-unsigned-${{ steps.normver.outputs.version }}.msix
         asset_content_type: application/vnd.ms-appx
 
     - name: Fail if no signed MSIX files found in AppPackages
@@ -622,7 +636,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: '**/AppPackages/**/*.msix'
-        asset_name: FindNeedleUX-signed-${{ needs.make_msix_signed.outputs.releasetag }}.msix
+        asset_name: FindNeedleUX-signed-${{ steps.normver.outputs.version }}.msix
         asset_content_type: application/vnd.ms-appx
 
 
