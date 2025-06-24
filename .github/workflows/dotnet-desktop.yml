@@ -831,18 +831,18 @@ jobs:
           }
           $totalTime = [System.TimeSpan]::FromSeconds($totalSeconds)
           $summary = "Total test time: $($totalTime.ToString())"
-          $summary | Out-File .github/badges/test-duration.txt -NoNewline
+          $summary | Out-File test-duration.txt -NoNewline
 
       - name: Generate test duration badge
         shell: pwsh
         run: |
-          $durationText = Get-Content .github/badges/test-duration.txt -Raw
+          $durationText = Get-Content test-duration.txt -Raw
           $duration = $durationText -replace 'Total test time: ', ''
           $badgeValue = $duration.Trim()
           if ($badgeValue -eq '00:00:00') { $badgeValue = '0s' }
           $color = '#007ec6'
           $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="140" height="20"><linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><rect rx="3" width="140" height="20" fill="#555"/><rect rx="3" x="80" width="60" height="20" fill="' + $color + '"/><path fill="' + $color + '" d="M80 0h4v20h-4z"/><rect rx="3" width="140" height="20" fill="url(#b)"/><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11"><text x="40" y="15" fill="#010101" fill-opacity=".3">test duration</text><text x="40" y="14">test duration</text><text x="110" y="15" fill="#010101" fill-opacity=".3">' + $badgeValue + '</text><text x="110" y="14">' + $badgeValue + '</text></g></svg>'
-          $svg | Out-File .github/badges/test-duration.svg -NoNewline
+          $svg | Out-File test-duration.svg -NoNewline
       - name: Upload test duration badge artifact (percentage)
         uses: actions/upload-artifact@v4
         with:
