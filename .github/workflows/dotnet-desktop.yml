@@ -122,23 +122,28 @@ jobs:
       shell: pwsh
       run: |
         # Get all tags matching *.*.* (no v prefix)
-        $tags = git tag --list '*.*.*' | Sort-Object -Descending
-        if ($tags.Count -eq 0) {
-          $latest = '1.0.0'
-        } else {
-          $latest = $tags[0]
+        $tags = git tag --list '*.*.*'
+        $versions = @()
+        foreach ($tag in $tags) {
+          try {
+            $ver = [Version]$tag
+            $versions += $ver
+          } catch {
+            # skip tags that are not valid versions
+          }
         }
-        Write-Host "Latest tag: $latest"
-        $ver = ([string]$latest)
-        $parts = $ver -split '\.'
-        while ($parts.Count -lt 3) { $parts += '0' }
-        if ($parts.Count -gt 3) { $parts = $parts[0..2] }
-        $major = [int]$parts[0]
-        $minor = [int]$parts[1]
-        $patch = [int]$parts[2] + 1
+        if ($versions.Count -eq 0) {
+          $latest = [Version]'1.0.0'
+        } else {
+          $latest = $versions | Sort-Object -Descending | Select-Object -First 1
+        }
+        Write-Host "Latest version: $latest"
+        $major = $latest.Major
+        $minor = $latest.Minor
+        $patch = $latest.Build + 1
         $next = "$major.$minor.$patch"
         echo "next_tag=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        echo "next_version=$major.$minor.$patch" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "next_version=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     # Only create a release/tag if workflow file was not changed
     - name: Create and push new tag (skip if workflow changed)
