@@ -121,15 +121,15 @@ jobs:
       id: nextver
       shell: pwsh
       run: |
-        # Get all tags matching v*.*.*
-        $tags = git tag --list 'v*.*.*' | Sort-Object -Descending
+        # Get all tags matching *.*.* (no v prefix)
+        $tags = git tag --list '*.*.*' | Sort-Object -Descending
         if ($tags.Count -eq 0) {
-          $latest = 'v1.0.0'
+          $latest = '1.0.0'
         } else {
           $latest = $tags[0]
         }
         Write-Host "Latest tag: $latest"
-        $ver = ([string]$latest).TrimStart('v')
+        $ver = ([string]$latest)
         $parts = $ver -split '\.'
         while ($parts.Count -lt 3) { $parts += '0' }
         if ($parts.Count -gt 3) { $parts = $parts[0..2] }
