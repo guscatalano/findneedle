@@ -526,6 +526,10 @@ jobs:
                            # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
 
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Check Test Results
       run: |
         echo "Test results must be checked in the test job."
@@ -783,6 +787,67 @@ jobs:
         with:
           name: test-status-badge
           path: test-status-percentage.svg
+      
+      - name: Calculate total test duration and write to file
+        shell: pwsh
+        run: |
+          $trxFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.trx -Recurse -ErrorAction SilentlyContinue
+          $totalSeconds = 0
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file.FullName
+            $results = $xml.TestRun.Results.UnitTestResult
+            foreach ($result in $results) {
+              $duration = $result.duration
+              $startTime = $result.startTime
+              $endTime = $result.endTime
+              Write-Host "File: $($file.FullName) | duration: $duration | startTime: $startTime | endTime: $endTime"
+              if ($duration) {
+                $parsed = $false
+                try {
+                  $ts = [System.TimeSpan]::Parse($duration)
+                  $totalSeconds += $ts.TotalSeconds
+                  $parsed = $true
+                } catch {}
+                if (-not $parsed) {
+                  try {
+                    $totalSeconds += [double]$duration
+                    $parsed = $true
+                  } catch {
+                    Write-Host "Could not parse duration: $duration"
+                  }
+                }
+              } elseif ($startTime -and $endTime) {
+                try {
+                  $start = [datetime]::Parse($startTime)
+                  $end = [datetime]::Parse($endTime)
+                  $totalSeconds += ($end - $start).TotalSeconds
+                } catch {
+                  Write-Host "Could not parse startTime/endTime: $startTime / $endTime"
+                }
+              } else {
+                Write-Host "No duration or start/end time for this result."
+              }
+            }
+          }
+          $totalTime = [System.TimeSpan]::FromSeconds($totalSeconds)
+          $summary = "Total test time: $($totalTime.ToString())"
+          $summary | Out-File .github/badges/test-duration.txt -NoNewline
+
+      - name: Generate test duration badge
+        shell: pwsh
+        run: |
+          $durationText = Get-Content .github/badges/test-duration.txt -Raw
+          $duration = $durationText -replace 'Total test time: ', ''
+          $badgeValue = $duration.Trim()
+          if ($badgeValue -eq '00:00:00') { $badgeValue = '0s' }
+          $color = '#007ec6'
+          $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="140" height="20"><linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><rect rx="3" width="140" height="20" fill="#555"/><rect rx="3" x="80" width="60" height="20" fill="' + $color + '"/><path fill="' + $color + '" d="M80 0h4v20h-4z"/><rect rx="3" width="140" height="20" fill="url(#b)"/><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11"><text x="40" y="15" fill="#010101" fill-opacity=".3">test duration</text><text x="40" y="14">test duration</text><text x="110" y="15" fill="#010101" fill-opacity=".3">' + $badgeValue + '</text><text x="110" y="14">' + $badgeValue + '</text></g></svg>'
+          $svg | Out-File .github/badges/test-duration.svg -NoNewline
+      - name: Upload test duration badge artifact (percentage)
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-duration-badge
+          path: test-duration.svg
 
   update-badges:
     needs: test-publish
@@ -879,61 +944,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Calculate total test duration and write to file
-        shell: pwsh
-        run: |
-          $trxFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.trx -Recurse -ErrorAction SilentlyContinue
-          $totalSeconds = 0
-          foreach ($file in $trxFiles) {
-            [xml]$xml = Get-Content $file.FullName
-            $results = $xml.TestRun.Results.UnitTestResult
-            foreach ($result in $results) {
-              $duration = $result.duration
-              $startTime = $result.startTime
-              $endTime = $result.endTime
-              Write-Host "File: $($file.FullName) | duration: $duration | startTime: $startTime | endTime: $endTime"
-              if ($duration) {
-                $parsed = $false
-                try {
-                  $ts = [System.TimeSpan]::Parse($duration)
-                  $totalSeconds += $ts.TotalSeconds
-                  $parsed = $true
-                } catch {}
-                if (-not $parsed) {
-                  try {
-                    $totalSeconds += [double]$duration
-                    $parsed = $true
-                  } catch {
-                    Write-Host "Could not parse duration: $duration"
-                  }
-                }
-              } elseif ($startTime -and $endTime) {
-                try {
-                  $start = [datetime]::Parse($startTime)
-                  $end = [datetime]::Parse($endTime)
-                  $totalSeconds += ($end - $start).TotalSeconds
-                } catch {
-                  Write-Host "Could not parse startTime/endTime: $startTime / $endTime"
-                }
-              } else {
-                Write-Host "No duration or start/end time for this result."
-              }
-            }
-          }
-          $totalTime = [System.TimeSpan]::FromSeconds($totalSeconds)
-          $summary = "Total test time: $($totalTime.ToString())"
-          $summary | Out-File .github/badges/test-duration.txt -NoNewline
+      - name: Download test duration badge artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: test-duration-badge
 
-      - name: Generate test duration badge
-        shell: pwsh
+      - name: Copy test duration badge to .github/badges/test-duration.svg
         run: |
-          $durationText = Get-Content .github/badges/test-duration.txt -Raw
-          $duration = $durationText -replace 'Total test time: ', ''
-          $badgeValue = $duration.Trim()
-          if ($badgeValue -eq '00:00:00') { $badgeValue = '0s' }
-          $color = '#007ec6'
-          $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="140" height="20"><linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><rect rx="3" width="140" height="20" fill="#555"/><rect rx="3" x="80" width="60" height="20" fill="' + $color + '"/><path fill="' + $color + '" d="M80 0h4v20h-4z"/><rect rx="3" width="140" height="20" fill="url(#b)"/><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11"><text x="40" y="15" fill="#010101" fill-opacity=".3">test duration</text><text x="40" y="14">test duration</text><text x="110" y="15" fill="#010101" fill-opacity=".3">' + $badgeValue + '</text><text x="110" y="14">' + $badgeValue + '</text></g></svg>'
-          $svg | Out-File .github/badges/test-duration.svg -NoNewline
+          mkdir -p .github/badges
+          cp test-duration.svg .github/badges/test-duration.svg
 
       - name: Commit and push test duration badge
         run: |
