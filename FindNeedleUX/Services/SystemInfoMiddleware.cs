@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Reflection;
 using FindPluginCore.GlobalConfiguration; // Add for settings
+using Windows.ApplicationModel; // Correct namespace for Package
 
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
@@ -12,7 +13,10 @@ public class SystemInfoMiddleware
         string wdkRootPath = "WDK Root Path: ";
         string tracefmtPath = "Tracefmt: ";
         string defaultViewer = $"Default Result Viewer: {GlobalSettings.DefaultResultViewer}";
-        string appVersion = $"App Version: {GetAppVersion()}";
+        string appVersion, versionSource;
+        (appVersion, versionSource) = GetAppVersionAndSource();
+        string versionLine = $"App Version: {appVersion}";
+        string versionSourceLine = $"Version Source: {versionSource}";
         try
         {
             // Use reflection to load WDKFinder if available
@@ -53,13 +57,23 @@ public class SystemInfoMiddleware
             wdkRootPath += $"Error: {ex.Message}";
             tracefmtPath += $"Error: {ex.Message}";
         }
-        return $"{dotnetInfo}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{appVersion}";
+        return $"{dotnetInfo}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}";
     }
 
-    private static string GetAppVersion()
+    private static (string version, string source) GetAppVersionAndSource()
     {
-        var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
-        var version = assembly.GetName().Version;
-        return version != null ? version.ToString() : "Unknown";
+        try
+        {
+            var package = Package.Current;
+            var v = package.Id.Version;
+            return ($"{v.Major}.{v.Minor}.{v.Build}.{v.Revision}", "Package");
+        }
+        catch
+        {
+            // Fallback to assembly version if not running as packaged app
+            var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+            var version = assembly.GetName().Version;
+            return (version != null ? version.ToString() : "Unknown", "Assembly");
+        }
     }
 }

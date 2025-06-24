@@ -318,6 +318,7 @@ jobs:
           while ($versionParts.Count -lt 3) { $versionParts += '0' }
           if ($versionParts.Count -gt 3) { $versionParts = $versionParts[0..2] }
           $version = $versionParts -join '.'
+          $version = "$version.0"  # Always append .0 for four-segment version
           echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           [xml]$xml = Get-Content $manifest
           $xml.Package.Identity.Version = $version
@@ -401,6 +402,8 @@ jobs:
     - name: Create MSIX package (signed)
       run: |
         $version = "${{ needs.set-msix-version.outputs.version }}"
+        # Ensure version ends with .0 for four-segment version
+        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
         dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }} /p:AppxPackageVersion=$version
       shell: pwsh
     - name: Remove signing certificate from cert store
@@ -468,6 +471,8 @@ jobs:
     - name: Create MSIX package (unsigned)
       run: |
         $version = "${{ needs.set-msix-version.outputs.version }}"
+        # Ensure version ends with .0 for four-segment version
+        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
         dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false /p:AppxPackageVersion=$version
       shell: pwsh
     - name: Upload MSIX artifact (unsigned)
@@ -534,8 +539,14 @@ jobs:
       shell: pwsh
       run: |
         $version = "${{ needs.make_msix_signed.outputs.version }}"
-        echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        echo "tag=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        # Always ensure version is four-segment for MSIX, three-segment for tag
+        $versionParts = $version -split '\.'
+        while ($versionParts.Count -lt 3) { $versionParts += '0' }
+        if ($versionParts.Count -gt 3) { $versionParts = $versionParts[0..2] }
+        $version3 = $versionParts -join '.'
+        $version4 = "$version3.0"
+        echo "version=$version4" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "tag=$version3" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     - name: Debug Release Tag
       run: "echo Release tag: ${{steps.normver.outputs.tag}}"
