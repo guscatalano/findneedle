@@ -133,7 +133,7 @@ jobs:
       id: currenttag
       uses: "WyriHaximus/github-action-get-previous-tag@v1"
       with:
-        fallback: 1.0.0 # Optional fallback tag to use when no tag can be found
+        fallback: 1.0.0.0 # Optional fallback tag to use when no tag can be found
         #workingDirectory: another/path/where/a/git/repo/is/checked/out # Optional alternative working directory
 
   discover-test-projects:
@@ -311,12 +311,27 @@ jobs:
         run: |
           $manifest = "FindNeedleUX/Package.appxmanifest"
           $tag = "${{ needs.create-release.outputs.releasetag }}"
-          $version = $tag.TrimStart('v')
-          if ($version -notmatch '^(\d+)\.(\d+)\.(\d+)(\.(\d+))?$') {
-            $version = "1.0.0.0"
-          } elseif ($version -notmatch '\.\d+$') {
-            $version = "$version.0"
+          $tag = $tag.TrimStart('v')
+          # If tag contains a branch prefix (e.g. master.1.145), convert to master1.0.0.145
+          if ($tag -match '^(?<prefix>[a-zA-Z]+)\.(?<major>\d+)\.(?<build>\d+)$') {
+            $prefix = $matches['prefix']
+            $major = $matches['major']
+            $build = $matches['build']
+            $version = "$prefix$major.0.0.$build"
+          } elseif ($tag -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)$') {
+            $major = $matches['major']
+            $minor = $matches['minor']
+            $build = $matches['build']
+            $version = "$major.$minor.$build.0"
+          } elseif ($tag -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)\.(?<rev>\d+)$') {
+            $version = $tag
+          } else {
+            # fallback: pad with .0 to 4 segments
+            $parts = $tag -split '\.'
+            while ($parts.Count -lt 4) { $parts += '0' }
+            $version = $parts -join '.'
           }
+          echo "version=$version"
           [xml]$xml = Get-Content $manifest
           $xml.Package.Identity.Version = $version
           $xml.Save($manifest)
@@ -602,7 +617,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: '**/AppPackages/**/*.msix'
-        asset_name: FindNeedleUX-unsigned.msix
+        asset_name: FindNeedleUX-unsigned-${{ needs.make_msix_signed.outputs.releasetag }}.msix
         asset_content_type: application/vnd.ms-appx
 
     - name: Fail if no signed MSIX files found in AppPackages
@@ -621,7 +636,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: '**/AppPackages/**/*.msix'
-        asset_name: FindNeedleUX-signed.msix
+        asset_name: FindNeedleUX-signed-${{ needs.make_msix_signed.outputs.releasetag }}.msix
         asset_content_type: application/vnd.ms-appx
 
 
