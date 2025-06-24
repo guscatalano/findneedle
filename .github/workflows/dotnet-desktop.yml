@@ -312,18 +312,22 @@ jobs:
           $manifest = "FindNeedleUX/Package.appxmanifest"
           $tag = "${{ needs.create-release.outputs.releasetag }}"
           $tag = $tag.TrimStart('v')
-          # If tag contains a branch prefix (e.g. master.1.145), convert to master1.0.0.145
-          if ($tag -match '^(?<prefix>[a-zA-Z]+)\.(?<major>\d+)\.(?<build>\d+)$') {
-            $prefix = $matches['prefix']
-            $major = $matches['major']
-            $build = $matches['build']
-            $version = "$prefix$major.0.0.$build"
-          } elseif ($tag -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)$') {
-            $major = $matches['major']
-            $minor = $matches['minor']
-            $build = $matches['build']
+          # Remove any branch prefix (e.g. master.1.145 or vmaster.1.145 -> 1.0.0.145)
+          if ($tag -match '^[a-zA-Z]+\.(\d+)\.(\d+)$') {
+            $major = $matches[1]
+            $build = $matches[2]
+            $version = "1.0.0.$build"
+          } elseif ($tag -match '^[a-zA-Z]+\.(\d+)\.(\d+)\.(\d+)$') {
+            $major = $matches[1]
+            $minor = $matches[2]
+            $build = $matches[3]
             $version = "$major.$minor.$build.0"
-          } elseif ($tag -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)\.(?<rev>\d+)$') {
+          } elseif ($tag -match '^(\d+)\.(\d+)\.(\d+)$') {
+            $major = $matches[1]
+            $minor = $matches[2]
+            $build = $matches[3]
+            $version = "$major.$minor.$build.0"
+          } elseif ($tag -match '^(\d+)\.(\d+)\.(\d+)\.(\d+)$') {
             $version = $tag
           } else {
             # fallback: pad with .0 to 4 segments
