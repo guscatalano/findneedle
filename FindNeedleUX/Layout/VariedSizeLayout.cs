@@ -28,6 +28,7 @@ public class LogLine
         Time = searchResult.GetLogTime().ToString();
         Message = searchResult.GetMessage();
         Source = searchResult.GetResultSource();
+        Level = searchResult.GetLevel().ToString();
     }
 
 

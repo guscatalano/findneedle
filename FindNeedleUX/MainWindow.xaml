@@ -35,9 +35,7 @@
             <MenuBarItem Title="View Results">
                 <MenuFlyoutItem Text="Get" Click="MenuFlyoutItem_Click" Name="results_get"/>
                 <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
-                <MenuFlyoutItem Text="View Native" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
-                <MenuFlyoutItem Text="View Web" Click="MenuFlyoutItem_Click" Name="results_viewweb"/>
-                <MenuFlyoutItem Text="View Community" Click="MenuFlyoutItem_Click" Name="results_viewcommunity"/>
+                <MenuFlyoutItem Text="View Raw Results" Click="MenuFlyoutItem_Click" Name="results_viewraw"/>
             </MenuBarItem>
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>

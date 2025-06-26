@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NuGetAudit>false</NuGetAudit>
+    <Platforms>AnyCPU;x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj">
+      <Private>True</Private>
+      <CopyLocalSatelliteAssemblies>True</CopyLocalSatelliteAssemblies>
+      <ReferenceOutputAssembly>True</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+  </ItemGroup>
+
+</Project>

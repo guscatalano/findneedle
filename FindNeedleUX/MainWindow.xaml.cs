@@ -28,6 +28,11 @@ public sealed partial class MainWindow : Window
         { "searchresultpage", typeof(FindNeedleUX.Pages.SearchResultPage) }
     };
 
+    private static readonly string[] RawResultViewers = new[]
+    {
+        "resultswebpage", "resultsvcommunitypage", "searchresultpage"
+    };
+
     public MainWindow()
     {
         this.InitializeComponent();
@@ -86,17 +91,20 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: SearchStatisticsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage));
                 break;
+            case "results_viewraw":
+                Logger.Instance.Log("Navigated: ViewRawResults");
+                // Load preferred view from GlobalSettings
+                var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+                if (!((IList<string>)RawResultViewers).Contains(viewerKey))
+                    viewerKey = "resultswebpage";
+                if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
+                    viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
+                contentFrame.Navigate(viewerType);
+                break;
             case "results_viewnative":
-                Logger.Instance.Log("Navigated: SearchResultPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchResultPage));
-                break;
             case "results_viewweb":
-                Logger.Instance.Log("Navigated: ResultsWebPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
-                break;
             case "results_viewcommunity":
-                Logger.Instance.Log("Navigated: ResultsVCommunityPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsVCommunityPage));
+                // Deprecated: handled by results_viewraw
                 break;
             case "systeminfo":
                 Logger.Instance.Log("Navigated: SystemInfoPage");

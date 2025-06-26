@@ -1,5 +1,4 @@
-﻿
-using findneedle;
+﻿using findneedle;
 using Microsoft.Diagnostics.Tracing.Etlx;
 using Newtonsoft.Json;
 
@@ -218,7 +217,46 @@ public class ETLLogLine : ISearchResult
         tempBuffer = String.Empty;
         //step++;
     }
-    public Level GetLevel() => throw new NotImplementedException();
+    public Level GetLevel()
+    {
+        // Try to extract from JSON if available
+        if (keyjson != null && keyjson.ContainsKey("meta"))
+        {
+            try
+            {
+                var meta = keyjson["meta"];
+                if (meta is Newtonsoft.Json.Linq.JObject metaObj && metaObj["level"] != null)
+                {
+                    var levelStr = metaObj["level"].ToString();
+                    if (int.TryParse(levelStr, out int levelInt))
+                    {
+                        return levelInt switch
+                        {
+                            1 => Level.Catastrophic,
+                            2 => Level.Error,
+                            3 => Level.Warning,
+                            4 => Level.Info,
+                            5 => Level.Verbose,
+                            _ => Level.Info
+                        };
+                    }
+                    // Try string mapping
+                    return levelStr.ToLower() switch
+                    {
+                        "catastrophic" => Level.Catastrophic,
+                        "error" => Level.Error,
+                        "warning" => Level.Warning,
+                        "info" => Level.Info,
+                        "verbose" => Level.Verbose,
+                        _ => Level.Info
+                    };
+                }
+            }
+            catch { /* ignore and fall through */ }
+        }
+        // fallback: try to parse from eventtxt or json if possible
+        return Level.Info;
+    }
     public DateTime GetLogTime()
     {
         if (parsedTime == DateTime.MinValue)

@@ -22,6 +22,11 @@
       "name": "SessionManagementProcessor",
       "path": "SessionManagementProcessor.dll",
       "enabled": true
+    },
+    {
+      "name": "KustoPlugin",
+      "path": "KustoPlugin.dll",
+      "enabled": true
     }
   ],
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
