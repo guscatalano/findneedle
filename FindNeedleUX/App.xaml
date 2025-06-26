@@ -3,7 +3,8 @@
     x:Class="FindNeedleUX.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:FindNeedleUX">
+    xmlns:local="using:FindNeedleUX"
+    xmlns:pages="using:FindNeedleUX.Pages">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -14,6 +15,7 @@
                  Color="{StaticResource SystemAccentColor}"
                  Opacity=".33" />
             <!-- Other app resources here -->
+            <pages:BoolToEnabledConverter x:Key="BoolToEnabledConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

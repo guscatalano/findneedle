@@ -11,10 +11,9 @@ namespace FindNeedleUX.Pages
     {
         public ProcessorOutputPage()
         {
-            this.InitializeComponent();
+            this.InitializeComponent(); // Restored for XAML initialization
             Loaded += ProcessorOutputPage_Loaded;
         }
-
 
         private void ProcessorOutputPage_Loaded(object sender, RoutedEventArgs e)
         {
@@ -27,7 +26,7 @@ namespace FindNeedleUX.Pages
             if (tabView == null) return;
             tabView.TabItems.Clear();
             // Get all enabled processors (from MiddleLayerService or Query)
-            var processors = MiddleLayerService.Query.Outputs;
+            var processors = MiddleLayerService.Query.Processors;
             if (processors == null || processors.Count == 0)
             {
                 var tab = new TabViewItem { Header = "No Processors", Content = new TextBlock { Text = "No processors are enabled in this workspace." } };

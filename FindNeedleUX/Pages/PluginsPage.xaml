@@ -54,7 +54,7 @@
             <TabViewItem Header="PluginConfig Entries" IsClosable="False">
                 <StackPanel Orientation="Vertical" Margin="16">
                     <TextBlock Text="PluginConfig Entries" FontWeight="Bold"/>
-                    <ListView x:Name="PluginConfigListView" ItemsSource="{x:Bind PluginConfigEntries, Mode=TwoWay}" SelectionMode="Single" Height="200" SelectedItem="{x:Bind SelectedPluginConfigEntry, Mode=TwoWay}">
+                    <ListView x:Name="PluginConfigListView" ItemsSource="{x:Bind PluginConfigEntries, Mode=TwoWay}" SelectionMode="Single" SelectedItem="{x:Bind SelectedPluginConfigEntry, Mode=TwoWay}">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:PluginConfigEntryViewModel">
                                 <StackPanel Orientation="Horizontal">
