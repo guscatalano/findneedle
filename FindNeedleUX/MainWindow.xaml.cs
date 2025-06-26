@@ -101,6 +101,10 @@ public sealed partial class MainWindow : Window
                     viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
                 contentFrame.Navigate(viewerType);
                 break;
+            case "results_processoroutput":
+                Logger.Instance.Log("Navigated: ProcessorOutputPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage));
+                break;
             case "results_viewnative":
             case "results_viewweb":
             case "results_viewcommunity":

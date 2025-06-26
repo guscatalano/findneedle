@@ -36,6 +36,7 @@
                 <MenuFlyoutItem Text="Get" Click="MenuFlyoutItem_Click" Name="results_get"/>
                 <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
                 <MenuFlyoutItem Text="View Raw Results" Click="MenuFlyoutItem_Click" Name="results_viewraw"/>
+                <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
             </MenuBarItem>
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
