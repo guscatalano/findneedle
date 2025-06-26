@@ -1,8 +1,9 @@
 ﻿<html id="htmlRoot">
 <head>
     <script>
-
         var count = 0;
+        var scrollYEnabled = false;
+        var defaultScrollY = null;
         window.chrome.webview.addEventListener('message', function (event) {
             let table = window.table;
             const payload = event.data;
@@ -27,11 +28,8 @@
                 count++;
                 document.getElementById("results").innerHTML = count + "<br/>";
                 table.row.add(payload.data);
-                //table.draw(false);
-
             }
             if (payload.verb === 'done') {
-                //table.draw(false);
                 document.getElementById("tablediv").style.visibility = "visible";
                 document.getElementById("tablediv").style.display = "block";
                 document.getElementById("loader").style.display = "none";
@@ -41,6 +39,12 @@
 
         function codeAddress() {
             document.getElementById("tablediv").style.display = "none";
+            var scrollY = null;
+            var checkbox = document.getElementById('limitToWindowCheckbox');
+            if (checkbox && checkbox.checked) {
+                scrollY = (window.innerHeight - document.getElementById('tablediv').getBoundingClientRect().top - 20) + "px";
+                scrollYEnabled = true;
+            }
             window.table = new DataTable('#myTable', {
                 columns: [
                     { title: "Index", data: "Index" },
@@ -59,6 +63,8 @@
                 ],
                 lengthChange: true,
                 pageLength: 500,
+                scrollY: scrollY,
+                scrollCollapse: true,
                 layout: {
                     topStart: {
                         pageLength: {
@@ -87,16 +93,54 @@
             }
         }
 
+        function updateTableScrollY(enable) {
+            var table = window.table;
+            var tableDiv = document.getElementById("tablediv");
+            if (!table) return;
+            if (enable) {
+                var scrollY = (window.innerHeight - tableDiv.getBoundingClientRect().top - 20) + "px";
+                $(table.table().container()).find('.dataTables_scrollBody').css('max-height', scrollY);
+                $(table.table().container()).find('.dataTables_scrollBody').css('height', scrollY);
+                table.settings()[0].oScroll.sY = scrollY;
+                table.draw(false);
+            } else {
+                $(table.table().container()).find('.dataTables_scrollBody').css('max-height', 'none');
+                $(table.table().container()).find('.dataTables_scrollBody').css('height', 'auto');
+                table.settings()[0].oScroll.sY = '';
+                table.draw(false);
+            }
+        }
+
+        function toggleTableLimitToWindow(checkbox) {
+            scrollYEnabled = checkbox.checked;
+            updateTableScrollY(scrollYEnabled);
+        }
+        window.addEventListener('resize', function() {
+            if (scrollYEnabled) {
+                updateTableScrollY(true);
+            }
+        });
+
     </script>
     <style>
         .min-width-message-id {
-            min-width: 100px; /* Adjust as needed */
-            white-space: nowrap;
+            min-width: 100px;
         }
-
         .min-width-message-time {
-            min-width: 160px; /* Adjust as needed */
-            white-space: nowrap;
+            min-width: 160px;
+        }
+        #myTable {
+            table-layout: auto;
+            width: 100%;
+        }
+        #myTable th, #myTable td {
+            white-space: normal !important;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            max-width: 400px;
+        }
+        .dataTables_scrollBody {
+            width: 100% !important;
         }
     </style>
 </head>
@@ -104,6 +148,7 @@
     <div id="loader">Loading... <section id="results"></section></div>
     <link href="datatables.min.css" rel="stylesheet">
     <button onclick="redrawTable()">Redraw Table</button>
+    <label><input type="checkbox" id="limitToWindowCheckbox" onchange="toggleTableLimitToWindow(this)"> Limit table to window size</label><br/>
     Toggle column: <a class="toggle-vis" data-column="0">Index</a> - <a class="toggle-vis" data-column="1">Time</a> - <a class="toggle-vis" data-column="2">Provider</a> - <a class="toggle-vis" data-column="3">TaskName</a> - <a class="toggle-vis" data-column="4">Message</a> - <a class="toggle-vis" data-column="5">Source</a>
     <div id="tablediv" style="display:none;">
         <script src="datatables.min.js"></script>
