@@ -37,13 +37,57 @@ namespace FindNeedleUX.Pages
             {
                 string header = (processor as IResultProcessor)?.GetDescription() ?? processor.GetType().Name;
                 string output = (processor as IResultProcessor)?.GetOutputText() ?? "No output.";
+
+                var outputBox = new TextBox
+                {
+                    Text = output,
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                    Margin = new Thickness(0, 8, 0, 0)
+                };
+
+                var runButton = new Button
+                {
+                    Content = "Run Processor",
+                    Margin = new Thickness(0, 0, 0, 8),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Tag = new ProcessorButtonTag { Processor = processor, OutputBox = outputBox }
+                };
+                runButton.Click += RunProcessor_Click;
+
+                var stack = new StackPanel();
+                stack.Children.Add(runButton);
+                stack.Children.Add(new ScrollViewer { Content = outputBox });
+
                 var tab = new TabViewItem
                 {
                     Header = header,
-                    Content = new ScrollViewer { Content = new TextBox { Text = output, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas") } }
+                    Content = stack
                 };
                 tabView.TabItems.Add(tab);
             }
+        }
+
+        private void RunProcessor_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is ProcessorButtonTag tag)
+            {
+                var processor = tag.Processor as IResultProcessor;
+                var outputBox = tag.OutputBox;
+                if (processor != null && outputBox != null)
+                {
+                    var results = MiddleLayerService.GetSearchResults();
+                    processor.ProcessResults(results);
+                    outputBox.Text = processor.GetOutputText();
+                }
+            }
+        }
+
+        private class ProcessorButtonTag
+        {
+            public object Processor { get; set; }
+            public TextBox OutputBox { get; set; }
         }
     }
 }

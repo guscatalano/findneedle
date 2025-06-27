@@ -7,6 +7,7 @@ using FindNeedlePluginLib.Interfaces;
 using findneedle.Interfaces;
 using System.Collections.ObjectModel;
 using FindPluginCore.PluginSubsystem;
+using FindNeedleUX.Services;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -112,5 +113,7 @@ public sealed partial class SearchProcessorsPage : Page
                 }
             }
         }
+        // Always refresh the search query so processor list is up to date
+        MiddleLayerService.UpdateSearchQuery();
     }
 }

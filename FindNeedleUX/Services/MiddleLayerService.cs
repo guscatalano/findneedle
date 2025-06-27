@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
@@ -74,10 +75,32 @@ public class MiddleLayerService
 
     public static void UpdateSearchQuery()
     {
+        // Update the processor list in the query based on the current plugin config
+        var pluginManager = PluginManager.GetSingleton();
+        var config = pluginManager.config;
+        var enabledProcessors = new List<IResultProcessor>();
+        if (config != null)
+        {
+            foreach (var entry in config.entries)
+            {
+                if (entry.enabled)
+                {
+                    // Find the processor instance by name (FriendlyName or ClassName)
+                    var processor = pluginManager.GetAllPluginsInstancesOfAType<IResultProcessor>()
+                        .FirstOrDefault(p =>
+                            p.GetType().Name == entry.name ||
+                            (p.GetType().FullName != null && p.GetType().FullName.EndsWith(entry.name))
+                        );
+                    if (processor != null && !enabledProcessors.Contains(processor))
+                        enabledProcessors.Add(processor);
+                }
+            }
+        }
+        Query.Processors = enabledProcessors;
+
         SearchQueryUX.UpdateSearchQuery();
         SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters, 
             new List<findneedle.Interfaces.IResultProcessor>(), Query.Outputs, Query.SearchStepNotificationSink);
-       
     }
 
     public static List<LogLine> GetLogLines()

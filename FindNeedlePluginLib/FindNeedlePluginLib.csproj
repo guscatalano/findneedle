@@ -5,12 +5,45 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
-	  <NuGetAudit>false</NuGetAudit>
-	  <Platforms>AnyCPU;x64</Platforms>
+    <NuGetAudit>false</NuGetAudit>
+    <Platforms>AnyCPU;x64</Platforms>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Find Needle Plugin Library</Title>
+    <Authors>Gus Catalano</Authors>
+    <Product>Find Needle</Product>
+    <Description>A library for plugin implementers to code against</Description>
+    <PackageProjectUrl>https://github.com/guscatalano/findneedle</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/guscatalano/findneedle</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeReferencedProjects>true</IncludeReferencedProjects>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <Target Name="CopyFindNeedleCoreUtilsDll" AfterTargets="Build">
+    <ItemGroup>
+      <FindNeedleCoreUtilsDll Include="$(SolutionDir)FindNeedleCoreUtils\bin\$(Configuration)\net8.0-windows10.0.19041.0\FindNeedleCoreUtils.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FindNeedleCoreUtilsDll)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <Content Include="$(SolutionDir)FindNeedleCoreUtils\bin\$(Configuration)\net8.0-windows10.0.19041.0\FindNeedleCoreUtils.dll">
+      <Pack>true</Pack>
+      <PackagePath>lib\net8.0-windows10.0.19041\</PackagePath>
+      <Visible>false</Visible>
+    </Content>
   </ItemGroup>
 
 </Project>
