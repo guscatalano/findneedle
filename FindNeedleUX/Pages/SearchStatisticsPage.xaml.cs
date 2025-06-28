@@ -57,23 +57,21 @@ public sealed partial class SearchStatisticsPage : Page
         // The content of the tab is often a frame that contains a page, though it could be any UIElement.
         Frame frame = new Frame();
         frame.Height = 500;
-        StackPanel x  = new StackPanel();
-        x.Height = 500;
-        TextBox y = new TextBox();
-        y.AcceptsReturn = true;
+        StackPanel x = new() { Height = 500 };
+        TextBox y = new() { AcceptsReturn = true, Text = "ohono" };
         var tet = string.Empty;
-        y.Text = "ohono";
-        ScrollViewer scrollViewer = new ScrollViewer();
-        scrollViewer.Height = 500;
-        scrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Visible;
-        scrollViewer.VerticalScrollMode = ScrollMode.Enabled;
-        TreeView treeeee = new TreeView();
-        treeeee.AllowDrop = false;
-        TreeViewNode parent = new TreeViewNode();
+        ScrollViewer scrollViewer = new()
+        {
+            Height = 500,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
+            VerticalScrollMode = ScrollMode.Enabled
+        };
+        TreeView treeeee = new() { AllowDrop = false };
+        TreeViewNode parent = new();
         treeeee.RootNodes.Add(parent);
 
         var middlestats = MiddleLayerService.GetStats();
-        
+
 
         if (!middlestats.componentReports.ContainsKey(SearchStep.AtLoad))
         {
@@ -85,14 +83,14 @@ public sealed partial class SearchStatisticsPage : Page
             case 0:
                 foreach (var i in z)
                 {
-                    TreeViewNode node = new TreeViewNode();
+                    TreeViewNode node = new();
                     parent.Children.Add(node);
                     node.Content = i.summary + "-" + i.component;
                     tet += Environment.NewLine + i.summary + "-" + i.component;// + i.metric
-                    foreach(var j in i.metric)
+                    foreach (var j in i.metric)
                     {
 
-                        TreeViewNode node2 = new TreeViewNode();
+                        TreeViewNode node2 = new();
                         node.Children.Add(node2);
                         node.Content = i.summary + "-" + i.component;
                         if (i.summary.Equals("ExtensionProviders"))
@@ -105,18 +103,18 @@ public sealed partial class SearchStatisticsPage : Page
                             node2.Content = j.Key;
                             foreach (KeyValuePair<string, int> jj in j.Value)
                             {
-                                TreeViewNode node3 = new TreeViewNode();
+                                TreeViewNode node3 = new();
                                 node2.Children.Add(node3);
-                                node3.Content = jj.Key + " --> " +jj.Value;
+                                node3.Content = jj.Key + " --> " + jj.Value;
                             }
-                        } 
+                        }
                         else
                         {
 
                             node2.Content = j.Key;
                             foreach (KeyValuePair<string, string> jj in j.Value)
                             {
-                                TreeViewNode node3 = new TreeViewNode();
+                                TreeViewNode node3 = new();
                                 node2.Children.Add(node3);
                                 node3.Content = jj.Key + " --> " + jj.Value;
                             }
@@ -127,10 +125,10 @@ public sealed partial class SearchStatisticsPage : Page
 
                 break;
             case 1:
-               // frame.Navigate(typeof(SamplePage2));
+                // frame.Navigate(typeof(SamplePage2));
                 break;
             case 2:
-               // frame.Navigate(typeof(SamplePage3));
+                // frame.Navigate(typeof(SamplePage3));
                 break;
         }
 

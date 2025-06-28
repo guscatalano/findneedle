@@ -211,10 +211,10 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
 
     public override List<ISearchResult> Search(ISearchQuery? searchQuery)
     {
-        List<ISearchResult> results = new List<ISearchResult>();
+        var results = new List<ISearchResult>();
         lock (knownProcessors)
         {
-            foreach (IFileExtensionProcessor item in knownProcessors)
+            foreach (var item in knownProcessors)
             {
                 if(item == null)
                 {
@@ -224,13 +224,13 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
             }
         }
 
-        List<ISearchResult> filteredResults = new List<ISearchResult>();
-        foreach (ISearchResult result in results)
+        var filteredResults = new List<ISearchResult>();
+        foreach (var result in results)
         {
             var passAll = true;
             if (searchQuery != null)
             {
-                foreach (ISearchFilter filter in searchQuery.GetFilters())
+                foreach (var filter in searchQuery.GetFilters())
                 {
                     if (!filter.Filter(result))
                     {
@@ -272,8 +272,8 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
 
     public override List<ReportFromComponent> ReportStatistics() {
 
-        List<ReportFromComponent> reports = new List<ReportFromComponent>();
-        ReportFromComponent extensionProviderReport = new ReportFromComponent()
+        var reports = new List<ReportFromComponent>();
+        var extensionProviderReport = new ReportFromComponent()
         {
             component = this.GetType().Name,
             step = SearchStep.AtLoad,
@@ -282,7 +282,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         };
         reports.Add(extensionProviderReport);
 
-        ReportFromComponent ProviderByFileReport = new ReportFromComponent()
+        var ProviderByFileReport = new ReportFromComponent()
         {
            component = this.GetType().Name,
            step = SearchStep.AtLoad,

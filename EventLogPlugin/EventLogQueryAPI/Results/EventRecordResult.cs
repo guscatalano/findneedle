@@ -128,7 +128,8 @@ public class EventRecordResult : ISearchResult
 
     public string GetOpCode()
     {
-        throw new NotImplementedException();
+        // Not implemented: EventRecordResult does not provide OpCode.
+        return ISearchResult.NOT_SUPPORTED;
     }
 
     public string GetSource()

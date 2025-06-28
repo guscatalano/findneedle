@@ -1,8 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿global using System;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Text;
+global using System.Threading.Tasks;
 using findneedle.Implementations.Locations;
 using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
@@ -24,7 +24,7 @@ public class EVTXProcessor : IFileExtensionProcessor
 
     public Dictionary<string, int> GetProviderCount()
     {
-        return new Dictionary<string, int>();
+        return new();
     }
 
     public string GetFileName()
@@ -35,7 +35,7 @@ public class EVTXProcessor : IFileExtensionProcessor
     {
     }
 
-    public List<ISearchResult> GetResults() => loc?.Search(null) ?? new List<ISearchResult>();
+    public List<ISearchResult> GetResults() => loc?.Search(null) ?? new();
     public void LoadInMemory()
     {
         if (loc != null)
@@ -47,7 +47,7 @@ public class EVTXProcessor : IFileExtensionProcessor
 
     public List<string> RegisterForExtensions()
     {
-        return new List<string>() { ".evtx" };
+        return new() { ".evtx" };
     }
 
     public bool CheckFileFormat()

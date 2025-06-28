@@ -67,8 +67,8 @@ public class WDKFinder
     private static string SearchWDKForFile(string file, string arch)
     {
         var searchFailed = false;
-        List<string> ret = FileIO.GetAllFiles(GetPathOfWDKRoot(), (path) => { searchFailed = true; }).ToList();
-        List<string> foundVersions = new();
+        var ret = FileIO.GetAllFiles(GetPathOfWDKRoot(), (path) => { searchFailed = true; }).ToList();
+        var foundVersions = new List<string>();
         if (!searchFailed)
         {
             try

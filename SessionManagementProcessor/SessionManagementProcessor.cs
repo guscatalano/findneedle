@@ -372,10 +372,10 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
     {
         var txt = "@startuml" + Environment.NewLine;
 
-        DateTime lastLogLine = DateTime.MinValue;
+        var lastLogLine = DateTime.MinValue;
         foreach (var msg in keypoints)
         {
-            foreach (KeyPoint key in keyHandlers)
+            foreach (var key in keyHandlers)
             {
                 if (msg.Key.Contains(key.textToMatch))
                 {
@@ -437,7 +437,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
             }
 
 
-            foreach (KeyPoint key in keyHandlers)
+            foreach (var key in keyHandlers)
             {
                 if (ret.GetMessage().Contains(key.textToMatch) || ret.GetSearchableData().Contains(key.textToMatch))
                 {

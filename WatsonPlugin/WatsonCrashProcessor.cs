@@ -45,7 +45,7 @@ public class WatsonCrashProcessor : IResultProcessor
     public void ProcessResults(List<ISearchResult> results)
     {
         resultList.Clear();
-        foreach (ISearchResult result in results)
+        foreach (var result in results)
         {
             if(result.GetSearchableData().Contains("A .NET application failed."))
             {

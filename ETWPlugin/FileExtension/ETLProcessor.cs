@@ -97,7 +97,7 @@ public void DoPreProcessing()
                     {
                         continue; // Don't throw or we skip too much!
                     }
-                    ETLLogLine etlline = new ETLLogLine(line, inputfile);
+                    var etlline = new ETLLogLine(line, inputfile);
                     if (providers.ContainsKey(etlline.GetSource()))
                     {
                         providers[etlline.GetSource()]++;
@@ -123,9 +123,12 @@ public void DoPreProcessing()
     {
         if (LoadEarly)
         {
-            foreach(ETLLogLine result in results)
+            foreach(var result in results)
             {
-                result.PreLoad();
+                if (result is ETLLogLine etlLogLine)
+                {
+                    etlLogLine.PreLoad();
+                }
             }
         }
         

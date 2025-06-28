@@ -64,12 +64,12 @@ public class NuSearchQuery : ISearchQuery
 
     public NuSearchQuery()
     {
-        _filters = [];
-        _outputs = [];
-        _processors = [];
+        _filters = new();
+        _outputs = new();
+        _processors = new();
         _depth = SearchLocationDepth.Shallow;
-        _locations = [];
-        _currentResultList = [];
+        _locations = new();
+        _currentResultList = new();
         _stats = new();
         _stepnotifysink = new();
         _stats.RegisterForNotifications(_stepnotifysink, this);
@@ -89,7 +89,7 @@ public class NuSearchQuery : ISearchQuery
     public void Step1_LoadAllLocationsInMemory()
     {
         _stepnotifysink.NotifyStep(SearchStep.AtLoad);
-        foreach(var loc in _locations)
+        foreach (var loc in _locations)
         {
             loc.LoadInMemory();
         }
@@ -99,17 +99,17 @@ public class NuSearchQuery : ISearchQuery
     public List<ISearchResult> Step2_GetFilteredResults()
     {
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
-        _filteredResults = new List<ISearchResult>();
+        _filteredResults = new();
         foreach (var loc in _locations)
         {
             loc.SetSearchDepth(_depth);
             var unfilteredResults = loc.Search();
-           
-            foreach (ISearchResult result in unfilteredResults)
+
+            foreach (var result in unfilteredResults)
             {
                 var passAllFilters = true;
-                
-                foreach (ISearchFilter filter in _filters)
+
+                foreach (var filter in _filters)
                 {
                     if (!filter.Filter(result))
                     {
@@ -121,29 +121,25 @@ public class NuSearchQuery : ISearchQuery
                     _filteredResults.Add(result);
                 }
             }
-            
-            
-            
         }
-        
+
         return _filteredResults;
     }
 
     public void Step3_ResultsToProcessors()
     {
         _stepnotifysink.NotifyStep(SearchStep.AtProcessor);
-        foreach(var proc in _processors)
+        foreach (var proc in _processors)
         {
             proc.ProcessResults(_currentResultList);
             Console.WriteLine("Output was written to: " + proc.GetOutputFile());
-            
         }
     }
 
     public void Step4_ProcessAllResultsToOutput()
     {
         _stepnotifysink.NotifyStep(SearchStep.AtOutput);
-        foreach(var output in _outputs)
+        foreach (var output in _outputs)
         {
             output.WriteAllOutput(_currentResultList);
         }

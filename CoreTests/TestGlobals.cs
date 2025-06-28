@@ -35,17 +35,20 @@ public class TestGlobals
 
     public static Dictionary<string, string> GetInfoFromPath(string path)
     {
-        Dictionary<string, string> ret = new();
+        var ret = new Dictionary<string, string>
+        {
+            ["Configuration"] = "unknown", //Debug/Release
+            ["Platform"] = "unknown", //AnyCPU, x64, x86
+            ["TargetRuntime"] = "unknown", //win-x64, win-x86, etc.
+            ["TargetFramework"] = "unknown" //net8.0-windows10.0.26100.0
+        };
+
         if (string.IsNullOrEmpty(path) || !System.IO.Directory.Exists(path))
         {
             throw new ArgumentException("Path is null or does not exist: " + path);
         }
         var parts = path.Split(System.IO.Path.DirectorySeparatorChar);
 
-        ret["Configuration"] = "unknown"; //Debug/Release
-        ret["Platform"] = "unknown"; //AnyCPU, x64, x86
-        ret["TargetRuntime"] = "unknown"; //win-x64, win-x86, etc.
-        ret["TargetFramework"] = "unknown"; //net8.0-windows10.0.26100.0
         foreach (var part in parts)
         {
             var clean = part.Replace("/", "").Replace("\\", "").Trim().ToLower();

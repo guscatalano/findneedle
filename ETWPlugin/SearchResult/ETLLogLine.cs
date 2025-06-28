@@ -1,4 +1,9 @@
-﻿using findneedle;
+﻿global using System;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Text;
+global using System.Threading.Tasks;
+using findneedle;
 using Microsoft.Diagnostics.Tracing.Etlx;
 using Newtonsoft.Json;
 using FindNeedlePluginLib;
@@ -361,7 +366,11 @@ public class ETLLogLine : ISearchResult
     {
         return eventtxt.ToString();
     }
-    public string GetOpCode() => throw new NotImplementedException();
+    public string GetOpCode()
+    {
+        // Not implemented: ETL log lines do not have an OpCode.
+        return ISearchResult.NOT_SUPPORTED;
+    }
     public string GetSearchableData()
     {
         return json;
@@ -385,5 +394,9 @@ public class ETLLogLine : ISearchResult
     {
         return "empty";
     }
-    public void WriteToConsole() => throw new NotImplementedException();
+    public void WriteToConsole()
+    {
+        // Not implemented: Console output not supported for ETLLogLine.
+        // Optionally, implement if needed.
+    }
 }
