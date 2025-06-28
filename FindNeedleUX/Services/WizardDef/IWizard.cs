@@ -111,7 +111,6 @@ public class IWizard
 
         var y = WindowUtil.GetWindowForElement(this.starterElement);
         WindowUtil.EnableInput(y);
-        var z = y.AppWindow;
         y.SetExtendedWindowStyle(ExtendedWindowStyle.AppWindow); //set this back so the taskbar icon doesnt disappear
     }
 }

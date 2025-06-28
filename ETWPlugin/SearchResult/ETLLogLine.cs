@@ -227,8 +227,8 @@ public class ETLLogLine : ISearchResult
                 var meta = keyjson["meta"];
                 if (meta is Newtonsoft.Json.Linq.JObject metaObj && metaObj["level"] != null)
                 {
-                    var levelStr = metaObj["level"].ToString();
-                    if (int.TryParse(levelStr, out int levelInt))
+                    var levelStr = metaObj["level"]?.ToString(); // Use null conditional operator to avoid null dereference
+                    if (!string.IsNullOrEmpty(levelStr) && int.TryParse(levelStr, out var levelInt))
                     {
                         return levelInt switch
                         {
@@ -241,7 +241,7 @@ public class ETLLogLine : ISearchResult
                         };
                     }
                     // Try string mapping
-                    return levelStr.ToLower() switch
+                    return levelStr?.ToLower() switch
                     {
                         "catastrophic" => Level.Catastrophic,
                         "error" => Level.Error,
@@ -252,9 +252,12 @@ public class ETLLogLine : ISearchResult
                     };
                 }
             }
-            catch { /* ignore and fall through */ }
+            catch
+            {
+                // Ignore and fall through
+            }
         }
-        // fallback: try to parse from eventtxt or json if possible
+        // Fallback: try to parse from eventtxt or json if possible
         return Level.Info;
     }
     public DateTime GetLogTime()

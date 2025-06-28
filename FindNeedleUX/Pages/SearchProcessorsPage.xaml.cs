@@ -71,7 +71,7 @@ public sealed partial class SearchProcessorsPage : Page
                 {
                     var name = !string.IsNullOrEmpty(desc.FriendlyName) ? desc.FriendlyName : desc.ClassName;
                     var enabled = false;
-                    string configKey = desc.FriendlyName ?? desc.ClassName;
+                    var configKey = desc.FriendlyName ?? desc.ClassName;
                     if (enabledDict.TryGetValue(desc.FriendlyName ?? desc.ClassName, out var isEnabled))
                         enabled = isEnabled;
                     else if (enabledDict.TryGetValue(desc.ClassName, out isEnabled))

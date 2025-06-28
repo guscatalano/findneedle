@@ -15,21 +15,21 @@ public class SystemInfoMiddleware
 
     public static string GetPanelText()
     {
-        string dotnetInfo = $".NET Runtime: {RuntimeInformation.FrameworkDescription}";
-        string osVersion = $"Windows Version: {GetWindowsVersion()}";
-        string wdkRootPath = "WDK Root Path: ";
-        string tracefmtPath = "Tracefmt: ";
-        string defaultViewer = $"Default Result Viewer: {GlobalSettings.DefaultResultViewer}";
+        var dotnetInfo = $".NET Runtime: {RuntimeInformation.FrameworkDescription}";
+        var osVersion = $"Windows Version: {GetWindowsVersion()}";
+        var wdkRootPath = "WDK Root Path: ";
+        var tracefmtPath = "Tracefmt: ";
+        var defaultViewer = $"Default Result Viewer: {GlobalSettings.DefaultResultViewer}";
         string appVersion, versionSource;
         (appVersion, versionSource) = GetAppVersionAndSource();
-        string versionLine = $"App Version: {appVersion}";
-        string versionSourceLine = $"Version Source: {versionSource}";
-        string buildTimeLine = $"Build Time: {GetBuildTime()}";
-        string msStoreVersionLine = $"MS-Store Version: {GetMsStoreVersion()}";
-        string storeLine = $"Store Page: {StoreUrl}";
-        string msStoreLine = $"MS-Store Link: {MsStoreUrl}";
-        string githubReleasesLine = $"GitHub Releases: {GithubReleasesUrl}";
-        string githubLine = $"GitHub: {GithubUrl}";
+        var versionLine = $"App Version: {appVersion}";
+        var versionSourceLine = $"Version Source: {versionSource}";
+        var buildTimeLine = $"Build Time: {GetBuildTime()}";
+        var msStoreVersionLine = $"MS-Store Version: {GetMsStoreVersion()}";
+        var storeLine = $"Store Page: {StoreUrl}";
+        var msStoreLine = $"MS-Store Link: {MsStoreUrl}";
+        var githubReleasesLine = $"GitHub Releases: {GithubReleasesUrl}";
+        var githubLine = $"GitHub: {GithubUrl}";
         try
         {
             // Use reflection to load WDKFinder if available

@@ -4,9 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle;
-
-
+namespace FindNeedlePluginLib;
 
 public class SearchProgressSink
 {

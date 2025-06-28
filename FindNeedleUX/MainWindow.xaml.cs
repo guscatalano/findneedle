@@ -170,7 +170,6 @@ public sealed partial class MainWindow : Window
         // Retrieve the window handle (HWND) of the current WinUI 3 window.
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
 
-        var currentSelection = "None";
 
         var picker = new FileOpenPicker()
         {
@@ -182,9 +181,8 @@ public sealed partial class MainWindow : Window
         var file = await picker.PickSingleFileAsync();
         if (file != null)
         {
-            currentSelection = file.Path;
             MiddleLayerService.NewWorkspace();
-            MiddleLayerService.AddFolderLocation(currentSelection);
+            MiddleLayerService.AddFolderLocation("None");
             await RunSearchWithProgress();
             // Use the default result viewer setting
             var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";

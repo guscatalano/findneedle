@@ -41,10 +41,7 @@ public class NuSearchQuery : ISearchQuery
     public List<ISearchLocation> Locations
     {
         get => _locations;
-        set
-        {
-            _locations = value;
-        }
+        set => _locations = value;
     }
     private List<ISearchLocation> _locations;
 

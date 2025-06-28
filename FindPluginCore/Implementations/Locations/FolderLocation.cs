@@ -10,6 +10,7 @@ using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib.Implementations.SearchNotifications;
+using FindNeedlePluginLib;
 using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;

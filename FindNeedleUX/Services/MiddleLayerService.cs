@@ -14,6 +14,7 @@ using FindNeedleUX.Services.WizardDef;
 using FindNeedleUX.ViewObjects;
 using FindPluginCore.Searching.Serializers;
 using Microsoft.UI.Xaml.Controls;
+using FindNeedlePluginLib;
 
 namespace FindNeedleUX.Services;
 public class MiddleLayerService

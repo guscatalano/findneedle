@@ -96,8 +96,8 @@ public sealed partial class ResultsWebPage : Page
         // Send theme colors to the web page
         var backgroundBrush = Application.Current.Resources["ApplicationPageBackgroundThemeBrush"] as SolidColorBrush;
         var foregroundBrush = Application.Current.Resources["TextFillColorPrimaryBrush"] as SolidColorBrush;
-        string bgHex = backgroundBrush != null ? ColorToHex(backgroundBrush) : "#FFFFFF";
-        string fgHex = foregroundBrush != null ? ColorToHex(foregroundBrush) : "#000000";
+        var bgHex = backgroundBrush != null ? ColorToHex(backgroundBrush) : "#FFFFFF";
+        var fgHex = foregroundBrush != null ? ColorToHex(foregroundBrush) : "#000000";
         var colorMessage = new {
             verb = "setTheme",
             data = new {
