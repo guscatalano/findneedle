@@ -7,7 +7,22 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <NuGetAudit>false</NuGetAudit>
     <Platforms>AnyCPU;x64</Platforms>
-    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Find Needle Core Utilities</Title>
+    <Authors>Gus Catalano</Authors>
+    <Description>common utilities for plugins</Description>
+    <PackageProjectUrl>github.com/guscatalano/findneedle</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>github.com/guscatalano/findneedle</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\FindNeedlePluginLib\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
 </Project>
