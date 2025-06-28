@@ -22,7 +22,7 @@ public sealed partial class SearchProcessorsPage : Page
     {
         public string Name { get; set; } = string.Empty;
         public bool Enabled { get; set; }
-        public string? ConfigKey { get; set; } // Used to update config
+        public string ConfigKey { get; set; } // Used to update config
     }
 
     public ObservableCollection<ProcessorDisplayItem> Processors { get; set; } = new();
@@ -70,8 +70,8 @@ public sealed partial class SearchProcessorsPage : Page
                 if (desc.ImplementedInterfacesShort.Contains("IResultProcessor"))
                 {
                     var name = !string.IsNullOrEmpty(desc.FriendlyName) ? desc.FriendlyName : desc.ClassName;
-                    var enabled = false;
                     var configKey = desc.FriendlyName ?? desc.ClassName;
+                    bool enabled;
                     if (enabledDict.TryGetValue(desc.FriendlyName ?? desc.ClassName, out var isEnabled))
                         enabled = isEnabled;
                     else if (enabledDict.TryGetValue(desc.ClassName, out isEnabled))
