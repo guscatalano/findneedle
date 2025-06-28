@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using System.Collections.Generic;
-using findneedle.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 

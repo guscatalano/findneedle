@@ -1,6 +1,6 @@
 ﻿using findneedle;
 using findneedle.Implementations;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 
 namespace CoreTests;

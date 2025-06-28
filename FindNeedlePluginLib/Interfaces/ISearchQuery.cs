@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using findneedle;
-using findneedle.Interfaces;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
 
-namespace FindNeedlePluginLib.Interfaces;
+
+namespace FindNeedlePluginLib;
 public interface ISearchQuery
 {
     void AddFilter(ISearchFilter filter);

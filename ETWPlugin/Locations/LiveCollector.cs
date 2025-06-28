@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle;
 using Microsoft.Diagnostics.Tracing.Session;
+using FindNeedlePluginLib;
 
 namespace ETWPlugin.Locations;
 

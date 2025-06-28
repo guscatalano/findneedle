@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
+using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 
 namespace CoreTests;

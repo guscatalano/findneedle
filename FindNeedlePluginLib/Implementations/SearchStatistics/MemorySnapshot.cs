@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using FindNeedleCoreUtils;
 
-namespace FindNeedlePluginLib.Implementations.SearchStatistics;
+namespace FindNeedlePluginLib;
 
 public class MemorySnapshot
 {

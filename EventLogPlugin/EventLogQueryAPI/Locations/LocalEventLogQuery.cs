@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using EventLogPlugin.EvQueryNativeAPI;
 using findneedle.Implementations.Discovery;
 using findneedle.Implementations.Locations.EventLogQueryLocation;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace findneedle.Implementations;
 

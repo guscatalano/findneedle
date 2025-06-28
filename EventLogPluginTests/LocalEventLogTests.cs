@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace EventLogPluginTests;
 

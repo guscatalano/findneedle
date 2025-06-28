@@ -1,7 +1,7 @@
 ﻿using findneedle;
 using findneedle.Implementations;
 using FindNeedleCoreUtils;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 
 namespace BasicFiltersTest;

@@ -1,6 +1,7 @@
 ﻿using findneedle;
 using Microsoft.Diagnostics.Tracing.Etlx;
 using Newtonsoft.Json;
+using FindNeedlePluginLib;
 
 public class ETLLogLine : ISearchResult
 {

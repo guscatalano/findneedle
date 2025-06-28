@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using findneedle;
 using findneedle.Implementations;
-using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindPluginCore.Searching;

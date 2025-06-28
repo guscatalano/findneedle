@@ -17,7 +17,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace FindNeedleUX.Pages;
 

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations.FileExtensions;
 using findneedle.WDK;
+using FindNeedlePluginLib;
 
 
 namespace ETWPluginTests;

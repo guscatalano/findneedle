@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
 using findneedle;
+using FindNeedlePluginLib;
 
 namespace EventLogPlugin.EvQueryNativeAPI;
 public class EventLogNativeResult : ISearchResult

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations.Locations;
-using findneedle.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
 
 namespace findneedle.Implementations.FileExtensions;

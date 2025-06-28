@@ -7,7 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.PluginSubsystem;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
 using FindPluginCore;
 

@@ -1,12 +1,9 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using FindNeedleCoreUtils;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
-using FindNeedlePluginLib.Implementations.SearchStatistics;
-using FindNeedlePluginLib.Interfaces;
-using static FindNeedlePluginLib.Implementations.SearchNotifications.SearchStepNotificationSink;
 
-namespace findneedle;
+
+namespace FindNeedlePluginLib;
 
 
 

@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
+using FindNeedlePluginLib;
 
 namespace EventLogPlugin.EvQueryNativeAPI;
 public class EventLogNativeWrapper

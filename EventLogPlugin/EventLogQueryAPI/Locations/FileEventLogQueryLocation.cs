@@ -6,7 +6,7 @@ using System.Security;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations.Locations.EventLogQueryLocation;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace findneedle.Implementations.Locations;
 

@@ -2,7 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
 
 namespace FakeLoadPlugin;

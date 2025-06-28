@@ -4,8 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
-using static FindNeedlePluginLib.Implementations.SearchNotifications.SearchStepNotificationSink;
+using FindNeedlePluginLib;
 
 namespace CoreTests;
 

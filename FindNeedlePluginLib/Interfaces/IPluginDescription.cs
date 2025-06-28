@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace FindNeedlePluginLib.Interfaces;
+namespace FindNeedlePluginLib;
 
 public struct PluginDescription
 {

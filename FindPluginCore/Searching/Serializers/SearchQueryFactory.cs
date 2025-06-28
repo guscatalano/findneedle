@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.PluginSubsystem;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace FindPluginCore.Searching.Serializers;
 public class SearchQueryFactory

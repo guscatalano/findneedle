@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using FindNeedleCoreUtils;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using FindPluginCore.GlobalConfiguration;
 using FindPluginCore.PluginSubsystem;
 

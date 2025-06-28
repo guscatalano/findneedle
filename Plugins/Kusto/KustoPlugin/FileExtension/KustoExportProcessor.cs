@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using findneedle.Interfaces;
-using findneedle;
+using FindNeedlePluginLib;
 
 namespace KustoPlugin.FileExtension;
 
@@ -137,12 +136,12 @@ public class KustoExportLogLine : ISearchResult
     {
         return Level switch
         {
-            "1" => findneedle.Level.Catastrophic,
-            "2" => findneedle.Level.Error,
-            "3" => findneedle.Level.Warning,
-            "4" => findneedle.Level.Info,
-            "5" => findneedle.Level.Verbose,
-            _ => findneedle.Level.Info
+            "1" => FindNeedlePluginLib.Level.Catastrophic,
+            "2" => FindNeedlePluginLib.Level.Error,
+            "3" => FindNeedlePluginLib.Level.Warning,
+            "4" => FindNeedlePluginLib.Level.Info,
+            "5" => FindNeedlePluginLib.Level.Verbose,
+            _ => FindNeedlePluginLib.Level.Info
         };
     }
     public string GetUsername() => string.Empty;

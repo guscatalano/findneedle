@@ -1,9 +1,7 @@
 ﻿using findneedle.Implementations;
-using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace findneedle;
 

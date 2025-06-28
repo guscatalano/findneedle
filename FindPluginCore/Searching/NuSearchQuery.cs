@@ -4,9 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle;
-using findneedle.Interfaces;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace FindPluginCore.Searching;
 public class NuSearchQuery : ISearchQuery

@@ -1,5 +1,5 @@
 ﻿using System.Text.Json.Serialization;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using Windows.ApplicationModel.Activation;
 
 namespace findneedle.Implementations;

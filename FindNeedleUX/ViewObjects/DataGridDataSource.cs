@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using findneedle;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml.Data;
+using FindNeedlePluginLib;
 
 namespace Microsoft.Toolkit.Uwp.SampleApp.Data;
 

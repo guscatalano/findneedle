@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace findneedle.Interfaces;
+namespace FindNeedlePluginLib;
 public interface IFileExtensionProcessor : IDisposable
 {
     /* Every file extension processor must implement this interface.

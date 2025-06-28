@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
+using FindNeedlePluginLib;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;

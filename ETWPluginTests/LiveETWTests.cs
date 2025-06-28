@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using ETWPlugin.Locations;
-using findneedle;
+using FindNeedlePluginLib;
 
 namespace ETWPluginTests;
 

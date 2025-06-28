@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using findneedle;
-
-namespace FindNeedlePluginLib.Implementations.SearchNotifications;
 
 
+namespace FindNeedlePluginLib;
 public enum SearchStep
 {
     AtLoad,

@@ -4,8 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using findneedle;
-using findneedle.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 
 namespace TestProcessorPlugin;

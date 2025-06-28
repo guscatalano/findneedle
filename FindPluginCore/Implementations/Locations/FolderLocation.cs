@@ -6,12 +6,9 @@ using System.Linq;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
 using FindNeedlePluginLib;
-using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 

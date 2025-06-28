@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations.Locations.EventLogQueryLocation;
+using FindNeedlePluginLib;
 
 namespace findneedle.Implementations.Locations.EventLogQueryLocation;
 

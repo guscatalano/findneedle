@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations;
 using findneedle;
+using FindNeedlePluginLib;
 
 namespace findneedle.Implementations;
 

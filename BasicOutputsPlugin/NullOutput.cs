@@ -1,10 +1,9 @@
-﻿using findneedle.Interfaces;
-using FindNeedlePluginLib.Interfaces;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedlePluginLib;
 
 namespace findneedle.Implementations.Outputs;
 

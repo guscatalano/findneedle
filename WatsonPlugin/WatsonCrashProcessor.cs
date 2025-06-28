@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using findneedle.Interfaces;
+using findneedle;
+using FindNeedlePluginLib;
 
 namespace findneedle.Implementations.ResultProcessors;
 public class WatsonCrashProcessor : IResultProcessor

@@ -1,7 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using findneedle;
-using findneedle.Interfaces;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace TestProcessorPlugin;
 

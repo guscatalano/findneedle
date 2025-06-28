@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle.Implementations;
 using FindNeedleCoreUtils;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 using Windows.ApplicationModel.Search;
 

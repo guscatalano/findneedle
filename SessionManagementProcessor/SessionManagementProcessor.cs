@@ -1,7 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
-using findneedle;
-using findneedle.Interfaces;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using Windows.System;
 
 namespace SessionManagementProcessor;

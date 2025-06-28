@@ -7,14 +7,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
-using findneedle.Interfaces;
+using FindNeedlePluginLib;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedleUX.Services.WizardDef;
 using FindNeedleUX.ViewObjects;
 using FindPluginCore.Searching.Serializers;
 using Microsoft.UI.Xaml.Controls;
-using FindNeedlePluginLib;
 
 namespace FindNeedleUX.Services;
 public class MiddleLayerService
@@ -101,7 +100,7 @@ public class MiddleLayerService
 
         SearchQueryUX.UpdateSearchQuery();
         SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters, 
-            new List<findneedle.Interfaces.IResultProcessor>(), Query.Outputs, Query.SearchStepNotificationSink);
+            new List<IResultProcessor>(), Query.Outputs, Query.SearchStepNotificationSink);
     }
 
     public static List<LogLine> GetLogLines()

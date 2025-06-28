@@ -1,6 +1,7 @@
 ﻿using findneedle;
 using findneedle.Implementations;
 using FindNeedlePluginLib.TestClasses;
+using FindNeedlePluginLib;
 
 namespace BasicOutputsTests;
 

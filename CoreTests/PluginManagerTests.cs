@@ -1,9 +1,8 @@
 ﻿using System.Reflection;
-using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
-using FindNeedlePluginLib.Interfaces;
 using FindPluginCore.GlobalConfiguration;
 using FindPluginCore.PluginSubsystem;
+using FindNeedlePluginLib;
 
 namespace CoreTests;
 

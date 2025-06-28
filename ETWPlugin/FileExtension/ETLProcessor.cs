@@ -5,11 +5,10 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using findneedle.Interfaces;
 using FindNeedleCoreUtils;
 using findneedle.WDK;
 using Newtonsoft.Json;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using Windows.Media.PlayTo;
 
 namespace findneedle.Implementations.FileExtensions;

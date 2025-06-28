@@ -7,6 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using findneedle;
+using FindNeedlePluginLib;
 
 namespace Microsoft.Toolkit.Uwp.SampleApp.Data
 {

@@ -8,6 +8,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using findneedle;
 using Windows.Foundation;
+using FindNeedlePluginLib;
 using VirtualizingLayout = Microsoft.UI.Xaml.Controls.VirtualizingLayout;
 using VirtualizingLayoutContext = Microsoft.UI.Xaml.Controls.VirtualizingLayoutContext;
 

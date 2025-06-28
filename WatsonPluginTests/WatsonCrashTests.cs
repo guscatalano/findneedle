@@ -1,6 +1,7 @@
 ﻿using findneedle;
 using findneedle.Implementations.ResultProcessors;
 using FindNeedlePluginLib.TestClasses;
+using FindNeedlePluginLib;
 
 namespace WatsonPluginTests;
 

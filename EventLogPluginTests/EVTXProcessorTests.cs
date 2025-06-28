@@ -45,7 +45,7 @@ public sealed class EVTXProcessorTests
         var firstOne = results.First();
         Assert.AreEqual(firstOne.GetSource(), "Microsoft-Windows-Sysmon");
         Assert.AreEqual(firstOne.GetMachineName(), "MSEDGEWIN10");
-        Assert.AreEqual(firstOne.GetLevel(), findneedle.Level.Verbose);
+        Assert.AreEqual(firstOne.GetLevel(), FindNeedlePluginLib.Level.Verbose);
         Assert.AreEqual(firstOne.GetResultSource(), "LocalEventLogRecord-SampleFiles\\susp_explorer_exec.evtx");
         Assert.AreEqual(firstOne.GetUsername(), "NT AUTHORITY\\SYSTEM");
         //removed check for time cause its timezone dependent

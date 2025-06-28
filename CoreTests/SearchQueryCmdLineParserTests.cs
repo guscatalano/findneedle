@@ -7,7 +7,7 @@ using findneedle;
 using findneedle.Implementations;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 using FindPluginCore.Searching;
 

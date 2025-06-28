@@ -5,10 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
-using findneedle.Interfaces;
 using findneedle.PluginSubsystem;
-using FindNeedlePluginLib.Implementations.SearchNotifications;
-using FindNeedlePluginLib.Interfaces;
+using FindNeedlePluginLib;
 
 namespace FindPluginCore.Searching.Serializers;
 public class SearchQueryUX
