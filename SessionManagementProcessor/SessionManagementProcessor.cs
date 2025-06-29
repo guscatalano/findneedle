@@ -352,7 +352,13 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
             {
                 var msg = input.msg;
                 var matchedText = input.matchedText;
-                msg = msg.Substring(msg.IndexOf("{"));
+                var starsub = msg.IndexOf("{");
+                if (starsub > 0)
+                {
+                    //fix when activityid doesnt have {
+                    msg = msg.Substring(msg.IndexOf("{"));
+                }
+                
                 return "Stack -> Termsrv : New connection with activityID: " + msg;
             }
         });
