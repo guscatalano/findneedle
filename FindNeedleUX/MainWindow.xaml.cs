@@ -38,6 +38,8 @@ public sealed partial class MainWindow : Window
         this.InitializeComponent();
         WindowUtil.TrackWindow(this);
         SetWindowIcon("Assets\\appicon.ico");
+        // Show WelcomePage on startup
+        contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
     }
 
     private void SetWindowIcon(string iconPath)

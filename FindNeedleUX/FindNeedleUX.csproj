@@ -65,6 +65,9 @@
     <None Remove="Windows\Location\LocationAddEventLog.xaml" />
     <None Remove="Windows\Location\LocationStart.xaml" />
   </ItemGroup>
+  <ItemGroup>
+    <Page Remove="Pages\WelcomePage.xaml" />
+  </ItemGroup>
 
   <ItemGroup>
     <Resource Include="..\findneedle\PluginConfig.json" Link="PluginConfig.json">
@@ -124,6 +127,11 @@
     <Content Update="Assets\appicon.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Pages\WelcomePage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Pages\LogsPage.xaml">
@@ -216,6 +224,11 @@
     <Page Update="Pages\ProcessorOutputPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="Pages\WelcomePage.xaml">
+      <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
 

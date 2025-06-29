@@ -31,7 +31,6 @@
   ],
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
   "SearchQueryClass": "NuSearchQuery",
-  "PlantUMLPath": "C:\\Users\\crimson\\Desktop\\plantuml-mit-1.2025.2.jar",
   "UserRegistryPluginKey": "Software\\FindNeedle\\Plugins",
   "UserRegistryPluginKeyEnabled": true
 }
