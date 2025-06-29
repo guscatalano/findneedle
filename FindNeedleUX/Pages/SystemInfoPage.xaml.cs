@@ -3,6 +3,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
 using FindPluginCore.GlobalConfiguration;
 using System.Diagnostics;
+using Windows.Storage.Pickers;
+using Windows.Storage;
+using System.Threading.Tasks;
+using Windows.Foundation;
+using System.Runtime.InteropServices.WindowsRuntime;
+using FindNeedleUX; // For WindowUtil
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -17,6 +23,7 @@ public sealed partial class SystemInfoPage : Page
     {
         this.InitializeComponent();
         this.sysout.Text = SystemInfoMiddleware.GetPanelText();
+        PlantUmlPathTextBlock.Text = SystemInfoMiddleware.GetPlantUMLPath();
         SetComboBoxToCurrent();
     }
 
@@ -84,5 +91,29 @@ public sealed partial class SystemInfoPage : Page
             Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
         }
         catch { }
+    }
+
+    private void ChangePlantUmlPath_Click(object sender, RoutedEventArgs e)
+    {
+        var window = WindowUtil.GetWindowForElement(this);
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        var picker = new FileOpenPicker();
+        picker.FileTypeFilter.Add(".jar");
+        picker.SuggestedStartLocation = PickerLocationId.Desktop;
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+        var fileOp = picker.PickSingleFileAsync();
+        fileOp.Completed = (op, status) =>
+        {
+            var file = op.GetResults();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (file != null)
+                {
+                    SystemInfoMiddleware.SetPlantUMLPath(file.Path);
+                    PlantUmlPathTextBlock.Text = file.Path;
+                    this.sysout.Text = SystemInfoMiddleware.GetPanelText();
+                }
+            });
+        };
     }
 }

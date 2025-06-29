@@ -4,6 +4,7 @@ using System.Reflection;
 using System.IO;
 using FindPluginCore.GlobalConfiguration; // Add for settings
 using Windows.ApplicationModel; // Correct namespace for Package
+using findneedle.PluginSubsystem; // For PluginManager
 
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
@@ -20,6 +21,7 @@ public class SystemInfoMiddleware
         var wdkRootPath = "WDK Root Path: ";
         var tracefmtPath = "Tracefmt: ";
         var defaultViewer = $"Default Result Viewer: {GlobalSettings.DefaultResultViewer}";
+        var plantumlPath = $"PlantUML Path: {GetPlantUMLPath()}";
         string appVersion, versionSource;
         (appVersion, versionSource) = GetAppVersionAndSource();
         var versionLine = $"App Version: {appVersion}";
@@ -70,7 +72,23 @@ public class SystemInfoMiddleware
             wdkRootPath += $"Error: {ex.Message}";
             tracefmtPath += $"Error: {ex.Message}";
         }
-        return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{versionLine}\n{versionSourceLine}\n{msStoreVersionLine}\n{buildTimeLine}\n{storeLine}\n{msStoreLine}\n{githubReleasesLine}\n{githubLine}";
+        return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{plantumlPath}\n{versionLine}\n{versionSourceLine}\n{msStoreVersionLine}\n{buildTimeLine}\n{storeLine}\n{msStoreLine}\n{githubReleasesLine}\n{githubLine}";
+    }
+
+    public static string GetPlantUMLPath()
+    {
+        var mgr = PluginManager.GetSingleton();
+        return mgr.config?.PlantUMLPath ?? string.Empty;
+    }
+
+    public static void SetPlantUMLPath(string newPath)
+    {
+        var mgr = PluginManager.GetSingleton();
+        if (mgr.config != null)
+        {
+            mgr.config.PlantUMLPath = newPath;
+            mgr.SaveToFile();
+        }
     }
 
     private static string GetWindowsVersion()
