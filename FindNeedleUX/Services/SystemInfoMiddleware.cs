@@ -5,6 +5,7 @@ using System.IO;
 using FindPluginCore.GlobalConfiguration; // Add for settings
 using Windows.ApplicationModel; // Correct namespace for Package
 using findneedle.PluginSubsystem; // For PluginManager
+using Microsoft.Win32;
 
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
@@ -78,7 +79,49 @@ public class SystemInfoMiddleware
     public static string GetPlantUMLPath()
     {
         var mgr = PluginManager.GetSingleton();
-        return mgr.config?.PlantUMLPath ?? string.Empty;
+        var val = mgr.config?.PlantUMLPath ?? string.Empty;
+        if (val.StartsWith("reg:", StringComparison.OrdinalIgnoreCase))
+        {
+            // Format: reg:HIVE\\KeyPath[\\ValueName]
+            // Example: reg:HKEY_CURRENT_USER\\Software\\FindNeedle\\PlantUMLPath
+            var regPath = val.Substring(4);
+            string hive = "";
+            string keyPath = regPath;
+            string valueName = "";
+            int hiveSep = regPath.IndexOf("\\");
+            if (hiveSep > 0)
+            {
+                hive = regPath.Substring(0, hiveSep);
+                keyPath = regPath.Substring(hiveSep + 1);
+            }
+            int valueSep = keyPath.LastIndexOf(":");
+            if (valueSep > 0)
+            {
+                valueName = keyPath.Substring(valueSep + 1);
+                keyPath = keyPath.Substring(0, valueSep);
+            }
+            RegistryKey baseKey = hive.ToUpper() switch
+            {
+                "HKEY_CURRENT_USER" => Registry.CurrentUser,
+                "HKCU" => Registry.CurrentUser,
+                "HKEY_LOCAL_MACHINE" => Registry.LocalMachine,
+                "HKLM" => Registry.LocalMachine,
+                _ => Registry.CurrentUser
+            };
+            try
+            {
+                using var regKey = baseKey.OpenSubKey(keyPath);
+                if (regKey != null)
+                {
+                    var regVal = regKey.GetValue(string.IsNullOrEmpty(valueName) ? null : valueName) as string;
+                    if (!string.IsNullOrWhiteSpace(regVal))
+                        return regVal;
+                }
+            }
+            catch { }
+            return string.Empty;
+        }
+        return val;
     }
 
     public static void SetPlantUMLPath(string newPath)

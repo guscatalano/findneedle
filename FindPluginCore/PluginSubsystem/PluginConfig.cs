@@ -14,6 +14,8 @@ public class PluginConfig
     public string PathToFakeLoadPlugin = "";
     public string SearchQueryClass = "";
     public string PlantUMLPath = string.Empty; // Optional: Path to PlantUML JAR
+    public string UserRegistryPluginKey = string.Empty; // Optional: Registry key in HKCU for extra plugins
+    public bool UserRegistryPluginKeyEnabled = false; // Enable/disable registry plugin loading
 }
 
 public class PluginConfigEntry

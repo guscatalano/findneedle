@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 using FindPluginCore.GlobalConfiguration;
@@ -213,6 +214,36 @@ public class PluginManager
         {
             if (config != null)
             {
+                // --- BEGIN: Registry plugin loading ---
+                if (config.UserRegistryPluginKeyEnabled && !string.IsNullOrWhiteSpace(config.UserRegistryPluginKey))
+                {
+                    try
+                    {
+                        using var regKey = Registry.CurrentUser.OpenSubKey(config.UserRegistryPluginKey);
+                        if (regKey != null)
+                        {
+                            var value = regKey.GetValue("") as string;
+                            if (!string.IsNullOrWhiteSpace(value))
+                            {
+                                var plugins = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                foreach (var pluginPath in plugins)
+                                {
+                                    // Only add if not already present
+                                    if (!config.entries.Any(e => string.Equals(e.path, pluginPath, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        config.entries.Add(new PluginConfigEntry { name = Path.GetFileNameWithoutExtension(pluginPath), path = pluginPath, enabled = true });
+                                        FindPluginCore.Logger.Instance.Log($"Loaded plugin from registry: {pluginPath}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        FindPluginCore.Logger.Instance.Log($"Error reading plugins from registry: {ex.Message}");
+                    }
+                }
+                // --- END: Registry plugin loading ---
                 foreach (var pluginModuleDescriptor in config.entries)
                 {
                     FindPluginCore.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
