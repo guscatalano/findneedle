@@ -21,6 +21,9 @@
                 <MenuFlyoutItem Text="Open Log File" Click="MenuFlyoutItem_Click" Name="openlogfile" />
                 <MenuFlyoutItem Text="Open Folder with logs" Click="MenuFlyoutItem_Click" Name="openlogfolder"/>
             </MenuBarItem>
+            <MenuBarItem Title="Inspect">
+                <MenuFlyoutItem Text="Inspect ETL" Click="MenuFlyoutItem_Click" Name="inspect_etl"/>
+            </MenuBarItem>
             <MenuBarItem Title="Workspace">
                 <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
                 <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
@@ -38,16 +41,17 @@
                 <MenuFlyoutItem Text="View Raw Results" Click="MenuFlyoutItem_Click" Name="results_viewraw"/>
                 <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
             </MenuBarItem>
+          
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
                 <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
             </MenuBarItem>
         </MenuBar>
 
-        <!-- Progress bar and text for search progress -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,4,8,4" Visibility="Collapsed" x:Name="ProgressPanel">
-            <ProgressBar x:Name="SearchProgressBar" Width="200" Height="20" Minimum="0" Maximum="100" Value="0"/>
-            <TextBlock x:Name="SearchProgressText" Margin="12,0,0,0" VerticalAlignment="Center"/>
+        <!-- Progress spinner for ETL inspection -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,4,8,4" Visibility="Collapsed" x:Name="SpinnerPanel">
+            <ProgressRing x:Name="EtlSpinner" Width="32" Height="32" IsActive="False"/>
+            <TextBlock Text="Inspecting ETL file..." Margin="12,0,0,0" VerticalAlignment="Center"/>
         </StackPanel>
 
         <Frame x:Name="contentFrame" Grid.Row="2"/>

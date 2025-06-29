@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/ETWPluginTests/SampleFiles
+/ETWPluginTests/SampleFiles/dumpfile.xml
+/ETWPluginTests/SampleFiles/report.xsl

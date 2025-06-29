@@ -1,11 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindPluginCore;
 using FindPluginCore.GlobalConfiguration; // Add this for settings
+using findneedle.ETWPlugin;
+using findneedle.WDK;
+using FindNeedleCoreUtils;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Text;
 using Windows.Storage.Pickers;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -52,7 +57,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void MenuFlyoutItem_Click(object sender, RoutedEventArgs e)
+    private async void MenuFlyoutItem_Click(object sender, RoutedEventArgs e)
     {
         var selectedFlyoutItem = sender as MenuFlyoutItem;
         switch (selectedFlyoutItem.Name.ToLower())
@@ -128,43 +133,20 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Opened log folder picker");
                 QuickFolderOpen();
                 break;
+            case "inspect_etl":
+                await InspectEtlFile();
+                break;
             default:
                 Logger.Instance.Log($"Navigation error: unknown menu item {selectedFlyoutItem.Name}");
                 throw new Exception("bad code");
         }
     }
 
-    private void ShowProgressBar(bool show)
-    {
-        ProgressPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void UpdateProgressBar(int percent)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            SearchProgressBar.Value = percent;
-        });
-    }
-
-    private void UpdateProgressText(string text)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            SearchProgressText.Text = text;
-        });
-    }
-
     private async Task RunSearchWithProgress(bool surfaceScan = false)
     {
-        ShowProgressBar(true);
-        SearchProgressBar.Value = 0;
-        SearchProgressText.Text = "Starting search...";
-        var sink = MiddleLayerService.GetProgressEventSink();
-        sink.RegisterForNumericProgress(UpdateProgressBar);
-        sink.RegisterForTextProgress(UpdateProgressText);
+        ShowSpinner(true);
         await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan).Wait());
-        ShowProgressBar(false);
+        ShowSpinner(false);
     }
 
     private async void QuickFileOpen()
@@ -255,6 +237,100 @@ public sealed partial class MainWindow : Window
         if (file != null)
         {
             MiddleLayerService.SaveWorkspace(file.Path);
+        }
+    }
+
+    private void ShowSpinner(bool show)
+    {
+        SpinnerPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        EtlSpinner.IsActive = show;
+    }
+
+    private async Task InspectEtlFile()
+    {
+        ShowSpinner(true);
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var picker = new FileOpenPicker()
+        {
+            ViewMode = PickerViewMode.List,
+            FileTypeFilter = { ".etl" },
+        };
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+        var file = await picker.PickSingleFileAsync();
+        if (file == null)
+        {
+            ShowSpinner(false);
+            return;
+        }
+        string etlPath = file.Path;
+        List<string> providers = null;
+        Dictionary<string, string> sysInfo = null;
+        ETLSummary reportSummary = null;
+        string error = null;
+        string tempPath = null;
+        await Task.Run(() =>
+        {
+            try
+            {
+                providers = EtlInfoExtractor.GetProviders(etlPath);
+                sysInfo = EtlInfoExtractor.GetSystemInfo(etlPath);
+                tempPath = TempStorage.GetNewTempPath("tracerpt");
+                reportSummary = TracerptRunner.RunAndParseReport(etlPath, tempPath);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
+        });
+        ShowSpinner(false);
+        var dialog = new ContentDialog
+        {
+            Title = error == null ? "ETL Inspection Results" : "ETL Inspection Error",
+            CloseButtonText = "OK",
+            XamlRoot = this.Content.XamlRoot
+        };
+        if (error != null)
+        {
+            dialog.Content = $"Error inspecting ETL: {error}";
+        }
+        else
+        {
+            var content = new StackPanel();
+            // Providers from TraceEvent
+            content.Children.Add(new TextBlock { Text = $"Providers (TraceEvent) ({providers.Count}):", FontWeight = FontWeights.Bold });
+            foreach (var p in providers.Take(20))
+                content.Children.Add(new TextBlock { Text = p });
+            if (providers.Count > 20)
+                content.Children.Add(new TextBlock { Text = $"...and {providers.Count - 20} more" });
+            // Providers from tracerpt -report
+            if (reportSummary != null && reportSummary.Providers != null && reportSummary.Providers.Count > 0)
+            {
+                content.Children.Add(new TextBlock { Text = $"\nProviders (tracerpt -report) ({reportSummary.Providers.Count}):", FontWeight = FontWeights.Bold, Margin = new Microsoft.UI.Xaml.Thickness(0,8,0,0) });
+                foreach (var p in reportSummary.Providers.Take(20))
+                    content.Children.Add(new TextBlock { Text = p });
+                if (reportSummary.Providers.Count > 20)
+                    content.Children.Add(new TextBlock { Text = $"...and {reportSummary.Providers.Count - 20} more" });
+            }
+            // Windows build info from tracerpt -report
+            if (!string.IsNullOrWhiteSpace(reportSummary?.WindowsBuildInfo))
+            {
+                content.Children.Add(new TextBlock { Text = $"\nWindows Build: {reportSummary.WindowsBuildInfo}", FontWeight = FontWeights.Bold, Margin = new Microsoft.UI.Xaml.Thickness(0,8,0,0) });
+            }
+            // System info from TraceEvent
+            content.Children.Add(new TextBlock { Text = "\nSystem Info:", FontWeight = FontWeights.Bold, Margin = new Microsoft.UI.Xaml.Thickness(0,8,0,0) });
+            if (sysInfo == null || sysInfo.Count == 0)
+                content.Children.Add(new TextBlock { Text = "(No system info found)" });
+            else
+                foreach (var kv in sysInfo.Take(10))
+                    content.Children.Add(new TextBlock { Text = $"{kv.Key}: {kv.Value}" });
+            if (sysInfo != null && sysInfo.Count > 10)
+                content.Children.Add(new TextBlock { Text = $"...and {sysInfo.Count - 10} more" });
+            dialog.Content = content;
+        }
+        await dialog.ShowAsync();
+        if (tempPath != null)
+        {
+            TempStorage.DeleteSomeTempPath(tempPath);
         }
     }
 }
