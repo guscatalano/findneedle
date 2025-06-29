@@ -20,6 +20,8 @@ public class PluginManager
     public static PluginManager GetSingleton()
     {
         gPluginManager ??= new PluginManager();
+        // Register the accessor for FindNeedlePluginLib
+        PluginSubsystemAccessorProvider.Register(new PluginSubsystemAccessor(gPluginManager));
         return gPluginManager;
     }
 

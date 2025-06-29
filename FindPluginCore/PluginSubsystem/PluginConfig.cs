@@ -13,6 +13,7 @@ public class PluginConfig
     public List<PluginConfigEntry> entries = new();
     public string PathToFakeLoadPlugin = "";
     public string SearchQueryClass = "";
+    public string PlantUMLPath = string.Empty; // Optional: Path to PlantUML JAR
 }
 
 public class PluginConfigEntry

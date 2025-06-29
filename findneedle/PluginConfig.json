@@ -30,5 +30,6 @@
     }
   ],
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
-  "SearchQueryClass":  "NuSearchQuery"
+  "SearchQueryClass":  "NuSearchQuery",
+  "PlantUMLPath": "C:\\Path\\To\\plantuml.jar"
 }

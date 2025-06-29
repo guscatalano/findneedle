@@ -1,6 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using FindNeedlePluginLib;
+using FindNeedleCoreUtils;
 using Windows.System;
+using FindNeedlePluginUtils;
 
 namespace SessionManagementProcessor;
 
@@ -111,7 +113,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
         var path = Path.Combine(optionalOutputFolder, "session.pu");
         path = Path.GetFullPath(path);
         File.WriteAllText(path, GeneratePlatUML());
-        PlantUMLGenerator x = new PlantUMLGenerator();
+        var x = new PlantUMLGenerator();
         var outputpath = x.GenerateUML(path);
         return outputpath;
     }

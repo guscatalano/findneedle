@@ -147,9 +147,6 @@ public class TestGlobals
                             } 
 
                             
-
-
-                            throw new Exception("There are multiple " + searchExe + " in " + basepath + ". Found: " + rightFile + " and " + file);
                         }
                         if (!originalPath.Equals("null"))
                         {
@@ -158,6 +155,10 @@ public class TestGlobals
                                 discardedFinds.Add(temp);
                                 continue; // We found a file, but it does not match the base info
                             }
+                        } 
+                        else
+                        {
+                            throw new Exception("There are multiple " + searchExe + " in " + basepath + ". Found: " + rightFile + " and " + file);
                         }
                         found = true;
                         rightFile = Path.GetFullPath(file).Replace(searchExe, "");

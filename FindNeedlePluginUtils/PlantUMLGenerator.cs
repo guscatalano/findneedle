@@ -1,14 +1,14 @@
-﻿global using System;
-global using System.Collections.Generic;
-global using System.Diagnostics;
-global using System.Linq;
-global using System.Text;
-global using System.Threading.Tasks;
+using System;
+using System.Diagnostics;
+using System.IO;
 using Microsoft.Win32;
+using FindNeedlePluginLib;
 
-namespace SessionManagementProcessor;
+namespace FindNeedlePluginUtils;
+
 public class PlantUMLGenerator
 {
+    private static string? _cachedPlantUMLPath = null;
 
     public string GenerateUML(string umlinput)
     {
@@ -59,9 +59,20 @@ public class PlantUMLGenerator
 
     public string GetPlantUMLPath()
     {
-        //hack
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "plantuml-mit-1.2025.2.jar");
-        return path;
+        if (_cachedPlantUMLPath != null)
+            return _cachedPlantUMLPath;
+
+        // Use PluginSubsystemAccessorProvider if available
+        var accessor = PluginSubsystemAccessorProvider.Accessor;
+        if (accessor != null && !string.IsNullOrWhiteSpace(accessor.PlantUMLPath))
+        {
+            _cachedPlantUMLPath = accessor.PlantUMLPath;
+            return _cachedPlantUMLPath;
+        }
+
+        // Fallback to default
+        _cachedPlantUMLPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "plantuml-mit-1.2025.2.jar");
+        return _cachedPlantUMLPath;
     }
 
     public bool IsJavaRuntimeInstalled()
@@ -91,5 +102,4 @@ public class PlantUMLGenerator
             return false;
         }
     }
-
 }
