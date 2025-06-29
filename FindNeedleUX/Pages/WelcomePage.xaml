@@ -11,10 +11,10 @@
             <TextBlock Text="Welcome to FindNeedle" FontSize="28" FontWeight="Bold" Margin="0,0,0,16"/>
             <TextBlock Text="FindNeedle is a powerful search and analysis tool with a plugin-based architecture. This user experience (UX) provides an intuitive interface for configuring, running, and viewing results from your searches." TextWrapping="Wrap" Margin="0,0,0,16"/>
             <TextBlock Text="Key Features:" FontWeight="Bold" FontSize="18" Margin="0,0,0,8"/>
-            <TextBlock Text="• Plugin management and configuration" Margin="8,0,0,0"/>
-            <TextBlock Text="• Search result viewing and export" Margin="8,0,0,0"/>
-            <TextBlock Text="• System information and diagnostics" Margin="8,0,0,0"/>
-            <TextBlock Text="• PlantUML integration for diagram generation" Margin="8,0,0,16"/>
+            <TextBlock Text="> Plugin management and configuration" Margin="8,0,0,0"/>
+            <TextBlock Text="> Search result viewing and export" Margin="8,0,0,0"/>
+            <TextBlock Text="> System information and diagnostics" Margin="8,0,0,0"/>
+            <TextBlock Text="> PlantUML integration for diagram generation" Margin="8,0,0,16"/>
             <TextBlock Text="Configuration is managed via PluginConfig.json. You can control which plugins are loaded, enable registry-based plugin loading, and configure PlantUML integration. See the README for more details." TextWrapping="Wrap" Margin="0,0,0,16"/>
             <TextBlock Text="Get started by exploring the menu on the top." TextWrapping="Wrap"/>
         </StackPanel>
