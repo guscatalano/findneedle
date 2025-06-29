@@ -182,7 +182,7 @@ public sealed partial class MainWindow : Window
         if (file != null)
         {
             MiddleLayerService.NewWorkspace();
-            MiddleLayerService.AddFolderLocation("None");
+            MiddleLayerService.AddFolderLocation(file.Path);
             await RunSearchWithProgress();
             // Use the default result viewer setting
             var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";

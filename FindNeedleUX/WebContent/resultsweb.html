@@ -4,6 +4,37 @@
         var count = 0;
         var scrollYEnabled = false;
         var defaultScrollY = null;
+        var levelColorMap = {};
+        var knownLevels = new Set();
+
+        function addLevelColorControl(level) {
+            if (document.getElementById('colorpicker-' + level)) return;
+            var controlsDiv = document.getElementById('levelColorControls');
+            var label = document.createElement('label');
+            label.textContent = ` ${level} `;
+            var input = document.createElement('input');
+            input.type = 'color';
+            input.id = 'colorpicker-' + level;
+            input.value = levelColorMap[level] || '#ffffff';
+            input.addEventListener('input', function() {
+                levelColorMap[level] = input.value;
+                recolorRowsForLevel(level);
+            });
+            label.appendChild(input);
+            controlsDiv.appendChild(label);
+        }
+
+        function recolorRowsForLevel(level) {
+            if (!window.table) return;
+            window.table.rows().every(function() {
+                var data = this.data();
+                if (data.Level === level) {
+                    var color = levelColorMap[level] || '';
+                    $(this.node()).css('background-color', color);
+                }
+            });
+        }
+
         window.chrome.webview.addEventListener('message', function (event) {
             let table = window.table;
             const payload = event.data;
@@ -21,13 +52,45 @@
                 }
             }
 
+            if (payload.verb === 'setLevelColors') {
+                // payload.data should be an object: { "Error": "#ffcccc", "Warning": "#fff3cd", ... }
+                levelColorMap = payload.data || {};
+                // Add color pickers for all levels in the map
+                Object.keys(levelColorMap).forEach(function(level) {
+                    knownLevels.add(level);
+                    addLevelColorControl(level);
+                });
+                // Redraw table to apply new colors
+                if (window.table) {
+                    window.table.rows().every(function() {
+                        var data = this.data();
+                        var level = data.Level;
+                        var color = levelColorMap[level] || '';
+                        $(this.node()).css('background-color', color);
+                    });
+                }
+            }
+
             if (payload.verb === 'newresult') {
                 if (count == 0) {
                     //debugger;
                 }
                 count++;
                 document.getElementById("results").innerHTML = count + "<br/>";
-                table.row.add(payload.data);
+                var rowIdx = table.row.add(payload.data).index();
+                var level = payload.data.Level;
+                if (!knownLevels.has(level)) {
+                    knownLevels.add(level);
+                    addLevelColorControl(level);
+                }
+                var color = levelColorMap[level] || '';
+                // Use setTimeout to ensure row is rendered before applying color
+                setTimeout(function() {
+                    var rowNode = table.row(rowIdx).node();
+                    if (rowNode) {
+                        rowNode.style.backgroundColor = color;
+                    }
+                }, 0);
             }
             if (payload.verb === 'done') {
                 document.getElementById("tablediv").style.visibility = "visible";
@@ -142,6 +205,9 @@
         .dataTables_scrollBody {
             width: 100% !important;
         }
+        #levelColorControls label {
+            margin-right: 16px;
+        }
     </style>
 </head>
 <body onload="codeAddress()">
@@ -149,6 +215,7 @@
     <link href="datatables.min.css" rel="stylesheet">
     <button onclick="redrawTable()">Redraw Table</button>
     <label><input type="checkbox" id="limitToWindowCheckbox" onchange="toggleTableLimitToWindow(this)"> Limit table to window size</label><br/>
+    <div id="levelColorControls" style="margin: 10px 0;"></div>
     Toggle column: <a class="toggle-vis" data-column="0">Index</a> - <a class="toggle-vis" data-column="1">Time</a> - <a class="toggle-vis" data-column="2">Provider</a> - <a class="toggle-vis" data-column="3">TaskName</a> - <a class="toggle-vis" data-column="4">Message</a> - <a class="toggle-vis" data-column="5">Source</a>
     <div id="tablediv" style="display:none;">
         <script src="datatables.min.js"></script>
