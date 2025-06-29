@@ -6,9 +6,10 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <Grid>
-        <TabView x:Name="ProcessorTabView" Margin="8">
-            <!-- Tabs will be added in code-behind -->
-        </TabView>
-    </Grid>
+    <NavigationView x:Name="ProcessorNavView" PaneDisplayMode="Left" IsPaneOpen="True" IsSettingsVisible="False" IsBackButtonVisible="Collapsed" SelectionChanged="ProcessorNavView_SelectionChanged" PaneOpened="ProcessorNavView_PaneOpened" PaneClosed="ProcessorNavView_PaneClosed" Margin="8">
+        <NavigationView.MenuItems>
+            <!-- Items will be added in code-behind -->
+        </NavigationView.MenuItems>
+        <Grid x:Name="ProcessorContentGrid" />
+    </NavigationView>
 </Page>

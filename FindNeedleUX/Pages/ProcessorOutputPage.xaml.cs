@@ -5,6 +5,8 @@ using FindNeedlePluginLib;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI;
+using Microsoft.UI.Text;
 using System;
 using FindNeedleCoreUtils;
 using System.Diagnostics;
@@ -14,6 +16,9 @@ namespace FindNeedleUX.Pages;
 
 public sealed partial class ProcessorOutputPage : Page
 {
+    private List<object> _processors;
+    private Dictionary<object, UIElement> _processorContentMap = new();
+
     public ProcessorOutputPage()
     {
         this.InitializeComponent();
@@ -22,26 +27,30 @@ public sealed partial class ProcessorOutputPage : Page
 
     private void ProcessorOutputPage_Loaded(object sender, RoutedEventArgs e)
     {
-        LoadProcessorTabs();
+        LoadProcessorNavItems();
     }
 
-    private void LoadProcessorTabs()
+    private void LoadProcessorNavItems()
     {
-        var tabView = this.FindName("ProcessorTabView") as TabView;
-        if (tabView == null) return;
-        tabView.TabItems.Clear();
-        var processors = MiddleLayerService.Query.Processors;
-        if (processors == null || processors.Count == 0)
+        var navView = this.FindName("ProcessorNavView") as NavigationView;
+        var contentGrid = this.FindName("ProcessorContentGrid") as Grid;
+        if (navView == null || contentGrid == null) return;
+        navView.MenuItems.Clear();
+        contentGrid.Children.Clear();
+        _processorContentMap.Clear();
+        _processors = new List<object>(MiddleLayerService.Query.Processors);
+        if (_processors == null || _processors.Count == 0)
         {
-            var tab = new TabViewItem { Header = "No Processors", Content = new TextBlock { Text = "No processors are enabled in this workspace." } };
-            tabView.TabItems.Add(tab);
+            navView.MenuItems.Add(new NavigationViewItem { Content = "No Processors", IsEnabled = false });
+            contentGrid.Children.Add(new TextBlock { Text = "No processors are enabled in this workspace." });
             return;
         }
-        foreach (var processor in processors)
+        foreach (var processor in _processors)
         {
-            var header = (processor as IResultProcessor)?.GetDescription() ?? processor.GetType().Name;
+            var name = processor.GetType().Name;
+            var description = (processor as IResultProcessor)?.GetDescription() ?? name;
             var outputText = (processor as IResultProcessor)?.GetOutputText() ?? "No output.";
-            var outputFile = processor.GetOutputFile(TempStorage.GetSingleton().tempPath);
+            var outputFile = (processor as IResultProcessor)?.GetOutputFile(TempStorage.GetSingleton().tempPath);
 
             var outputBox = new TextBox
             {
@@ -83,6 +92,22 @@ public sealed partial class ProcessorOutputPage : Page
             };
             runButton.Click += RunProcessor_Click;
 
+            var titleBlock = new TextBlock
+            {
+                Text = name,
+                FontWeight = FontWeights.Bold,
+                FontSize = 20,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
+            var descBlock = new TextBlock
+            {
+                Text = description,
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
             var pivot = new Pivot();
             pivot.Items.Add(new PivotItem
             {
@@ -96,15 +121,60 @@ public sealed partial class ProcessorOutputPage : Page
             });
 
             var stack = new StackPanel();
+            stack.Children.Add(titleBlock);
+            stack.Children.Add(descBlock);
             stack.Children.Add(runButton);
             stack.Children.Add(pivot);
 
-            var tab = new TabViewItem
-            {
-                Header = header,
-                Content = stack
-            };
-            tabView.TabItems.Add(tab);
+            _processorContentMap[processor] = stack;
+            var navItem = new NavigationViewItem { Content = name, Tag = processor };
+            ToolTipService.SetToolTip(navItem, description);
+            navView.MenuItems.Add(navItem);
+        }
+        // Select the first processor by default
+        if (navView.MenuItems.Count > 0)
+        {
+            navView.SelectedItem = navView.MenuItems[0];
+            ShowProcessorContent(_processors[0]);
+        }
+    }
+
+    private void ProcessorNavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.SelectedItem is NavigationViewItem item && item.Tag != null)
+        {
+            ShowProcessorContent(item.Tag);
+            // Collapse the pane after selection
+            sender.IsPaneOpen = false;
+        }
+    }
+
+    private void ProcessorNavView_PaneOpened(NavigationView sender, object args)
+    {
+        foreach (var item in sender.MenuItems)
+        {
+            if (item is NavigationViewItem navItem)
+                navItem.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void ProcessorNavView_PaneClosed(NavigationView sender, object args)
+    {
+        foreach (var item in sender.MenuItems)
+        {
+            if (item is NavigationViewItem navItem)
+                navItem.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ShowProcessorContent(object processor)
+    {
+        var contentGrid = this.FindName("ProcessorContentGrid") as Grid;
+        if (contentGrid == null) return;
+        contentGrid.Children.Clear();
+        if (_processorContentMap.TryGetValue(processor, out var content))
+        {
+            contentGrid.Children.Add(content);
         }
     }
 
