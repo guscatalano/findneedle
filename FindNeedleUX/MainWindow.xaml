@@ -55,7 +55,7 @@
             <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="#80000000" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" >
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
                     <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False"/>
-                    <TextBlock Text="Inspecting file..." Margin="0,16,0,0" FontSize="18" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="SpinnerText" Text="Inspecting file..." Margin="0,16,0,0" FontSize="18" Foreground="White" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Grid>
         </Grid>
