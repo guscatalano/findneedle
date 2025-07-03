@@ -151,8 +151,29 @@ public sealed partial class MainWindow : Window
     private async Task RunSearchWithProgress(bool surfaceScan = false)
     {
         ShowSpinner(true, "Running search...");
+        // Register for progress updates
+        var sink = MiddleLayerService.GetProgressEventSink();
+        void OnTextProgress(string text)
+        {
+            DispatcherQueue.TryEnqueue(() => SpinnerText.Text = text);
+        }
+        void OnNumericProgress(int percent)
+        {
+            // Optionally, you could update a progress bar or add percent to SpinnerText
+            // For now, just append percent to the text
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!string.IsNullOrWhiteSpace(SpinnerText.Text))
+                    SpinnerText.Text = $"{SpinnerText.Text.Split('(')[0].Trim()} ({percent}%)";
+                else
+                    SpinnerText.Text = $"Progress: {percent}%";
+            });
+        }
+        sink.RegisterForTextProgress(OnTextProgress);
+        sink.RegisterForNumericProgress(OnNumericProgress);
         await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan).Wait());
         ShowSpinner(false);
+        // Optionally: unregister handlers if needed (not strictly necessary for this pattern)
     }
 
     private async void QuickFileOpen()

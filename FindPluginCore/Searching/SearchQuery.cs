@@ -59,6 +59,10 @@ public class SearchQuery : ISearchQuery
             _stepnotifysink ??= new SearchStepNotificationSink();
             return _stepnotifysink;
         }
+        set
+        {
+            _stepnotifysink = value;
+        }
     }
     
 
@@ -153,13 +157,13 @@ public class SearchQuery : ISearchQuery
         SearchStepNotificationSink.NotifyStep(SearchStep.AtLoad);
         SetDepthForAllLocations(Depth);
         var count = 1;
-        
+        int total = Locations.Count();
         foreach (var loc in Locations)
         {
-            SearchStepNotificationSink.progressSink.NotifyProgress(50 * (count / Locations.Count()), "loading location: " + loc.GetName());
+            int percent = total > 0 ? (int)(50.0 * count / total) : 0;
+            SearchStepNotificationSink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
             //loc.SetNotificationCallback(progressSink);
             //loc.SetSearchStatistics(stats);
-
             loc.LoadInMemory();
             count++;
         }
@@ -171,9 +175,11 @@ public class SearchQuery : ISearchQuery
         SearchStepNotificationSink.NotifyStep(SearchStep.AtSearch);
         List<ISearchResult> results = new List<ISearchResult>();
         var count = 1;
+        int total = Locations.Count();
         foreach (var loc in Locations)
         {
-            SearchStepNotificationSink.progressSink.NotifyProgress(50 + (50 * (count / Locations.Count())), "loading results: " + loc.GetName());
+            int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
+            SearchStepNotificationSink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
             results.AddRange(loc.Search(this));
             count++;
         }

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-
 namespace FindNeedlePluginLib;
 public interface ISearchQuery
 {
@@ -41,4 +40,11 @@ public interface ISearchQuery
 
     //No matter the implementation, this function should run through every step
     void RunThrough();
+
+    // New property to expose the notification sink
+    SearchStepNotificationSink SearchStepNotificationSink {
+        get; set;
+    }
+
+    void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations);
 }

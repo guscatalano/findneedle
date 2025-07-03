@@ -53,8 +53,12 @@ public class NuSearchQuery : ISearchQuery
     public SearchStatistics Statistics => _stats;
     private readonly SearchStatistics _stats;
 
-    public SearchStepNotificationSink SearchStepNotificationSink => _stepnotifysink;
-    private readonly SearchStepNotificationSink _stepnotifysink;
+    public SearchStepNotificationSink SearchStepNotificationSink
+    {
+        get => _stepnotifysink;
+        set => _stepnotifysink = value;
+    }
+    private SearchStepNotificationSink _stepnotifysink;
 
     public List<ISearchResult> CurrentResultList => _currentResultList;
 
@@ -89,9 +93,14 @@ public class NuSearchQuery : ISearchQuery
     public void Step1_LoadAllLocationsInMemory()
     {
         _stepnotifysink.NotifyStep(SearchStep.AtLoad);
+        int count = 1;
+        int total = _locations.Count;
         foreach (var loc in _locations)
         {
+            int percent = total > 0 ? (int)(50.0 * count / total) : 0;
+            _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
             loc.LoadInMemory();
+            count++;
         }
     }
 
@@ -100,8 +109,12 @@ public class NuSearchQuery : ISearchQuery
     {
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
+        int count = 1;
+        int total = _locations.Count;
         foreach (var loc in _locations)
         {
+            int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
+            _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
             loc.SetSearchDepth(_depth);
             var unfilteredResults = loc.Search();
 
@@ -121,6 +134,7 @@ public class NuSearchQuery : ISearchQuery
                     _filteredResults.Add(result);
                 }
             }
+            count++;
         }
 
         return _filteredResults;
@@ -150,6 +164,14 @@ public class NuSearchQuery : ISearchQuery
         _stepnotifysink.NotifyStep(SearchStep.Total);
     }
     #endregion
+
+    public void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations)
+    {
+        foreach (var loc in _locations)
+        {
+            loc.SetSearchDepth(depthForAllLocations);
+        }
+    }
 
     //Consider rethinking this one
     public void AddFilter(ISearchFilter filter) 

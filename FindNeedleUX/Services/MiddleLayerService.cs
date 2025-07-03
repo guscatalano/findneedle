@@ -20,7 +20,6 @@ public class MiddleLayerService
 {
     public static List<ISearchLocation> Locations = new();
     public static List<ISearchFilter> Filters = new();
-    public static SearchQuery Query = new();
     public static SearchQueryUX SearchQueryUX = new();
 
     public static void AddFolderLocation(string location)
@@ -96,11 +95,17 @@ public class MiddleLayerService
                 }
             }
         }
-        Query.Processors = enabledProcessors;
+        var query = SearchQueryUX.CurrentQuery;
+        if (query != null)
+        {
+            query.Processors = enabledProcessors;
 
-        SearchQueryUX.UpdateSearchQuery();
-        SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters, 
-            new List<IResultProcessor>(), Query.Outputs, Query.SearchStepNotificationSink);
+            SearchQueryUX.UpdateSearchQuery();
+            // Try to get SearchStepNotificationSink if possible
+            SearchStepNotificationSink? sink = query?.SearchStepNotificationSink;
+            SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters, 
+                new List<IResultProcessor>(), query.Outputs, sink);
+        }
     }
 
     public static List<LogLine> GetLogLines()
@@ -117,26 +122,27 @@ public class MiddleLayerService
 
     public static SearchProgressSink GetProgressEventSink()
     {
-        return Query.SearchStepNotificationSink.progressSink;
+        var query = SearchQueryUX.CurrentQuery;
+        return query != null ? query.SearchStepNotificationSink.progressSink : null;
     }
 
     public static Task<string> RunSearch(bool surfacescan = false)
     {
 
         UpdateSearchQuery();
-        if (surfacescan)
+        var query = SearchQueryUX.CurrentQuery;
+        if (query != null)
         {
-            Query.SetDepthForAllLocations(SearchLocationDepth.Shallow);
-        } else
-        {
-            Query.SetDepthForAllLocations(SearchLocationDepth.Intermediate);
+            if (surfacescan)
+            {
+                query.SetDepthForAllLocations(SearchLocationDepth.Shallow);
+            } else
+            {
+                query.SetDepthForAllLocations(SearchLocationDepth.Intermediate);
+            }
         }
         SearchResults = SearchQueryUX.GetSearchResults();
-        //Query.LoadAllLocationsInMemory();
-
-        //SearchResults = Query.GetFilteredResults();
-        
-        SearchStatistics x = SearchQueryUX.GetSearchStatistics(); //Query.GetSearchStatistics();
+        SearchStatistics x = SearchQueryUX.GetSearchStatistics();
         return Task.FromResult(x.GetSummaryReport());
 
 
@@ -144,8 +150,9 @@ public class MiddleLayerService
 
     public static SearchStatistics GetStats()
     {
-        SearchStatistics x = Query.GetSearchStatistics();
-        return x;
+        var query = SearchQueryUX.CurrentQuery;
+        var searchQueryConcrete = query as SearchQuery;
+        return searchQueryConcrete != null ? searchQueryConcrete.GetSearchStatistics() : null;
     }
 
 
@@ -154,9 +161,8 @@ public class MiddleLayerService
     {
         var o = SearchQueryJsonReader.LoadSearchQuery(File.ReadAllText(filename));
         SearchQuery r = SearchQueryJsonReader.GetSearchQueryObject(o);
-        Query = r;
-        Filters = Query.Filters;
-        Locations = Query.Locations;
+        Filters = r.Filters;
+        Locations = r.Locations;
 
         foreach(ISearchLocation loc in Locations)
         {
@@ -166,6 +172,7 @@ public class MiddleLayerService
                 ((FolderLocation)loc).SetExtensionProcessorList(PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IFileExtensionProcessor>());
             }
         }
+        UpdateSearchQuery();
     }
 
     public static void NewWorkspace()
@@ -179,9 +186,14 @@ public class MiddleLayerService
     public static void SaveWorkspace(string filename)
     {
         UpdateSearchQuery();
-        SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(Query);
-        var json = r.GetQueryJson();
-        File.WriteAllText(filename, json);
+        var query = SearchQueryUX.CurrentQuery;
+        var searchQueryConcrete = query as SearchQuery;
+        if (searchQueryConcrete != null)
+        {
+            SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(searchQueryConcrete);
+            var json = r.GetQueryJson();
+            File.WriteAllText(filename, json);
+        }
     }
 
     public static ObservableCollection<LocationListItem> GetLocationListItems()

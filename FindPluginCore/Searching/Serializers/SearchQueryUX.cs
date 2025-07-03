@@ -15,6 +15,8 @@ public class SearchQueryUX
     private PluginManager? pluginManager;
     private bool initalized = false;
 
+    public ISearchQuery? CurrentQuery => q;
+
     public List<IPluginDescription> GetLoadedPlugins()
     {
         Initialize();
@@ -76,7 +78,7 @@ public class SearchQueryUX
         q.Locations = locations;
         q.Processors = processors;
         q.Outputs = outputs;
-        //q. = stepnotifysink;
+        q.SearchStepNotificationSink = stepnotifysink;
     }
 
     public List<ISearchResult> GetSearchResults()

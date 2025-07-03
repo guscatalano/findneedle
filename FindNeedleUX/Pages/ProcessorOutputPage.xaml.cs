@@ -38,7 +38,9 @@ public sealed partial class ProcessorOutputPage : Page
         navView.MenuItems.Clear();
         contentGrid.Children.Clear();
         _processorContentMap.Clear();
-        _processors = new List<object>(MiddleLayerService.Query.Processors);
+        var query = MiddleLayerService.SearchQueryUX.CurrentQuery;
+        var processors = query != null ? query.Processors : new List<IResultProcessor>();
+        _processors = new List<object>(processors);
         if (_processors == null || _processors.Count == 0)
         {
             navView.MenuItems.Add(new NavigationViewItem { Content = "No Processors", IsEnabled = false });

@@ -48,6 +48,12 @@ public class FakeSearchQuery : ISearchQuery
         set;
     }
 
+    private SearchStepNotificationSink _stepnotifysink = new SearchStepNotificationSink();
+    public SearchStepNotificationSink SearchStepNotificationSink {
+        get => _stepnotifysink;
+        set => _stepnotifysink = value;
+    }
+
     public string Name => throw new NotImplementedException();
 
     public void AddFilter(ISearchFilter filter) { }
@@ -58,6 +64,8 @@ public class FakeSearchQuery : ISearchQuery
         return []; 
     }
     public SearchStatistics GetSearchStatistics() => throw new NotImplementedException();
+
+    public void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations) { /* no-op for fake */ }
 
     public void RunThrough()
     {
