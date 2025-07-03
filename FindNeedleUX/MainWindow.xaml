@@ -12,7 +12,6 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -49,12 +48,16 @@
             </MenuBarItem>
         </MenuBar>
 
-        <!-- Progress spinner for ETL inspection -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,4,8,4" Visibility="Collapsed" x:Name="SpinnerPanel">
-            <ProgressRing x:Name="EtlSpinner" Width="32" Height="32" IsActive="False"/>
-            <TextBlock Text="Inspecting file..." Margin="12,0,0,0" VerticalAlignment="Center"/>
-        </StackPanel>
-
-        <Frame x:Name="contentFrame" Grid.Row="2"/>
+        <!-- Main content area with overlay spinner -->
+        <Grid Grid.Row="1">
+            <Frame x:Name="contentFrame" />
+            <!-- Full-window overlay spinner for ETL inspection -->
+            <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="#80000000" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" >
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
+                    <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False"/>
+                    <TextBlock Text="Inspecting file..." Margin="0,16,0,0" FontSize="18" Foreground="White" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
     </Grid>
 </Window>
