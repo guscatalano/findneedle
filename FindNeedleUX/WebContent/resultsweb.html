@@ -138,7 +138,6 @@
                         var color = levelColorMap[level] || '';
                         $(this.node()).css('background-color', color);
                     });
-                    updateLevelCounts();
                 }
             }
 
@@ -147,7 +146,7 @@
                     //debugger;
                 }
                 count++;
-                document.getElementById("results").innerHTML = count + "<br/>";
+                document.getElementById("results").textContent = count;
                 var rowIdx = table.row.add(payload.data).index();
                 var level = payload.data.Level;
                 if (!knownLevels.has(level)) {
@@ -160,7 +159,6 @@
                     if (rowNode) {
                         rowNode.style.backgroundColor = color;
                     }
-                    updateLevelCounts();
                 }, 0);
             }
             if (payload.verb === 'done') {
@@ -175,11 +173,6 @@
         function codeAddress() {
             document.getElementById("tablediv").style.display = "none";
             var scrollY = null;
-            var checkbox = document.getElementById('limitToWindowCheckbox');
-            if (checkbox && checkbox.checked) {
-                scrollY = (window.innerHeight - document.getElementById('tablediv').getBoundingClientRect().top - 20) + "px";
-                scrollYEnabled = true;
-            }
             window.table = new DataTable('#myTable', {
                 columns: [
                     { title: "Index", data: "Index" },
@@ -224,41 +217,6 @@
                 });
             }
         }
-
-        function redrawTable() {
-            if (window.table) {
-                window.table.draw(false);
-                updateLevelCounts();
-            }
-        }
-
-        function updateTableScrollY(enable) {
-            var table = window.table;
-            var tableDiv = document.getElementById("tablediv");
-            if (!table) return;
-            if (enable) {
-                var scrollY = (window.innerHeight - tableDiv.getBoundingClientRect().top - 20) + "px";
-                $(table.table().container()).find('.dataTables_scrollBody').css('max-height', scrollY);
-                $(table.table().container()).find('.dataTables_scrollBody').css('height', scrollY);
-                table.settings()[0].oScroll.sY = scrollY;
-                table.draw(false);
-            } else {
-                $(table.table().container()).find('.dataTables_scrollBody').css('max-height', 'none');
-                $(table.table().container()).find('.dataTables_scrollBody').css('height', 'auto');
-                table.settings()[0].oScroll.sY = '';
-                table.draw(false);
-            }
-        }
-
-        function toggleTableLimitToWindow(checkbox) {
-            scrollYEnabled = checkbox.checked;
-            updateTableScrollY(scrollYEnabled);
-        }
-        window.addEventListener('resize', function() {
-            if (scrollYEnabled) {
-                updateTableScrollY(true);
-            }
-        });
 
         // Help modal logic
         function showHelp() {
@@ -361,12 +319,13 @@
     </style>
 </head>
 <body onload="codeAddress()">
-    <div id="loader">Loading... <section id="results"></section></div>
+    <div style="margin-bottom:8px;">
+        <span id="results" style="font-weight:bold;">0</span> results
+    </div>
+    <div id="loader">Loading...</div>
     <link href="datatables.min.css" rel="stylesheet">
     <input id="searchbox" type="text" placeholder="Search/filter results..." />
     <button id="helpBtn" onclick="showHelp()">Help</button>
-    <button onclick="redrawTable()">Redraw Table</button>
-    <label><input type="checkbox" id="limitToWindowCheckbox" onchange="toggleTableLimitToWindow(this)"> Limit table to window size</label><br/>
     <div id="levelColorControls" style="margin: 10px 0;"></div>
     Toggle column: <a class="toggle-vis" data-column="0">Index</a> - <a class="toggle-vis" data-column="1">Time</a> - <a class="toggle-vis" data-column="2">Provider</a> - <a class="toggle-vis" data-column="3">TaskName</a> - <a class="toggle-vis" data-column="4">Message</a> - <a class="toggle-vis" data-column="5">Source</a>
     <div id="tablediv" style="display:none;">
@@ -402,5 +361,4 @@
             <p>Advanced: Use <b>regex</b> or <b>column-specific</b> filtering in the DataTables search box if supported.</p>
         </div>
     </div>
-</body>
 </html>
