@@ -35,7 +35,7 @@ public class EVTXProcessor : IFileExtensionProcessor
     {
     }
 
-    public List<ISearchResult> GetResults() => loc?.Search(null) ?? new();
+    public List<ISearchResult> GetResults() => loc?.Search() ?? new();
     public void LoadInMemory()
     {
         if (loc != null)

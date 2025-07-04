@@ -151,7 +151,7 @@ public class SearchQuery : ISearchQuery
         }
     }
 
-    public void LoadAllLocationsInMemory()
+    public void LoadAllLocationsInMemory(System.Threading.CancellationToken cancellationToken = default)
     {
         stats = new SearchStatistics(); //reset the stats
         SearchStepNotificationSink.NotifyStep(SearchStep.AtLoad);
@@ -162,15 +162,13 @@ public class SearchQuery : ISearchQuery
         {
             int percent = total > 0 ? (int)(50.0 * count / total) : 0;
             SearchStepNotificationSink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
-            //loc.SetNotificationCallback(progressSink);
-            //loc.SetSearchStatistics(stats);
-            loc.LoadInMemory();
+            loc.LoadInMemory(cancellationToken);
             count++;
         }
         stats.LoadedAll(this);
     }
 
-    public List<ISearchResult> GetFilteredResults()
+    public List<ISearchResult> GetFilteredResults(System.Threading.CancellationToken cancellationToken = default)
     {
         SearchStepNotificationSink.NotifyStep(SearchStep.AtSearch);
         List<ISearchResult> results = new List<ISearchResult>();
@@ -180,7 +178,7 @@ public class SearchQuery : ISearchQuery
         {
             int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
             SearchStepNotificationSink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
-            results.AddRange(loc.Search(this));
+            results.AddRange(loc.Search(cancellationToken));
             count++;
         }
         stats.Searched(this);

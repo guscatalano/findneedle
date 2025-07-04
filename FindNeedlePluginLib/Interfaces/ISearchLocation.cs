@@ -33,11 +33,11 @@ public abstract class ISearchLocation: IReportStatistics
         get; set; 
     }
 
+    // Make CancellationToken optional
+    public abstract void LoadInMemory(System.Threading.CancellationToken cancellationToken = default);
 
-
-    public abstract void LoadInMemory();
-
-    public abstract List<ISearchResult> Search(ISearchQuery? searchQuery = null);
+    // Remove ISearchQuery from Search signature
+    public abstract List<ISearchResult> Search(System.Threading.CancellationToken cancellationToken = default);
 
     public void SetSearchDepth(SearchLocationDepth depth)
     {
@@ -47,7 +47,6 @@ public abstract class ISearchLocation: IReportStatistics
     {
         return this.depth;
     }
-
 
     public abstract string GetDescription();
     public abstract string GetName();

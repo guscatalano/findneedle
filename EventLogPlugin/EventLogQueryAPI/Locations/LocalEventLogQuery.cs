@@ -70,7 +70,7 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation, ICommandLinePa
 
 
 
-    public override void LoadInMemory()
+    public override void LoadInMemory(System.Threading.CancellationToken cancellationToken = default)
     {
 
         if (eventLogName.Equals("everything", StringComparison.OrdinalIgnoreCase))
@@ -92,6 +92,7 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation, ICommandLinePa
                         ISearchResult result = new EventRecordResult(eventdetail, this);
                         searchResults.Add(result);
                         numRecordsInMemory++;
+                        if (cancellationToken.IsCancellationRequested) return;
                     }
                     succeess++;
                 }
@@ -124,34 +125,21 @@ public class LocalEventLogQueryLocation : IEventLogQueryLocation, ICommandLinePa
                 ISearchResult result = new EventRecordResult(eventdetail, this);
                 searchResults.Add(result);
                 numRecordsInMemory++;
+                if (cancellationToken.IsCancellationRequested) return;
             }
         }
        
     }
 
-    public override List<ISearchResult> Search(ISearchQuery? searchQuery)
+    public override List<ISearchResult> Search(System.Threading.CancellationToken cancellationToken = default)
     {
         numRecordsInLastResult = 0;
         List<ISearchResult> filteredResults = new List<ISearchResult>();
         foreach (ISearchResult result in searchResults)
         {
-            var passAll = true;
-            if (searchQuery != null)
-            {
-                foreach (ISearchFilter filter in searchQuery.GetFilters())
-                {
-                    if (!filter.Filter(result))
-                    {
-                        passAll = false;
-                        continue;
-                    }
-                }
-            }
-            if (passAll)
-            {
-                filteredResults.Add(result);
-                numRecordsInLastResult++;
-            }
+            if (cancellationToken.IsCancellationRequested) break;
+            filteredResults.Add(result);
+            numRecordsInLastResult++;
         }
         return filteredResults;
     }

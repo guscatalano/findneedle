@@ -17,7 +17,7 @@ public class LocalEventLogTests
     {
         var query = new LocalEventLogQueryLocation("Application");
         query.LoadInMemory();
-        List<ISearchResult> ret = query.Search(null);
+        List<ISearchResult> ret = query.Search();
         Assert.IsTrue(ret.Count() > 0);
         Assert.AreEqual(ret.First().GetResultSource(), "LocalEventLogRecord-Application");
     }
@@ -27,7 +27,7 @@ public class LocalEventLogTests
     {
         var query = new LocalEventLogLocation("Application");
         query.LoadInMemory();
-        List<ISearchResult> ret = query.Search(null);
+        List<ISearchResult> ret = query.Search();
         Assert.IsTrue(ret.Count() > 0);
         Assert.AreEqual(ret.First().GetResultSource(), "LocalEventLog-Application");
     }
@@ -37,7 +37,7 @@ public class LocalEventLogTests
     {
         var query = new LocalEventLogLocation("everything");
         query.LoadInMemory();
-        var ret = query.Search(null);
+        var ret = query.Search();
         Assert.IsTrue(ret.Count() > 0);
         Assert.AreEqual(ret.First().GetResultSource(), "LocalEventLog-everything");
     }

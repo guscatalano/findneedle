@@ -80,7 +80,9 @@ public class FakeSearchQuery : ISearchQuery
     }
 
     public void Step1_LoadAllLocationsInMemory() => throw new NotImplementedException();
+    public void Step1_LoadAllLocationsInMemory(System.Threading.CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public List<ISearchResult> Step2_GetFilteredResults() => throw new NotImplementedException();
+    public List<ISearchResult> Step2_GetFilteredResults(System.Threading.CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public void Step3_ResultsToProcessors() => throw new NotImplementedException();
     public void Step4_ProcessAllResultsToOutput() => throw new NotImplementedException();
     public void Step5_Done() => throw new NotImplementedException();

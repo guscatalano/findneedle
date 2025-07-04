@@ -36,11 +36,9 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation
 
 
 
-    public override void LoadInMemory()
+    public override void LoadInMemory(System.Threading.CancellationToken cancellationToken = default)
     {
 
-        //This can be useful to pre-filter
-        //var query = "*"; //"*[System/Level=3 or Level=4]";
         EventLogQuery eventsQuery = new EventLogQuery(filename,
                                                       PathType.FilePath
                                                       );
@@ -48,6 +46,7 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation
 
         for (EventRecord eventdetail = logReader.ReadEvent(); eventdetail != null; eventdetail = logReader.ReadEvent())
         {
+            if (cancellationToken.IsCancellationRequested) return;
             ISearchResult result = new EventRecordResult(eventdetail, this);
             searchResults.Add(result);
             numRecordsInMemory++;
@@ -55,29 +54,15 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation
 
     }
 
-    public override List<ISearchResult> Search(ISearchQuery? searchQuery)
+    public override List<ISearchResult> Search(System.Threading.CancellationToken cancellationToken = default)
     {
         numRecordsInLastResult = 0;
         List<ISearchResult> filteredResults = new List<ISearchResult>();
         foreach (ISearchResult result in searchResults)
         {
-            var passAll = true;
-            if (searchQuery != null)
-            {
-                foreach (ISearchFilter filter in searchQuery.GetFilters())
-                {
-                    if (!filter.Filter(result))
-                    {
-                        passAll = false;
-                        continue;
-                    }
-                }
-            }
-            if (passAll)
-            {
-                filteredResults.Add(result);
-                numRecordsInLastResult++;
-            }
+            if (cancellationToken.IsCancellationRequested) break;
+            filteredResults.Add(result);
+            numRecordsInLastResult++;
         }
         return filteredResults;
     }

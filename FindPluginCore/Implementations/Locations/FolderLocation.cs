@@ -113,7 +113,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
     private readonly Dictionary<string, List<IFileExtensionProcessor>> extToProcessor = new();
 
     private readonly List<Task> tasks = new();
-    public override void LoadInMemory()
+    public override void LoadInMemory(System.Threading.CancellationToken cancellationToken = default)
     {
         procStats = new ReportFromComponent()
         {
@@ -139,7 +139,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             {
                 sink.NotifyProgress("queuing up: " + path);
             }
-            tasks.Add(Task.Run(() => ProcessFile(path)));
+            tasks.Add(Task.Run(() => ProcessFile(path), cancellationToken));
         }
         else
         {
@@ -150,7 +150,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 {
                     sink.NotifyProgress("queuing up: " + file);
                 }
-                tasks.Add(Task.Run(() => ProcessFile(file)));
+                tasks.Add(Task.Run(() => ProcessFile(file), cancellationToken));
             }
         }
         if (sink != null)
@@ -220,7 +220,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 
     }
 
-    public override List<ISearchResult> Search(ISearchQuery? searchQuery)
+    public override List<ISearchResult> Search(System.Threading.CancellationToken cancellationToken = default)
     {
         var results = new List<ISearchResult>();
         lock (knownProcessors)
@@ -239,16 +239,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         foreach (var result in results)
         {
             var passAll = true;
-            if (searchQuery != null)
-            {
-                foreach (var filter in searchQuery.GetFilters())
-                {
-                    if (!filter.Filter(result))
-                    {
-                        passAll = false;
-                    }
-                }
-            }
+            // No searchQuery, so no filters applied here
             if (passAll)
             {
                 filteredResults.Add(result);

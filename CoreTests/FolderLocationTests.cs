@@ -161,7 +161,7 @@ public class FolderLocationTests
 
         loc.SetExtensionProcessorList(processors);
         loc.LoadInMemory();
-        var results = loc.Search(new FakeSearchQuery());
+        var results = loc.Search();
         Assert.AreEqual(results.Count, 2);
     }
 }

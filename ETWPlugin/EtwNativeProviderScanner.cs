@@ -33,24 +33,24 @@ public static class EtwNativeProviderScanner
         br.ReadUInt16(); // Characteristics
 
         // --- Parse Optional header ---
-        long optHeaderStart = fs.Position;
-        ushort magic = br.ReadUInt16();
-        bool isPE32Plus = magic == 0x20b;
+        var optHeaderStart = fs.Position;
+        var magic = br.ReadUInt16();
+        var isPE32Plus = magic == 0x20b;
         fs.Seek(optHeaderStart + sizeOfOptionalHeader, SeekOrigin.Begin);
 
         // --- Parse Section headers ---
-        long sectionHeadersStart = optHeaderStart + sizeOfOptionalHeader;
+        var sectionHeadersStart = optHeaderStart + sizeOfOptionalHeader;
         fs.Seek(sectionHeadersStart, SeekOrigin.Begin);
         var sections = new List<(string name, int va, int ptr, int size)>();
-        for (int i = 0; i < numSections; i++)
+        for (var i = 0; i < numSections; i++)
         {
             fs.Seek(sectionHeadersStart + i * 40, SeekOrigin.Begin);
-            byte[] nameBytes = br.ReadBytes(8);
-            string sectionName = Encoding.UTF8.GetString(nameBytes).TrimEnd('\0');
-            uint virtualSize = br.ReadUInt32();
-            uint virtualAddress = br.ReadUInt32();
-            uint sizeOfRawData = br.ReadUInt32();
-            uint pointerToRawData = br.ReadUInt32();
+            var nameBytes = br.ReadBytes(8);
+            var sectionName = Encoding.UTF8.GetString(nameBytes).TrimEnd('\0');
+            var virtualSize = br.ReadUInt32();
+            var virtualAddress = br.ReadUInt32();
+            var sizeOfRawData = br.ReadUInt32();
+            var pointerToRawData = br.ReadUInt32();
             br.ReadUInt32(); // PointerToRelocations
             br.ReadUInt32(); // PointerToLinenumbers
             br.ReadUInt16(); // NumberOfRelocations

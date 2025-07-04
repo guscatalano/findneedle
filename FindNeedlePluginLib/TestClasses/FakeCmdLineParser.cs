@@ -52,8 +52,8 @@ public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFil
 
     //Do not implement any below, this is just for the casting to work
     public bool Filter(ISearchResult entry) => throw new NotImplementedException();
-    public override void LoadInMemory() => throw new NotImplementedException();
-    public override List<ISearchResult> Search(ISearchQuery? searchQuery) => throw new NotImplementedException();
+    public override void LoadInMemory(System.Threading.CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public override List<ISearchResult> Search(System.Threading.CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public override string GetDescription() => throw new NotImplementedException();
     public override string GetName() => throw new NotImplementedException();
     public void ProcessResults(List<ISearchResult> results) => throw new NotImplementedException();
