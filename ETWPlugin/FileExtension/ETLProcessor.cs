@@ -28,6 +28,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     public string inputfile = "";
     private SearchProgressSink? _progressSink;
 
+    private int _badlyFormattedCount = 0;
+
     public ETLProcessor()
     {
         currentResult = new TraceFmtResult(); //empty
@@ -134,26 +136,35 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     readonly List<ISearchResult> results = new();
     public void LoadInMemory() 
     {
+        _badlyFormattedCount = 0;
         _progressSink?.NotifyProgress(0, $"Loading results into memory for {inputfile}");
         if (LoadEarly)
         {
             int total = results.Count;
             int count = 0;
+            var lastProgressTime = DateTime.UtcNow;
             foreach(var result in results)
             {
                 if (result is ETLLogLine etlLogLine)
                 {
                     etlLogLine.PreLoad();
+                    if (etlLogLine.tasktxt == "Badly formatted event")
+                    {
+                        _badlyFormattedCount++;
+                    }
                 }
                 count++;
                 if (count % 100 == 0 && total > 0)
                 {
+                    var now = DateTime.UtcNow;
+                    var seconds = (now - lastProgressTime).TotalSeconds;
+                    lastProgressTime = now;
                     int percent = (int)(100.0 * count / total);
-                    _progressSink?.NotifyProgress(percent, $"Loaded {count} of {total} results into memory for {inputfile}");
+                    _progressSink?.NotifyProgress(percent, $"Loaded {count} of {total} results into memory for {inputfile} (last 100: {seconds:F2}s, badly formatted: {_badlyFormattedCount})");
                 }
             }
         }
-        _progressSink?.NotifyProgress(100, $"Finished loading results into memory for {inputfile}");
+        _progressSink?.NotifyProgress(100, $"Finished loading results into memory for {inputfile} (badly formatted: {_badlyFormattedCount})");
     }
 
     public List<ISearchResult> GetResults()

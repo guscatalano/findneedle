@@ -92,7 +92,7 @@ public class NuSearchQuery : ISearchQuery
     #region main functions
     public void Step1_LoadAllLocationsInMemory()
     {
-        _stepnotifysink.NotifyStep(SearchStep.AtLoad);
+       
         int count = 1;
         int total = _locations.Count;
         foreach (var loc in _locations)
@@ -106,6 +106,7 @@ public class NuSearchQuery : ISearchQuery
             loc.LoadInMemory();
             count++;
         }
+        _stepnotifysink.NotifyStep(SearchStep.AtLoad);
     }
 
     private List<ISearchResult>? _filteredResults;

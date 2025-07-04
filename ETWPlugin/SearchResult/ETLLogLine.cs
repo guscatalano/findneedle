@@ -282,7 +282,7 @@ public class ETLLogLine : ISearchResult
         return parsedTime;
     }
 
-    public void     PreLoad()
+    public void PreLoad()
     {
         if (!json.StartsWith("{"))
         {
@@ -296,9 +296,6 @@ public class ETLLogLine : ISearchResult
         //Parse the json early
         try
         {
-
-
-
             var deserialized = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
             if (deserialized != null)
             {
@@ -309,44 +306,55 @@ public class ETLLogLine : ISearchResult
                 throw new Exception("Deserialization resulted in null");
             }
 
-
-            metaprovider = keyjson["meta"]["provider"];
-            metadatetime = DateTime.Parse((string)keyjson["meta"]["time"]);
-
-            if (!String.IsNullOrEmpty(keyjson["meta"]["task"]))
+            if (keyjson.TryGetValue("meta", out var metaObj) && metaObj is Newtonsoft.Json.Linq.JObject meta)
             {
-                eventtxt = keyjson["meta"]["event"];
-                tasktxt = keyjson["meta"]["task"];
+                metaprovider = meta["provider"]?.ToString() ?? string.Empty;
+                var metaTime = meta["time"]?.ToString();
+                if (!string.IsNullOrEmpty(metaTime))
+                {
+                    DateTime.TryParse(metaTime, out metadatetime);
+                }
+                var eventVal = meta["event"]?.ToString();
+                var taskVal = meta["task"]?.ToString();
+                if (!string.IsNullOrEmpty(taskVal))
+                {
+                    eventtxt = eventVal ?? string.Empty;
+                    tasktxt = taskVal;
+                }
+                else
+                {
+                    tasktxt = eventVal ?? string.Empty;
+                    try
+                    {
+                        eventtxt = "{";
+                        foreach (var key in keyjson.Keys)
+                        {
+                            if (key.Equals("meta"))
+                            {
+                                continue; //We dont need it
+                            }
+                            eventtxt += $"\"{key}\": \"{keyjson[key]}\", ";
+                        }
+                        if (eventtxt.Length > 1)
+                        {
+                            eventtxt = eventtxt.Substring(0, eventtxt.Length - 2); //remove last part
+                        }
+                        eventtxt += "}";
+                    }
+                    catch (Exception)
+                    {
+                        //Not all of them have this, throw the rest in there;
+                        eventtxt = "Error?" + json;
+                    }
+                }
             }
             else
             {
-                tasktxt = keyjson["meta"]["event"];
-                try
-                {
-                    eventtxt = "{";
-                    foreach (var key in keyjson.Keys)
-                    {
-                        if (key.Equals("meta"))
-                        {
-                            continue; //We dont need it
-                        }
-
-                        eventtxt += "\"" + key + "\": \"" + keyjson[key] + "\", ";
-                    }
-                    if (eventtxt.Length > 1)
-                    {
-                        eventtxt = eventtxt.Substring(0, eventtxt.Length - 2); //remove last part
-                    }
-                    eventtxt += "}";
-
-                }
-                catch (Exception)
-                {
-                    //Not all of them have this, throw the rest in there;
-                    eventtxt = "Error?" + json;
-                }
+                eventtxt = json;
+                tasktxt = "Badly formatted event";
+                metadatetime = DateTime.MinValue;
+                metaprovider = string.Empty;
             }
-
         }
         catch (Exception)
         {
