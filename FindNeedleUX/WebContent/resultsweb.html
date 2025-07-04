@@ -6,10 +6,14 @@
         var defaultScrollY = null;
         var levelColorMap = {};
         var knownLevels = new Set();
+        var levelCounts = {};
+        var helpVisible = false;
 
         function addLevelColorControl(level) {
             if (document.getElementById('colorpicker-' + level)) return;
             var controlsDiv = document.getElementById('levelColorControls');
+            var wrapper = document.createElement('span');
+            wrapper.className = 'level-control-wrapper';
             var label = document.createElement('label');
             label.textContent = ` ${level} `;
             var input = document.createElement('input');
@@ -21,7 +25,59 @@
                 recolorRowsForLevel(level);
             });
             label.appendChild(input);
-            controlsDiv.appendChild(label);
+            wrapper.appendChild(label);
+            // Add count display
+            var countSpan = document.createElement('span');
+            countSpan.className = 'level-count';
+            countSpan.id = 'level-count-' + level;
+            countSpan.textContent = `(${levelCounts[level] || 0})`;
+            countSpan.title = 'Click to expand';
+            countSpan.style.cursor = 'pointer';
+            countSpan.addEventListener('click', function() {
+                toggleLevelDetails(level);
+            });
+            wrapper.appendChild(countSpan);
+            // Add expandable details
+            var detailsDiv = document.createElement('div');
+            detailsDiv.className = 'level-details';
+            detailsDiv.id = 'level-details-' + level;
+            detailsDiv.style.display = 'none';
+            detailsDiv.innerHTML = `<small>Log messages with level <b>${level}</b>: <span id='level-details-count-${level}'>${levelCounts[level] || 0}</span></small>`;
+            wrapper.appendChild(detailsDiv);
+            controlsDiv.appendChild(wrapper);
+        }
+
+        function toggleLevelDetails(level) {
+            var detailsDiv = document.getElementById('level-details-' + level);
+            if (detailsDiv) {
+                if (detailsDiv.style.display === 'none') {
+                    detailsDiv.style.display = 'block';
+                } else {
+                    detailsDiv.style.display = 'none';
+                }
+            }
+        }
+
+        function updateLevelCounts() {
+            if (!window.table) return;
+            var newCounts = {};
+            // Use DataTables API to get all visible (filtered) rows' data efficiently
+            var dataArr = window.table.rows({search:'applied'}).data();
+            for (var i = 0; i < dataArr.length; i++) {
+                var level = dataArr[i].Level;
+                if (!newCounts[level]) newCounts[level] = 0;
+                newCounts[level]++;
+            }
+            // Only update DOM if value changed
+            Object.keys(newCounts).forEach(function(level) {
+                if (levelCounts[level] !== newCounts[level]) {
+                    var countSpan = document.getElementById('level-count-' + level);
+                    if (countSpan) countSpan.textContent = `(${newCounts[level]})`;
+                    var detailsCount = document.getElementById('level-details-count-' + level);
+                    if (detailsCount) detailsCount.textContent = newCounts[level];
+                }
+            });
+            levelCounts = newCounts;
         }
 
         function recolorRowsForLevel(level) {
@@ -40,27 +96,41 @@
             const payload = event.data;
 
             if (payload.verb === 'setTheme') {
-
                 document.body.style.backgroundColor = payload.data.background;
                 document.body.style.color = payload.data.foreground;
-                // Set data-bs-theme on html node for dark mode
                 var htmlNode = document.getElementById('htmlRoot');
                 if (payload.data.background && payload.data.background.toLowerCase() !== '#ffffff' && payload.data.background.toLowerCase() !== '#fff') {
                     htmlNode.setAttribute('data-bs-theme', 'dark');
                 } else {
                     htmlNode.setAttribute('data-bs-theme', 'light');
                 }
+                // Set help modal content colors
+                var helpModalContent = document.getElementById('helpModalContent');
+                if (helpModalContent) {
+                    helpModalContent.style.backgroundColor = payload.data.background;
+                    helpModalContent.style.color = payload.data.foreground;
+                }
+                // Set DataTables dropdown and UI colors
+                setTimeout(function() {
+                    var dtLength = document.querySelector('.dataTables_length');
+                    if (dtLength) {
+                        dtLength.style.backgroundColor = payload.data.background;
+                        dtLength.style.color = payload.data.foreground;
+                        var selects = dtLength.getElementsByTagName('select');
+                        for (var i = 0; i < selects.length; i++) {
+                            selects[i].style.backgroundColor = payload.data.background;
+                            selects[i].style.color = payload.data.foreground;
+                        }
+                    }
+                }, 0);
             }
 
             if (payload.verb === 'setLevelColors') {
-                // payload.data should be an object: { "Error": "#ffcccc", "Warning": "#fff3cd", ... }
                 levelColorMap = payload.data || {};
-                // Add color pickers for all levels in the map
                 Object.keys(levelColorMap).forEach(function(level) {
                     knownLevels.add(level);
                     addLevelColorControl(level);
                 });
-                // Redraw table to apply new colors
                 if (window.table) {
                     window.table.rows().every(function() {
                         var data = this.data();
@@ -68,6 +138,7 @@
                         var color = levelColorMap[level] || '';
                         $(this.node()).css('background-color', color);
                     });
+                    updateLevelCounts();
                 }
             }
 
@@ -84,12 +155,12 @@
                     addLevelColorControl(level);
                 }
                 var color = levelColorMap[level] || '';
-                // Use setTimeout to ensure row is rendered before applying color
                 setTimeout(function() {
                     var rowNode = table.row(rowIdx).node();
                     if (rowNode) {
                         rowNode.style.backgroundColor = color;
                     }
+                    updateLevelCounts();
                 }, 0);
             }
             if (payload.verb === 'done') {
@@ -97,6 +168,7 @@
                 document.getElementById("tablediv").style.display = "block";
                 document.getElementById("loader").style.display = "none";
                 table.draw(false);
+                updateLevelCounts();
             }
         });
 
@@ -122,7 +194,6 @@
                 columnDefs: [
                     { targets: 0, className: 'min-width-message-id' },
                     { targets: 1, className: 'min-width-message-time' },
-
                 ],
                 lengthChange: true,
                 pageLength: 500,
@@ -140,19 +211,24 @@
             document.querySelectorAll('a.toggle-vis').forEach((el) => {
                 el.addEventListener('click', function (e) {
                     e.preventDefault();
-
                     let columnIdx = e.target.getAttribute('data-column');
                     let column = window.table.column(columnIdx);
-
-                    // Toggle the visibility
                     column.visible(!column.visible());
                 });
             });
+            // Searchbox filter
+            var searchBox = document.getElementById('searchbox');
+            if (searchBox) {
+                searchBox.addEventListener('input', function() {
+                    window.table.search(this.value).draw();
+                });
+            }
         }
 
         function redrawTable() {
             if (window.table) {
                 window.table.draw(false);
+                updateLevelCounts();
             }
         }
 
@@ -184,6 +260,13 @@
             }
         });
 
+        // Help modal logic
+        function showHelp() {
+            document.getElementById('helpModal').style.display = 'block';
+        }
+        function hideHelp() {
+            document.getElementById('helpModal').style.display = 'none';
+        }
     </script>
     <style>
         .min-width-message-id {
@@ -206,13 +289,82 @@
             width: 100% !important;
         }
         #levelColorControls label {
+            margin-right: 8px;
+        }
+        .level-control-wrapper {
+            display: inline-block;
             margin-right: 16px;
+            font-size: 0.95em;
+        }
+        .level-count {
+            font-size: 0.8em;
+            color: #666;
+            margin-left: 2px;
+        }
+        .level-details {
+            font-size: 0.8em;
+            color: #444;
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 2px;
+            padding: 2px 6px;
+            max-width: 220px;
+        }
+        #searchbox {
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1.1em;
+            padding: 6px 10px;
+            margin-bottom: 8px;
+        }
+        #helpBtn {
+            float: right;
+            margin-left: 8px;
+            font-size: 1em;
+            padding: 4px 10px;
+        }
+        /* Modal styles */
+        #helpModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.3);
+        }
+        #helpModalContent {
+            background: #fff;
+            margin: 8vh auto;
+            padding: 24px 32px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+        }
+        #helpModalContent h2 {
+            margin-top: 0;
+        }
+        #helpModalContent ul {
+            margin: 0 0 0 18px;
+        }
+        #helpModalContent button {
+            float: right;
+        }
+        /* Hide DataTables default searchbox */
+        div.dataTables_filter {
+            display: none !important;
         }
     </style>
 </head>
 <body onload="codeAddress()">
     <div id="loader">Loading... <section id="results"></section></div>
     <link href="datatables.min.css" rel="stylesheet">
+    <input id="searchbox" type="text" placeholder="Search/filter results..." />
+    <button id="helpBtn" onclick="showHelp()">Help</button>
     <button onclick="redrawTable()">Redraw Table</button>
     <label><input type="checkbox" id="limitToWindowCheckbox" onchange="toggleTableLimitToWindow(this)"> Limit table to window size</label><br/>
     <div id="levelColorControls" style="margin: 10px 0;"></div>
@@ -235,6 +387,20 @@
             </tbody>
         </table>
     </div>
-
+    <!-- Help Modal -->
+    <div id="helpModal">
+        <div id="helpModalContent">
+            <button onclick="hideHelp()">Close</button>
+            <h2>How to Filter Results</h2>
+            <ul>
+                <li>Type any text to filter all columns (case-insensitive).</li>
+                <li>To filter by level, type the level name (e.g., <b>Error</b>, <b>Warning</b>).</li>
+                <li>Combine terms: <code>Error disk</code> (shows rows with both "Error" and "disk").</li>
+                <li>Use column toggles to hide/show columns.</li>
+                <li>Use the color pickers to highlight log levels.</li>
+            </ul>
+            <p>Advanced: Use <b>regex</b> or <b>column-specific</b> filtering in the DataTables search box if supported.</p>
+        </div>
+    </div>
 </body>
 </html>
