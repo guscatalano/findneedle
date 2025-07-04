@@ -151,12 +151,60 @@ public class SearchStatistics
     public string GetSummaryReport()
     {
         var summary = string.Empty;
-        summary += ("Memory at launch: " + GetMemoryUsage(SearchStep.AtLaunch) + Environment.NewLine);
-        summary += ("Total records when loaded (" + GetRecordsAtStep(SearchStep.AtLoad) + ") with" + GetMemoryUsage(SearchStep.AtLoad) + Environment.NewLine);
-        summary += ("Total records after search (" + GetRecordsAtStep(SearchStep.AtSearch) + ") with" + GetMemoryUsage(SearchStep.AtSearch) + Environment.NewLine);
-        summary += ("Took " + GetTimeTaken(SearchStep.AtLoad).TotalSeconds + " second(s) to load." + Environment.NewLine);
-        summary += ("Took " + GetTimeTaken(SearchStep.AtSearch).TotalSeconds + " second(s) to search." + Environment.NewLine);
-        summary += ("Took " + GetTimeTaken(SearchStep.Total).TotalSeconds + " second(s) total." + Environment.NewLine);
+        // Memory at launch
+        try
+        {
+            summary += ("Memory at launch: " + GetMemoryUsage(SearchStep.AtLaunch) + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            summary += ("Memory at launch: ERROR - " + ex.Message + Environment.NewLine);
+        }
+        // Records loaded
+        try
+        {
+            summary += ("Total records when loaded (" + GetRecordsAtStep(SearchStep.AtLoad) + ") with" + GetMemoryUsage(SearchStep.AtLoad) + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            summary += ("Total records when loaded: ERROR - " + ex.Message + Environment.NewLine);
+        }
+        // Records after search
+        try
+        {
+            summary += ("Total records after search (" + GetRecordsAtStep(SearchStep.AtSearch) + ") with" + GetMemoryUsage(SearchStep.AtSearch) + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            summary += ("Total records after search: ERROR - " + ex.Message + Environment.NewLine);
+        }
+        // Time taken to load
+        try
+        {
+            summary += ("Took " + GetTimeTaken(SearchStep.AtLoad).TotalSeconds + " second(s) to load." + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            summary += ("Took to load: ERROR - " + ex.Message + Environment.NewLine);
+        }
+        // Time taken to search
+        try
+        {
+            summary += ("Took " + GetTimeTaken(SearchStep.AtSearch).TotalSeconds + " second(s) to search." + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            summary += ("Took to search: ERROR - " + ex.Message + Environment.NewLine);
+        }
+        // Total time
+        try
+        {
+            summary += ("Took " + GetTimeTaken(SearchStep.Total).TotalSeconds + " second(s) total." + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            summary += ("Took total: ERROR - " + ex.Message + Environment.NewLine);
+        }
         return summary;
     }
 

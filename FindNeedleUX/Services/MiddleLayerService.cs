@@ -104,7 +104,7 @@ public class MiddleLayerService
             // Try to get SearchStepNotificationSink if possible
             SearchStepNotificationSink? sink = query?.SearchStepNotificationSink;
             SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters, 
-                new List<IResultProcessor>(), query.Outputs, sink);
+                new List<IResultProcessor>(), query.Outputs, sink, query.stats);
         }
     }
 

@@ -67,7 +67,7 @@ public class SearchQueryUX
     }
 
     public void UpdateAllParameters(SearchLocationDepth depth, List<ISearchLocation> locations, List<ISearchFilter> filters, 
-        List<IResultProcessor> processors, List<ISearchOutput> outputs, SearchStepNotificationSink stepnotifysink)
+        List<IResultProcessor> processors, List<ISearchOutput> outputs, SearchStepNotificationSink stepnotifysink, SearchStatistics stats)
     {
         if(q == null)
         {
@@ -79,6 +79,7 @@ public class SearchQueryUX
         q.Processors = processors;
         q.Outputs = outputs;
         q.SearchStepNotificationSink = stepnotifysink;
+        q.stats = stats;
     }
 
     public List<ISearchResult> GetSearchResults()

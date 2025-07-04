@@ -72,12 +72,12 @@ public sealed partial class SearchStatisticsPage : Page
 
         var middlestats = MiddleLayerService.GetStats();
 
-
-        if (!middlestats.componentReports.ContainsKey(SearchStep.AtLoad))
+        // Robust null and key checks
+        if (middlestats == null || middlestats.componentReports == null ||
+            !middlestats.componentReports.TryGetValue(SearchStep.AtLoad, out var z) || z == null)
         {
             return newItem;
         }
-        var z = middlestats.componentReports[SearchStep.AtLoad];
         switch (index % 3)
         {
             case 0:
@@ -89,13 +89,11 @@ public sealed partial class SearchStatisticsPage : Page
                     tet += Environment.NewLine + i.summary + "-" + i.component;// + i.metric
                     foreach (var j in i.metric)
                     {
-
                         TreeViewNode node2 = new();
                         node.Children.Add(node2);
                         node.Content = i.summary + "-" + i.component;
                         if (i.summary.Equals("ExtensionProviders"))
                         {
-                            //tet += Environment.NewLine + j.Key + "==> " + j.Value;
                             node2.Content = j.Key + "==> " + j.Value;
                         }
                         else if (i.summary.Equals("ProviderByFile"))
@@ -110,7 +108,6 @@ public sealed partial class SearchStatisticsPage : Page
                         }
                         else
                         {
-
                             node2.Content = j.Key;
                             foreach (KeyValuePair<string, string> jj in j.Value)
                             {
@@ -122,7 +119,6 @@ public sealed partial class SearchStatisticsPage : Page
                     }
                 }
                 y.Text = tet;
-
                 break;
             case 1:
                 // frame.Navigate(typeof(SamplePage2));
@@ -131,7 +127,6 @@ public sealed partial class SearchStatisticsPage : Page
                 // frame.Navigate(typeof(SamplePage3));
                 break;
         }
-
 
         //x.Children.Add(y);
         scrollViewer.Content = treeeee;

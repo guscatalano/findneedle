@@ -50,7 +50,16 @@ public class NuSearchQuery : ISearchQuery
     }
     private SearchLocationDepth _depth;
 
-    public SearchStatistics Statistics => _stats;
+    public SearchStatistics Statistics
+    {
+        get => _stats;
+        set { /* can't set readonly field, but for interface compliance, do nothing or throw if needed */ }
+    }
+    public SearchStatistics stats
+    {
+        get => _stats;
+        set { /* can't set readonly field, but for interface compliance, do nothing or throw if needed */ }
+    }
     private readonly SearchStatistics _stats;
 
     public SearchStepNotificationSink SearchStepNotificationSink

@@ -54,6 +54,13 @@ public class FakeSearchQuery : ISearchQuery
         set => _stepnotifysink = value;
     }
 
+    private SearchStatistics _stats = new SearchStatistics();
+    public SearchStatistics stats
+    {
+        get => _stats;
+        set => _stats = value;
+    }
+
     public string Name => throw new NotImplementedException();
 
     public void AddFilter(ISearchFilter filter) { }

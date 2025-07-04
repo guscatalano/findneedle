@@ -47,4 +47,7 @@ public interface ISearchQuery
     }
 
     void SetDepthForAllLocations(SearchLocationDepth depthForAllLocations);
+
+    // Add property for SearchStatistics
+    SearchStatistics stats { get; set; }
 }
