@@ -9,10 +9,11 @@ using FindNeedleCoreUtils;
 using findneedle.WDK;
 using Newtonsoft.Json;
 using FindNeedlePluginLib;
+using FindNeedlePluginLib.Interfaces;
 using Windows.Media.PlayTo;
 
 namespace findneedle.Implementations.FileExtensions;
-public class ETLProcessor : IFileExtensionProcessor, IPluginDescription
+public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReportProgress
 {
     public TraceFmtResult currentResult
     {
@@ -25,6 +26,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription
     private readonly string tempPath = "";
 
     public string inputfile = "";
+    private SearchProgressSink? _progressSink;
+
     public ETLProcessor()
     {
         currentResult = new TraceFmtResult(); //empty
@@ -52,8 +55,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription
     }
 
    
-public void DoPreProcessing()
+    public void DoPreProcessing()
     {
+        _progressSink?.NotifyProgress(0, $"Preprocessing {inputfile}");
         var getLock = 50;
 
         if (inputfile.EndsWith(".txt"))
@@ -64,8 +68,10 @@ public void DoPreProcessing()
         }
         else
         {
-            currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath);
+            // Pass progress sink to TraceFmt.ParseSimpleETL
+            currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath, _progressSink);
         }
+        _progressSink?.NotifyProgress(20, "Parsing output file");
         while (getLock > 0)
         {
             try
@@ -78,7 +84,7 @@ public void DoPreProcessing()
                 using var streamReader = new StreamReader(fileStream, Encoding.UTF8, false); //change buffer if there's perf reasons
 
                 string? line;
-
+                int lineCount = 0;
                 while ((line = streamReader.ReadLine()) != null)
                 {
                     var failsafe = 10;
@@ -107,7 +113,13 @@ public void DoPreProcessing()
                         providers[etlline.GetSource()] = 1;
                     }
                     results.Add(etlline);
+                    lineCount++;
+                    if (lineCount % 1000 == 0)
+                    {
+                        _progressSink?.NotifyProgress(20 + (int)(70.0 * lineCount / 100000), $"Processed {lineCount} lines");
+                    }
                 }
+                _progressSink?.NotifyProgress(90, $"Finished reading output file, total lines: {lineCount}");
                 break;
             }
             catch (Exception)
@@ -116,22 +128,32 @@ public void DoPreProcessing()
                 getLock--; // Sometimes tracefmt can hold the lock, wait until file is ready
             }
         }
+        _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
     }
 
     readonly List<ISearchResult> results = new();
     public void LoadInMemory() 
     {
+        _progressSink?.NotifyProgress(0, $"Loading results into memory for {inputfile}");
         if (LoadEarly)
         {
+            int total = results.Count;
+            int count = 0;
             foreach(var result in results)
             {
                 if (result is ETLLogLine etlLogLine)
                 {
                     etlLogLine.PreLoad();
                 }
+                count++;
+                if (count % 100 == 0 && total > 0)
+                {
+                    int percent = (int)(100.0 * count / total);
+                    _progressSink?.NotifyProgress(percent, $"Loaded {count} of {total} results into memory for {inputfile}");
+                }
             }
         }
-        
+        _progressSink?.NotifyProgress(100, $"Finished loading results into memory for {inputfile}");
     }
 
     public List<ISearchResult> GetResults()
@@ -168,5 +190,10 @@ public void DoPreProcessing()
     public string GetPluginClassName()
     {
         return IPluginDescription.GetPluginClassNameBase(this);
+    }
+
+    public void SetProgressSink(SearchProgressSink sink)
+    {
+        _progressSink = sink;
     }
 }

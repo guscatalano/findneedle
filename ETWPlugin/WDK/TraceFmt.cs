@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedlePluginLib;
 
 namespace findneedle.WDK;
 
@@ -107,8 +108,9 @@ public class TraceFmtResult
 
 public class TraceFmt
 {
-    public static TraceFmtResult ParseSimpleETL(string etl, string temppath)
+    public static TraceFmtResult ParseSimpleETL(string etl, string temppath, SearchProgressSink? progressSink = null)
     {
+        progressSink?.NotifyProgress(0, $"Starting TraceFmt for {etl}");
         if (!File.Exists(WDKFinder.GetTraceFmtPath()))
         {
             throw new Exception("Cant find tracefmt");
@@ -131,12 +133,13 @@ public class TraceFmt
             throw new Exception("???");
         }
         p.Start();
+        progressSink?.NotifyProgress(10, "TraceFmt process started");
         p.WaitForExit();
+        progressSink?.NotifyProgress(80, "TraceFmt process finished");
         if(p.ExitCode != 0)
         {
             throw new Exception("exit code was not 0 for tracefmt!");
         }
-
 
         result.outputfile = Path.Combine(temppath, "FmtFile.txt");
         result.summaryfile = Path.Combine(temppath, "FmtSum.txt");
@@ -150,8 +153,9 @@ public class TraceFmt
             throw new Exception("FmtSum output was not there!");
         }
 
-        //Make this optional?
+        progressSink?.NotifyProgress(90, "Parsing summary file");
         result.ParseSummaryFile();
+        progressSink?.NotifyProgress(100, "TraceFmt parsing complete");
 
         return result;
     }

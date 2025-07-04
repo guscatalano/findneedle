@@ -9,11 +9,11 @@ using System.Threading.Tasks;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
+using FindNeedlePluginLib.Interfaces;
 
 namespace findneedle.Implementations;
 
-
-public class FolderLocation : ISearchLocation, ICommandLineParser
+public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgress
 {
     public void Clone(ICommandLineParser parser)
     {
@@ -45,8 +45,19 @@ public class FolderLocation : ISearchLocation, ICommandLineParser
         };
     }
 
-
-
+    private SearchProgressSink? _progressSink;
+    public void SetProgressSink(SearchProgressSink sink)
+    {
+        _progressSink = sink;
+        sink = _progressSink;
+        foreach (var processor in knownProcessors)
+        {
+            if (processor is IReportProgress reportable)
+            {
+                reportable.SetProgressSink(sink);
+            }
+        }
+    }
 
     [ExcludeFromCodeCoverage]
     public override string GetDescription()

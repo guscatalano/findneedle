@@ -97,6 +97,10 @@ public class NuSearchQuery : ISearchQuery
         int total = _locations.Count;
         foreach (var loc in _locations)
         {
+            if (loc is FindNeedlePluginLib.Interfaces.IReportProgress reportable)
+            {
+                reportable.SetProgressSink(_stepnotifysink.progressSink);
+            }
             int percent = total > 0 ? (int)(50.0 * count / total) : 0;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
             loc.LoadInMemory();

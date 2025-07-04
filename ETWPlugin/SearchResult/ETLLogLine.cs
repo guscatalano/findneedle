@@ -282,7 +282,7 @@ public class ETLLogLine : ISearchResult
         return parsedTime;
     }
 
-    public void PreLoad()
+    public void     PreLoad()
     {
         if (!json.StartsWith("{"))
         {
