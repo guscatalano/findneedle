@@ -2,12 +2,26 @@
 <head>
     <script>
         var count = 0;
+        var startTime = null;
         var scrollYEnabled = false;
         var defaultScrollY = null;
         var levelColorMap = {};
         var knownLevels = new Set();
         var levelCounts = {};
         var helpVisible = false;
+
+        function updateResultsDisplay() {
+            var resultsSpan = document.getElementById("results");
+            var rpmSpan = document.getElementById("resultsPerMinute");
+            resultsSpan.textContent = count;
+            if (startTime) {
+                var elapsedSeconds = (Date.now() - startTime) / 1000;
+                var rpm = elapsedSeconds > 0 ? (count / elapsedSeconds) * 60 : 0;
+                rpmSpan.textContent = `(${rpm.toFixed(1)}/min)`;
+            } else {
+                rpmSpan.textContent = "";
+            }
+        }
 
         function addLevelColorControl(level) {
             if (document.getElementById('colorpicker-' + level)) return;
@@ -81,14 +95,10 @@
         }
 
         function recolorRowsForLevel(level) {
-            if (!window.table) return;
-            window.table.rows().every(function() {
-                var data = this.data();
-                if (data.Level === level) {
-                    var color = levelColorMap[level] || '';
-                    $(this.node()).css('background-color', color);
-                }
-            });
+            // Instead of iterating and setting color, just redraw the table
+            if (window.table) {
+                window.table.rows().invalidate().draw(false);
+            }
         }
 
         window.chrome.webview.addEventListener('message', function (event) {
@@ -109,6 +119,12 @@
                 if (helpModalContent) {
                     helpModalContent.style.backgroundColor = payload.data.background;
                     helpModalContent.style.color = payload.data.foreground;
+                }
+                // Set loader colors
+                var loader = document.getElementById('loader');
+                if (loader) {
+                    loader.style.backgroundColor = payload.data.background;
+                    loader.style.color = payload.data.foreground;
                 }
                 // Set DataTables dropdown and UI colors
                 setTimeout(function() {
@@ -143,10 +159,10 @@
 
             if (payload.verb === 'newresult') {
                 if (count == 0) {
-                    //debugger;
+                    startTime = Date.now();
                 }
                 count++;
-                document.getElementById("results").textContent = count;
+                updateResultsDisplay();
                 var rowIdx = table.row.add(payload.data).index();
                 var level = payload.data.Level;
                 if (!knownLevels.has(level)) {
@@ -198,6 +214,10 @@
                             menu: [5, 10, 25, 50,100,500,1000,2000,5000,10000]
                         }
                     }
+                },
+                rowCallback: function(row, data) {
+                    var color = levelColorMap[data.Level] || '';
+                    row.style.backgroundColor = color;
                 }
             });
             window.chrome.webview.postMessage('getData');
@@ -320,7 +340,7 @@
 </head>
 <body onload="codeAddress()">
     <div style="margin-bottom:8px;">
-        <span id="results" style="font-weight:bold;">0</span> results
+        <span id="results" style="font-weight:bold;">0</span> results <span id="resultsPerMinute" style="font-size:0.95em;color:#888;"></span>
     </div>
     <div id="loader">Loading...</div>
     <link href="datatables.min.css" rel="stylesheet">
