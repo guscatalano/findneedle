@@ -25,11 +25,11 @@ public static class EtwNativeProviderScanner
 
         // --- Parse COFF header ---
         br.ReadUInt16(); // Machine
-        ushort numSections = br.ReadUInt16();
+        var numSections = br.ReadUInt16();
         br.ReadUInt32(); // TimeDateStamp
         br.ReadUInt32(); // PointerToSymbolTable
         br.ReadUInt32(); // NumberOfSymbols
-        ushort sizeOfOptionalHeader = br.ReadUInt16();
+        var sizeOfOptionalHeader = br.ReadUInt16();
         br.ReadUInt16(); // Characteristics
 
         // --- Parse Optional header ---

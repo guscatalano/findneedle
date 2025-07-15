@@ -18,7 +18,6 @@
     <IncludeReferencedProjects>true</IncludeReferencedProjects>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Version>1.0.0.2</Version>
   </PropertyGroup>
 
   <ItemGroup>

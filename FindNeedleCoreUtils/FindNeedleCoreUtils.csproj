@@ -16,7 +16,6 @@
     <RepositoryUrl>github.com/guscatalano/findneedle</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Version>1.0.0.2</Version>
   </PropertyGroup>
 
   <ItemGroup>

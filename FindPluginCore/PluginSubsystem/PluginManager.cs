@@ -219,10 +219,17 @@ public class PluginManager
                 {
                     try
                     {
+                        FindPluginCore.Logger.Instance.Log($"Attempting to open registry key: HKCU\\{config.UserRegistryPluginKey}");
                         using var regKey = Registry.CurrentUser.OpenSubKey(config.UserRegistryPluginKey);
-                        if (regKey != null)
+                        FindPluginCore.Logger.Instance.Log($"Process: {Process.GetCurrentProcess().ProcessName}, Is64Bit: {Environment.Is64BitProcess}, AppDomain: {AppDomain.CurrentDomain.FriendlyName}");
+                        if (regKey == null)
+                        {
+                            FindPluginCore.Logger.Instance.Log($"Registry key not found: HKCU\\{config.UserRegistryPluginKey}");
+                        }
+                        else
                         {
                             var value = regKey.GetValue("") as string;
+                            FindPluginCore.Logger.Instance.Log($"Registry key found. Value: '{value ?? "<null>"}'");
                             if (!string.IsNullOrWhiteSpace(value))
                             {
                                 var plugins = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -235,6 +242,10 @@ public class PluginManager
                                         FindPluginCore.Logger.Instance.Log($"Loaded plugin from registry: {pluginPath}");
                                     }
                                 }
+                            }
+                            else
+                            {
+                                FindPluginCore.Logger.Instance.Log($"Registry value is empty or whitespace for key: HKCU\\{config.UserRegistryPluginKey}");
                             }
                         }
                     }
