@@ -219,8 +219,9 @@ public class PluginManager
                 {
                     try
                     {
+                        // Open registry key with minimal permissions (read-only, non-writable)
                         FindPluginCore.Logger.Instance.Log($"Attempting to open registry key: HKCU\\{config.UserRegistryPluginKey}");
-                        using var regKey = Registry.CurrentUser.OpenSubKey(config.UserRegistryPluginKey);
+                        using var regKey = Registry.CurrentUser.OpenSubKey(config.UserRegistryPluginKey, writable: false);
                         FindPluginCore.Logger.Instance.Log($"Process: {Process.GetCurrentProcess().ProcessName}, Is64Bit: {Environment.Is64BitProcess}, AppDomain: {AppDomain.CurrentDomain.FriendlyName}");
                         if (regKey == null)
                         {

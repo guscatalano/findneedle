@@ -18,6 +18,8 @@ using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using FindNeedlePluginLib;
+using Windows.Storage.Pickers;
+using Windows.Storage;
 
 namespace FindNeedleUX.Pages;
 
@@ -417,6 +419,68 @@ public sealed partial class PluginsPage : Page
         catch (Exception ex)
         {
             FindPluginCore.Logger.Instance.Log($"Exception in ReloadPlugin_Click: {ex}");
+        }
+    }
+
+    private async void ReloadAllPlugins_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
+            manager.loadedPluginsModules.Clear();
+            manager.LoadAllPlugins();
+            // Refresh UI
+            ModulesFound.Clear();
+            foreach (var module in manager.loadedPluginsModules)
+            {
+                var modulePath = module.dll != null ? module.dll.Location : "Unknown";
+                var moduleVM = new ModuleViewModel { ModulePath = modulePath, LoadedSuccessfully = module.LoadedSuccessfully, LoadException = module.LoadException, LoadExceptionString = module.LoadExceptionString };
+                foreach (var plugin in module.description)
+                {
+                    moduleVM.Plugins.Add(new PluginListItemViewModel
+                    {
+                        Name = plugin.FriendlyName,
+                        Description = plugin.TextDescription,
+                        ModulePath = modulePath,
+                        ClassName = plugin.ClassName,
+                        Plugin = plugin,
+                        ImplementedInterfaces = plugin.ImplementedInterfacesShort
+                    });
+                }
+                if (moduleVM.Plugins.Count > 0)
+                    ModulesFound.Add(moduleVM);
+            }
+            if (ModulesFound.Count > 0)
+            {
+                SelectedModule = ModulesFound[0];
+                if (ModuleSelectorComboBox != null)
+                    ModuleSelectorComboBox.SelectedItem = SelectedModule;
+                UpdatePluginsInSelectedModule();
+            }
+            UpdatePluginDescription();
+        }
+        catch (Exception ex)
+        {
+            FindPluginCore.Logger.Instance.Log($"Exception in ReloadAllPlugins_Click: {ex}");
+        }
+    }
+
+    private async void PickPluginFile_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is PluginConfigEntryViewModel entry)
+        {
+            var picker = new FileOpenPicker();
+            // Use the current window for WinUI 3
+            var window = Microsoft.UI.Xaml.Window.Current;
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.FileTypeFilter.Add(".dll");
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+            StorageFile file = await picker.PickSingleFileAsync();
+            if (file != null)
+            {
+                entry.Path = file.Path;
+            }
         }
     }
 }

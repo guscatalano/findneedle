@@ -33,13 +33,14 @@
                     <TextBlock x:Name="ModuleLoadExceptionTextBlock" TextWrapping="Wrap" Margin="0,0,0,2"/>
                     <TextBlock x:Name="ModuleLoadExceptionStringTextBlock" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <TextBlock Text="Select a Plugin" FontWeight="Bold"/>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
                         <ComboBox x:Name="PluginSelectorComboBox"
                                   ItemsSource="{x:Bind PluginsInSelectedModule}"
                                   DisplayMemberPath="Name"
                                   SelectedItem="{x:Bind SelectedPlugin, Mode=TwoWay}"
                                   Margin="0,0,10,0" Width="300"/>
                         <Button Content="Reload Plugin" Click="ReloadPlugin_Click" IsEnabled="False"/>
+                        <Button Content="Reload All Plugins" Click="ReloadAllPlugins_Click"/>
                     </StackPanel>
                     <CheckBox x:Name="HideInvalidPluginsCheckBox" Content="Hide Invalid Plugins" IsChecked="True" Margin="0,10,0,10" Checked="HideInvalidPluginsCheckBox_Checked" Unchecked="HideInvalidPluginsCheckBox_Unchecked"/>
                     <TextBlock Text="Description:" FontWeight="Bold"/>
@@ -57,9 +58,10 @@
                     <ListView x:Name="PluginConfigListView" ItemsSource="{x:Bind PluginConfigEntries, Mode=TwoWay}" SelectionMode="Single" SelectedItem="{x:Bind SelectedPluginConfigEntry, Mode=TwoWay}">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:PluginConfigEntryViewModel">
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBox Text="{x:Bind Name, Mode=TwoWay}" Width="180" Margin="0,0,5,0"/>
-                                    <TextBox Text="{x:Bind Path, Mode=TwoWay}" Width="340" Margin="0,0,5,0"/>
+                                    <TextBox Text="{x:Bind Path, Mode=TwoWay}" Width="260" Margin="0,0,5,0"/>
+                                    <Button Content="..." Width="32" Click="PickPluginFile_Click" Tag="{x:Bind}"/>
                                     <CheckBox IsChecked="{x:Bind Enabled, Mode=TwoWay}" Content="Enabled"/>
                                 </StackPanel>
                             </DataTemplate>
