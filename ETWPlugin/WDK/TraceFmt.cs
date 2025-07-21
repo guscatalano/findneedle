@@ -108,12 +108,38 @@ public class TraceFmtResult
 
 public class TraceFmt
 {
+    private static void LogWarning(string message)
+    {
+        // Use reflection to log warning if Logger.Instance is available
+        var loggerType = Type.GetType("FindPluginCore.Logger, FindPluginCore");
+        if (loggerType != null)
+        {
+            var instanceProp = loggerType.GetProperty("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+            var logMethod = loggerType.GetMethod("Log");
+            var loggerInstance = instanceProp?.GetValue(null);
+            logMethod?.Invoke(loggerInstance, new object[] { message });
+        }
+    }
+
     public static TraceFmtResult ParseSimpleETL(string etl, string temppath, SearchProgressSink? progressSink = null)
     {
         progressSink?.NotifyProgress(0, $"Starting TraceFmt for {etl}");
-        if (!File.Exists(WDKFinder.GetTraceFmtPath()))
+        string traceFmtPath = string.Empty;
+        try
         {
-            throw new Exception("Cant find tracefmt");
+            traceFmtPath = WDKFinder.GetTraceFmtPath();
+        }
+        catch (Exception ex)
+        {
+            LogWarning($"Warning: Could not determine tracefmt path: {ex.Message}");
+            progressSink?.NotifyProgress(100, "Warning: TraceFmt (tracefmt.exe) was not found. ETL parsing will be skipped.");
+            return null!;
+        }
+        if (string.IsNullOrEmpty(traceFmtPath) || !File.Exists(traceFmtPath))
+        {
+            LogWarning("Warning: TraceFmt (tracefmt.exe) was not found. ETL parsing will be skipped.");
+            progressSink?.NotifyProgress(100, "Warning: TraceFmt (tracefmt.exe) was not found. ETL parsing will be skipped.");
+            return null!;
         }
 
         if (!File.Exists(etl))
@@ -123,7 +149,7 @@ public class TraceFmt
         TraceFmtResult result = new TraceFmtResult();
 
         ProcessStartInfo st = new ProcessStartInfo();
-        st.FileName = WDKFinder.GetTraceFmtPath();
+        st.FileName = traceFmtPath;
         st.Arguments = etl;
         st.WindowStyle = ProcessWindowStyle.Hidden;
         st.WorkingDirectory = temppath;

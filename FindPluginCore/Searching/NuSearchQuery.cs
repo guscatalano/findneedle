@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using findneedle;
 using FindNeedlePluginLib;
+using FindPluginCore; // Add for Logger
 
 namespace FindPluginCore.Searching;
 public class NuSearchQuery : ISearchQuery
@@ -87,25 +88,29 @@ public class NuSearchQuery : ISearchQuery
         _stepnotifysink = new();
         _stats.RegisterForNotifications(_stepnotifysink, this);
         _stepnotifysink.NotifyStep(SearchStep.AtLaunch);
+        Logger.Instance.Log("NuSearchQuery constructed");
     }
 
     public void RunThrough()
     {
+        Logger.Instance.Log("RunThrough started");
         Step1_LoadAllLocationsInMemory();
         _currentResultList = Step2_GetFilteredResults();
         Step3_ResultsToProcessors();
         Step4_ProcessAllResultsToOutput();
         Step5_Done();
+        Logger.Instance.Log("RunThrough finished");
     }
 
     #region main functions
     public void Step1_LoadAllLocationsInMemory()
     {
-       
+        Logger.Instance.Log($"Step1_LoadAllLocationsInMemory: {_locations.Count} locations");
         int count = 1;
         int total = _locations.Count;
         foreach (var loc in _locations)
         {
+            Logger.Instance.Log($"Loading location {count}/{total}: {loc.GetName()}");
             if (loc is FindNeedlePluginLib.Interfaces.IReportProgress reportable)
             {
                 reportable.SetProgressSink(_stepnotifysink.progressSink);
@@ -113,29 +118,33 @@ public class NuSearchQuery : ISearchQuery
             int percent = total > 0 ? (int)(50.0 * count / total) : 0;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
             loc.LoadInMemory();
+            Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             count++;
         }
         _stepnotifysink.NotifyStep(SearchStep.AtLoad);
+        Logger.Instance.Log("Step1_LoadAllLocationsInMemory complete");
     }
 
     private List<ISearchResult>? _filteredResults;
     public List<ISearchResult> Step2_GetFilteredResults()
     {
+        Logger.Instance.Log("Step2_GetFilteredResults started");
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
         int count = 1;
         int total = _locations.Count;
         foreach (var loc in _locations)
         {
+            Logger.Instance.Log($"Filtering results for location {count}/{total}: {loc.GetName()}");
             int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
             loc.SetSearchDepth(_depth);
             var unfilteredResults = loc.Search();
+            Logger.Instance.Log($"{unfilteredResults.Count} results from location: {loc.GetName()}");
 
             foreach (var result in unfilteredResults)
             {
                 var passAllFilters = true;
-
                 foreach (var filter in _filters)
                 {
                     if (!filter.Filter(result))
@@ -148,33 +157,41 @@ public class NuSearchQuery : ISearchQuery
                     _filteredResults.Add(result);
                 }
             }
+            Logger.Instance.Log($"{_filteredResults.Count} results passed filters for location: {loc.GetName()}");
             count++;
         }
-
+        Logger.Instance.Log($"Step2_GetFilteredResults complete: {_filteredResults.Count} total filtered results");
         return _filteredResults;
     }
 
     public void Step3_ResultsToProcessors()
     {
+        Logger.Instance.Log("Step3_ResultsToProcessors started");
         _stepnotifysink.NotifyStep(SearchStep.AtProcessor);
         foreach (var proc in _processors)
         {
+            Logger.Instance.Log($"Processing results with processor: {proc.GetType().Name}");
             proc.ProcessResults(_currentResultList);
-            Console.WriteLine("Output was written to: " + proc.GetOutputFile());
+            Logger.Instance.Log($"Output was written to: {proc.GetOutputFile()}");
         }
+        Logger.Instance.Log("Step3_ResultsToProcessors complete");
     }
 
     public void Step4_ProcessAllResultsToOutput()
     {
+        Logger.Instance.Log("Step4_ProcessAllResultsToOutput started");
         _stepnotifysink.NotifyStep(SearchStep.AtOutput);
         foreach (var output in _outputs)
         {
+            Logger.Instance.Log($"Writing all output with: {output.GetType().Name}");
             output.WriteAllOutput(_currentResultList);
         }
+        Logger.Instance.Log("Step4_ProcessAllResultsToOutput complete");
     }
 
     public void Step5_Done()
     {
+        Logger.Instance.Log("Step5_Done called");
         _stepnotifysink.NotifyStep(SearchStep.Total);
     }
     #endregion
