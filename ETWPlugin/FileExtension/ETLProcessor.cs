@@ -91,6 +91,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         {
             LogInfo($"Calling TraceFmt.ParseSimpleETL for file: {inputfile}");
             currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath, _progressSink);
+            if (currentResult == null)
+            {
+                LogInfo($"TraceFmt result is null for {inputfile}, skipping ETL processing.");
+                _progressSink?.NotifyProgress(100, $"TraceFmt not found or failed for {inputfile}, skipping ETL processing.");
+                return;
+            }
         }
         _progressSink?.NotifyProgress(20, "Parsing output file");
         while (getLock > 0)
