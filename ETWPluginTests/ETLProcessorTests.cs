@@ -26,7 +26,7 @@ public sealed class ETWProcessorTests
     {
         ETLProcessor x = new ETLProcessor();
         var reg = x.RegisterForExtensions();
-        Assert.IsTrue(reg.Count() == 2);
+        Assert.IsTrue(reg.Count() == 3);
         Assert.IsTrue(reg.FirstOrDefault(x => x.Equals(".etl")) != null);
         x.Dispose();
     }

@@ -219,8 +219,23 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         LogInfo($"CheckFileFormat called for ETLProcessor, file: {inputfile}");
         if (inputfile.EndsWith(".txt") || inputfile.EndsWith(".log"))
         {
-            var firstline = File.ReadLines(inputfile).Take(1).ToList().First();
-            if (ETLLogLine.DoesHeaderLookRight(firstline))
+            using var reader = new StreamReader(inputfile);
+            string? validLine = null;
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (!line.StartsWith("Unknown("))
+                {
+                    validLine = line;
+                    break;
+                }
+            }
+            if (validLine == null)
+            {
+                LogInfo($"All lines start with 'Unknown(', not a valid ETL format: {inputfile}");
+                return false;
+            }
+            if (ETLLogLine.DoesHeaderLookRight(validLine))
             {
                 LogInfo($"File format looks right for .txt/.log: {inputfile}");
                 return true;
