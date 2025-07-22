@@ -80,9 +80,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         _progressSink?.NotifyProgress(0, $"Preprocessing {inputfile}");
         var getLock = 50;
 
-        if (inputfile.EndsWith(".txt"))
+        if (inputfile.EndsWith(".txt") || inputfile.EndsWith(".log"))
         {
-            LogInfo($"Input file is .txt, skipping TraceFmt: {inputfile}");
+            LogInfo($"Input file is .txt or .log, skipping TraceFmt: {inputfile}");
             currentResult.ProcessedFile = inputfile;
             currentResult.outputfile = inputfile;
             currentResult.summaryfile = inputfile;
@@ -205,24 +205,30 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     public List<string> RegisterForExtensions()
     {
         LogInfo("RegisterForExtensions called for ETLProcessor");
-        return new List<string>() { ".etl", ".txt" };
+        return new List<string>() { ".etl", ".txt", ".log" };
     }
 
     public bool CheckFileFormat()
     {
         LogInfo($"CheckFileFormat called for ETLProcessor, file: {inputfile}");
-        if (inputfile.EndsWith(".txt")) {
+        if (inputfile.EndsWith(".txt") || inputfile.EndsWith(".log"))
+        {
             var firstline = File.ReadLines(inputfile).Take(1).ToList().First();
             if (ETLLogLine.DoesHeaderLookRight(firstline))
             {
-                LogInfo($"File format looks right for .txt: {inputfile}");
+                LogInfo($"File format looks right for .txt/.log: {inputfile}");
                 return true;
-            } else {
-                LogInfo($"File format does NOT look right for .txt: {inputfile}");
+            }
+            else
+            {
+                LogInfo($"File format does NOT look right for .txt/.log: {inputfile}");
                 return false;
             }
         }
-        LogInfo($"Assuming file format is correct for non-.txt: {inputfile}");
+        else
+        {
+            LogInfo($"Assuming file format is correct for .etl: {inputfile}");
+        }
         return true;
     }
 

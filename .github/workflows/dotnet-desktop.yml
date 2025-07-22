@@ -499,6 +499,14 @@ jobs:
     # Remove redundant restore/build steps, keep only MSIX-specific build/packaging
     - name: Restore NuGet packages for MSIX packaging
       run: dotnet restore ${{ env.FindNeedleUX_Project }}
+    - name: Set unsigned namespace in AppxManifest
+      shell: pwsh
+      run: |
+        $manifest = "FindNeedleUX/Package.appxmanifest"
+        [xml]$xml = Get-Content $manifest
+        $xml.Package.Identity.Publisher = "CN=Unsigned"
+        $xml.Package.Identity.Name = $xml.Package.Identity.Name + ".unsigned"
+        $xml.Save($manifest)
     - name: Create MSIX package (unsigned)
       run: |
         $version = "${{ needs.set-msix-version.outputs.version }}"
