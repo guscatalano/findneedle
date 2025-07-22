@@ -164,6 +164,7 @@ public sealed partial class ProcessorOutputPage : Page
                 Margin = new Thickness(0, 0, 0, 8)
             };
 
+            // Create pivot for output tabs
             var pivot = new Pivot();
             pivot.Items.Add(new PivotItem
             {
@@ -171,14 +172,29 @@ public sealed partial class ProcessorOutputPage : Page
                 Content = scrollViewer
             });
             pivot.Items.Add(fileOutputPivotItem);
+            pivot.VerticalAlignment = VerticalAlignment.Stretch;
+            pivot.HorizontalAlignment = HorizontalAlignment.Stretch;
+            pivot.Height = double.NaN;
+            pivot.Width = double.NaN;
 
-            var stack = new StackPanel();
-            stack.Children.Add(titleBlock);
-            stack.Children.Add(descBlock);
-            stack.Children.Add(runButton);
-            stack.Children.Add(pivot);
+            // Create outer grid for layout
+            var outerGrid = new Grid();
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // title
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // desc
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // run button
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // pivot
 
-            _processorContentMap[processor] = stack;
+            // Add title, desc, run button, pivot to grid
+            outerGrid.Children.Add(titleBlock);
+            Grid.SetRow(titleBlock, 0);
+            outerGrid.Children.Add(descBlock);
+            Grid.SetRow(descBlock, 1);
+            outerGrid.Children.Add(runButton);
+            Grid.SetRow(runButton, 2);
+            outerGrid.Children.Add(pivot);
+            Grid.SetRow(pivot, 3);
+
+            _processorContentMap[processor] = outerGrid;
             var navItem = new NavigationViewItem { Content = name, Tag = processor };
             ToolTipService.SetToolTip(navItem, description);
             navView.MenuItems.Add(navItem);
@@ -271,7 +287,32 @@ public sealed partial class ProcessorOutputPage : Page
     {
         var htmlPath = Path.Combine(Path.GetDirectoryName(imagePath)!, Path.GetFileNameWithoutExtension(imagePath) + "_view.html");
         var imgSrc = Path.GetFileName(imagePath);
-        var html = $"<html><body style='margin:0;padding:0;'><img src='{imgSrc}' style='max-width:100vw;max-height:100vh;display:block;margin:auto;'/></body></html>";
+        var html = "" +
+            "<html><head><style>" +
+            "body { margin:0;padding:0; }" +
+            ".img-zoom-container { position:relative; width:100vw; height:100vh; overflow:auto; }" +
+            ".img-zoom { max-width:100vw; max-height:100vh; display:block; margin:auto; transition: transform 0.2s; cursor: grab; }" +
+            ".zoom-controls { position:fixed; top:16px; right:16px; z-index:10; background:#fff8; border-radius:8px; padding:8px; }" +
+            ".zoom-btn { font-size:24px; margin:4px; padding:4px 12px; cursor:pointer; border:none; background:#eee; border-radius:4px; }" +
+            "</style></head><body>" +
+            "<div class='img-zoom-container'><img src='" + imgSrc + "' class='img-zoom' id='zoomImg'/></div>" +
+            "<div class='zoom-controls'><button class='zoom-btn' id='zoomIn'>+</button><button class='zoom-btn' id='zoomOut'>?</button><button class='zoom-btn' id='zoomReset'>Reset</button></div>" +
+            "<script type='text/javascript'>" +
+            "let zoom = 1; let originX = 0; let originY = 0; let isDragging = false; let startX = 0; let startY = 0;" +
+            "const img = document.getElementById('zoomImg');" +
+            "const zoomIn = document.getElementById('zoomIn');" +
+            "const zoomOut = document.getElementById('zoomOut');" +
+            "const zoomReset = document.getElementById('zoomReset');" +
+            "function applyZoom() { img.style.transform = 'scale(' + zoom + ') translate(' + originX + 'px,' + originY + 'px)'; }" +
+            "zoomIn.onclick = function() { zoom = Math.min(zoom + 0.2, 5); applyZoom(); };" +
+            "zoomOut.onclick = function() { zoom = Math.max(zoom - 0.2, 1); if (zoom === 1) { originX = 0; originY = 0; } applyZoom(); };" +
+            "zoomReset.onclick = function() { zoom = 1; originX = 0; originY = 0; applyZoom(); };" +
+            "img.addEventListener('wheel', function(e) { e.preventDefault(); var rect = img.getBoundingClientRect(); var mx = e.clientX - rect.left; var my = e.clientY - rect.top; var prevZoom = zoom; if (e.deltaY < 0) zoom = Math.min(zoom + 0.2, 5); else zoom = Math.max(zoom - 0.2, 1); if (zoom !== prevZoom) { originX -= (mx - rect.width/2) * (zoom - prevZoom) / zoom; originY -= (my - rect.height/2) * (zoom - prevZoom) / zoom; } if (zoom === 1) { originX = 0; originY = 0; } applyZoom(); });" +
+            "img.addEventListener('dblclick', function(e) { var rect = img.getBoundingClientRect(); var mx = e.clientX - rect.left; var my = e.clientY - rect.top; var prevZoom = zoom; if (zoom === 1) zoom = 2; else zoom = 1; if (zoom !== prevZoom) { originX -= (mx - rect.width/2) * (zoom - prevZoom) / zoom; originY -= (my - rect.height/2) * (zoom - prevZoom) / zoom; } if (zoom === 1) { originX = 0; originY = 0; } applyZoom(); });" +
+            "img.addEventListener('mousedown', function(e) { if (zoom > 1) { isDragging = true; startX = e.clientX - originX; startY = e.clientY - originY; img.style.cursor = 'grabbing'; } });" +
+            "window.addEventListener('mousemove', function(e) { if (isDragging) { originX = e.clientX - startX; originY = e.clientY - startY; applyZoom(); } });" +
+            "window.addEventListener('mouseup', function(e) { isDragging = false; img.style.cursor = 'grab'; });" +
+            "</script></body></html>";
         File.WriteAllText(htmlPath, html);
         return htmlPath;
     }

@@ -10,6 +10,6 @@
         <NavigationView.MenuItems>
             <!-- Items will be added in code-behind -->
         </NavigationView.MenuItems>
-        <Grid x:Name="ProcessorContentGrid" />
+        <Grid x:Name="ProcessorContentGrid" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
     </NavigationView>
 </Page>
