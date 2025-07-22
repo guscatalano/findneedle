@@ -499,20 +499,22 @@ jobs:
     # Remove redundant restore/build steps, keep only MSIX-specific build/packaging
     - name: Restore NuGet packages for MSIX packaging
       run: dotnet restore ${{ env.FindNeedleUX_Project }}
-    - name: Set unsigned namespace in AppxManifest
+    - name: Copy and set unsigned namespace in AppxManifest
       shell: pwsh
       run: |
-        $manifest = "FindNeedleUX/Package.appxmanifest"
-        [xml]$xml = Get-Content $manifest
+        $src = "FindNeedleUX/Package.appxmanifest"
+        $dst = "FindNeedleUX/Package.unsigned.appxmanifest"
+        Copy-Item $src $dst -Force
+        [xml]$xml = Get-Content $dst
         $xml.Package.Identity.Publisher = "CN=Unsigned"
         $xml.Package.Identity.Name = $xml.Package.Identity.Name + ".unsigned"
-        $xml.Save($manifest)
+        $xml.Save($dst)
     - name: Create MSIX package (unsigned)
       run: |
         $version = "${{ needs.set-msix-version.outputs.version }}"
         # Ensure version ends with .0 for four-segment version
         if (-not $version.EndsWith('.0')) { $version = "$version.0" }
-        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false /p:AppxPackageVersion=$version
+        dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false /p:AppxPackageVersion=$version /p:AppxManifestFile=FindNeedleUX/Package.unsigned.appxmanifest
       shell: pwsh
     - name: Upload MSIX artifact (unsigned)
       uses: actions/upload-artifact@v4
@@ -1139,4 +1141,3 @@ jobs:
               Get-Content $file.FullName | Write-Host
             }
           }
-       
