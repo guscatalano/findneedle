@@ -60,7 +60,20 @@ public sealed partial class ProcessorOutputPage : Page
                 IsReadOnly = true,
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = new FontFamily("Consolas"),
-                Margin = new Thickness(0, 8, 0, 0)
+                Margin = new Thickness(0, 8, 0, 0),
+                AcceptsReturn = true,
+                MinHeight = 300,
+                MinWidth = 300
+            };
+
+            var scrollViewer = new ScrollViewer
+            {
+                Content = outputBox,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Margin = new Thickness(0, 0, 0, 0),
+                MinHeight = 300,
+                MinWidth = 300
             };
 
             var webView = new WebView2
@@ -69,8 +82,49 @@ public sealed partial class ProcessorOutputPage : Page
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
                 MinHeight = 300,
+                MinWidth = 300,
+                Height = double.NaN, // Allow to auto-size vertically
+                Width = double.NaN // Allow to auto-size horizontally
+            };
+  
+            // Create clickable link TextBox for file path
+            var filePathLink = new TextBox
+            {
+                Text = outputFile ?? string.Empty,
+                IsReadOnly = true,
+                FontFamily = new FontFamily("Consolas"),
+                Margin = new Thickness(0, 0, 0, 4),
+                Foreground = new SolidColorBrush(Colors.Blue),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
                 MinWidth = 300
             };
+            ToolTipService.SetToolTip(filePathLink, "Click to open file");
+            filePathLink.PointerPressed += (s, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(outputFile) && File.Exists(outputFile))
+                {
+                    try { Process.Start(new ProcessStartInfo { FileName = outputFile, UseShellExecute = true }); } catch { }
+                }
+            };
+
+            // Use a Grid to allow WebView2 to stretch
+            var fileOutputGrid = new Grid();
+            fileOutputGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            fileOutputGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            fileOutputGrid.Children.Add(filePathLink);
+            Grid.SetRow(filePathLink, 0);
+            fileOutputGrid.Children.Add(webView);
+            Grid.SetRow(webView, 1);
+
+            var fileOutputPivotItem = new PivotItem
+            {
+                Header = "File Output",
+                Content = fileOutputGrid
+            };
+            fileOutputPivotItem.SetValue(PivotItem.VerticalContentAlignmentProperty, VerticalAlignment.Stretch);
+            fileOutputPivotItem.SetValue(PivotItem.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch);
+
             if (!string.IsNullOrWhiteSpace(outputFile) && File.Exists(outputFile))
             {
                 Debug.WriteLine($"[ProcessorOutputPage] Output file: {outputFile}");
@@ -114,13 +168,9 @@ public sealed partial class ProcessorOutputPage : Page
             pivot.Items.Add(new PivotItem
             {
                 Header = "Text Output",
-                Content = new ScrollViewer { Content = outputBox }
+                Content = scrollViewer
             });
-            pivot.Items.Add(new PivotItem
-            {
-                Header = "File Output",
-                Content = webView
-            });
+            pivot.Items.Add(fileOutputPivotItem);
 
             var stack = new StackPanel();
             stack.Children.Add(titleBlock);

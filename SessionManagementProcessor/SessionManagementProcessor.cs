@@ -40,6 +40,7 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 
     public void GenerateKeyPoints()
     {
+        keyHandlers.Clear();
         keyHandlers.Add(new KeyPoint()
         {
             textToMatch = "- WMsgMessageHandler: ",
@@ -335,6 +336,8 @@ public class SessionManagementProcessor : IResultProcessor, IPluginDescription
 
     public void ProcessResults(List<ISearchResult> results)
     {
+
+        keypoints = new(); // reset 
         GenerateKeyPoints();
         foreach (var ret in results)
         {

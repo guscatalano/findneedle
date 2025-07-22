@@ -166,15 +166,17 @@ public class NuSearchQuery : ISearchQuery
 
     public void Step3_ResultsToProcessors()
     {
-        Logger.Instance.Log("Step3_ResultsToProcessors started");
+        
+        Logger.Instance.Log("Step3_ResultsToProcessors skipped (due to ux)");
         _stepnotifysink.NotifyStep(SearchStep.AtProcessor);
+        /* skipping
         foreach (var proc in _processors)
         {
             Logger.Instance.Log($"Processing results with processor: {proc.GetType().Name}");
             proc.ProcessResults(_currentResultList);
             Logger.Instance.Log($"Output was written to: {proc.GetOutputFile()}");
         }
-        Logger.Instance.Log("Step3_ResultsToProcessors complete");
+        Logger.Instance.Log("Step3_ResultsToProcessors complete");*/
     }
 
     public void Step4_ProcessAllResultsToOutput()

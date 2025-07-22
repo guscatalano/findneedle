@@ -70,15 +70,29 @@ public sealed partial class SearchProcessorsPage : Page
                 {
                     var name = !string.IsNullOrEmpty(desc.FriendlyName) ? desc.FriendlyName : desc.ClassName;
                     var configKey = desc.FriendlyName ?? desc.ClassName;
-                    bool enabled;
+                    bool enabled = true;
+                    string matchedKey = null;
                     if (enabledDict.TryGetValue(desc.FriendlyName ?? desc.ClassName, out var isEnabled))
+                    {
                         enabled = isEnabled;
+                        matchedKey = desc.FriendlyName ?? desc.ClassName;
+                    }
                     else if (enabledDict.TryGetValue(desc.ClassName, out isEnabled))
+                    {
                         enabled = isEnabled;
+                        matchedKey = desc.ClassName;
+                    }
                     else if (enabledDict.TryGetValue(desc.SourceFile, out isEnabled))
+                    {
                         enabled = isEnabled;
+                        matchedKey = desc.SourceFile;
+                    }
                     else
+                    {
                         enabled = true; // default to true if not found
+                    }
+                    // Log the matching process for debugging
+                    FindPluginCore.Logger.Instance.Log($"Processor: {name}, ConfigKey: {configKey}, Enabled: {enabled}, MatchedKey: {matchedKey}, ConfigEntryFound: {matchedKey != null}");
                     Processors.Add(new ProcessorDisplayItem { Name = name, Enabled = enabled, ConfigKey = configKey });
                 }
             }
