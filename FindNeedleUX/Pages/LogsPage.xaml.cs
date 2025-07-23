@@ -15,6 +15,7 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using FindPluginCore;
 using FindPluginCore.GlobalConfiguration;
+using FindNeedleUX; // For WindowUtil
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -43,12 +44,19 @@ public sealed partial class LogsPage : Page
 
     public void AddLogLine(string line)
     {
-        LogLines.Add(line);
-        try
+        if (DispatcherQueue.HasThreadAccess)
         {
-            LogListView.ScrollIntoView(line);
+            LogLines.Add(line);
+            try
+            {
+                LogListView.ScrollIntoView(line);
+            }
+            catch { }
         }
-        catch { }
+        else
+        {
+            DispatcherQueue.TryEnqueue(() => AddLogLine(line));
+        }
     }
 
     private void DebugToggleSwitch_Toggled(object sender, RoutedEventArgs e)
@@ -61,5 +69,15 @@ public sealed partial class LogsPage : Page
     private void UpdateDebugStatusText()
     {
         DebugStatusText.Text = $"Debug is {(GlobalSettings.Debug ? "ON" : "OFF")}";
+    }
+
+    private void PopupButton_Click(object sender, RoutedEventArgs e)
+    {
+        var win = WindowUtil.CreateWindow();
+        var frame = new Frame();
+        win.Content = frame;
+        frame.Navigate(typeof(LogsPage));
+        win.Activate();
+        WindowUtil.SizeWindowToContent(win);
     }
 }
