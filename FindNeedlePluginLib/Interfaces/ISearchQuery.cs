@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace FindNeedlePluginLib;
 public interface ISearchQuery
@@ -50,4 +51,9 @@ public interface ISearchQuery
 
     // Add property for SearchStatistics
     SearchStatistics stats { get; set; }
+
+    // --- Cancellation support ---
+    void Step1_LoadAllLocationsInMemory(CancellationToken cancellationToken);
+    List<ISearchResult> Step2_GetFilteredResults(CancellationToken cancellationToken);
+    void RunThrough(CancellationToken cancellationToken);
 }

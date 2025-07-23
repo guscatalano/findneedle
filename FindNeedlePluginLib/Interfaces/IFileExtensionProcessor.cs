@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace FindNeedlePluginLib;
 public interface IFileExtensionProcessor : IDisposable
@@ -19,10 +20,12 @@ public interface IFileExtensionProcessor : IDisposable
     public void LoadInMemory();
     public void DoPreProcessing();
 
+    // New overloads for cancellation support
+    public void LoadInMemory(CancellationToken cancellationToken);
+    public void DoPreProcessing(CancellationToken cancellationToken);
+
     public List<ISearchResult> GetResults();
 
     public string GetFileName();
     public Dictionary<string, int> GetProviderCount();
-
-    
 }

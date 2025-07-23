@@ -7,6 +7,7 @@ using findneedle;
 using findneedle.Implementations;
 using findneedle.PluginSubsystem;
 using FindNeedlePluginLib;
+using System.Threading;
 
 namespace FindPluginCore.Searching.Serializers;
 public class SearchQueryUX
@@ -94,6 +95,20 @@ public class SearchQueryUX
         q.Step3_ResultsToProcessors();
         q.Step4_ProcessAllResultsToOutput();
 
+        return x;
+    }
+
+    public List<ISearchResult> GetSearchResults(CancellationToken cancellationToken)
+    {
+        Initialize();
+        if(q == null)
+        {
+            throw new Exception("wtf");
+        }
+        q.Step1_LoadAllLocationsInMemory(cancellationToken);
+        var x = q.Step2_GetFilteredResults(cancellationToken);
+        q.Step3_ResultsToProcessors();
+        q.Step4_ProcessAllResultsToOutput();
         return x;
     }
 }

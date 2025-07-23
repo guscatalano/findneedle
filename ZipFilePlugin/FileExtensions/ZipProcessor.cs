@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
 
@@ -35,7 +36,10 @@ public class ZipProcessor : IFileExtensionProcessor
     }
 
     public void DoPreProcessing() {
-        if (inputfile == null)
+        DoPreProcessing(CancellationToken.None);
+    }
+    public void DoPreProcessing(CancellationToken cancellationToken) {
+        if (inputfile == null || cancellationToken.IsCancellationRequested)
         {
             return;
         }
@@ -63,6 +67,11 @@ public class ZipProcessor : IFileExtensionProcessor
 
     public void LoadInMemory() 
     {
+        LoadInMemory(CancellationToken.None);
+    }
+    public void LoadInMemory(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested) return;
     }
 
     public void RegisterForQueueNewFolderCallback(Action<string> callback)

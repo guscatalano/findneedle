@@ -2,6 +2,7 @@ using findneedle.ETWPlugin;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindPluginCore;
@@ -19,14 +20,8 @@ using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Text;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
-
 namespace FindNeedleUX;
 
-/// <summary>
-/// An empty window that can be used on its own or navigated to within a Frame.
-/// </summary>
 public sealed partial class MainWindow : Window
 {
     private static readonly Dictionary<string, Type> ResultViewerPages = new()
@@ -40,6 +35,8 @@ public sealed partial class MainWindow : Window
     {
         "resultswebpage", "resultsvcommunitypage", "searchresultpage"
     };
+
+    private CancellationTokenSource _quickActionCts;
 
     public MainWindow()
     {
@@ -150,7 +147,8 @@ public sealed partial class MainWindow : Window
 
     private async Task RunSearchWithProgress(bool surfaceScan = false)
     {
-        ShowSpinner(true, "Running search...");
+        _quickActionCts = new CancellationTokenSource();
+        ShowSpinner(true, "Running search...", showCancel:true);
         // Register for progress updates
         var sink = MiddleLayerService.GetProgressEventSink();
         void OnTextProgress(string text)
@@ -159,8 +157,6 @@ public sealed partial class MainWindow : Window
         }
         void OnNumericProgress(int percent)
         {
-            // Optionally, you could update a progress bar or add percent to SpinnerText
-            // For now, just append percent to the text
             DispatcherQueue.TryEnqueue(() =>
             {
                 if (!string.IsNullOrWhiteSpace(SpinnerText.Text))
@@ -171,9 +167,20 @@ public sealed partial class MainWindow : Window
         }
         sink.RegisterForTextProgress(OnTextProgress);
         sink.RegisterForNumericProgress(OnNumericProgress);
-        await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan).Wait());
-        ShowSpinner(false);
-        // Optionally: unregister handlers if needed (not strictly necessary for this pattern)
+        try
+        {
+            await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, _quickActionCts.Token).Wait(), _quickActionCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            DispatcherQueue.TryEnqueue(() => SpinnerText.Text = "Search cancelled.");
+        }
+        finally
+        {
+            ShowSpinner(false);
+            _quickActionCts?.Dispose();
+            _quickActionCts = null;
+        }
     }
 
     private async void QuickFileOpen()
@@ -190,7 +197,7 @@ public sealed partial class MainWindow : Window
         {
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(file.Path);
-            ShowSpinner(true, "Opening file...");
+            ShowSpinner(true, "Opening file...", showCancel:true);
             await RunSearchWithProgress();
             ShowSpinner(false);
             var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
@@ -214,7 +221,7 @@ public sealed partial class MainWindow : Window
             var folderPath = folder.Path;
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(folderPath);
-            ShowSpinner(true, "Opening folder...");
+            ShowSpinner(true, "Opening folder...", showCancel:true);
             await RunSearchWithProgress();
             ShowSpinner(false);
             var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
@@ -261,12 +268,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowSpinner(bool show, string text = null)
+    private void ShowSpinner(bool show, string text = null, bool showCancel = false)
     {
         SpinnerPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         EtlSpinner.IsActive = show;
         if (text != null)
             SpinnerText.Text = text;
+        CancelQuickActionButton.Visibility = show && showCancel ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void CancelQuickActionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_quickActionCts != null && !_quickActionCts.IsCancellationRequested)
+        {
+            _quickActionCts.Cancel();
+            SpinnerText.Text = "Cancelling...";
+        }
     }
 
     private async Task InspectEtlFile()

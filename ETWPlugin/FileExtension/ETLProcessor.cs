@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Threading;
 using FindNeedleCoreUtils;
 using findneedle.WDK;
 using Newtonsoft.Json;
@@ -76,6 +77,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
    
     public void DoPreProcessing()
     {
+        DoPreProcessing(CancellationToken.None);
+    }
+    public void DoPreProcessing(CancellationToken cancellationToken)
+    {
         LogInfo($"DoPreProcessing started for file: {inputfile}");
         _progressSink?.NotifyProgress(0, $"Preprocessing {inputfile}");
         var getLock = 50;
@@ -101,6 +106,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         _progressSink?.NotifyProgress(20, "Parsing output file");
         while (getLock > 0)
         {
+            if (cancellationToken.IsCancellationRequested) return;
             try
             {
                 if (currentResult.outputfile == null)
@@ -115,6 +121,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 int lineCount = 0;
                 while ((line = streamReader.ReadLine()) != null)
                 {
+                    if (cancellationToken.IsCancellationRequested) return;
                     var failsafe = 10;
                     while (!ETLLogLine.DoesHeaderLookRight(line) && failsafe > 0)
                     {
@@ -168,6 +175,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     readonly List<ISearchResult> results = new();
     public void LoadInMemory() 
     {
+        LoadInMemory(CancellationToken.None);
+    }
+    public void LoadInMemory(CancellationToken cancellationToken)
+    {
         LogInfo($"LoadInMemory called for ETLProcessor, file: {inputfile}");
         _badlyFormattedCount = 0;
         _progressSink?.NotifyProgress(0, $"Loading results into memory for {inputfile}");
@@ -178,6 +189,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             var lastProgressTime = DateTime.UtcNow;
             foreach(var result in results)
             {
+                if (cancellationToken.IsCancellationRequested) return;
                 if (result is ETLLogLine etlLogLine)
                 {
                     etlLogLine.PreLoad();

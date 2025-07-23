@@ -11,9 +11,9 @@
 
     <StackPanel>
         <Button Click="Button2_Click">Run Shallow Search</Button>
-      
         <ProgressBar Width="130" IsIndeterminate="True" ShowPaused="True" ShowError="False" Name="busybar"/>
         <Button Click="Button_Click">Run Normal</Button>
+        <Button x:Name="CancelButton" Click="CancelButton_Click">Cancel</Button>
         <TextBlock Name="progresstext"/>
         <ProgressBar Width="130" IsIndeterminate="False" ShowPaused="True" ShowError="False" Name="busybar2"/>
         <TextBlock Name="summary"/>

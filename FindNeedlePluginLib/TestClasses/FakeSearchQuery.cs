@@ -86,4 +86,5 @@ public class FakeSearchQuery : ISearchQuery
     public void Step3_ResultsToProcessors() => throw new NotImplementedException();
     public void Step4_ProcessAllResultsToOutput() => throw new NotImplementedException();
     public void Step5_Done() => throw new NotImplementedException();
+    public void RunThrough(CancellationToken cancellationToken) => throw new NotImplementedException();
 }

@@ -3,6 +3,7 @@ global using System.Collections.Generic;
 global using System.Linq;
 global using System.Text;
 global using System.Threading.Tasks;
+global using System.Threading;
 using findneedle.Implementations.Locations;
 using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
@@ -31,18 +32,20 @@ public class EVTXProcessor : IFileExtensionProcessor
     {
         return inputfile;
     }
-    public void DoPreProcessing() 
-    {
-    }
+    public void DoPreProcessing() { }
+    public void DoPreProcessing(CancellationToken cancellationToken) { }
 
     public List<ISearchResult> GetResults() => loc?.Search() ?? new();
     public void LoadInMemory()
     {
+        LoadInMemory(CancellationToken.None);
+    }
+    public void LoadInMemory(CancellationToken cancellationToken)
+    {
         if (loc != null)
         {
-            loc.LoadInMemory();
+            loc.LoadInMemory(cancellationToken);
         }
-       
     }
 
     public List<string> RegisterForExtensions()

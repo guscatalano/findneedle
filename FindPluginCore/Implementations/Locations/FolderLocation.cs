@@ -149,7 +149,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 sink.NotifyProgress("queuing up: " + path);
             }
             Logger.Instance.Log($"Queuing file for processing: {path}");
-            tasks.Add(Task.Run(() => ProcessFile(path), cancellationToken));
+            tasks.Add(Task.Run(() => ProcessFile(path, cancellationToken), cancellationToken));
         }
         else
         {
@@ -161,7 +161,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                     sink.NotifyProgress("queuing up: " + file);
                 }
                 Logger.Instance.Log($"Queuing file for processing: {file}");
-                tasks.Add(Task.Run(() => ProcessFile(file), cancellationToken));
+                tasks.Add(Task.Run(() => ProcessFile(file, cancellationToken), cancellationToken));
             }
         }
         if (sink != null)
@@ -189,8 +189,9 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         }
     }
 
-    private void ProcessFile(string file)
+    private void ProcessFile(string file, System.Threading.CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested) return;
         Logger.Instance.Log($"Processing file: {file}");
         var ext = Path.GetExtension(file).ToLower();
 
@@ -212,6 +213,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         {
             foreach(var processor in extToProcessor[ext])
             {
+                if (cancellationToken.IsCancellationRequested) return;
                 if (processor == null)
                 {
                     Logger.Instance.Log($"Null processor found for extension {ext} in ProcessFile");
@@ -219,11 +221,13 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 }
                 Logger.Instance.Log($"Opening file {file} with processor {processor.GetType().Name}");
                 processor.OpenFile(file);
+                if (cancellationToken.IsCancellationRequested) return;
                 if (processor.CheckFileFormat())
                 {
                     Logger.Instance.Log($"File format valid for {file}, running DoPreProcessing and LoadInMemory");
-                    processor.DoPreProcessing();
-                    processor.LoadInMemory();
+                    processor.DoPreProcessing(cancellationToken);
+                    if (cancellationToken.IsCancellationRequested) return;
+                    processor.LoadInMemory(cancellationToken);
                 }
                 else
                 {

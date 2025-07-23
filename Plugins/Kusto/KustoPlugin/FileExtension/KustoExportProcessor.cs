@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using FindNeedlePluginLib;
 
 namespace KustoPlugin.FileExtension;
@@ -46,6 +47,10 @@ public class KustoExportProcessor : IFileExtensionProcessor
 
     public void LoadInMemory()
     {
+        LoadInMemory(CancellationToken.None);
+    }
+    public void LoadInMemory(CancellationToken cancellationToken)
+    {
         if (!_formatChecked)
             return;
         if (_fileName == null || !File.Exists(_fileName))
@@ -60,6 +65,7 @@ public class KustoExportProcessor : IFileExtensionProcessor
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
+            if (cancellationToken.IsCancellationRequested) return;
             if (string.IsNullOrWhiteSpace(line)) continue;
             var logLine = KustoExportLogLine.Parse(line, _headerFields, _fileName);
             if (logLine != null)
@@ -76,7 +82,8 @@ public class KustoExportProcessor : IFileExtensionProcessor
         }
     }
 
-    public void DoPreProcessing() { /* No pre-processing needed */ }
+    public void DoPreProcessing() { }
+    public void DoPreProcessing(CancellationToken cancellationToken) { if (cancellationToken.IsCancellationRequested) return; }
 
     public List<ISearchResult> GetResults() => _results.Cast<ISearchResult>().ToList();
 

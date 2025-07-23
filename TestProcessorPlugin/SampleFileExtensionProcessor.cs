@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 
@@ -19,6 +20,11 @@ public class SampleFileExtensionProcessor : IFileExtensionProcessor
     public void DoPreProcessing()
     {
         hasDonePreProcessing = true;
+    }
+    public void DoPreProcessing(CancellationToken cancellationToken)
+    {
+        hasDonePreProcessing = true;
+        if (cancellationToken.IsCancellationRequested) return;
     }
     public string GetFileName() {
         return lastOpenedFile; 
@@ -41,6 +47,11 @@ public class SampleFileExtensionProcessor : IFileExtensionProcessor
     public void LoadInMemory()
     {
         hasLoaded = true;
+    }
+    public void LoadInMemory(CancellationToken cancellationToken)
+    {
+        hasLoaded = true;
+        if (cancellationToken.IsCancellationRequested) return;
     }
     public void OpenFile(string fileName)
     {

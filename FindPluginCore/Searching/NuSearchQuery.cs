@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using findneedle;
 using FindNeedlePluginLib;
 using FindPluginCore; // Add for Logger
@@ -102,6 +103,17 @@ public class NuSearchQuery : ISearchQuery
         Logger.Instance.Log("RunThrough finished");
     }
 
+    public void RunThrough(CancellationToken cancellationToken)
+    {
+        Logger.Instance.Log("RunThrough (with cancellation) started");
+        Step1_LoadAllLocationsInMemory(cancellationToken);
+        _currentResultList = Step2_GetFilteredResults(cancellationToken);
+        Step3_ResultsToProcessors();
+        Step4_ProcessAllResultsToOutput();
+        Step5_Done();
+        Logger.Instance.Log("RunThrough (with cancellation) finished");
+    }
+
     #region main functions
     public void Step1_LoadAllLocationsInMemory()
     {
@@ -123,6 +135,29 @@ public class NuSearchQuery : ISearchQuery
         }
         _stepnotifysink.NotifyStep(SearchStep.AtLoad);
         Logger.Instance.Log("Step1_LoadAllLocationsInMemory complete");
+    }
+
+    public void Step1_LoadAllLocationsInMemory(CancellationToken cancellationToken)
+    {
+        Logger.Instance.Log($"Step1_LoadAllLocationsInMemory (with cancellation): {_locations.Count} locations");
+        int count = 1;
+        int total = _locations.Count;
+        foreach (var loc in _locations)
+        {
+            if (cancellationToken.IsCancellationRequested) return;
+            Logger.Instance.Log($"Loading location {count}/{total}: {loc.GetName()}");
+            if (loc is FindNeedlePluginLib.Interfaces.IReportProgress reportable)
+            {
+                reportable.SetProgressSink(_stepnotifysink.progressSink);
+            }
+            int percent = total > 0 ? (int)(50.0 * count / total) : 0;
+            _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
+            loc.LoadInMemory(cancellationToken);
+            Logger.Instance.Log($"Loaded location: {loc.GetName()}");
+            count++;
+        }
+        _stepnotifysink.NotifyStep(SearchStep.AtLoad);
+        Logger.Instance.Log("Step1_LoadAllLocationsInMemory (with cancellation) complete");
     }
 
     private List<ISearchResult>? _filteredResults;
@@ -161,6 +196,46 @@ public class NuSearchQuery : ISearchQuery
             count++;
         }
         Logger.Instance.Log($"Step2_GetFilteredResults complete: {_filteredResults.Count} total filtered results");
+        return _filteredResults;
+    }
+
+    public List<ISearchResult> Step2_GetFilteredResults(CancellationToken cancellationToken)
+    {
+        Logger.Instance.Log("Step2_GetFilteredResults (with cancellation) started");
+        _stepnotifysink.NotifyStep(SearchStep.AtSearch);
+        _filteredResults = new();
+        int count = 1;
+        int total = _locations.Count;
+        foreach (var loc in _locations)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            Logger.Instance.Log($"Filtering results for location {count}/{total}: {loc.GetName()}");
+            int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
+            _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
+            loc.SetSearchDepth(_depth);
+            var unfilteredResults = loc.Search(cancellationToken);
+            Logger.Instance.Log($"{unfilteredResults.Count} results from location: {loc.GetName()}");
+
+            foreach (var result in unfilteredResults)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                var passAllFilters = true;
+                foreach (var filter in _filters)
+                {
+                    if (!filter.Filter(result))
+                    {
+                        passAllFilters = false;
+                    }
+                }
+                if (passAllFilters)
+                {
+                    _filteredResults.Add(result);
+                }
+            }
+            Logger.Instance.Log($"{_filteredResults.Count} results passed filters for location: {loc.GetName()}");
+            count++;
+        }
+        Logger.Instance.Log($"Step2_GetFilteredResults (with cancellation) complete: {_filteredResults.Count} total filtered results");
         return _filteredResults;
     }
 

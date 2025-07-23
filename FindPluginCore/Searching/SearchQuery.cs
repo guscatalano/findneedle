@@ -2,6 +2,7 @@
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
+using System.Threading;
 
 namespace findneedle;
 
@@ -22,6 +23,15 @@ public class SearchQuery : ISearchQuery
         //IResultProcessor p = new WatsonCrashProcessor();
         //p.ProcessResults(y);
         //p.GetOutputFile();
+    }
+
+    public void RunThrough(CancellationToken cancellationToken)
+    {
+        LoadAllLocationsInMemory(cancellationToken);
+        GetFilteredResults(cancellationToken);
+        ProcessAllResultsToOutput(); // TODO: propagate token if outputs support it
+        PrintOutputFilesToConsole();
+        GetSearchStatsOutput();
     }
 
     public void AddFilter(ISearchFilter filter)
@@ -160,9 +170,10 @@ public class SearchQuery : ISearchQuery
         int total = Locations.Count();
         foreach (var loc in Locations)
         {
+            if (cancellationToken.IsCancellationRequested) return;
             int percent = total > 0 ? (int)(50.0 * count / total) : 0;
             SearchStepNotificationSink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
-            loc.LoadInMemory(cancellationToken);
+            loc.LoadInMemory(cancellationToken); // always pass token
             count++;
         }
         stats.LoadedAll(this);
@@ -176,6 +187,7 @@ public class SearchQuery : ISearchQuery
         int total = Locations.Count();
         foreach (var loc in Locations)
         {
+            if (cancellationToken.IsCancellationRequested) break;
             int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
             SearchStepNotificationSink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
             results.AddRange(loc.Search(cancellationToken));
@@ -221,9 +233,17 @@ public class SearchQuery : ISearchQuery
     {
         LoadAllLocationsInMemory();
     }
+    public void Step1_LoadAllLocationsInMemory(CancellationToken cancellationToken)
+    {
+        LoadAllLocationsInMemory(cancellationToken);
+    }
     public List<ISearchResult> Step2_GetFilteredResults()
     {
         return GetFilteredResults();
+    }
+    public List<ISearchResult> Step2_GetFilteredResults(CancellationToken cancellationToken)
+    {
+        return GetFilteredResults(cancellationToken);
     }
     public void Step3_ResultsToProcessors()
     {

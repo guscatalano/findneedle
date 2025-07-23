@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using findneedle;
 using findneedle.Implementations;
@@ -126,7 +127,7 @@ public class MiddleLayerService
         return query != null ? query.SearchStepNotificationSink.progressSink : null;
     }
 
-    public static Task<string> RunSearch(bool surfacescan = false)
+    public static Task<string> RunSearch(bool surfacescan = false, CancellationToken cancellationToken = default)
     {
 
         UpdateSearchQuery();
@@ -141,7 +142,14 @@ public class MiddleLayerService
                 query.SetDepthForAllLocations(SearchLocationDepth.Intermediate);
             }
         }
-        SearchResults = SearchQueryUX.GetSearchResults();
+        if (cancellationToken != default)
+        {
+            SearchResults = SearchQueryUX.GetSearchResults(cancellationToken);
+        }
+        else
+        {
+            SearchResults = SearchQueryUX.GetSearchResults();
+        }
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
         return Task.FromResult(x.GetSummaryReport());
 
