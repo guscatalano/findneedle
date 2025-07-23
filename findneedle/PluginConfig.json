@@ -32,5 +32,6 @@
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
   "SearchQueryClass": "NuSearchQuery",
   "UserRegistryPluginKey": "Software\\FindNeedle\\Plugins",
-  "UserRegistryPluginKeyEnabled": true
+  "UserRegistryPluginKeyEnabled": true,
+  "PlantUMLPath": ""
 }
