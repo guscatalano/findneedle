@@ -40,6 +40,7 @@ public sealed partial class LogsPage : Page
         Logger.Instance.LogCallback = AddLogLine;
         DebugToggleSwitch.IsOn = GlobalSettings.Debug;
         UpdateDebugStatusText();
+        // Removed pop-out logic from constructor
     }
 
     public void AddLogLine(string line)
@@ -69,15 +70,5 @@ public sealed partial class LogsPage : Page
     private void UpdateDebugStatusText()
     {
         DebugStatusText.Text = $"Debug is {(GlobalSettings.Debug ? "ON" : "OFF")}";
-    }
-
-    private void PopupButton_Click(object sender, RoutedEventArgs e)
-    {
-        var win = WindowUtil.CreateWindow();
-        var frame = new Frame();
-        win.Content = frame;
-        frame.Navigate(typeof(LogsPage));
-        win.Activate();
-        WindowUtil.SizeWindowToContent(win);
     }
 }
