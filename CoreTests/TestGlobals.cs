@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using FindNeedleCoreUtils;
 using Windows.ApplicationModel.Search;
+using Windows.Storage;
+using FileIO = FindNeedleCoreUtils.FileIO;
 
 namespace CoreTests;
 
@@ -32,6 +34,19 @@ public class TestGlobals
                info["TargetRuntime"] == info2["TargetRuntime"] &&
                info["TargetFramework"] == info2["TargetFramework"];
     }
+
+    public static int GetInfoFromPathMatchCount(string path1, string path2)
+    {
+        var info1 = GetInfoFromPath(path1);
+        var info2 = GetInfoFromPath(path2);
+        var matchCount = 0;
+        if (info1["Configuration"] == info2["Configuration"]) matchCount++;
+        if (info1["Platform"] == info2["Platform"]) matchCount++;
+        if (info1["TargetRuntime"] == info2["TargetRuntime"]) matchCount++;
+        if (info1["TargetFramework"] == info2["TargetFramework"]) matchCount++;
+        return matchCount;
+    }
+
 
     public static Dictionary<string, string> GetInfoFromPath(string path)
     {
@@ -172,7 +187,19 @@ public class TestGlobals
                 {
                     if(discardedFinds.Count() > 0)
                     {
-                        return discardedFinds[0]; // pick one
+                        // Use GetInfoFromPathMatchCount to pick the best match
+                        var maxMatch = -1;
+                        var bestMatch = discardedFinds[0];
+                        foreach (var candidate in discardedFinds)
+                        {
+                            var matchCount = GetInfoFromPathMatchCount(candidate, originalPath);
+                            if (matchCount > maxMatch)
+                            {
+                                maxMatch = matchCount;
+                                bestMatch = candidate;
+                            }
+                        }
+                        return bestMatch;
                     }
                     throw new Exception("Can't find " + searchExe + " in " + basepath);
                 }
