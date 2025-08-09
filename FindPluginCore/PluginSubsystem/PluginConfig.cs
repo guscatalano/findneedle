@@ -16,6 +16,7 @@ public class PluginConfig
     public string PlantUMLPath = string.Empty; // Optional: Path to PlantUML JAR
     public string UserRegistryPluginKey = string.Empty; // Optional: Registry key in HKCU for extra plugins
     public bool UserRegistryPluginKeyEnabled = false; // Enable/disable registry plugin loading
+    public bool UseSynchronousSearch = false; // Add this option
 }
 
 public class PluginConfigEntry

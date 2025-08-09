@@ -365,34 +365,37 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         return reports;
     }
 
-    public override Task SearchWithCallback(Action<List<ISearchResult>> onBatch, System.Threading.CancellationToken cancellationToken = default, int batchSize = 1000)
+    public override async Task SearchWithCallback(Action<List<ISearchResult>> onBatch, System.Threading.CancellationToken cancellationToken = default, int batchSize = 1000)
     {
-        // FolderLocation does not have a searchResults field, so aggregate from knownProcessors
+        // Use GetResultsWithCallback for each processor
         var batch = new List<ISearchResult>(batchSize);
+        List<Task> processorTasks = new();
         lock (knownProcessors)
         {
             foreach (var processor in knownProcessors)
             {
                 if (processor == null) continue;
-                var results = processor.GetResults();
-                foreach (var result in results)
+                var task = processor.GetResultsWithCallback(results =>
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                        break;
-                    batch.Add(result);
-                    if (batch.Count == batchSize)
+                    if (cancellationToken.IsCancellationRequested) return;
+                    foreach (var result in results)
                     {
-                        onBatch(batch);
-                        batch = new List<ISearchResult>(batchSize);
+                        batch.Add(result);
+                        if (batch.Count == batchSize)
+                        {
+                            onBatch(batch);
+                            batch = new List<ISearchResult>(batchSize);
+                        }
                     }
-                }
+                }, cancellationToken, batchSize);
+                processorTasks.Add(task);
             }
         }
+        await Task.WhenAll(processorTasks);
         if (batch.Count > 0)
         {
             onBatch(batch);
         }
-        return Task.CompletedTask;
     }
 
     public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)

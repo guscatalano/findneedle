@@ -42,7 +42,7 @@ public sealed class InterfaceTests
     [TestMethod]
     public void TestInvalidPluginDescription()
     {
-        var output = IPluginDescription.GetInvalidPluginDescription("testclass", "testsource", ["something"], ["somethingelse", "yea"], "testerror");
+        var output = IPluginDescription.GetInvalidPluginDescription("testclass", "testtype", "testsource", ["something"], ["somethingelse", "yea"], "testerror");
         Assert.IsTrue(output.validPlugin == false);
         Assert.IsTrue("testclass".Equals(output.ClassName));
         Assert.IsTrue("testsource".Equals(output.SourceFile));
@@ -59,7 +59,7 @@ public sealed class InterfaceTests
         FakePluginDescription description = new();
         description.textdescription = "validdescription";
         description.friendlyname = "realfriend";
-        var output = IPluginDescription.GetPluginDescription(description, "testsource", ["something"], ["somethingelse", "yea"]);
+        var output = IPluginDescription.GetPluginDescription(description, "testtype", "testsource", ["something"], ["somethingelse", "yea"]);
         Assert.IsTrue(output.validPlugin == true);
         Assert.IsTrue("FindNeedlePluginLib.TestClasses.FakePluginDescription".Equals(output.ClassName));
         Assert.IsTrue("testsource".Equals(output.SourceFile));

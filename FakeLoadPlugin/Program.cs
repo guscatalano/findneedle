@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Text.Json;
 using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
+using Windows.Foundation.Collections;
+using System.Security.Cryptography;
 
 namespace FakeLoadPlugin;
 
@@ -82,6 +84,12 @@ public class Program
             {
                 continue;
             }
+            if (type.IsNested) //callback classes are not plugins
+            {
+                WriteToConsoleAndFile("Skipping nested class: " + type.FullName);
+                continue;
+            }
+
             List<string> implementedInterfaces = new();
             List<string> implementedInterfacesShort = new();
             WriteToConsoleAndFile("Found class: " + type.FullName);
@@ -93,7 +101,7 @@ public class Program
                     continue;
                 }
 
-                WriteToConsoleAndFile("Found interface: " + possibleInterface.FullName);
+                WriteToConsoleAndFile("Found interface: " + possibleInterface.FullName + " of type " + possibleInterface.BaseType);
                 if (possibleInterface.FullName.Equals("FindNeedlePluginLib.Interfaces.IPluginDescription"))
                 {
                     instantiate = true;
@@ -103,27 +111,35 @@ public class Program
                 implementedInterfacesShort.Add(possibleInterface.Name);
             }
 
+            var baseType = "Unknown";
+            if (type.BaseType != null)
+            {
+                baseType = type.BaseType.ToString();
+            }
+
             if (instantiate)
             {
                 var Plugin = dll.CreateInstance(type.FullName);
+               
+                
                 if (Plugin != null)
                 {
                     WriteToConsoleAndFile("Friendly Name: " + ((IPluginDescription)Plugin).GetPluginFriendlyName());
                     WriteToConsoleAndFile("Description: " + ((IPluginDescription)Plugin).GetPluginTextDescription());
-                    foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin,
+                    foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, baseType,
                         file, implementedInterfaces, implementedInterfacesShort));
                 }
                 else
                 {
                     WriteToConsoleAndFile("Failed to create instance of " + type.FullName);
-                    foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName,
+                    foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName, baseType,
                     file, implementedInterfaces, implementedInterfacesShort, "Could not instantiate (missing binary?)"));
                 }
             }
             else
             {
                 WriteToConsoleAndFile("Skipping " + type.FullName + " because it has no IPluginDescription");
-                foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName,
+                foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName, baseType,
                     file, implementedInterfaces, implementedInterfacesShort, "No IPluginDescription"));
             }
         }

@@ -207,6 +207,26 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         return results;
     }
 
+    public async Task GetResultsWithCallback(Action<List<ISearchResult>> onBatch, CancellationToken cancellationToken = default, int batchSize = 1000)
+    {
+        var batch = new List<ISearchResult>(batchSize);
+        foreach (var result in results)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            batch.Add(result);
+            if (batch.Count >= batchSize)
+            {
+                onBatch(batch);
+                batch = new List<ISearchResult>(batchSize);
+            }
+        }
+        if (batch.Count > 0)
+        {
+            onBatch(batch);
+        }
+        await Task.CompletedTask;
+    }
+
     public List<string> RegisterForExtensions()
     {
         Logger.Instance.Log("RegisterForExtensions called for ETLProcessor");

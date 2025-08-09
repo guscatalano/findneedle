@@ -71,4 +71,25 @@ public class EVTXProcessor : IFileExtensionProcessor, IReportProgress
     {
         return true;
     }
+
+    public async Task GetResultsWithCallback(Action<List<ISearchResult>> onBatch, CancellationToken cancellationToken = default, int batchSize = 1000)
+    {
+        var batch = new List<ISearchResult>(batchSize);
+        var allResults = loc?.Search() ?? new();
+        foreach (var result in allResults)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            batch.Add(result);
+            if (batch.Count >= batchSize)
+            {
+                onBatch(batch);
+                batch = new List<ISearchResult>(batchSize);
+            }
+        }
+        if (batch.Count > 0)
+        {
+            onBatch(batch);
+        }
+        await Task.CompletedTask;
+    }
 }

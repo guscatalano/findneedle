@@ -7,6 +7,7 @@ using System.Threading;
 using findneedle;
 using FindNeedlePluginLib;
 using FindPluginCore; // Add for Logger
+using findneedle.PluginSubsystem;
 
 namespace FindPluginCore.Searching;
 public class NuSearchQuery : ISearchQuery
@@ -120,6 +121,8 @@ public class NuSearchQuery : ISearchQuery
         Logger.Instance.Log($"Step1_LoadAllLocationsInMemory: {_locations.Count} locations");
         int count = 1;
         int total = _locations.Count;
+        var pluginManager = PluginManager.GetSingleton();
+        bool useSync = pluginManager.config?.UseSynchronousSearch ?? false;
         foreach (var loc in _locations)
         {
             Logger.Instance.Log($"Loading location {count}/{total}: {loc.GetName()}");
@@ -138,26 +141,32 @@ public class NuSearchQuery : ISearchQuery
             {
                 Logger.Instance.Log($"Performance estimate not implemented for {loc.GetName()}");
             }
-            try
+            if (!useSync)
             {
-                loc.SearchWithCallback(batch => {
-                    Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
-                });
+                try
+                {
+                    loc.SearchWithCallback(batch => {
+                        Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
+                    }).Wait();
+                }
+                catch (NotImplementedException)
+                {
+                    Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
+                }
             }
-            catch (NotImplementedException)
+            else
             {
-                Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
+                try
+                {
+                    var results = loc.Search();
+                    Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
+                }
+                catch (NotImplementedException)
+                {
+                    Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
+                }
             }
             loc.LoadInMemory();
-            try
-            {
-                var results = loc.Search();
-                Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
-            }
-            catch (NotImplementedException)
-            {
-                Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
-            }
             Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             count++;
         }
@@ -170,6 +179,8 @@ public class NuSearchQuery : ISearchQuery
         Logger.Instance.Log($"Step1_LoadAllLocationsInMemory (with cancellation): {_locations.Count} locations");
         int count = 1;
         int total = _locations.Count;
+        var pluginManager = PluginManager.GetSingleton();
+        bool useSync = pluginManager.config?.UseSynchronousSearch ?? false;
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) return;
@@ -189,26 +200,32 @@ public class NuSearchQuery : ISearchQuery
             {
                 Logger.Instance.Log($"Performance estimate not implemented for {loc.GetName()}");
             }
-            try
+            if (!useSync)
             {
-                loc.SearchWithCallback(batch => {
-                    Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
-                }, cancellationToken);
+                try
+                {
+                    loc.SearchWithCallback(batch => {
+                        Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
+                    }, cancellationToken).Wait();
+                }
+                catch (NotImplementedException)
+                {
+                    Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
+                }
             }
-            catch (NotImplementedException)
+            else
             {
-                Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
+                try
+                {
+                    var results = loc.Search(cancellationToken);
+                    Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
+                }
+                catch (NotImplementedException)
+                {
+                    Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
+                }
             }
             loc.LoadInMemory(cancellationToken);
-            try
-            {
-                var results = loc.Search(cancellationToken);
-                Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
-            }
-            catch (NotImplementedException)
-            {
-                Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
-            }
             Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             count++;
         }

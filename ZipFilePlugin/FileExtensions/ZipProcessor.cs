@@ -64,6 +64,25 @@ public class ZipProcessor : IFileExtensionProcessor
     {
         return new List<ISearchResult>(); //This just expands zips provides no real results
     }
+    public async Task GetResultsWithCallback(Action<List<ISearchResult>> onBatch, CancellationToken cancellationToken = default, int batchSize = 1000)
+    {
+        var batch = new List<ISearchResult>(batchSize);
+        foreach (var result in GetResults())
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            batch.Add(result);
+            if (batch.Count >= batchSize)
+            {
+                onBatch(batch);
+                batch = new List<ISearchResult>(batchSize);
+            }
+        }
+        if (batch.Count > 0)
+        {
+            onBatch(batch);
+        }
+        await Task.CompletedTask;
+    }
 
     public void LoadInMemory() 
     {

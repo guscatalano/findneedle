@@ -25,6 +25,8 @@ public interface IFileExtensionProcessor : IDisposable
     public void DoPreProcessing(CancellationToken cancellationToken);
 
     public List<ISearchResult> GetResults();
+    // New: callback-based batch results
+    public Task GetResultsWithCallback(Action<List<ISearchResult>> onBatch, CancellationToken cancellationToken = default, int batchSize = 1000);
 
     public string GetFileName();
     public Dictionary<string, int> GetProviderCount();

@@ -18,6 +18,7 @@ public struct PluginDescription
     public List<string> ImplementedInterfacesShort;
     public bool validPlugin;
     public string validationErrorMessage;
+    public string baseType;
 }
 
 public interface IPluginDescription
@@ -41,7 +42,7 @@ public interface IPluginDescription
     }
 
 
-    public static PluginDescription GetInvalidPluginDescription(string className, string sourceFile,
+    public static PluginDescription GetInvalidPluginDescription(string className, string baseType, string sourceFile,
                                                             List<string> implementedInterfaces, List<string> implementedInterfacesShort, string error)
     {
         PluginDescription description = new PluginDescription()
@@ -53,12 +54,13 @@ public interface IPluginDescription
             ImplementedInterfaces = implementedInterfaces,
             ImplementedInterfacesShort = implementedInterfacesShort,
             validPlugin = false,
-            validationErrorMessage = error
+            validationErrorMessage = error,
+            baseType = baseType
         };
         return description;
     }
 
-    public static PluginDescription GetPluginDescription(IPluginDescription pluginInstance, string sourceFile, 
+    public static PluginDescription GetPluginDescription(IPluginDescription pluginInstance, string baseType, string sourceFile,
                                                             List<string> implementedInterfaces, List<string> implementedInterfacesShort)
     {
         PluginDescription description = new PluginDescription()
@@ -70,7 +72,8 @@ public interface IPluginDescription
             ImplementedInterfaces = implementedInterfaces,
             ImplementedInterfacesShort = implementedInterfacesShort,
             validPlugin = true,
-            validationErrorMessage = ""
+            validationErrorMessage = "",
+            baseType = baseType
         };
         return description;
     }
