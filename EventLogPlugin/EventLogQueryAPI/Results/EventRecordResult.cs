@@ -19,19 +19,6 @@ public class EventRecordResult : ISearchResult
     readonly string formattedevent = "";
 
 
-    private static void LogInfo(string message)
-    {
-        // Use reflection to log info if Logger.Instance is available
-        var loggerType = Type.GetType("FindPluginCore.Logger, FindPluginCore");
-        if (loggerType != null)
-        {
-            var instanceProp = loggerType.GetProperty("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-            var logMethod = loggerType.GetMethod("Log");
-            var loggerInstance = instanceProp?.GetValue(null);
-            logMethod?.Invoke(loggerInstance, new object[] { message });
-        }
-    }
-
     public EventRecordResult(EventRecord entry, IEventLogQueryLocation location)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -41,7 +28,7 @@ public class EventRecordResult : ISearchResult
         var xmlStopwatch = System.Diagnostics.Stopwatch.StartNew();
         var doc = entry.ToXml();
         xmlStopwatch.Stop();
-        LogInfo($"[PERF] EventRecordResult.ToXml() took {xmlStopwatch.Elapsed.TotalMilliseconds:F0} ms");
+        Logger.Instance.Log($"[PERF] EventRecordResult.ToXml() took {xmlStopwatch.Elapsed.TotalMilliseconds:F0} ms");
 
         //Parse eventdata
         var first = doc.IndexOf("<EventData>") + "<EventData>".Length;
@@ -89,10 +76,10 @@ public class EventRecordResult : ISearchResult
             formatted = sb.ToString();
         }
         formatStopwatch.Stop();
-        LogInfo($"[PERF] EventRecordResult.FormatDescription() took {formatStopwatch.Elapsed.TotalMilliseconds:F0} ms");
+        Logger.Instance.Log($"[PERF] EventRecordResult.FormatDescription() took {formatStopwatch.Elapsed.TotalMilliseconds:F0} ms");
         formattedevent = formatted;
         stopwatch.Stop();
-        LogInfo($"[PERF] EventRecordResult constructor took {stopwatch.Elapsed.TotalMilliseconds:F0} ms");
+        Logger.Instance.Log($"[PERF] EventRecordResult constructor took {stopwatch.Elapsed.TotalMilliseconds:F0} ms");
     }
 
 
@@ -204,6 +191,38 @@ public class EventRecordResult : ISearchResult
         Console.WriteLine(eventdata);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -14,4 +14,8 @@
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+  </ItemGroup>
+
 </Project>

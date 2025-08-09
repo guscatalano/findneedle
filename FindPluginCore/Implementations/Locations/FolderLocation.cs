@@ -11,6 +11,7 @@ using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 using FindNeedlePluginLib.Interfaces;
 using FindPluginCore; // For Logger
+using FindNeedlePluginLib;
 
 namespace findneedle.Implementations;
 
@@ -362,5 +363,41 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         }
         Logger.Instance.Log($"ReportStatistics completed for FolderLocation: {path}");
         return reports;
+    }
+
+    public override Task SearchWithCallback(Action<List<ISearchResult>> onBatch, System.Threading.CancellationToken cancellationToken = default, int batchSize = 1000)
+    {
+        // FolderLocation does not have a searchResults field, so aggregate from knownProcessors
+        var batch = new List<ISearchResult>(batchSize);
+        lock (knownProcessors)
+        {
+            foreach (var processor in knownProcessors)
+            {
+                if (processor == null) continue;
+                var results = processor.GetResults();
+                foreach (var result in results)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        break;
+                    batch.Add(result);
+                    if (batch.Count == batchSize)
+                    {
+                        onBatch(batch);
+                        batch = new List<ISearchResult>(batchSize);
+                    }
+                }
+            }
+        }
+        if (batch.Count > 0)
+        {
+            onBatch(batch);
+        }
+        return Task.CompletedTask;
+    }
+
+    public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)
+    {
+        // Stub implementation
+        return (null, null);
     }
 }

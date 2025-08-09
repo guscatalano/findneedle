@@ -16,6 +16,7 @@ using Windows.Foundation.Collections;
 using FindPluginCore;
 using FindPluginCore.GlobalConfiguration;
 using FindNeedleUX; // For WindowUtil
+using FindNeedlePluginLib; // For Logger
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.

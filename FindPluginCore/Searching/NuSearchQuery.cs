@@ -129,7 +129,35 @@ public class NuSearchQuery : ISearchQuery
             }
             int percent = total > 0 ? (int)(50.0 * count / total) : 0;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
+            try
+            {
+                var perf = loc.GetSearchPerformanceEstimate();
+                Logger.Instance.Log($"Performance estimate for {loc.GetName()}: time={perf.timeTaken}, records={perf.recordCount}");
+            }
+            catch (NotImplementedException)
+            {
+                Logger.Instance.Log($"Performance estimate not implemented for {loc.GetName()}");
+            }
+            try
+            {
+                loc.SearchWithCallback(batch => {
+                    Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
+                });
+            }
+            catch (NotImplementedException)
+            {
+                Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
+            }
             loc.LoadInMemory();
+            try
+            {
+                var results = loc.Search();
+                Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
+            }
+            catch (NotImplementedException)
+            {
+                Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
+            }
             Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             count++;
         }
@@ -152,7 +180,35 @@ public class NuSearchQuery : ISearchQuery
             }
             int percent = total > 0 ? (int)(50.0 * count / total) : 0;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
+            try
+            {
+                var perf = loc.GetSearchPerformanceEstimate(cancellationToken);
+                Logger.Instance.Log($"Performance estimate for {loc.GetName()}: time={perf.timeTaken}, records={perf.recordCount}");
+            }
+            catch (NotImplementedException)
+            {
+                Logger.Instance.Log($"Performance estimate not implemented for {loc.GetName()}");
+            }
+            try
+            {
+                loc.SearchWithCallback(batch => {
+                    Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
+                }, cancellationToken);
+            }
+            catch (NotImplementedException)
+            {
+                Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
+            }
             loc.LoadInMemory(cancellationToken);
+            try
+            {
+                var results = loc.Search(cancellationToken);
+                Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
+            }
+            catch (NotImplementedException)
+            {
+                Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
+            }
             Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             count++;
         }

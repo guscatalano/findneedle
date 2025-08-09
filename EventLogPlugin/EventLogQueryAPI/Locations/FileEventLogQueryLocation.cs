@@ -41,36 +41,6 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
         return filename;
     }
 
-    private static bool IsDebugEnabled()
-    {
-        var globalSettingsType = Type.GetType("FindPluginCore.GlobalConfiguration.GlobalSettings, FindPluginCore");
-        if (globalSettingsType != null)
-        {
-            var debugProp = globalSettingsType.GetProperty("Debug", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-            if (debugProp != null)
-            {
-                var value = debugProp.GetValue(null);
-                if (value is bool b)
-                    return b;
-            }
-        }
-        return false;
-    }
-
-    private static void LogInfo(string message)
-    {
-        if (!IsDebugEnabled()) return;
-        // Use reflection to log info if Logger.Instance is available
-        var loggerType = Type.GetType("FindPluginCore.Logger, FindPluginCore");
-        if (loggerType != null)
-        {
-            var instanceProp = loggerType.GetProperty("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-            var logMethod = loggerType.GetMethod("Log");
-            var loggerInstance = instanceProp?.GetValue(null);
-            logMethod?.Invoke(loggerInstance, new object[] { message });
-        }
-    }
-
     public override void LoadInMemory(System.Threading.CancellationToken cancellationToken = default)
     {
         if (_progressSink != null)
@@ -95,20 +65,20 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
             var readEventStopwatch = System.Diagnostics.Stopwatch.StartNew();
             var eventdetail = logReader.ReadEvent();
             readEventStopwatch.Stop();
-            LogInfo($"[PERF] logReader.ReadEvent() took {readEventStopwatch.Elapsed.TotalMilliseconds:F0} ms");
+            Logger.Instance.Log($"[PERF] logReader.ReadEvent() took {readEventStopwatch.Elapsed.TotalMilliseconds:F0} ms");
             if (eventdetail == null) break;
             count++;
             if ((DateTime.UtcNow - lastSecondTime).TotalSeconds >= 1)
             {
                 int eventsThisSecond = count - lastSecondCount;
-                LogInfo($"[PERF] Read {eventsThisSecond} events in the last second");
+                Logger.Instance.Log($"[PERF] Read {eventsThisSecond} events in the last second");
                 lastSecondTime = DateTime.UtcNow;
                 lastSecondCount = count;
             }
             var constructResultsStopwatch = System.Diagnostics.Stopwatch.StartNew();
             var result = new EventRecordResult(eventdetail, this);
             constructResultsStopwatch.Stop();
-            LogInfo($"[PERF] Constructed EventRecordResult in {constructResultsStopwatch.Elapsed.TotalMilliseconds:F0} ms");
+            Logger.Instance.Log($"[PERF] Constructed EventRecordResult in {constructResultsStopwatch.Elapsed.TotalMilliseconds:F0} ms");
             searchResults.Add(result);
             numRecordsInMemory++;
             if (_progressSink != null && count % 1000 == 0)
@@ -122,7 +92,7 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
             }
         }
         overallStopwatch.Stop();
-        LogInfo($"[PERF] Total LoadInMemory time: {overallStopwatch.Elapsed.TotalSeconds:F2} seconds for {count} records");
+        Logger.Instance.Log($"[PERF] Total LoadInMemory time: {overallStopwatch.Elapsed.TotalSeconds:F2} seconds for {count} records");
         if (_progressSink != null)
         {
             _progressSink.NotifyProgress(100, $"Finished loading {count} event log records into memory");
@@ -142,6 +112,33 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
         return filteredResults;
     }
 
+    public override Task SearchWithCallback(Action<List<ISearchResult>> onBatch, System.Threading.CancellationToken cancellationToken = default, int batchSize = 1000)
+    {
+        // Simple implementation: batch from searchResults
+        var batch = new List<ISearchResult>(batchSize);
+        foreach (var result in searchResults)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+            batch.Add(result);
+            if (batch.Count == batchSize)
+            {
+                onBatch(batch);
+                batch = new List<ISearchResult>(batchSize);
+            }
+        }
+        if (batch.Count > 0)
+        {
+            onBatch(batch);
+        }
+        return Task.CompletedTask;
+    }
+
     public override void ClearStatistics() => throw new NotImplementedException();
     public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
+    public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)
+    {
+        // Stub implementation
+        return (null, null);
+    }
 }

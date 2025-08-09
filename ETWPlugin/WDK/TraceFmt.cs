@@ -108,19 +108,6 @@ public class TraceFmtResult
 
 public class TraceFmt
 {
-    private static void LogWarning(string message)
-    {
-        // Use reflection to log warning if Logger.Instance is available
-        var loggerType = Type.GetType("FindPluginCore.Logger, FindPluginCore");
-        if (loggerType != null)
-        {
-            var instanceProp = loggerType.GetProperty("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-            var logMethod = loggerType.GetMethod("Log");
-            var loggerInstance = instanceProp?.GetValue(null);
-            logMethod?.Invoke(loggerInstance, new object[] { message });
-        }
-    }
-
     public static TraceFmtResult ParseSimpleETL(string etl, string temppath, SearchProgressSink? progressSink = null)
     {
         progressSink?.NotifyProgress(0, $"Starting TraceFmt for {etl}");
@@ -131,23 +118,21 @@ public class TraceFmt
         }
         catch (Exception ex)
         {
-            LogWarning($"Warning: Could not determine tracefmt path: {ex.Message}");
+            Logger.Instance.Log($"Warning: Could not determine tracefmt path: {ex.Message}");
             progressSink?.NotifyProgress(100, "Warning: TraceFmt (tracefmt.exe) was not found. ETL parsing will be skipped.");
             return null!;
         }
         if (string.IsNullOrEmpty(traceFmtPath) || !File.Exists(traceFmtPath))
         {
-            LogWarning("Warning: TraceFmt (tracefmt.exe) was not found. ETL parsing will be skipped.");
+            Logger.Instance.Log("Warning: TraceFmt (tracefmt.exe) was not found. ETL parsing will be skipped.");
             progressSink?.NotifyProgress(100, "Warning: TraceFmt (tracefmt.exe) was not found. ETL parsing will be skipped.");
             return null!;
         }
-
         if (!File.Exists(etl))
         {
             throw new Exception("Cant find etl");
         }
         TraceFmtResult result = new TraceFmtResult();
-
         ProcessStartInfo st = new ProcessStartInfo();
         st.FileName = traceFmtPath;
         st.Arguments = etl;
@@ -166,23 +151,19 @@ public class TraceFmt
         {
             throw new Exception("exit code was not 0 for tracefmt!");
         }
-
         result.outputfile = Path.Combine(temppath, "FmtFile.txt");
         result.summaryfile = Path.Combine(temppath, "FmtSum.txt");
         if (!File.Exists(result.outputfile))
         {
             throw new Exception("FmtFile output was not there!");
         }
-
         if (!File.Exists(result.summaryfile))
         {
             throw new Exception("FmtSum output was not there!");
         }
-
         progressSink?.NotifyProgress(90, "Parsing summary file");
         result.ParseSummaryFile();
         progressSink?.NotifyProgress(100, "TraceFmt parsing complete");
-
         return result;
     }
 }

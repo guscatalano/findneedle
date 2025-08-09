@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 
@@ -39,6 +40,11 @@ public abstract class ISearchLocation: IReportStatistics
     // Remove ISearchQuery from Search signature
     public abstract List<ISearchResult> Search(System.Threading.CancellationToken cancellationToken = default);
 
+    // New: Search with callback for batches
+    public abstract Task SearchWithCallback(
+        Action<List<ISearchResult>> onBatch,
+        CancellationToken cancellationToken = default,
+        int batchSize = 1000);
     public void SetSearchDepth(SearchLocationDepth depth)
     {
         this.depth = depth;
@@ -52,4 +58,7 @@ public abstract class ISearchLocation: IReportStatistics
     public abstract string GetName();
     public abstract void ClearStatistics();
     public abstract List<ReportFromComponent> ReportStatistics();
+
+    // New: Calculate time to search and/or records
+    public abstract (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default);
 }

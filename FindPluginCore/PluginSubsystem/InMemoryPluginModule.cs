@@ -10,6 +10,7 @@ using findneedle.PluginSubsystem;
 using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
 using FindPluginCore;
+using static FindNeedlePluginLib.Logger;
 
 namespace FindPluginCore.PluginSubsystem;
 

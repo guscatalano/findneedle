@@ -3,7 +3,7 @@ using System.IO;
 using System.Collections.Generic;
 using FindNeedleCoreUtils;
 
-namespace FindPluginCore;
+namespace FindNeedlePluginLib;
 
 public class Logger
 {

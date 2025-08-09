@@ -64,4 +64,16 @@ public class FakeCmdLineParser : ISearchLocation, ICommandLineParser, ISearchFil
     public string GetClassName() => throw new NotImplementedException();
     public override void ClearStatistics() => throw new NotImplementedException();
     public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
+    public override Task SearchWithCallback(
+        Action<List<ISearchResult>> onBatch,
+        System.Threading.CancellationToken cancellationToken = default,
+        int batchSize = 1000)
+    {
+        throw new NotImplementedException();
+    }
+    public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)
+    {
+        // Stub implementation
+        return (null, null);
+    }
 }

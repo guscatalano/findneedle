@@ -41,16 +41,16 @@ public class PluginManager
     {
         try
         {
-            FindPluginCore.Logger.Instance.Log($"CallFakeLoadPlugin called with plugin: {plugin}");
+            FindNeedlePluginLib.Logger.Instance.Log($"CallFakeLoadPlugin called with plugin: {plugin}");
             var entryAssembly = Assembly.GetEntryAssembly();
             if (entryAssembly == null)
             {
-                FindPluginCore.Logger.Instance.Log("Entry assembly is null");
+                FindNeedlePluginLib.Logger.Instance.Log("Entry assembly is null");
                 throw new Exception("Entry assembly is null");
             }
 
             var fakeLoaderPath = GetFakeLoadPluginPath();
-            FindPluginCore.Logger.Instance.Log($"Using FakeLoadPlugin path: {fakeLoaderPath}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Using FakeLoadPlugin path: {fakeLoaderPath}");
 
             ProcessStartInfo ps = new()
             {
@@ -80,7 +80,7 @@ public class PluginManager
                 });
                 p.EnableRaisingEvents = true;
             }
-            FindPluginCore.Logger.Instance.Log($"Starting FakeLoadPlugin process for plugin: {plugin}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Starting FakeLoadPlugin process for plugin: {plugin}");
             p.Start();
             if (GlobalSettings.Debug)
             {
@@ -89,16 +89,16 @@ public class PluginManager
             }
 
             p.WaitForExit();
-            FindPluginCore.Logger.Instance.Log($"FakeLoadPlugin process exited for plugin: {plugin} with code {p.ExitCode}");
+            FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin process exited for plugin: {plugin} with code {p.ExitCode}");
             if (GlobalSettings.Debug)
             {
-                FindPluginCore.Logger.Instance.Log($"FakeLoadPlugin output: {eOut}");
+                FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin output: {eOut}");
             }
             return eOut;
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in CallFakeLoadPlugin: {ex}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Exception in CallFakeLoadPlugin: {ex}");
             throw;
         }
     }
@@ -110,7 +110,7 @@ public class PluginManager
 
     public void PrintToConsole()
     {
-        FindPluginCore.Logger.Instance.Log($"Loaded ({loadedPluginsModules.Count}) plugin modules.");
+        FindNeedlePluginLib.Logger.Instance.Log($"Loaded ({loadedPluginsModules.Count}) plugin modules.");
     }
 
 
@@ -152,7 +152,7 @@ public class PluginManager
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in PluginManager constructor: {ex}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Exception in PluginManager constructor: {ex}");
             throw;
         }
     }
@@ -173,12 +173,10 @@ public class PluginManager
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in SaveToFile: {ex}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Exception in SaveToFile: {ex}");
             throw;
         }
     }
-
-
 
     public List<T> GetAllPluginsInstancesOfAType<T>()
     {
@@ -209,7 +207,7 @@ public class PluginManager
 
     public void LoadAllPlugins(bool loadIntoAssembly = true)
     {
-        FindPluginCore.Logger.Instance.Log($"Starting to load plugins. Config entries: {(config?.entries.Count ?? 0)}");
+        FindNeedlePluginLib.Logger.Instance.Log($"Starting to load plugins. Config entries: {(config?.entries.Count ?? 0)}");
         try
         {
             if (config != null)
@@ -220,17 +218,17 @@ public class PluginManager
                     try
                     {
                         // Open registry key with minimal permissions (read-only, non-writable)
-                        FindPluginCore.Logger.Instance.Log($"Attempting to open registry key: HKCU\\{config.UserRegistryPluginKey}");
+                        FindNeedlePluginLib.Logger.Instance.Log($"Attempting to open registry key: HKCU\\{config.UserRegistryPluginKey}");
                         using var regKey = Registry.CurrentUser.OpenSubKey(config.UserRegistryPluginKey, writable: false);
-                        FindPluginCore.Logger.Instance.Log($"Process: {Process.GetCurrentProcess().ProcessName}, Is64Bit: {Environment.Is64BitProcess}, AppDomain: {AppDomain.CurrentDomain.FriendlyName}");
+                        FindNeedlePluginLib.Logger.Instance.Log($"Process: {Process.GetCurrentProcess().ProcessName}, Is64Bit: {Environment.Is64BitProcess}, AppDomain: {AppDomain.CurrentDomain.FriendlyName}");
                         if (regKey == null)
                         {
-                            FindPluginCore.Logger.Instance.Log($"Registry key not found: HKCU\\{config.UserRegistryPluginKey}");
+                            FindNeedlePluginLib.Logger.Instance.Log($"Registry key not found: HKCU\\{config.UserRegistryPluginKey}");
                         }
                         else
                         {
                             var value = regKey.GetValue("") as string;
-                            FindPluginCore.Logger.Instance.Log($"Registry key found. Value: '{value ?? "<null>"}'");
+                            FindNeedlePluginLib.Logger.Instance.Log($"Registry key found. Value: '{value ?? "<null>"}'");
                             if (!string.IsNullOrWhiteSpace(value))
                             {
                                 var plugins = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -240,42 +238,42 @@ public class PluginManager
                                     if (!config.entries.Any(e => string.Equals(e.path, pluginPath, StringComparison.OrdinalIgnoreCase)))
                                     {
                                         config.entries.Add(new PluginConfigEntry { name = Path.GetFileNameWithoutExtension(pluginPath), path = pluginPath, enabled = true });
-                                        FindPluginCore.Logger.Instance.Log($"Loaded plugin from registry: {pluginPath}");
+                                        FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin from registry: {pluginPath}");
                                     }
                                 }
                             }
                             else
                             {
-                                FindPluginCore.Logger.Instance.Log($"Registry value is empty or whitespace for key: HKCU\\{config.UserRegistryPluginKey}");
+                                FindNeedlePluginLib.Logger.Instance.Log($"Registry value is empty or whitespace for key: HKCU\\{config.UserRegistryPluginKey}");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        FindPluginCore.Logger.Instance.Log($"Error reading plugins from registry: {ex.Message}");
+                        FindNeedlePluginLib.Logger.Instance.Log($"Error reading plugins from registry: {ex.Message}");
                     }
                 }
                 // --- END: Registry plugin loading ---
                 foreach (var pluginModuleDescriptor in config.entries)
                 {
-                    FindPluginCore.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
+                    FindNeedlePluginLib.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
                     pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
                     if (!File.Exists(pluginModuleDescriptor.path))
                     {
-                        FindPluginCore.Logger.Instance.Log($"ERROR: Can't find plugin module for {pluginModuleDescriptor.path}");
+                        FindNeedlePluginLib.Logger.Instance.Log($"ERROR: Can't find plugin module for {pluginModuleDescriptor.path}");
                         throw new Exception($"Can't find plugin module for {pluginModuleDescriptor.path}");
                     }
 
                     InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);
                     loadedPluginsModules.Add(loadedPluginModule);
-                    FindPluginCore.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.path}");
+                    FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.path}");
                 }
-                FindPluginCore.Logger.Instance.Log($"Finished loading plugins. Total loaded: {loadedPluginsModules.Count}");
+                FindNeedlePluginLib.Logger.Instance.Log($"Finished loading plugins. Total loaded: {loadedPluginsModules.Count}");
             }
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in LoadAllPlugins: {ex}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Exception in LoadAllPlugins: {ex}");
             throw;
         }
     }
@@ -300,7 +298,7 @@ public class PluginManager
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in GetFakeLoadPluginPath: {ex}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Exception in GetFakeLoadPluginPath: {ex}");
             throw;
         }
     }
@@ -318,7 +316,7 @@ public class PluginManager
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in GetSearchQueryClass: {ex}");
+            FindNeedlePluginLib.Logger.Instance.Log($"Exception in GetSearchQueryClass: {ex}");
             throw;
         }
     }

@@ -88,7 +88,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in PluginsPage InitializeAsync: {ex}");
+            Logger.Instance.Log($"Exception in PluginsPage InitializeAsync: {ex}");
         }
         finally
         {
@@ -126,7 +126,7 @@ public sealed partial class PluginsPage : Page
                                 }
                                 catch (Exception ex)
                                 {
-                                    FindPluginCore.Logger.Instance.Log($"Exception loading plugin in PluginsPage constructor: {ex}");
+                                    Logger.Instance.Log($"Exception loading plugin in PluginsPage constructor: {ex}");
                                 }
                             }
                             if (moduleVM.Plugins.Count > 0)
@@ -134,7 +134,7 @@ public sealed partial class PluginsPage : Page
                         }
                         catch (Exception ex)
                         {
-                            FindPluginCore.Logger.Instance.Log($"Exception loading module in PluginsPage constructor: {ex}");
+                            Logger.Instance.Log($"Exception loading module in PluginsPage constructor: {ex}");
                         }
                     }
                     if (ModulesFound.Count > 0)
@@ -151,7 +151,7 @@ public sealed partial class PluginsPage : Page
                 }
                 catch (Exception ex)
                 {
-                    FindPluginCore.Logger.Instance.Log($"Exception in PluginsPage constructor: {ex}");
+                    Logger.Instance.Log($"Exception in PluginsPage constructor: {ex}");
                 }
             });
         }
@@ -227,7 +227,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in UpdatePluginsInSelectedModule: {ex}");
+            Logger.Instance.Log($"Exception in UpdatePluginsInSelectedModule: {ex}");
         }
     }
 
@@ -252,7 +252,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in ModuleSelectorComboBox_SelectionChanged: {ex}");
+            Logger.Instance.Log($"Exception in ModuleSelectorComboBox_SelectionChanged: {ex}");
         }
     }
 
@@ -264,7 +264,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in PluginSelectorComboBox_SelectionChanged: {ex}");
+            Logger.Instance.Log($"Exception in PluginSelectorComboBox_SelectionChanged: {ex}");
         }
     }
 
@@ -321,7 +321,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in UpdatePluginDescription: {ex}");
+            Logger.Instance.Log($"Exception in UpdatePluginDescription: {ex}");
         }
     }
 
@@ -343,7 +343,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in LoadPluginConfig: {ex}");
+            Logger.Instance.Log($"Exception in LoadPluginConfig: {ex}");
         }
     }
 
@@ -355,7 +355,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in AddPluginConfigEntry_Click: {ex}");
+            Logger.Instance.Log($"Exception in AddPluginConfigEntry_Click: {ex}");
         }
     }
 
@@ -371,7 +371,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in RemovePluginConfigEntry_Click: {ex}");
+            Logger.Instance.Log($"Exception in RemovePluginConfigEntry_Click: {ex}");
         }
     }
 
@@ -392,12 +392,12 @@ public sealed partial class PluginsPage : Page
             }
             catch (Exception ex)
             {
-                FindPluginCore.Logger.Instance.Log($"Exception in SavePluginConfig_Click (SaveToFile): {ex}");
+                Logger.Instance.Log($"Exception in SavePluginConfig_Click (SaveToFile): {ex}");
             }
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in SavePluginConfig_Click: {ex}");
+            Logger.Instance.Log($"Exception in SavePluginConfig_Click: {ex}");
         }
     }
 
@@ -412,13 +412,13 @@ public sealed partial class PluginsPage : Page
                 var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
                 // This is a placeholder for actual reload logic
                 // manager.ReloadModule(SelectedModule.ModulePath);
-                FindPluginCore.Logger.Instance.Log($"Reload requested for module: {SelectedModule.ModulePath}");
+                Logger.Instance.Log($"Reload requested for module: {SelectedModule.ModulePath}");
                 // Optionally, refresh the UI after reload
             }
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in ReloadPlugin_Click: {ex}");
+            Logger.Instance.Log($"Exception in ReloadPlugin_Click: {ex}");
         }
     }
 
@@ -461,7 +461,7 @@ public sealed partial class PluginsPage : Page
         }
         catch (Exception ex)
         {
-            FindPluginCore.Logger.Instance.Log($"Exception in ReloadAllPlugins_Click: {ex}");
+            Logger.Instance.Log($"Exception in ReloadAllPlugins_Click: {ex}");
         }
     }
 

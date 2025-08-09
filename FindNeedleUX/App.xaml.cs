@@ -4,6 +4,7 @@
 using Microsoft.UI.Xaml;
 using FindPluginCore;
 using FindNeedleUX.Services;
+using FindNeedlePluginLib;
 
 namespace FindNeedleUX;
 

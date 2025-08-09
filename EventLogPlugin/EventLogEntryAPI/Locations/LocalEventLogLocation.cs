@@ -117,4 +117,32 @@ public class LocalEventLogLocation : IEventLogQueryLocation, ICommandLineParser
     public override List<ReportFromComponent> ReportStatistics() {
         return new List<ReportFromComponent>();
     }
+
+    public override Task SearchWithCallback(Action<List<ISearchResult>> onBatch, System.Threading.CancellationToken cancellationToken = default, int batchSize = 1000)
+    {
+        // Simple implementation: batch from searchResults
+        var batch = new List<ISearchResult>(batchSize);
+        foreach (var result in searchResults)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+            batch.Add(result);
+            if (batch.Count == batchSize)
+            {
+                onBatch(batch);
+                batch = new List<ISearchResult>(batchSize);
+            }
+        }
+        if (batch.Count > 0)
+        {
+            onBatch(batch);
+        }
+        return Task.CompletedTask;
+    }
+
+    public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)
+    {
+        // Stub implementation
+        return (null, null);
+    }
 }

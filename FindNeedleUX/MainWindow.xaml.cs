@@ -19,6 +19,7 @@ using System.Diagnostics;
 using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Text;
+using FindNeedlePluginLib;
 
 namespace FindNeedleUX;
 
