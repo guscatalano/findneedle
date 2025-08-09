@@ -8,6 +8,7 @@ using findneedle;
 using FindNeedlePluginLib;
 using FindPluginCore; // Add for Logger
 using findneedle.PluginSubsystem;
+using FindPluginCore.Implementations.Storage;
 
 namespace FindPluginCore.Searching;
 public class NuSearchQuery : ISearchQuery
@@ -78,6 +79,8 @@ public class NuSearchQuery : ISearchQuery
 
     private List<ISearchResult> _currentResultList;
 
+    private InMemoryStorage _resultStorage;
+
     public NuSearchQuery()
     {
         _filters = new();
@@ -91,17 +94,12 @@ public class NuSearchQuery : ISearchQuery
         _stats.RegisterForNotifications(_stepnotifysink, this);
         _stepnotifysink.NotifyStep(SearchStep.AtLaunch);
         Logger.Instance.Log("NuSearchQuery constructed");
+        _resultStorage = new InMemoryStorage();
     }
 
     public void RunThrough()
     {
-        Logger.Instance.Log("RunThrough started");
-        Step1_LoadAllLocationsInMemory();
-        _currentResultList = Step2_GetFilteredResults();
-        Step3_ResultsToProcessors();
-        Step4_ProcessAllResultsToOutput();
-        Step5_Done();
-        Logger.Instance.Log("RunThrough finished");
+        RunThrough(CancellationToken.None);
     }
 
     public void RunThrough(CancellationToken cancellationToken)
@@ -118,60 +116,7 @@ public class NuSearchQuery : ISearchQuery
     #region main functions
     public void Step1_LoadAllLocationsInMemory()
     {
-        Logger.Instance.Log($"Step1_LoadAllLocationsInMemory: {_locations.Count} locations");
-        int count = 1;
-        int total = _locations.Count;
-        var pluginManager = PluginManager.GetSingleton();
-        bool useSync = pluginManager.config?.UseSynchronousSearch ?? false;
-        foreach (var loc in _locations)
-        {
-            Logger.Instance.Log($"Loading location {count}/{total}: {loc.GetName()}");
-            if (loc is FindNeedlePluginLib.Interfaces.IReportProgress reportable)
-            {
-                reportable.SetProgressSink(_stepnotifysink.progressSink);
-            }
-            int percent = total > 0 ? (int)(50.0 * count / total) : 0;
-            _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
-            try
-            {
-                var perf = loc.GetSearchPerformanceEstimate();
-                Logger.Instance.Log($"Performance estimate for {loc.GetName()}: time={perf.timeTaken}, records={perf.recordCount}");
-            }
-            catch (NotImplementedException)
-            {
-                Logger.Instance.Log($"Performance estimate not implemented for {loc.GetName()}");
-            }
-            if (!useSync)
-            {
-                try
-                {
-                    loc.SearchWithCallback(batch => {
-                        Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
-                    }).Wait();
-                }
-                catch (NotImplementedException)
-                {
-                    Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
-                }
-            }
-            else
-            {
-                try
-                {
-                    var results = loc.Search();
-                    Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
-                }
-                catch (NotImplementedException)
-                {
-                    Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
-                }
-            }
-            loc.LoadInMemory();
-            Logger.Instance.Log($"Loaded location: {loc.GetName()}");
-            count++;
-        }
-        _stepnotifysink.NotifyStep(SearchStep.AtLoad);
-        Logger.Instance.Log("Step1_LoadAllLocationsInMemory complete");
+        Step1_LoadAllLocationsInMemory(CancellationToken.None);
     }
 
     public void Step1_LoadAllLocationsInMemory(CancellationToken cancellationToken)
@@ -180,7 +125,6 @@ public class NuSearchQuery : ISearchQuery
         int count = 1;
         int total = _locations.Count;
         var pluginManager = PluginManager.GetSingleton();
-        bool useSync = pluginManager.config?.UseSynchronousSearch ?? false;
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) return;
@@ -200,31 +144,6 @@ public class NuSearchQuery : ISearchQuery
             {
                 Logger.Instance.Log($"Performance estimate not implemented for {loc.GetName()}");
             }
-            if (!useSync)
-            {
-                try
-                {
-                    loc.SearchWithCallback(batch => {
-                        Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} results");
-                    }, cancellationToken).Wait();
-                }
-                catch (NotImplementedException)
-                {
-                    Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
-                }
-            }
-            else
-            {
-                try
-                {
-                    var results = loc.Search(cancellationToken);
-                    Logger.Instance.Log($"Search for {loc.GetName()} returned {results.Count} results");
-                }
-                catch (NotImplementedException)
-                {
-                    Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
-                }
-            }
             loc.LoadInMemory(cancellationToken);
             Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             count++;
@@ -236,40 +155,7 @@ public class NuSearchQuery : ISearchQuery
     private List<ISearchResult>? _filteredResults;
     public List<ISearchResult> Step2_GetFilteredResults()
     {
-        Logger.Instance.Log("Step2_GetFilteredResults started");
-        _stepnotifysink.NotifyStep(SearchStep.AtSearch);
-        _filteredResults = new();
-        int count = 1;
-        int total = _locations.Count;
-        foreach (var loc in _locations)
-        {
-            Logger.Instance.Log($"Filtering results for location {count}/{total}: {loc.GetName()}");
-            int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
-            _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
-            loc.SetSearchDepth(_depth);
-            var unfilteredResults = loc.Search();
-            Logger.Instance.Log($"{unfilteredResults.Count} results from location: {loc.GetName()}");
-
-            foreach (var result in unfilteredResults)
-            {
-                var passAllFilters = true;
-                foreach (var filter in _filters)
-                {
-                    if (!filter.Filter(result))
-                    {
-                        passAllFilters = false;
-                    }
-                }
-                if (passAllFilters)
-                {
-                    _filteredResults.Add(result);
-                }
-            }
-            Logger.Instance.Log($"{_filteredResults.Count} results passed filters for location: {loc.GetName()}");
-            count++;
-        }
-        Logger.Instance.Log($"Step2_GetFilteredResults complete: {_filteredResults.Count} total filtered results");
-        return _filteredResults;
+        return Step2_GetFilteredResults(CancellationToken.None);
     }
 
     public List<ISearchResult> Step2_GetFilteredResults(CancellationToken cancellationToken)
@@ -277,8 +163,11 @@ public class NuSearchQuery : ISearchQuery
         Logger.Instance.Log("Step2_GetFilteredResults (with cancellation) started");
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
+        _resultStorage = new InMemoryStorage(); // Reset storage for each search
         int count = 1;
         int total = _locations.Count;
+        var pluginManager = PluginManager.GetSingleton();
+        bool useSync = pluginManager.config?.UseSynchronousSearch ?? false;
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) break;
@@ -286,10 +175,38 @@ public class NuSearchQuery : ISearchQuery
             int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
             loc.SetSearchDepth(_depth);
-            var unfilteredResults = loc.Search(cancellationToken);
-            Logger.Instance.Log($"{unfilteredResults.Count} results from location: {loc.GetName()}");
-
-            foreach (var result in unfilteredResults)
+            List<ISearchResult> rawResults = new();
+            if (!useSync)
+            {
+                try
+                {
+                    loc.SearchWithCallback(batch => {
+                        rawResults.AddRange(batch);
+                        Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} raw results");
+                        _resultStorage.AddRawBatch(batch, cancellationToken);
+                    }, cancellationToken).Wait();
+                }
+                catch (NotImplementedException)
+                {
+                    Logger.Instance.Log($"SearchWithCallback not implemented for {loc.GetName()}");
+                }
+            }
+            else
+            {
+                try
+                {
+                    rawResults = loc.Search(cancellationToken);
+                    Logger.Instance.Log($"Search for {loc.GetName()} returned {rawResults.Count} raw results");
+                    _resultStorage.AddRawBatch(rawResults, cancellationToken);
+                }
+                catch (NotImplementedException)
+                {
+                    Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
+                }
+            }
+            // Filter and add to filtered batch
+            var filteredBatch = new List<ISearchResult>();
+            foreach (var result in rawResults)
             {
                 if (cancellationToken.IsCancellationRequested) break;
                 var passAllFilters = true;
@@ -302,12 +219,17 @@ public class NuSearchQuery : ISearchQuery
                 }
                 if (passAllFilters)
                 {
-                    _filteredResults.Add(result);
+                    filteredBatch.Add(result);
                 }
             }
-            Logger.Instance.Log($"{_filteredResults.Count} results passed filters for location: {loc.GetName()}");
+            _resultStorage.AddFilteredBatch(filteredBatch, cancellationToken);
+            Logger.Instance.Log($"Results stored for location: {loc.GetName()}");
             count++;
         }
+        // Gather all filtered results from storage
+        var allResults = new List<ISearchResult>();
+        _resultStorage.GetFilteredResultsInBatches(batch => allResults.AddRange(batch), 1000, cancellationToken);
+        _filteredResults = allResults;
         Logger.Instance.Log($"Step2_GetFilteredResults (with cancellation) complete: {_filteredResults.Count} total filtered results");
         return _filteredResults;
     }
