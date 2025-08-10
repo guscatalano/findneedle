@@ -124,7 +124,8 @@ public sealed partial class MainWindow : Window
                 break;
             case "logs":
                 Logger.Instance.Log("Navigated: LogsPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.LogsPage));
+                var logsWindow = new FindNeedleUX.Windows.LogsWindow();
+                logsWindow.Activate();
                 break;
             case "openlogfile":
                 Logger.Instance.Log("Opened log file picker");
