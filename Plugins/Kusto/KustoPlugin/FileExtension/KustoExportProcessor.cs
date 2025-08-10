@@ -112,6 +112,12 @@ public class KustoExportProcessor : IFileExtensionProcessor
         }
         await Task.CompletedTask;
     }
+
+    public (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(CancellationToken cancellationToken = default)
+    {
+        // Stub: no performance data available
+        return (null, null);
+    }
 }
 
 public class KustoExportLogLine : ISearchResult

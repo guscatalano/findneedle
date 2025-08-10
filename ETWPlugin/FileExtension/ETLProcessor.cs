@@ -289,4 +289,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         Logger.Instance.Log($"SetProgressSink called for ETLProcessor, file: {inputfile}");
         _progressSink = sink;
     }
+
+    public (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(CancellationToken cancellationToken = default)
+    {
+        // Stub: no performance data available
+        return (null, null);
+    }
 }

@@ -86,6 +86,10 @@ public class EventRecordResult : ISearchResult
     public Level GetLevel()
     {
         try { 
+            if(entry.LevelDisplayName == null)
+            {
+                return Level.Verbose; // If LevelDisplayName is null, we assume it's verbose
+            }
             switch (entry.LevelDisplayName.ToLower())
             {
                 case "warning":

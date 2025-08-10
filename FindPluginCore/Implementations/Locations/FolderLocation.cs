@@ -10,8 +10,6 @@ using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 using FindNeedlePluginLib.Interfaces;
-using FindPluginCore; // For Logger
-using FindNeedlePluginLib;
 
 namespace findneedle.Implementations;
 
@@ -91,13 +89,16 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         }
     } 
 
+    private readonly object _knownProcessorsLock = new();
+
     public void SetExtensionProcessorList(List<IFileExtensionProcessor> processors)
     {
-        Logger.Instance.Log($"SetExtensionProcessorList called with {processors?.Count} processors for FolderLocation: {path}");
-        lock (knownProcessors)
+
+        Logger.Instance.Log($"SetExtensionProcessorList called with {processors.Count} processors for FolderLocation: {path}");
+        lock (_knownProcessorsLock)
         {
-            knownProcessors = processors;
-            foreach(var processor in processors)
+            knownProcessors = processors ?? throw new ArgumentNullException(nameof(processors), "Processors list cannot be null");
+            foreach (var processor in processors)
             {
                 if (processor == null)
                 {
@@ -105,7 +106,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                     throw new Exception("null?");
                 }
                 var exts = processor.RegisterForExtensions();
-                foreach(var ext in exts)
+                foreach (var ext in exts)
                 {
                     if (!extToProcessor.ContainsKey(ext))
                     {
@@ -400,7 +401,28 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 
     public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)
     {
-        // Stub implementation
-        return (null, null);
+        TimeSpan totalTime = TimeSpan.Zero;
+        int totalRecords = 0;
+        bool anyTime = false;
+        bool anyRecords = false;
+        lock (knownProcessors)
+        {
+            foreach (var processor in knownProcessors)
+            {
+                if (processor == null) continue;
+                var (timeTaken, recordCount) = processor.GetSearchPerformanceEstimate(cancellationToken);
+                if (timeTaken.HasValue)
+                {
+                    totalTime += timeTaken.Value;
+                    anyTime = true;
+                }
+                if (recordCount.HasValue)
+                {
+                    totalRecords += recordCount.Value;
+                    anyRecords = true;
+                }
+            }
+        }
+        return (anyTime ? totalTime : null, anyRecords ? totalRecords : null);
     }
 }

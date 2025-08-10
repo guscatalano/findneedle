@@ -9,6 +9,8 @@ using FindNeedlePluginLib;
 using FindPluginCore; // Add for Logger
 using findneedle.PluginSubsystem;
 using FindPluginCore.Implementations.Storage;
+using FindNeedlePluginLib.Interfaces; // Fix missing ISearchStorage reference
+using FindPluginCore.PluginSubsystem; // For StorageType and PluginConfig
 
 namespace FindPluginCore.Searching;
 public class NuSearchQuery : ISearchQuery
@@ -79,7 +81,7 @@ public class NuSearchQuery : ISearchQuery
 
     private List<ISearchResult> _currentResultList;
 
-    private InMemoryStorage _resultStorage;
+    private ISearchStorage _resultStorage; // Use ISearchStorage instead of InMemoryStorage
 
     public NuSearchQuery()
     {
@@ -94,7 +96,45 @@ public class NuSearchQuery : ISearchQuery
         _stats.RegisterForNotifications(_stepnotifysink, this);
         _stepnotifysink.NotifyStep(SearchStep.AtLaunch);
         Logger.Instance.Log("NuSearchQuery constructed");
-        _resultStorage = new InMemoryStorage();
+        _resultStorage = CreateStorage(CancellationToken.None);
+    }
+
+    // Remove duplicate declaration of filePath in CreateStorage
+    private ISearchStorage CreateStorage(CancellationToken cancellationToken)
+    {
+        var config = PluginManager.GetSingleton().config;
+        string filePath = _locations.Count > 0 ? _locations[0].GetName() : "default";
+        switch (config?.SearchStorageType)
+        {
+            case StorageType.SqlLite:
+                return new SqliteStorage(filePath);
+            case StorageType.InMemory:
+                return new InMemoryStorage();
+            case StorageType.Auto:
+            default:
+                int totalRecords = 0;
+                TimeSpan totalTime = TimeSpan.Zero;
+                foreach (var loc in _locations)
+                {
+                    try
+                    {
+                        var perf = loc.GetSearchPerformanceEstimate(cancellationToken);
+                        if (perf.recordCount.HasValue)
+                            totalRecords += perf.recordCount.Value;
+                        if (perf.timeTaken.HasValue)
+                            totalTime += perf.timeTaken.Value;
+                    }
+                    catch (NotImplementedException)
+                    {
+                        totalRecords += 100;
+                    }
+                }
+                // Heuristic: Use InMemory if < 100,000 records and estimated time < 30s, else SqlLite
+                if (totalRecords < 100_000 && totalTime.TotalSeconds < 30)
+                    return new InMemoryStorage();
+                else
+                    return new SqliteStorage(filePath);
+        }
     }
 
     public void RunThrough()
@@ -135,6 +175,8 @@ public class NuSearchQuery : ISearchQuery
             }
             int percent = total > 0 ? (int)(50.0 * count / total) : 0;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
+            loc.LoadInMemory(cancellationToken);
+            Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             try
             {
                 var perf = loc.GetSearchPerformanceEstimate(cancellationToken);
@@ -144,8 +186,6 @@ public class NuSearchQuery : ISearchQuery
             {
                 Logger.Instance.Log($"Performance estimate not implemented for {loc.GetName()}");
             }
-            loc.LoadInMemory(cancellationToken);
-            Logger.Instance.Log($"Loaded location: {loc.GetName()}");
             count++;
         }
         _stepnotifysink.NotifyStep(SearchStep.AtLoad);
@@ -163,7 +203,7 @@ public class NuSearchQuery : ISearchQuery
         Logger.Instance.Log("Step2_GetFilteredResults (with cancellation) started");
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
-        _resultStorage = new InMemoryStorage(); // Reset storage for each search
+        _resultStorage = CreateStorage(cancellationToken); // Use selected storage
         int count = 1;
         int total = _locations.Count;
         var pluginManager = PluginManager.GetSingleton();

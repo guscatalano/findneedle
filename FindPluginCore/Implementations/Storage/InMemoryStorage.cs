@@ -19,7 +19,10 @@ namespace FindPluginCore.Implementations.Storage
         {
             foreach (var result in batch)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
                 _rawResults.Add(result);
             }
         }
@@ -28,7 +31,10 @@ namespace FindPluginCore.Implementations.Storage
         {
             foreach (var result in batch)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
                 _filteredResults.Add(result);
             }
         }
@@ -38,7 +44,10 @@ namespace FindPluginCore.Implementations.Storage
             var batch = new List<ISearchResult>(batchSize);
             foreach (var result in _rawResults)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
                 batch.Add(result);
                 if (batch.Count == batchSize)
                 {
@@ -57,7 +66,10 @@ namespace FindPluginCore.Implementations.Storage
             var batch = new List<ISearchResult>(batchSize);
             foreach (var result in _filteredResults)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
                 batch.Add(result);
                 if (batch.Count == batchSize)
                 {
@@ -80,13 +92,17 @@ namespace FindPluginCore.Implementations.Storage
             {
                 var msg = result.GetMessage();
                 if (msg != null)
+                {
                     sizeInMemory += System.Text.Encoding.UTF8.GetByteCount(msg);
+                }
             }
             foreach (var result in _filteredResults)
             {
                 var msg = result.GetMessage();
                 if (msg != null)
+                {
                     sizeInMemory += System.Text.Encoding.UTF8.GetByteCount(msg);
+                }
             }
             long sizeOnDisk = 0;
             return (rawRecordCount, filteredRecordCount, sizeOnDisk, sizeInMemory);

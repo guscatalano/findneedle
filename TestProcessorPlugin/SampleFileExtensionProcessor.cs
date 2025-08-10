@@ -81,4 +81,10 @@ public class SampleFileExtensionProcessor : IFileExtensionProcessor
     {
         return [".txt"];
     }
+
+    public (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(CancellationToken cancellationToken = default)
+    {
+        // Stub: no performance data available
+        return (null, null);
+    }
 }

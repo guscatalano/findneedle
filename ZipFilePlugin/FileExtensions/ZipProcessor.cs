@@ -105,4 +105,9 @@ public class ZipProcessor : IFileExtensionProcessor
             TempStorage.DeleteSomeTempPath(newTempFolder);
         }
     }
+    public (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(CancellationToken cancellationToken = default)
+    {
+        // Stub: no performance data available
+        return (null, null);
+    }
 }

@@ -175,7 +175,29 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
     public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
     public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)
     {
-        // Stub implementation
-        return (null, null);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        int count = 0;
+        try
+        {
+            EventLogQuery eventsQuery = new EventLogQuery(filename, PathType.FilePath);
+            using EventLogReader logReader = new EventLogReader(eventsQuery);
+            while (true)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                var eventdetail = logReader.ReadEvent();
+                if (eventdetail == null) break;
+                count++;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"[PERF] Exception in GetSearchPerformanceEstimate: {ex.Message}");
+            return (null, null);
+        }
+        finally
+        {
+            stopwatch.Stop();
+        }
+        return (stopwatch.Elapsed, count);
     }
 }

@@ -7,6 +7,13 @@ using System.Threading.Tasks;
 
 namespace FindPluginCore.PluginSubsystem;
 
+public enum StorageType
+{
+    InMemory,
+    SqlLite,
+    Auto
+}
+
 [ExcludeFromCodeCoverage]
 public class PluginConfig
 {
@@ -17,6 +24,8 @@ public class PluginConfig
     public string UserRegistryPluginKey = string.Empty; // Optional: Registry key in HKCU for extra plugins
     public bool UserRegistryPluginKeyEnabled = false; // Enable/disable registry plugin loading
     public bool UseSynchronousSearch = false; // Add this option
+
+    public StorageType SearchStorageType { get; set; } = StorageType.Auto;
 }
 
 public class PluginConfigEntry
