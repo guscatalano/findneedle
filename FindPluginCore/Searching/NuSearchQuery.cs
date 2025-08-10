@@ -96,7 +96,7 @@ public class NuSearchQuery : ISearchQuery
         _stats.RegisterForNotifications(_stepnotifysink, this);
         _stepnotifysink.NotifyStep(SearchStep.AtLaunch);
         Logger.Instance.Log("NuSearchQuery constructed");
-        _resultStorage = CreateStorage(CancellationToken.None);
+        _resultStorage = null;
     }
 
     // Remove duplicate declaration of filePath in CreateStorage
@@ -129,8 +129,8 @@ public class NuSearchQuery : ISearchQuery
                         totalRecords += 100;
                     }
                 }
-                // Heuristic: Use InMemory if < 100,000 records and estimated time < 30s, else SqlLite
-                if (totalRecords < 100_000 && totalTime.TotalSeconds < 30)
+                // Heuristic: Use InMemory if < 10,000 records and estimated time < 30s, else SqlLite
+                if (totalRecords < 10_000 && totalTime.TotalSeconds < 30)
                     return new InMemoryStorage();
                 else
                     return new SqliteStorage(filePath);
@@ -203,7 +203,8 @@ public class NuSearchQuery : ISearchQuery
         Logger.Instance.Log("Step2_GetFilteredResults (with cancellation) started");
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
-        _resultStorage = CreateStorage(cancellationToken); // Use selected storage
+        _resultStorage = CreateStorage(cancellationToken); // Now called at the start of step 2
+        string storageType = _resultStorage is InMemoryStorage ? "InMemoryStorage" : _resultStorage is SqliteStorage ? "SqliteStorage" : _resultStorage.GetType().Name;
         int count = 1;
         int total = _locations.Count;
         var pluginManager = PluginManager.GetSingleton();
@@ -213,7 +214,7 @@ public class NuSearchQuery : ISearchQuery
             if (cancellationToken.IsCancellationRequested) break;
             Logger.Instance.Log($"Filtering results for location {count}/{total}: {loc.GetName()}");
             int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
-            _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName());
+            _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName() + $" using storage: {storageType}" );
             loc.SetSearchDepth(_depth);
             List<ISearchResult> rawResults = new();
             if (!useSync)

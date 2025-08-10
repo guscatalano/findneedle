@@ -49,10 +49,7 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
         numRecordsInLastResult = 0;
         numRecordsInMemory = 0;
         var results = new List<ISearchResult>();
-        if (_progressSink != null)
-        {
-            _progressSink.NotifyProgress(0, "Starting event log search...");
-        }
+
         var overallStopwatch = System.Diagnostics.Stopwatch.StartNew();
         EventLogQuery eventsQuery = new EventLogQuery(filename, PathType.FilePath);
         EventLogReader logReader = new EventLogReader(eventsQuery);
@@ -89,7 +86,23 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
                 var now = DateTime.UtcNow;
                 var elapsed = (now - lastReportTime).TotalMinutes;
                 var rate = elapsed > 0 ? (int)((count - lastReportCount) / elapsed) : 0;
-                _progressSink.NotifyProgress(0, $"Loaded {count} event log records ({rate} records/min)");
+                int totalRecords = 0;
+                double estimatedTimeLeft = 0;
+                // Use cached performance estimate if available
+                if (_cachedPerfEstimate != null && _cachedPerfEstimate.Value.recordCount.HasValue)
+                {
+                    totalRecords = _cachedPerfEstimate.Value.recordCount.Value;
+                    int recordsLeft = totalRecords - count;
+                    if (rate > 0)
+                    {
+                        estimatedTimeLeft = recordsLeft / (double)rate;
+                    }
+                    _progressSink.NotifyProgress(0, $"Loaded {count} event log records ({rate} records/min), {recordsLeft} left, est. time left: {(rate > 0 ? $"{estimatedTimeLeft:F1} min" : "unknown")}");
+                }
+                else
+                {
+                    _progressSink.NotifyProgress(0, $"Loaded {count} event log records ({rate} records/min)");
+                }
                 lastReportTime = now;
                 lastReportCount = count;
             }
@@ -107,10 +120,7 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
     {
         numRecordsInLastResult = 0;
         numRecordsInMemory = 0;
-        if (_progressSink != null)
-        {
-            _progressSink.NotifyProgress(0, "Starting event log search (batched)...");
-        }
+       
         var overallStopwatch = System.Diagnostics.Stopwatch.StartNew();
         EventLogQuery eventsQuery = new EventLogQuery(filename, PathType.FilePath);
         EventLogReader logReader = new EventLogReader(eventsQuery);
@@ -153,7 +163,23 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
                 var now = DateTime.UtcNow;
                 var elapsed = (now - lastReportTime).TotalMinutes;
                 var rate = elapsed > 0 ? (int)((count - lastReportCount) / elapsed) : 0;
-                _progressSink.NotifyProgress(0, $"Loaded {count} event log records ({rate} records/min)");
+                int totalRecords = 0;
+                double estimatedTimeLeft = 0;
+                // Use cached performance estimate if available
+                if (_cachedPerfEstimate != null && _cachedPerfEstimate.Value.recordCount.HasValue)
+                {
+                    totalRecords = _cachedPerfEstimate.Value.recordCount.Value;
+                    int recordsLeft = totalRecords - count;
+                    if (rate > 0)
+                    {
+                        estimatedTimeLeft = recordsLeft / (double)rate;
+                    }
+                    _progressSink.NotifyProgress(0, $"Loaded {count} event log records ({rate} records/min), {recordsLeft} left, est. time left: {(rate > 0 ? $"{estimatedTimeLeft:F1} min" : "unknown")}");
+                }
+                else
+                {
+                    _progressSink.NotifyProgress(0, $"Loaded {count} event log records ({rate} records/min)");
+                }
                 lastReportTime = now;
                 lastReportCount = count;
             }
@@ -173,8 +199,16 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
 
     public override void ClearStatistics() => throw new NotImplementedException();
     public override List<ReportFromComponent> ReportStatistics() => throw new NotImplementedException();
+    private (TimeSpan? timeTaken, int? recordCount)? _cachedPerfEstimate = null;
+    private string? _cachedPerfEstimateFilename = null;
+    private CancellationToken _cachedPerfEstimateToken;
+
     public override (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(System.Threading.CancellationToken cancellationToken = default)
     {
+        if (_cachedPerfEstimate != null && _cachedPerfEstimateFilename == filename && _cachedPerfEstimateToken == cancellationToken)
+        {
+            return _cachedPerfEstimate.Value;
+        }
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         int count = 0;
         try
@@ -192,12 +226,19 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
         catch (Exception ex)
         {
             Logger.Instance.Log($"[PERF] Exception in GetSearchPerformanceEstimate: {ex.Message}");
+            _cachedPerfEstimate = (null, null);
+            _cachedPerfEstimateFilename = filename;
+            _cachedPerfEstimateToken = cancellationToken;
             return (null, null);
         }
         finally
         {
             stopwatch.Stop();
         }
-        return (stopwatch.Elapsed, count);
+        var result = (stopwatch.Elapsed, count);
+        _cachedPerfEstimate = result;
+        _cachedPerfEstimateFilename = filename;
+        _cachedPerfEstimateToken = cancellationToken;
+        return result;
     }
 }
