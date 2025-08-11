@@ -125,26 +125,28 @@ public sealed partial class ResultsWebPage : Page
 
     public static string SerializeAndEncodeLogLine(LogLine logLine)
     {
-        List<string> columnsToSend = ["Index", "Time", "Provider", "TaskName", "Message", "Source", "Level"];
-#pragma warning disable CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
+        // Dynamically get all public properties of LogLine
         var dict = new Dictionary<string, object?>();
-#pragma warning restore CS8632 // The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.
-        foreach (var prop in typeof(LogLine).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        foreach (var prop in typeof(LogLine).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
         {
-            if(columnsToSend.Contains(prop.Name) == false)
-            {
-                continue; // Skip properties not in the list
-            }
             var value = prop.GetValue(logLine);
             if (value is string str)
-                dict[prop.Name] = HttpUtility.JavaScriptStringEncode(str);
+                dict[prop.Name] = System.Web.HttpUtility.JavaScriptStringEncode(str);
             else if (value != null)
-                dict[prop.Name] = HttpUtility.JavaScriptStringEncode(value.ToString());
+                dict[prop.Name] = System.Web.HttpUtility.JavaScriptStringEncode(value.ToString());
             else
-            {
                 dict[prop.Name] = "null";
-            }
-                
+        }
+        // Also include all fields (not just properties)
+        foreach (var field in typeof(LogLine).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            var value = field.GetValue(logLine);
+            if (value is string str)
+                dict[field.Name] = System.Web.HttpUtility.JavaScriptStringEncode(str);
+            else if (value != null)
+                dict[field.Name] = System.Web.HttpUtility.JavaScriptStringEncode(value.ToString());
+            else
+                dict[field.Name] = "null";
         }
         return JsonSerializer.Serialize(dict);
     }

@@ -45,4 +45,6 @@ namespace FindNeedlePluginLib.Interfaces
         /// <returns>Statistics: number of raw records, number of filtered records, size on disk (bytes), size in memory (bytes).</returns>
         (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory) GetStatistics();
     }
+
+    
 }

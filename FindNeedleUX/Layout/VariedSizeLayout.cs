@@ -30,9 +30,14 @@ public class LogLine
         Message = searchResult.GetMessage();
         Source = searchResult.GetResultSource();
         Level = searchResult.GetLevel().ToString();
+        MachineName = searchResult.GetMachineName();
+        Username = searchResult.GetUsername();
+        OpCode = searchResult.GetOpCode();
+        SearchableData = searchResult.GetSearchableData();
+        LogTime = searchResult.GetLogTime();
     }
 
-
+    
 
     //This is really a view into SearchResult
     public int Index
@@ -64,7 +69,26 @@ public class LogLine
     {
         get; set;
     }
-
+    public string MachineName
+    {
+        get; set;
+    }
+    public string Username
+    {
+        get; set;
+    }
+    public string OpCode
+    {
+        get; set;
+    }
+    public string SearchableData
+    {
+        get; set;
+    }
+    public DateTime LogTime
+    {
+        get; set;
+    }
 }
 
 public class Recipe

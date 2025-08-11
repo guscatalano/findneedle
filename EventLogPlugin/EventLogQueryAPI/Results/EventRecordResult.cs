@@ -88,7 +88,7 @@ public class EventRecordResult : ISearchResult
         try { 
             if(entry.LevelDisplayName == null)
             {
-                return Level.Verbose; // If LevelDisplayName is null, we assume it's verbose
+                return Level.Unknown;
             }
             switch (entry.LevelDisplayName.ToLower())
             {
@@ -165,6 +165,9 @@ public class EventRecordResult : ISearchResult
     public string GetUsername()
     {
 
+        if(entry.UserId == null) { 
+            return "Unknown";
+        }
         var sid = entry.UserId.ToString();
         try
         {

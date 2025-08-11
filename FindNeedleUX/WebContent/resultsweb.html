@@ -9,6 +9,7 @@
         var knownLevels = new Set();
         var levelCounts = {};
         var helpVisible = false;
+        var allLogLines = [];
 
         function updateResultsDisplay() {
             var resultsSpan = document.getElementById("results");
@@ -21,6 +22,36 @@
             } else {
                 rpmSpan.textContent = "";
             }
+        }
+
+        function showMoreModal(rowIdx) {
+            var logLine = allLogLines[rowIdx];
+            var modal = document.getElementById('moreModal');
+            var modalContent = document.getElementById('moreModalContent');
+            modalContent.innerHTML = '<button onclick="hideMoreModal()">Close</button><h2>LogLine Details</h2>';
+            var table = document.createElement('table');
+            table.style.width = '100%';
+            table.style.borderCollapse = 'collapse';
+            Object.keys(logLine).forEach(function(key) {
+                var tr = document.createElement('tr');
+                var tdKey = document.createElement('td');
+                tdKey.textContent = key;
+                tdKey.style.fontWeight = 'bold';
+                tdKey.style.border = '1px solid #ddd';
+                tdKey.style.padding = '4px 8px';
+                var tdVal = document.createElement('td');
+                tdVal.textContent = logLine[key];
+                tdVal.style.border = '1px solid #ddd';
+                tdVal.style.padding = '4px 8px';
+                tr.appendChild(tdKey);
+                tr.appendChild(tdVal);
+                table.appendChild(tr);
+            });
+            modalContent.appendChild(table);
+            modal.style.display = 'block';
+        }
+        function hideMoreModal() {
+            document.getElementById('moreModal').style.display = 'none';
         }
 
         function addLevelColorControl(level) {
@@ -164,6 +195,7 @@
                 count++;
                 updateResultsDisplay();
                 var rowIdx = table.row.add(payload.data).index();
+                allLogLines[rowIdx] = payload.data;
                 var level = payload.data.Level;
                 if (!knownLevels.has(level)) {
                     knownLevels.add(level);
@@ -197,7 +229,10 @@
                     { title: "TaskName", data: "TaskName" },
                     { title: "Message", data: "Message" },
                     { title: "Source", data: "Source" },
-                    { title: "Level", data: "Level" }
+                    { title: "Level", data: "Level" },
+                    { title: "More", data: null, orderable: false, render: function(data, type, row, meta) {
+                        return `<button onclick='showMoreModal(${meta.row})'>[...]</button>`;
+                    }}
                 ],
                 colReorder: true,
                 columnDefs: [
@@ -332,6 +367,42 @@
         #helpModalContent button {
             float: right;
         }
+        /* More Modal styles */
+        #moreModal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.3);
+        }
+        #moreModalContent {
+            background: #fff;
+            margin: 8vh auto;
+            padding: 24px 32px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+        }
+        #moreModalContent h2 {
+            margin-top: 0;
+        }
+        #moreModalContent table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        #moreModalContent td {
+            border: 1px solid #ddd;
+            padding: 4px 8px;
+        }
+        #moreModalContent button {
+            float: right;
+        }
         /* Hide DataTables default searchbox */
         div.dataTables_filter {
             display: none !important;
@@ -360,11 +431,16 @@
                     <th>Message</th>
                     <th>Source</th>
                     <th>Level</th>
+                    <th>More</th>
                 </tr>
             </thead>
             <tbody>
             </tbody>
         </table>
+    </div>
+    <!-- More Modal -->
+    <div id="moreModal">
+        <div id="moreModalContent"></div>
     </div>
     <!-- Help Modal -->
     <div id="helpModal">

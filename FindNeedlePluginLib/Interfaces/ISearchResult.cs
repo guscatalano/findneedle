@@ -13,7 +13,8 @@ public enum Level
     Error,
     Warning,
     Info,
-    Verbose
+    Verbose, 
+    Unknown // For use when we can't tell the level
 }
 
 public interface ISearchResult
