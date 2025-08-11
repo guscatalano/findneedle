@@ -57,6 +57,7 @@
     <None Remove="WebContent\datatables.min.css" />
     <None Remove="WebContent\datatables.min.js" />
     <None Remove="WebContent\resultsweb.html" />
+    <None Remove="WebContent\resultsweb.js" />
     <None Remove="Windows\Filter\FilterAddSimpleKeyword.xaml" />
     <None Remove="Windows\Filter\FilterAddTimeAgo.xaml" />
     <None Remove="Windows\Filter\FilterStart.xaml" />
@@ -94,6 +95,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="WebContent\resultsweb.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="WebContent\resultsweb.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
