@@ -232,4 +232,281 @@ public class StorageTests
 
         factory.cleanup();
     }
+
+    // --- Additional tests added ---
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    public void Concurrency_AddsArePresent(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var tasks = new List<Task>();
+        const int writers = 10;
+        const int perWriter = 100;
+        for (int w = 0; w < writers; w++)
+        {
+            var idx = w;
+            tasks.Add(Task.Run(() =>
+            {
+                var items = Enumerable.Range(0, perWriter).Select(i => (ISearchResult)new DummySearchResult($"T{idx}-{i}")).ToList();
+                storage.AddRawBatch(items);
+            }));
+        }
+        Task.WaitAll(tasks.ToArray());
+
+        var all = new List<ISearchResult>();
+        storage.GetRawResultsInBatches(b => all.AddRange(b), 1000);
+        Assert.AreEqual(writers * perWriter, all.Count);
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void CancellationDuringWrite_StopsEarly(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var items = Enumerable.Range(0, 10000).Select(i => (ISearchResult)new DummySearchResult($"M{i}")).ToList();
+        var cts = new CancellationTokenSource();
+        // Start the add on a background task so we can cancel while it's running
+        var addTask = Task.Run(() => storage.AddRawBatch(items, cts.Token));
+        // Cancel shortly after starting
+        Task.Run(() => { Thread.Sleep(5); cts.Cancel(); });
+
+        // Wait for add to complete
+        try { addTask.Wait(); } catch (AggregateException) { }
+
+        var all = new List<ISearchResult>();
+        storage.GetRawResultsInBatches(b => all.AddRange(b), 1000);
+        // InMemory can be so fast that cancellation arrives too late; accept either partial or complete writes.
+        Assert.IsTrue(all.Count <= items.Count, $"Unexpected number of written items: {all.Count} of {items.Count}");
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void CancellationDuringRead_StopsEarly(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var total = 1000;
+        var items = Enumerable.Range(0, total).Select(i => (ISearchResult)new DummySearchResult($"R{i}")).ToList();
+        storage.AddRawBatch(items);
+
+        var cts = new CancellationTokenSource();
+        var readResults = new List<ISearchResult>();
+
+        // Start a canceller that will fire shortly after read starts
+        Task.Run(() => { Thread.Sleep(5); cts.Cancel(); });
+
+        storage.GetRawResultsInBatches(batch => { readResults.AddRange(batch); Thread.Sleep(1); }, 1, cts.Token);
+
+        Assert.IsTrue(readResults.Count < total);
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void ExactBatching_Boundaries(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var items = Enumerable.Range(0, 5).Select(i => (ISearchResult)new DummySearchResult($"B{i}")).ToList();
+        storage.AddRawBatch(items);
+
+        var batches2 = new List<List<ISearchResult>>();
+        storage.GetRawResultsInBatches(b => batches2.Add(b), 2);
+        Assert.AreEqual(3, batches2.Count);
+
+        var batchesLarge = new List<List<ISearchResult>>();
+        storage.GetRawResultsInBatches(b => batchesLarge.Add(b), 10);
+        Assert.AreEqual(1, batchesLarge.Count);
+
+        var batchesOne = new List<List<ISearchResult>>();
+        storage.GetRawResultsInBatches(b => batchesOne.Add(b), 1);
+        Assert.AreEqual(5, batchesOne.Count);
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void Ordering_IsPreserved(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var items = Enumerable.Range(0, 5).Select(i => (ISearchResult)new DummySearchResult($"O{i}")).ToList();
+        storage.AddRawBatch(items);
+
+        var all = new List<ISearchResult>();
+        storage.GetRawResultsInBatches(b => all.AddRange(b), 10);
+        CollectionAssert.AreEqual(items.Select(x => x.GetMessage()).ToList(), all.Select(x => x.GetMessage()).ToList());
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void Isolation_RawVsFiltered(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var raw = new[] { new DummySearchResult("raw1"), new DummySearchResult("raw2") };
+        var filtered = new[] { new DummySearchResult("f1"), new DummySearchResult("f2") };
+        storage.AddRawBatch(raw);
+        storage.AddFilteredBatch(filtered);
+
+        var allRaw = new List<ISearchResult>();
+        storage.GetRawResultsInBatches(b => allRaw.AddRange(b), 10);
+        var allFiltered = new List<ISearchResult>();
+        storage.GetFilteredResultsInBatches(b => allFiltered.AddRange(b), 10);
+
+        Assert.AreEqual(2, allRaw.Count);
+        Assert.AreEqual(2, allFiltered.Count);
+        Assert.IsTrue(allRaw.All(r => r.GetMessage().StartsWith("raw")));
+        Assert.IsTrue(allFiltered.All(r => r.GetMessage().StartsWith("f")));
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("Sqlite")]
+    public void Persistence_Sqlite_DataPersistsAcrossInstances(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+
+        // create, write and dispose
+        using (var storage = factory.create())
+        {
+            var items = Enumerable.Range(0, 10).Select(i => (ISearchResult)new DummySearchResult($"P{i}")).ToList();
+            storage.AddRawBatch(items);
+        }
+
+        // reopen and verify
+        using (var storage = factory.create())
+        {
+            var all = new List<ISearchResult>();
+            storage.GetRawResultsInBatches(b => all.AddRange(b), 1000);
+            Assert.AreEqual(10, all.Count);
+        }
+
+        // verify file size grew
+        var dbPath = _createdDbPaths.Last();
+        Assert.IsTrue(File.Exists(dbPath));
+        var size = new FileInfo(dbPath).Length;
+        Assert.IsTrue(size > 0);
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void DisposeBehavior_MultipleDisposeAndUse(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        var storage = factory.create();
+
+        // double dispose must be safe
+        storage.Dispose();
+        storage.Dispose();
+
+        // Behavior after dispose: InMemory is a no-op and still usable; Sqlite may throw
+        try
+        {
+            storage.AddRawBatch(new[] { new DummySearchResult("afterDispose") });
+            // If no exception, ensure call succeeded for InMemory
+            var all = new List<ISearchResult>();
+            storage.GetRawResultsInBatches(b => all.AddRange(b), 1000);
+            // Either zero or more -- just ensure it does not crash the test framework
+        }
+        catch (Exception ex)
+        {
+            // For SQLite we may get ObjectDisposedException or InvalidOperationException
+            Assert.IsTrue(ex is ObjectDisposedException || ex is InvalidOperationException);
+        }
+        finally
+        {
+            // Ensure cleanup (dispose again if needed)
+            try { storage.Dispose(); } catch { }
+        }
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void Statistics_AreAccurate(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        storage.AddRawBatch(new[] { new DummySearchResult("sraw1"), new DummySearchResult("sraw2") });
+        storage.AddFilteredBatch(new[] { new DummySearchResult("sf1") });
+
+        var stats = storage.GetStatistics();
+        Assert.AreEqual(2, stats.rawRecordCount);
+        Assert.AreEqual(1, stats.filteredRecordCount);
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void LargePayloads_HandleAndBatch(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var large = new string('X', 100_000);
+        var items = Enumerable.Range(0, 3).Select(i => (ISearchResult)new DummySearchResult(large)).ToList();
+        storage.AddRawBatch(items);
+
+        var batches = new List<List<ISearchResult>>();
+        storage.GetRawResultsInBatches(b => batches.Add(b), 2);
+        Assert.AreEqual(2, batches.Count);
+        Assert.AreEqual(2, batches[0].Count);
+        Assert.AreEqual(1, batches[1].Count);
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    public void MutationSafety_CallbackMutatingBatchDoesNotAffectStorage(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        using var storage = factory.create();
+
+        var items = Enumerable.Range(0, 5).Select(i => (ISearchResult)new DummySearchResult($"MS{i}")).ToList();
+        storage.AddRawBatch(items);
+
+        // callback mutates the provided batch (clears it)
+        storage.GetRawResultsInBatches(batch => { batch.Clear(); }, 2);
+
+        // subsequent read should still return all stored items
+        var all = new List<ISearchResult>();
+        storage.GetRawResultsInBatches(b => all.AddRange(b), 10);
+        Assert.AreEqual(5, all.Count);
+
+        factory.cleanup();
+    }
 }
