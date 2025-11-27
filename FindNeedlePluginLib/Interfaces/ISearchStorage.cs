@@ -6,8 +6,9 @@ namespace FindNeedlePluginLib.Interfaces
 {
     /// <summary>
     /// Interface for storage of search results, supporting batched input and statistics reporting.
+    /// Now inherits IDisposable so implementations can be disposed by callers.
     /// </summary>
-    public interface ISearchStorage
+    public interface ISearchStorage : IDisposable
     {
         /// <summary>
         /// Add a batch of raw (pre-filtered) search results to the storage.

@@ -109,5 +109,12 @@ namespace FindPluginCore.Implementations.Storage
             long sizeOnDisk = 0;
             return (rawRecordCount, filteredRecordCount, sizeOnDisk, sizeInMemory);
         }
+
+        // Implement IDisposable because ISearchStorage now inherits IDisposable.
+        public void Dispose()
+        {
+            // No unmanaged resources to release for in-memory storage.
+            // Method provided so callers can use 'using' with ISearchStorage.
+        }
     }
 }
