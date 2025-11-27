@@ -17,6 +17,7 @@ namespace FindPluginCore.Implementations.Storage
 
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
+            if (batch == null) throw new ArgumentNullException(nameof(batch));
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -29,6 +30,7 @@ namespace FindPluginCore.Implementations.Storage
 
         public void AddFilteredBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
+            if (batch == null) throw new ArgumentNullException(nameof(batch));
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested)

@@ -67,6 +67,7 @@ namespace FindPluginCore.Implementations.Storage
 
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
+            if (batch == null) throw new ArgumentNullException(nameof(batch));
             using var transaction = _connection.BeginTransaction();
             foreach (var result in batch)
             {
@@ -81,6 +82,7 @@ namespace FindPluginCore.Implementations.Storage
 
         public void AddFilteredBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
+            if (batch == null) throw new ArgumentNullException(nameof(batch));
             using var transaction = _connection.BeginTransaction();
             foreach (var result in batch)
             {
@@ -169,7 +171,16 @@ namespace FindPluginCore.Implementations.Storage
 
         public void Dispose()
         {
-            _connection?.Dispose();
+            try
+            {
+                // Ensure connection is closed before disposing to release any file locks
+                try { _connection?.Close(); } catch { }
+                _connection?.Dispose();
+            }
+            catch
+            {
+                // swallow - tests will attempt deletion with retries
+            }
         }
 
         /// <summary>
@@ -190,7 +201,7 @@ namespace FindPluginCore.Implementations.Storage
 
             public SqliteSearchResult(IDataRecord record)
             {
-                _logTime = DateTime.Parse(record.GetString(0));
+                _logTime = DateTime.Parse(record.GetString(0), null, System.Globalization.DateTimeStyles.RoundtripKind);
                 _machineName = record.GetString(1);
                 _level = record.GetInt32(2);
                 _username = record.GetString(3);
