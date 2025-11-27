@@ -77,11 +77,18 @@ public class NuSearchQuery : ISearchQuery
 
     public List<ISearchResult> CurrentResultList => _currentResultList;
 
-    public string Name => throw new NotImplementedException();
+    public string Name
+    {
+        get => "noname";
+        set
+        {
+            // Optionally implement setter logic or leave empty for interface compliance
+        }
+    }
 
     private List<ISearchResult> _currentResultList;
 
-    private ISearchStorage _resultStorage; // Use ISearchStorage instead of InMemoryStorage
+    private ISearchStorage? _resultStorage; // Use ISearchStorage instead of InMemoryStorage
 
     public NuSearchQuery()
     {
@@ -103,7 +110,7 @@ public class NuSearchQuery : ISearchQuery
     private ISearchStorage CreateStorage(CancellationToken cancellationToken)
     {
         var config = PluginManager.GetSingleton().config;
-        string filePath = _locations.Count > 0 ? _locations[0].GetName() : "default";
+        var filePath = _locations.Count > 0 ? _locations[0].GetName() : "default";
         switch (config?.SearchStorageType)
         {
             case StorageType.SqlLite:
@@ -112,7 +119,7 @@ public class NuSearchQuery : ISearchQuery
                 return new InMemoryStorage();
             case StorageType.Auto:
             default:
-                int totalRecords = 0;
+                var totalRecords = 0;
                 TimeSpan totalTime = TimeSpan.Zero;
                 foreach (var loc in _locations)
                 {
@@ -162,9 +169,9 @@ public class NuSearchQuery : ISearchQuery
     public void Step1_LoadAllLocationsInMemory(CancellationToken cancellationToken)
     {
         Logger.Instance.Log($"Step1_LoadAllLocationsInMemory (with cancellation): {_locations.Count} locations");
-        int count = 1;
-        int total = _locations.Count;
-        var pluginManager = PluginManager.GetSingleton();
+        var count = 1;
+        var total = _locations.Count;
+        _ = PluginManager.GetSingleton();
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) return;
@@ -173,7 +180,7 @@ public class NuSearchQuery : ISearchQuery
             {
                 reportable.SetProgressSink(_stepnotifysink.progressSink);
             }
-            int percent = total > 0 ? (int)(50.0 * count / total) : 0;
+            var percent = total > 0 ? (int)(50.0 * count / total) : 0;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading location: " + loc.GetName());
             loc.LoadInMemory(cancellationToken);
             Logger.Instance.Log($"Loaded location: {loc.GetName()}");
@@ -204,16 +211,16 @@ public class NuSearchQuery : ISearchQuery
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
         _resultStorage = CreateStorage(cancellationToken); // Now called at the start of step 2
-        string storageType = _resultStorage is InMemoryStorage ? "InMemoryStorage" : _resultStorage is SqliteStorage ? "SqliteStorage" : _resultStorage.GetType().Name;
-        int count = 1;
-        int total = _locations.Count;
+        var storageType = _resultStorage is InMemoryStorage ? "InMemoryStorage" : _resultStorage is SqliteStorage ? "SqliteStorage" : _resultStorage.GetType().Name;
+        var count = 1;
+        var total = _locations.Count;
         var pluginManager = PluginManager.GetSingleton();
-        bool useSync = pluginManager.config?.UseSynchronousSearch ?? false;
+        var useSync = pluginManager.config?.UseSynchronousSearch ?? false;
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) break;
             Logger.Instance.Log($"Filtering results for location {count}/{total}: {loc.GetName()}");
-            int percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
+            var percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
             _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName() + $" using storage: {storageType}" );
             loc.SetSearchDepth(_depth);
             List<ISearchResult> rawResults = new();
