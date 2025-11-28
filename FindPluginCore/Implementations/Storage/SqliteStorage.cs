@@ -17,6 +17,7 @@ namespace FindPluginCore.Implementations.Storage
     {
         private readonly string _dbPath;
         private readonly SqliteConnection _connection;
+        private readonly object _sync = new();
 
         /// <summary>
         /// Constructs a SqliteStorage for the given file being searched, storing the DB in AppData cache.
@@ -68,31 +69,37 @@ namespace FindPluginCore.Implementations.Storage
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
-            using var transaction = _connection.BeginTransaction();
-            foreach (var result in batch)
+            lock (_sync)
             {
-                if (cancellationToken.IsCancellationRequested)
+                using var transaction = _connection.BeginTransaction();
+                foreach (var result in batch)
                 {
-                    break;
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    InsertResult("RawResults", result, transaction);
                 }
-                InsertResult("RawResults", result, transaction);
+                transaction.Commit();
             }
-            transaction.Commit();
         }
 
         public void AddFilteredBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
-            using var transaction = _connection.BeginTransaction();
-            foreach (var result in batch)
+            lock (_sync)
             {
-                if (cancellationToken.IsCancellationRequested)
+                using var transaction = _connection.BeginTransaction();
+                foreach (var result in batch)
                 {
-                    break;
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    InsertResult("FilteredResults", result, transaction);
                 }
-                InsertResult("FilteredResults", result, transaction);
+                transaction.Commit();
             }
-            transaction.Commit();
         }
 
         private void InsertResult(string table, ISearchResult result, SqliteTransaction transaction)
@@ -128,36 +135,44 @@ namespace FindPluginCore.Implementations.Storage
 
         private void GetResultsInBatches(string table, Action<List<ISearchResult>> onBatch, int batchSize, CancellationToken cancellationToken)
         {
-            var cmd = _connection.CreateCommand();
-            cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource FROM {table}";
-            using var reader = cmd.ExecuteReader();
-            var batch = new List<ISearchResult>(batchSize);
-            while (reader.Read())
+            lock (_sync)
             {
-                if (cancellationToken.IsCancellationRequested)
+                var cmd = _connection.CreateCommand();
+                cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource FROM {table}";
+                using var reader = cmd.ExecuteReader();
+                var batch = new List<ISearchResult>(batchSize);
+                while (reader.Read())
                 {
-                    break;
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    batch.Add(new SqliteSearchResult(reader));
+                    if (batch.Count == batchSize)
+                    {
+                        onBatch(batch);
+                        batch = new List<ISearchResult>(batchSize);
+                    }
                 }
-                batch.Add(new SqliteSearchResult(reader));
-                if (batch.Count == batchSize)
+                if (batch.Count > 0)
                 {
                     onBatch(batch);
-                    batch = new List<ISearchResult>(batchSize);
                 }
-            }
-            if (batch.Count > 0)
-            {
-                onBatch(batch);
             }
         }
 
         public (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory) GetStatistics()
         {
-            int rawCount = GetCount("RawResults");
-            int filteredCount = GetCount("FilteredResults");
+            int rawCount;
+            int filteredCount;
             long sizeOnDisk = 0;
-            if (File.Exists(_dbPath))
-                sizeOnDisk = new FileInfo(_dbPath).Length;
+            lock (_sync)
+            {
+                rawCount = GetCount("RawResults");
+                filteredCount = GetCount("FilteredResults");
+                if (File.Exists(_dbPath))
+                    sizeOnDisk = new FileInfo(_dbPath).Length;
+            }
             long sizeInMemory = 0; // Not applicable for SQLite
             return (rawCount, filteredCount, sizeOnDisk, sizeInMemory);
         }
@@ -171,15 +186,18 @@ namespace FindPluginCore.Implementations.Storage
 
         public void Dispose()
         {
-            try
+            lock (_sync)
             {
-                // Ensure connection is closed before disposing to release any file locks
-                try { _connection?.Close(); } catch { }
-                _connection?.Dispose();
-            }
-            catch
-            {
-                // swallow - tests will attempt deletion with retries
+                try
+                {
+                    // Ensure connection is closed before disposing to release any file locks
+                    try { _connection?.Close(); } catch { }
+                    _connection?.Dispose();
+                }
+                catch
+                {
+                    // swallow - tests will attempt deletion with retries
+                }
             }
         }
 

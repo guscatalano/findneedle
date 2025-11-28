@@ -9,42 +9,63 @@ namespace FindPluginCore.Implementations.Storage
 {
     /// <summary>
     /// In-memory implementation of ISearchStorage using separate lists for raw and filtered results.
+    /// Thread-safe for concurrent Add and read operations.
     /// </summary>
     public class InMemoryStorage : ISearchStorage
     {
         private readonly List<ISearchResult> _rawResults = new();
         private readonly List<ISearchResult> _filteredResults = new();
+        private readonly object _sync = new();
 
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
+            var toAdd = new List<ISearchResult>();
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                _rawResults.Add(result);
+                toAdd.Add(result);
+            }
+            if (toAdd.Count == 0) return;
+            lock (_sync)
+            {
+                _rawResults.AddRange(toAdd);
             }
         }
 
         public void AddFilteredBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
+            var toAdd = new List<ISearchResult>();
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                _filteredResults.Add(result);
+                toAdd.Add(result);
+            }
+            if (toAdd.Count == 0) return;
+            lock (_sync)
+            {
+                _filteredResults.AddRange(toAdd);
             }
         }
 
         public void GetRawResultsInBatches(Action<List<ISearchResult>> onBatch, int batchSize = 1000, CancellationToken cancellationToken = default)
         {
+            if (onBatch == null) throw new ArgumentNullException(nameof(onBatch));
+            List<ISearchResult> snapshot;
+            lock (_sync)
+            {
+                snapshot = new List<ISearchResult>(_rawResults);
+            }
+
             var batch = new List<ISearchResult>(batchSize);
-            foreach (var result in _rawResults)
+            foreach (var result in snapshot)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -65,8 +86,15 @@ namespace FindPluginCore.Implementations.Storage
 
         public void GetFilteredResultsInBatches(Action<List<ISearchResult>> onBatch, int batchSize = 1000, CancellationToken cancellationToken = default)
         {
+            if (onBatch == null) throw new ArgumentNullException(nameof(onBatch));
+            List<ISearchResult> snapshot;
+            lock (_sync)
+            {
+                snapshot = new List<ISearchResult>(_filteredResults);
+            }
+
             var batch = new List<ISearchResult>(batchSize);
-            foreach (var result in _filteredResults)
+            foreach (var result in snapshot)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -87,10 +115,17 @@ namespace FindPluginCore.Implementations.Storage
 
         public (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory) GetStatistics()
         {
-            int rawRecordCount = _rawResults.Count;
-            int filteredRecordCount = _filteredResults.Count;
+            List<ISearchResult> rawSnapshot, filteredSnapshot;
+            lock (_sync)
+            {
+                rawSnapshot = new List<ISearchResult>(_rawResults);
+                filteredSnapshot = new List<ISearchResult>(_filteredResults);
+            }
+
+            int rawRecordCount = rawSnapshot.Count;
+            int filteredRecordCount = filteredSnapshot.Count;
             long sizeInMemory = 0;
-            foreach (var result in _rawResults)
+            foreach (var result in rawSnapshot)
             {
                 var msg = result.GetMessage();
                 if (msg != null)
@@ -98,7 +133,7 @@ namespace FindPluginCore.Implementations.Storage
                     sizeInMemory += System.Text.Encoding.UTF8.GetByteCount(msg);
                 }
             }
-            foreach (var result in _filteredResults)
+            foreach (var result in filteredSnapshot)
             {
                 var msg = result.GetMessage();
                 if (msg != null)

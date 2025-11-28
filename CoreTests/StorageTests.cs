@@ -237,6 +237,7 @@ public class StorageTests
 
     [DataTestMethod]
     [DataRow("InMemory")]
+    [DataRow("Sqlite")]
     public void Concurrency_AddsArePresent(string kind)
     {
         var factory = GetFactoryByKind(kind);
