@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -507,6 +508,89 @@ public class StorageTests
         var all = new List<ISearchResult>();
         storage.GetRawResultsInBatches(b => all.AddRange(b), 10);
         Assert.AreEqual(5, all.Count);
+
+        factory.cleanup();
+    }
+
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    [TestCategory("Performance")]
+    public void Performance_InsertOneMillion(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+        const int total = 1_000_000;
+        const int batchSize = 10_000; // 100 batches
+        var batches = total / batchSize;
+
+        // If sqlite, the factory call already created and registered the DB path.
+        string? dbPath = null;
+        long dbSizeBefore = 0;
+        if (kind == "Sqlite" && _createdDbPaths.Count > 0)
+        {
+            dbPath = _createdDbPaths.Last();
+            if (File.Exists(dbPath)) dbSizeBefore = new FileInfo(dbPath).Length;
+        }
+
+        // Capture memory usage before
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+        long memBefore = GC.GetTotalMemory(true);
+        var proc = Process.GetCurrentProcess();
+        long procMemBefore = proc.PrivateMemorySize64;
+
+        using var storage = factory.create();
+
+        var sw = Stopwatch.StartNew();
+        for (var b = 0; b < batches; b++)
+        {
+            var list = new List<ISearchResult>(batchSize);
+            var baseIndex = b * batchSize;
+            for (var i = 0; i < batchSize; i++)
+            {
+                list.Add(new DummySearchResult("PerfMsg" + (baseIndex + i)));
+            }
+            storage.AddRawBatch(list);
+        }
+        sw.Stop();
+
+        // Force a GC to get a cleaner measure after inserts
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+        long memAfter = GC.GetTotalMemory(true);
+        long procMemAfter = proc.PrivateMemorySize64;
+
+        var stats = storage.GetStatistics();
+        // Verify all records were written
+        Assert.AreEqual(total, stats.rawRecordCount, $"Expected {total} records in {kind}, got {stats.rawRecordCount}");
+
+        long dbSizeAfter = 0;
+        if (kind == "Sqlite" && dbPath != null && File.Exists(dbPath))
+        {
+            dbSizeAfter = new FileInfo(dbPath).Length;
+        }
+
+        // Compute deltas
+        long gcDelta = memAfter - memBefore;
+        long procDelta = procMemAfter - procMemBefore;
+        long dbDelta = dbSizeAfter - dbSizeBefore;
+
+        // Emit timing and resource usage information to test output
+        Console.WriteLine($"Inserted {total:N0} records into {kind} in {sw.Elapsed.TotalSeconds:F2}s");
+        Console.WriteLine($"GC memory delta: {gcDelta:N0} bytes ({gcDelta / 1024.0 / 1024.0:F2} MB)");
+        Console.WriteLine($"Process private memory delta: {procDelta:N0} bytes ({procDelta / 1024.0 / 1024.0:F2} MB)");
+        Console.WriteLine($"Storage-reported sizeInMemory: {stats.sizeInMemory:N0} bytes ({stats.sizeInMemory / 1024.0 / 1024.0:F2} MB)");
+        if (kind == "Sqlite")
+        {
+            Console.WriteLine($"DB file: {dbPath}");
+            Console.WriteLine($"DB size before: {dbSizeBefore:N0} bytes, after: {dbSizeAfter:N0} bytes, delta: {dbDelta:N0} bytes ({dbDelta / 1024.0 / 1024.0:F2} MB)");
+            Console.WriteLine($"DB reported by GetStatistics: sizeOnDisk={stats.sizeOnDisk:N0} bytes");
+        }
+
+        Console.WriteLine($"Per-record GC delta: {gcDelta / (double)total:F2} bytes");
+        Console.WriteLine($"Per-record storage-reported size: {stats.sizeInMemory / (double)total:F2} bytes");
+        if (kind == "Sqlite")
+        {
+            Console.WriteLine($"Per-record DB delta: {dbDelta / (double)total:F2} bytes");
+        }
 
         factory.cleanup();
     }

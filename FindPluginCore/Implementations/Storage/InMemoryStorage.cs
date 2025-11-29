@@ -125,24 +125,61 @@ namespace FindPluginCore.Implementations.Storage
             int rawRecordCount = rawSnapshot.Count;
             int filteredRecordCount = filteredSnapshot.Count;
             long sizeInMemory = 0;
+            
             foreach (var result in rawSnapshot)
             {
-                var msg = result.GetMessage();
-                if (msg != null)
-                {
-                    sizeInMemory += System.Text.Encoding.UTF8.GetByteCount(msg);
-                }
+                sizeInMemory += CalculateResultSize(result);
             }
             foreach (var result in filteredSnapshot)
             {
-                var msg = result.GetMessage();
-                if (msg != null)
-                {
-                    sizeInMemory += System.Text.Encoding.UTF8.GetByteCount(msg);
-                }
+                sizeInMemory += CalculateResultSize(result);
             }
+            
             long sizeOnDisk = 0;
             return (rawRecordCount, filteredRecordCount, sizeOnDisk, sizeInMemory);
+        }
+
+        private static long CalculateResultSize(ISearchResult result)
+        {
+            long size = 0;
+            
+            // Calculate size for all string fields that are stored
+            var message = result.GetMessage();
+            if (message != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(message);
+            
+            var machineName = result.GetMachineName();
+            if (machineName != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(machineName);
+            
+            var username = result.GetUsername();
+            if (username != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(username);
+            
+            var taskName = result.GetTaskName();
+            if (taskName != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(taskName);
+            
+            var opCode = result.GetOpCode();
+            if (opCode != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(opCode);
+            
+            var source = result.GetSource();
+            if (source != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(source);
+            
+            var searchableData = result.GetSearchableData();
+            if (searchableData != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(searchableData);
+            
+            var resultSource = result.GetResultSource();
+            if (resultSource != null)
+                size += System.Text.Encoding.UTF8.GetByteCount(resultSource);
+            
+            // Add overhead for DateTime (8 bytes) and Level enum (4 bytes)
+            size += 12;
+            
+            return size;
         }
 
         // Implement IDisposable because ISearchStorage now inherits IDisposable.
