@@ -83,300 +83,432 @@ public class AdaptivePerformanceTests
     }
 
     /// <summary>
-    /// Adaptive performance test that continues inserting until write performance degrades beyond threshold.
-    /// Measures both write and read performance degradation.
+    /// Comparative write performance test: writes 3,000,000 records across all storage types.
+    /// Each storage type must complete within 80 seconds.
+    /// Generates an HTML graph comparing performance degradation.
     /// </summary>
-    [DataTestMethod]
-    [DataRow("InMemory")]
-    [DataRow("Sqlite")]
-    [DataRow("Hybrid")]
+    [TestMethod]
     [TestCategory("Performance")]
-    [Timeout(300000)] // 5 minute timeout
-    public void AdaptivePerformance_UntilDegradation(string kind)
+    [Timeout(360000)] // 6 minute total timeout for all three tests (80s each + overhead)
+    public void ComparativeWritePerformance_3MillionRecords()
     {
-        var factory = CreateStorageFactory(kind);
-        using var storage = factory.create();
-
-        const int batchSize = 1000;
-        const int warmupBatches = 10; // Establish baseline
-        const double degradationThreshold = 2.0; // 2x slower than baseline
-        const int maxBatches = 10000; // Safety limit
-        const int checkInterval = 10; // Check every N batches
-
-        var writeTimings = new List<double>();
-        var readTimings = new List<double>();
-        double baselineWriteTime = 0;
-        double baselineReadTime = 0;
-        int totalRecords = 0;
-        bool degraded = false;
-        string degradationReason = "";
-
-        Console.WriteLine($"=== Adaptive Performance Test: {kind} ===");
-        Console.WriteLine($"Batch Size: {batchSize:N0}");
-        Console.WriteLine($"Degradation Threshold: {degradationThreshold}x baseline");
-        Console.WriteLine($"Warmup Batches: {warmupBatches}");
-        Console.WriteLine();
-
-        var overallSw = Stopwatch.StartNew();
-
-        for (int batchNum = 0; batchNum < maxBatches && !degraded; batchNum++)
-        {
-            // Create batch
-            var batch = Enumerable.Range(0, batchSize)
-                .Select(i => (ISearchResult)new DummySearchResult($"Batch{batchNum:D5}-Record{i:D5}"))
-                .ToList();
-
-            // Measure write time
-            var writeSw = Stopwatch.StartNew();
-            storage.AddRawBatch(batch);
-            writeSw.Stop();
-            var writeTime = writeSw.Elapsed.TotalMilliseconds;
-            writeTimings.Add(writeTime);
-            totalRecords += batchSize;
-
-            // Establish baseline after warmup
-            if (batchNum == warmupBatches - 1)
-            {
-                baselineWriteTime = writeTimings.Average();
-                Console.WriteLine($"Baseline established after {warmupBatches} batches:");
-                Console.WriteLine($"  - Baseline write time: {baselineWriteTime:F2} ms/batch");
-                Console.WriteLine($"  - Records so far: {totalRecords:N0}");
-                Console.WriteLine();
-            }
-
-            // Check for degradation every N batches after warmup
-            if (batchNum >= warmupBatches && (batchNum + 1) % checkInterval == 0)
-            {
-                // Get recent average (last checkInterval batches)
-                var recentWrites = writeTimings.Skip(writeTimings.Count - checkInterval).Average();
-                
-                // Measure read performance
-                var readSw = Stopwatch.StartNew();
-                int readCount = 0;
-                storage.GetRawResultsInBatches(b => readCount += b.Count, batchSize);
-                readSw.Stop();
-                var readTime = readSw.Elapsed.TotalMilliseconds;
-                readTimings.Add(readTime);
-
-                // Check read baseline
-                if (readTimings.Count == 1)
-                {
-                    baselineReadTime = readTime;
-                    Console.WriteLine($"Read baseline established: {baselineReadTime:F2} ms");
-                }
-
-                // Check for write degradation
-                if (recentWrites > baselineWriteTime * degradationThreshold)
-                {
-                    degraded = true;
-                    degradationReason = $"Write performance degraded: {recentWrites:F2} ms > {baselineWriteTime * degradationThreshold:F2} ms ({degradationThreshold}x baseline)";
-                }
-
-                // Check for read degradation
-                if (readTimings.Count > 1 && readTime > baselineReadTime * degradationThreshold)
-                {
-                    degraded = true;
-                    degradationReason += (degraded ? " AND " : "") + 
-                        $"Read performance degraded: {readTime:F2} ms > {baselineReadTime * degradationThreshold:F2} ms ({degradationThreshold}x baseline)";
-                }
-
-                // Progress report
-                var stats = storage.GetStatistics();
-                Console.WriteLine($"Batch {batchNum + 1:N0}: {totalRecords:N0} records");
-                Console.WriteLine($"  Write: {writeTime:F2} ms (avg: {recentWrites:F2} ms, baseline: {baselineWriteTime:F2} ms, ratio: {recentWrites / baselineWriteTime:F2}x)");
-                Console.WriteLine($"  Read:  {readTime:F2} ms (baseline: {baselineReadTime:F2} ms, ratio: {(baselineReadTime > 0 ? readTime / baselineReadTime : 0):F2}x)");
-                Console.WriteLine($"  Memory: {stats.sizeInMemory / 1024.0 / 1024.0:F2} MB, Disk: {stats.sizeOnDisk / 1024.0 / 1024.0:F2} MB");
-                
-                if (degraded)
-                {
-                    Console.WriteLine($"  *** DEGRADATION DETECTED ***");
-                }
-                Console.WriteLine();
-            }
-        }
-
-        overallSw.Stop();
-
-        // Final statistics
-        var finalStats = storage.GetStatistics();
-        Console.WriteLine($"=== Test Complete: {(degraded ? "Degradation Detected" : "Max Batches Reached")} ===");
-        if (degraded)
-        {
-            Console.WriteLine($"Reason: {degradationReason}");
-        }
-        Console.WriteLine($"Total Records: {totalRecords:N0}");
-        Console.WriteLine($"Total Time: {overallSw.Elapsed.TotalSeconds:F2}s");
-        Console.WriteLine($"Final Memory: {finalStats.sizeInMemory / 1024.0 / 1024.0:F2} MB");
-        Console.WriteLine($"Final Disk: {finalStats.sizeOnDisk / 1024.0 / 1024.0:F2} MB");
-        Console.WriteLine();
-
-        // Statistical analysis
-        Console.WriteLine("=== Performance Analysis ===");
-        Console.WriteLine($"Write Timings:");
-        Console.WriteLine($"  Min:    {writeTimings.Min():F2} ms");
-        Console.WriteLine($"  Max:    {writeTimings.Max():F2} ms");
-        Console.WriteLine($"  Mean:   {writeTimings.Average():F2} ms");
-        Console.WriteLine($"  Median: {GetMedian(writeTimings):F2} ms");
-        Console.WriteLine($"  StdDev: {GetStandardDeviation(writeTimings):F2} ms");
-        
-        if (readTimings.Count > 0)
-        {
-            Console.WriteLine($"Read Timings:");
-            Console.WriteLine($"  Min:    {readTimings.Min():F2} ms");
-            Console.WriteLine($"  Max:    {readTimings.Max():F2} ms");
-            Console.WriteLine($"  Mean:   {readTimings.Average():F2} ms");
-            Console.WriteLine($"  Median: {GetMedian(readTimings):F2} ms");
-            Console.WriteLine($"  StdDev: {GetStandardDeviation(readTimings):F2} ms");
-        }
-
-        // Assertions
-        Assert.IsTrue(totalRecords >= warmupBatches * batchSize, "Should complete at least warmup phase");
-        Assert.IsTrue(baselineWriteTime > 0, "Should establish write baseline");
-        Assert.IsTrue(baselineReadTime > 0, "Should establish read baseline");
-
-        factory.cleanup();
-    }
-
-    /// <summary>
-    /// More aggressive test - continues until operations are 5x slower, useful for stress testing.
-    /// </summary>
-    [DataTestMethod]
-    [DataRow("InMemory")]
-    [DataRow("Sqlite")]
-    [DataRow("Hybrid")]
-    [TestCategory("Performance")]
-    [TestCategory("Stress")]
-    [Timeout(600000)] // 10 minute timeout
-    public void StressTest_UntilSevereDegradation(string kind)
-    {
-        var factory = CreateStorageFactory(kind);
-        using var storage = factory.create();
-
+        const int totalRecords = 3_000_000;
         const int batchSize = 5000;
-        const int warmupBatches = 5;
-        const double degradationThreshold = 5.0; // 5x slower
-        const int maxBatches = 5000;
+        const int totalBatches = totalRecords / batchSize; // 600 batches
+        const double timeoutSeconds = 80.0;
 
-        var writeTimings = new List<double>();
-        double baselineWriteTime = 0;
-        int totalRecords = 0;
-        bool degraded = false;
+        var storageTypes = new[] { "Sqlite", "Hybrid", "InMemory" };
+        var results = new Dictionary<string, WriteTestResult>();
 
-        Console.WriteLine($"=== Stress Test: {kind} ===");
-        Console.WriteLine($"This test will continue until write performance degrades to {degradationThreshold}x baseline");
+        Console.WriteLine("=== COMPARATIVE WRITE PERFORMANCE TEST ===");
+        Console.WriteLine($"Target: {totalRecords:N0} records ({totalBatches} batches of {batchSize:N0})");
+        Console.WriteLine($"Timeout: {timeoutSeconds}s per storage type");
         Console.WriteLine();
 
-        for (int batchNum = 0; batchNum < maxBatches && !degraded; batchNum++)
+        // Run test for each storage type
+        foreach (var storageKind in storageTypes)
         {
-            var batch = Enumerable.Range(0, batchSize)
-                .Select(i => (ISearchResult)new DummySearchResult($"Stress{batchNum:D5}-{i:D5}"))
-                .ToList();
+            Console.WriteLine($"? Testing: {storageKind}");
+            Console.WriteLine(new string('?', 60));
 
-            var sw = Stopwatch.StartNew();
-            storage.AddRawBatch(batch);
-            sw.Stop();
+            var factory = CreateStorageFactory(storageKind);
+            using var storage = factory.create();
+
+            var writeTimings = new List<double>();
+            var performanceData = new List<PerformanceDataPoint>();
             
-            writeTimings.Add(sw.Elapsed.TotalMilliseconds);
-            totalRecords += batchSize;
+            var overallSw = Stopwatch.StartNew();
+            bool timedOut = false;
+            int batchesCompleted = 0;
 
-            if (batchNum == warmupBatches - 1)
+            // Write all batches with timeout check
+            for (int batchNum = 0; batchNum < totalBatches; batchNum++)
             {
-                baselineWriteTime = writeTimings.Average();
-                Console.WriteLine($"Baseline: {baselineWriteTime:F2} ms/batch ({totalRecords:N0} records)");
+                // Check if we're approaching timeout (with 2 second buffer)
+                if (overallSw.Elapsed.TotalSeconds > timeoutSeconds - 2)
+                {
+                    timedOut = true;
+                    Console.WriteLine($"  ?? Approaching timeout at batch {batchNum + 1}/{totalBatches}");
+                    Console.WriteLine($"  ?? Completed {batchNum * batchSize:N0} records in {overallSw.Elapsed.TotalSeconds:F2}s");
+                    break;
+                }
+
+                var batch = Enumerable.Range(0, batchSize)
+                    .Select(i => (ISearchResult)new DummySearchResult($"{storageKind}{batchNum:D5}-{i:D5}"))
+                    .ToList();
+
+                var sw = Stopwatch.StartNew();
+                storage.AddRawBatch(batch);
+                sw.Stop();
+
+                var writeTime = sw.Elapsed.TotalMilliseconds;
+                writeTimings.Add(writeTime);
+                batchesCompleted = batchNum + 1;
+
+                // Record data point every 10 batches for graphing
+                if (batchNum % 10 == 0 || batchNum == totalBatches - 1)
+                {
+                    var stats = storage.GetStatistics();
+                    performanceData.Add(new PerformanceDataPoint
+                    {
+                        BatchNumber = batchNum + 1,
+                        TotalRecords = (batchNum + 1) * batchSize,
+                        WriteTimeMs = writeTime,
+                        MemoryMB = stats.sizeInMemory / 1024.0 / 1024.0,
+                        DiskMB = stats.sizeOnDisk / 1024.0 / 1024.0
+                    });
+                }
+
+                // Progress every 100 batches
+                if ((batchNum + 1) % 100 == 0)
+                {
+                    var elapsed = overallSw.Elapsed.TotalSeconds;
+                    var recordsWritten = (batchNum + 1) * batchSize;
+                    var remainingTime = timeoutSeconds - elapsed;
+                    Console.WriteLine($"  [{batchNum + 1}/{totalBatches}] {recordsWritten:N0} records, {elapsed:F1}s elapsed, {remainingTime:F1}s remaining");
+                }
             }
 
-            if (batchNum >= warmupBatches && batchNum % 5 == 0)
+            overallSw.Stop();
+
+            // Calculate statistics
+            var finalStats = storage.GetStatistics();
+            var baseline = writeTimings.Take(Math.Min(10, writeTimings.Count)).Average(); // First 10 batches as baseline
+            var actualRecords = batchesCompleted * batchSize;
+            
+            results[storageKind] = new WriteTestResult
             {
-                var recent = writeTimings.Skip(writeTimings.Count - 5).Average();
-                if (recent > baselineWriteTime * degradationThreshold)
-                {
-                    degraded = true;
-                    Console.WriteLine($"SEVERE DEGRADATION at {totalRecords:N0} records: {recent:F2} ms ({recent / baselineWriteTime:F2}x baseline)");
-                }
-                else
-                {
-                    Console.WriteLine($"{totalRecords:N0} records: {sw.Elapsed.TotalMilliseconds:F2} ms ({recent / baselineWriteTime:F2}x baseline)");
-                }
+                StorageKind = storageKind,
+                TotalRecords = actualRecords,
+                TotalBatches = batchesCompleted,
+                TotalTimeSeconds = overallSw.Elapsed.TotalSeconds,
+                AverageWriteMs = writeTimings.Average(),
+                MedianWriteMs = GetMedian(writeTimings),
+                MinWriteMs = writeTimings.Min(),
+                MaxWriteMs = writeTimings.Max(),
+                BaselineWriteMs = baseline,
+                FinalMemoryMB = finalStats.sizeInMemory / 1024.0 / 1024.0,
+                FinalDiskMB = finalStats.sizeOnDisk / 1024.0 / 1024.0,
+                PerformanceData = performanceData,
+                TimedOut = timedOut
+            };
+
+            if (timedOut)
+            {
+                Console.WriteLine($"?? {storageKind} timed out at {overallSw.Elapsed.TotalSeconds:F2}s ({actualRecords:N0} records)");
+            }
+            else
+            {
+                Console.WriteLine($"? {storageKind} completed in {overallSw.Elapsed.TotalSeconds:F2}s");
+            }
+            Console.WriteLine($"  Avg: {writeTimings.Average():F2}ms, Median: {GetMedian(writeTimings):F2}ms, Baseline: {baseline:F2}ms");
+            Console.WriteLine();
+
+            factory.cleanup();
+        }
+
+        // Generate comparison report
+        Console.WriteLine();
+        Console.WriteLine("???????????????????????????????????????????????????????");
+        Console.WriteLine("              COMPARATIVE RESULTS");
+        Console.WriteLine("???????????????????????????????????????????????????????");
+        Console.WriteLine();
+
+        Console.WriteLine($"{"Storage",-12} {"Status",-12} {"Total Time",-12} {"Records",-12} {"Avg Write",-12} {"Median",-12}");
+        Console.WriteLine(new string('?', 80));
+        foreach (var result in results.Values.OrderBy(r => r.TotalTimeSeconds))
+        {
+            var status = result.TimedOut ? "TIMEOUT" : "PASS";
+            Console.WriteLine($"{result.StorageKind,-12} {status,-12} {result.TotalTimeSeconds,8:F2}s     {result.TotalRecords,10:N0}  {result.AverageWriteMs,8:F2}ms   {result.MedianWriteMs,8:F2}ms");
+        }
+        Console.WriteLine();
+
+        // Generate HTML graph
+        var htmlPath = GenerateComparisonHtml(results, totalRecords);
+        Console.WriteLine($"?? Interactive graph generated: {htmlPath}");
+        Console.WriteLine($"   Open in browser to view performance comparison");
+        Console.WriteLine();
+
+        // Validate all completed within timeout
+        foreach (var result in results.Values)
+        {
+            if (result.TimedOut)
+            {
+                Assert.Fail($"{result.StorageKind} exceeded timeout: {result.TotalTimeSeconds:F2}s > {timeoutSeconds}s (completed {result.TotalRecords:N0}/{totalRecords:N0} records)");
+            }
+            else
+            {
+                Assert.IsTrue(result.TotalTimeSeconds <= timeoutSeconds,
+                    $"{result.StorageKind} exceeded timeout: {result.TotalTimeSeconds:F2}s > {timeoutSeconds}s");
+                Console.WriteLine($"? {result.StorageKind} passed: {result.TotalTimeSeconds:F2}s ? {timeoutSeconds}s");
             }
         }
 
-        Console.WriteLine($"\nTest completed with {totalRecords:N0} records");
-        Console.WriteLine($"Final write time: {writeTimings.Last():F2} ms ({writeTimings.Last() / baselineWriteTime:F2}x baseline)");
-
-        factory.cleanup();
+        Console.WriteLine();
+        Console.WriteLine("? ALL TESTS PASSED");
     }
 
     /// <summary>
-    /// Measures throughput degradation - records per second.
+    /// Generate HTML with Plotly.js graphs comparing all storage types.
     /// </summary>
-    [DataTestMethod]
-    [DataRow("InMemory")]
-    [DataRow("Sqlite")]
-    [DataRow("Hybrid")]
-    [TestCategory("Performance")]
-    [Timeout(300000)]
-    public void ThroughputDegradation_RecordsPerSecond(string kind)
+    private string GenerateComparisonHtml(Dictionary<string, WriteTestResult> results, int targetRecords)
     {
-        var factory = CreateStorageFactory(kind);
-        using var storage = factory.create();
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var filename = $"WritePerformance_Comparison_{timestamp}.html";
+        var filePath = Path.Combine(Path.GetTempPath(), filename);
 
-        const int batchSize = 1000;
-        const int warmupBatches = 10;
-        const double degradationThreshold = 0.5; // Drop to 50% of baseline throughput
-        const int maxBatches = 10000;
+        var sqlite = results["Sqlite"];
+        var hybrid = results["Hybrid"];
+        var inMemory = results["InMemory"];
 
-        var throughputs = new List<double>(); // records per second
-        double baselineThroughput = 0;
-        int totalRecords = 0;
-        bool degraded = false;
+        // Prepare data for Plotly
+        var sqliteRecords = string.Join(",", sqlite.PerformanceData.Select(d => d.TotalRecords));
+        var hybridRecords = string.Join(",", hybrid.PerformanceData.Select(d => d.TotalRecords));
+        var inMemoryRecords = string.Join(",", inMemory.PerformanceData.Select(d => d.TotalRecords));
 
-        Console.WriteLine($"=== Throughput Degradation Test: {kind} ===");
-        Console.WriteLine($"Will stop when throughput drops below {degradationThreshold * 100}% of baseline");
-        Console.WriteLine();
+        var sqliteTimes = string.Join(",", sqlite.PerformanceData.Select(d => d.WriteTimeMs.ToString("F2")));
+        var hybridTimes = string.Join(",", hybrid.PerformanceData.Select(d => d.WriteTimeMs.ToString("F2")));
+        var inMemoryTimes = string.Join(",", inMemory.PerformanceData.Select(d => d.WriteTimeMs.ToString("F2")));
 
-        for (int batchNum = 0; batchNum < maxBatches && !degraded; batchNum++)
-        {
-            var batch = Enumerable.Range(0, batchSize)
-                .Select(i => (ISearchResult)new DummySearchResult($"TP{batchNum:D5}-{i:D5}"))
-                .ToList();
+        var sqliteStatus = sqlite.TimedOut ? "?? TIMEOUT" : $"{sqlite.TotalTimeSeconds:F1}s";
+        var hybridStatus = hybrid.TimedOut ? "?? TIMEOUT" : $"{hybrid.TotalTimeSeconds:F1}s";
+        var inMemoryStatus = inMemory.TimedOut ? "?? TIMEOUT" : $"{inMemory.TotalTimeSeconds:F1}s";
 
-            var sw = Stopwatch.StartNew();
-            storage.AddRawBatch(batch);
-            sw.Stop();
+        var html = $@"<!DOCTYPE html>
+<html>
+<head>
+    <title>Write Performance Comparison - {targetRecords:N0} Records Target</title>
+    <script src='https://cdn.plot.ly/plotly-2.27.0.min.js'></script>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }}
+        .container {{ max-width: 1400px; margin: 0 auto; }}
+        h1 {{ color: white; text-align: center; font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
+        .subtitle {{ color: rgba(255,255,255,0.9); text-align: center; font-size: 1.2em; margin-bottom: 30px; }}
+        .card {{ background: white; padding: 25px; margin: 20px 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }}
+        .stat-box {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }}
+        .stat-box.timeout {{ background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }}
+        .stat-box h3 {{ margin: 0 0 10px 0; font-size: 1.1em; opacity: 0.9; }}
+        .stat-box .value {{ font-size: 2.5em; font-weight: bold; margin: 10px 0; }}
+        .stat-box .label {{ font-size: 0.9em; opacity: 0.8; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+        th {{ background: #f8f9fa; font-weight: 600; color: #495057; }}
+        .winner {{ background: #d4edda; font-weight: bold; }}
+        .timeout {{ background: #fff3cd; }}
+        .chart-container {{ margin: 30px 0; }}
+        .footer {{ text-align: center; color: rgba(255,255,255,0.8); margin-top: 30px; font-size: 0.9em; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <h1>?? Write Performance Comparison</h1>
+        <div class='subtitle'>Target: {targetRecords:N0} Records • SQLite vs Hybrid vs InMemory</div>
+        
+        <div class='stats-grid'>
+            <div class='stat-box{(sqlite.TimedOut ? " timeout" : "")}'>
+                <h3>SQLite</h3>
+                <div class='value'>{sqliteStatus}</div>
+                <div class='label'>{sqlite.TotalRecords:N0} records • {sqlite.AverageWriteMs:F2}ms avg</div>
+            </div>
+            <div class='stat-box{(hybrid.TimedOut ? " timeout" : "")}'>
+                <h3>Hybrid</h3>
+                <div class='value'>{hybridStatus}</div>
+                <div class='label'>{hybrid.TotalRecords:N0} records • {hybrid.AverageWriteMs:F2}ms avg</div>
+            </div>
+            <div class='stat-box{(inMemory.TimedOut ? " timeout" : "")}'>
+                <h3>InMemory</h3>
+                <div class='value'>{inMemoryStatus}</div>
+                <div class='label'>{inMemory.TotalRecords:N0} records • {inMemory.AverageWriteMs:F2}ms avg</div>
+            </div>
+        </div>
 
-            double throughput = batchSize / sw.Elapsed.TotalSeconds;
-            throughputs.Add(throughput);
-            totalRecords += batchSize;
+        <div class='card'>
+            <h2>Detailed Results</h2>
+            <table>
+                <tr>
+                    <th>Storage Type</th>
+                    <th>Status</th>
+                    <th>Total Time</th>
+                    <th>Records</th>
+                    <th>Average Write</th>
+                    <th>Median Write</th>
+                    <th>Baseline</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                </tr>
+                <tr class='{(sqlite.TimedOut ? "timeout" : (sqlite.TotalTimeSeconds < hybrid.TotalTimeSeconds && sqlite.TotalTimeSeconds < inMemory.TotalTimeSeconds ? "winner" : ""))}'>
+                    <td><strong>SQLite</strong></td>
+                    <td>{(sqlite.TimedOut ? "?? TIMEOUT" : "? PASS")}</td>
+                    <td>{sqlite.TotalTimeSeconds:F2}s</td>
+                    <td>{sqlite.TotalRecords:N0}</td>
+                    <td>{sqlite.AverageWriteMs:F2}ms</td>
+                    <td>{sqlite.MedianWriteMs:F2}ms</td>
+                    <td>{sqlite.BaselineWriteMs:F2}ms</td>
+                    <td>{sqlite.MinWriteMs:F2}ms</td>
+                    <td>{sqlite.MaxWriteMs:F2}ms</td>
+                </tr>
+                <tr class='{(hybrid.TimedOut ? "timeout" : (hybrid.TotalTimeSeconds < sqlite.TotalTimeSeconds && hybrid.TotalTimeSeconds < inMemory.TotalTimeSeconds ? "winner" : ""))}'>
+                    <td><strong>Hybrid</strong></td>
+                    <td>{(hybrid.TimedOut ? "?? TIMEOUT" : "? PASS")}</td>
+                    <td>{hybrid.TotalTimeSeconds:F2}s</td>
+                    <td>{hybrid.TotalRecords:N0}</td>
+                    <td>{hybrid.AverageWriteMs:F2}ms</td>
+                    <td>{hybrid.MedianWriteMs:F2}ms</td>
+                    <td>{hybrid.BaselineWriteMs:F2}ms</td>
+                    <td>{hybrid.MinWriteMs:F2}ms</td>
+                    <td>{hybrid.MaxWriteMs:F2}ms</td>
+                </tr>
+                <tr class='{(inMemory.TimedOut ? "timeout" : (inMemory.TotalTimeSeconds < sqlite.TotalTimeSeconds && inMemory.TotalTimeSeconds < hybrid.TotalTimeSeconds ? "winner" : ""))}'>
+                    <td><strong>InMemory</strong></td>
+                    <td>{(inMemory.TimedOut ? "?? TIMEOUT" : "? PASS")}</td>
+                    <td>{inMemory.TotalTimeSeconds:F2}s</td>
+                    <td>{inMemory.TotalRecords:N0}</td>
+                    <td>{inMemory.AverageWriteMs:F2}ms</td>
+                    <td>{inMemory.MedianWriteMs:F2}ms</td>
+                    <td>{inMemory.BaselineWriteMs:F2}ms</td>
+                    <td>{inMemory.MinWriteMs:F2}ms</td>
+                    <td>{inMemory.MaxWriteMs:F2}ms</td>
+                </tr>
+            </table>
+        </div>
 
-            if (batchNum == warmupBatches - 1)
-            {
-                baselineThroughput = throughputs.Average();
-                Console.WriteLine($"Baseline throughput: {baselineThroughput:N0} records/sec");
-            }
+        <div class='card chart-container'>
+            <h2>Write Time Over Records</h2>
+            <div id='writeTimeChart'></div>
+        </div>
 
-            if (batchNum >= warmupBatches && batchNum % 10 == 0)
-            {
-                var recentThroughput = throughputs.Skip(throughputs.Count - 10).Average();
-                var ratio = recentThroughput / baselineThroughput;
+        <div class='card chart-container'>
+            <h2>Performance Degradation (Ratio to Baseline)</h2>
+            <div id='degradationChart'></div>
+        </div>
 
-                Console.WriteLine($"{totalRecords:N0} records: {throughput:N0} rec/sec (recent avg: {recentThroughput:N0}, {ratio:P0} of baseline)");
+        <div class='card chart-container'>
+            <h2>Total Time Comparison</h2>
+            <div id='barChart'></div>
+        </div>
 
-                if (ratio < degradationThreshold)
-                {
-                    degraded = true;
-                    Console.WriteLine($"\n*** THROUGHPUT DEGRADATION DETECTED ***");
-                    Console.WriteLine($"Dropped to {ratio:P0} of baseline ({recentThroughput:N0} vs {baselineThroughput:N0} rec/sec)");
-                }
-            }
-        }
+        <div class='footer'>
+            Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss} • Target: {targetRecords:N0} records
+        </div>
+    </div>
 
-        Console.WriteLine($"\nCompleted with {totalRecords:N0} records");
-        Console.WriteLine($"Final throughput: {throughputs.Last():N0} rec/sec ({throughputs.Last() / baselineThroughput:P0} of baseline)");
+    <script>
+        // Write Time Over Records
+        var sqliteTrace = {{
+            x: [{sqliteRecords}],
+            y: [{sqliteTimes}],
+            name: 'SQLite{(sqlite.TimedOut ? " (timeout)" : "")}',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#FF6B6B', width: 3 }}
+        }};
 
-        Assert.IsTrue(totalRecords >= warmupBatches * batchSize);
-        Assert.IsTrue(baselineThroughput > 0);
+        var hybridTrace = {{
+            x: [{hybridRecords}],
+            y: [{hybridTimes}],
+            name: 'Hybrid{(hybrid.TimedOut ? " (timeout)" : "")}',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#4ECDC4', width: 3 }}
+        }};
 
-        factory.cleanup();
+        var inMemoryTrace = {{
+            x: [{inMemoryRecords}],
+            y: [{inMemoryTimes}],
+            name: 'InMemory{(inMemory.TimedOut ? " (timeout)" : "")}',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#95E1D3', width: 3 }}
+        }};
+
+        var writeTimeLayout = {{
+            xaxis: {{ title: 'Records Written', gridcolor: '#e0e0e0' }},
+            yaxis: {{ title: 'Write Time (ms)', gridcolor: '#e0e0e0' }},
+            hovermode: 'x unified',
+            plot_bgcolor: '#fafafa',
+            paper_bgcolor: 'white'
+        }};
+
+        Plotly.newPlot('writeTimeChart', [sqliteTrace, hybridTrace, inMemoryTrace], writeTimeLayout, {{responsive: true}});
+
+        // Performance Degradation (ratio to baseline)
+        var sqliteBaseline = {sqlite.BaselineWriteMs:F2};
+        var hybridBaseline = {hybrid.BaselineWriteMs:F2};
+        var inMemoryBaseline = {inMemory.BaselineWriteMs:F2};
+
+        var sqliteDegradation = {{
+            x: [{sqliteRecords}],
+            y: [{sqliteTimes}].map(t => t / sqliteBaseline),
+            name: 'SQLite',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#FF6B6B', width: 3 }}
+        }};
+
+        var hybridDegradation = {{
+            x: [{hybridRecords}],
+            y: [{hybridTimes}].map(t => t / hybridBaseline),
+            name: 'Hybrid',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#4ECDC4', width: 3 }}
+        }};
+
+        var inMemoryDegradation = {{
+            x: [{inMemoryRecords}],
+            y: [{inMemoryTimes}].map(t => t / inMemoryBaseline),
+            name: 'InMemory',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#95E1D3', width: 3 }}
+        }};
+
+        var degradationLayout = {{
+            xaxis: {{ title: 'Records Written', gridcolor: '#e0e0e0' }},
+            yaxis: {{ title: 'Performance Ratio (×baseline)', gridcolor: '#e0e0e0' }},
+            hovermode: 'x unified',
+            plot_bgcolor: '#fafafa',
+            paper_bgcolor: 'white',
+            shapes: [{{
+                type: 'line',
+                x0: 0,
+                x1: {targetRecords},
+                y0: 1,
+                y1: 1,
+                line: {{ color: '#999', width: 2, dash: 'dash' }}
+            }}]
+        }};
+
+        Plotly.newPlot('degradationChart', [sqliteDegradation, hybridDegradation, inMemoryDegradation], degradationLayout, {{responsive: true}});
+
+        // Bar Chart Comparison
+        var barTrace = {{
+            x: ['SQLite', 'Hybrid', 'InMemory'],
+            y: [{sqlite.TotalTimeSeconds:F2}, {hybrid.TotalTimeSeconds:F2}, {inMemory.TotalTimeSeconds:F2}],
+            type: 'bar',
+            marker: {{
+                color: [{(sqlite.TimedOut ? "'#f5576c'" : "'#FF6B6B'")}, {(hybrid.TimedOut ? "'#f5576c'" : "'#4ECDC4'")}, {(inMemory.TimedOut ? "'#f5576c'" : "'#95E1D3'")}],
+                line: {{ color: 'white', width: 2 }}
+            }},
+            text: ['{sqlite.TotalTimeSeconds:F2}s{(sqlite.TimedOut ? " (timeout)" : "")}', '{hybrid.TotalTimeSeconds:F2}s{(hybrid.TimedOut ? " (timeout)" : "")}', '{inMemory.TotalTimeSeconds:F2}s{(inMemory.TimedOut ? " (timeout)" : "")}'],
+            textposition: 'outside'
+        }};
+
+        var barLayout = {{
+            yaxis: {{ title: 'Total Time (seconds)', gridcolor: '#e0e0e0' }},
+            plot_bgcolor: '#fafafa',
+            paper_bgcolor: 'white',
+            showlegend: false
+        }};
+
+        Plotly.newPlot('barChart', [barTrace], barLayout, {{responsive: true}});
+    </script>
+</body>
+</html>";
+
+        File.WriteAllText(filePath, html);
+        return filePath;
     }
 
     // Helper methods for statistics
@@ -390,11 +522,30 @@ public class AdaptivePerformanceTests
         return (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
     }
 
-    private static double GetStandardDeviation(List<double> values)
+    // Data structures
+    private class WriteTestResult
     {
-        if (values.Count < 2) return 0;
-        double avg = values.Average();
-        double sumSquares = values.Sum(v => Math.Pow(v - avg, 2));
-        return Math.Sqrt(sumSquares / (values.Count - 1));
+        public string StorageKind { get; set; }
+        public int TotalRecords { get; set; }
+        public int TotalBatches { get; set; }
+        public double TotalTimeSeconds { get; set; }
+        public double AverageWriteMs { get; set; }
+        public double MedianWriteMs { get; set; }
+        public double MinWriteMs { get; set; }
+        public double MaxWriteMs { get; set; }
+        public double BaselineWriteMs { get; set; }
+        public double FinalMemoryMB { get; set; }
+        public double FinalDiskMB { get; set; }
+        public List<PerformanceDataPoint> PerformanceData { get; set; }
+        public bool TimedOut { get; set; }
+    }
+
+    private class PerformanceDataPoint
+    {
+        public int BatchNumber { get; set; }
+        public int TotalRecords { get; set; }
+        public double WriteTimeMs { get; set; }
+        public double MemoryMB { get; set; }
+        public double DiskMB { get; set; }
     }
 }
