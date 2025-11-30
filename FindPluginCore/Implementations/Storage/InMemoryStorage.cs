@@ -13,21 +13,39 @@ namespace FindPluginCore.Implementations.Storage
     /// </summary>
     public class InMemoryStorage : ISearchStorage
     {
-        private readonly List<ISearchResult> _rawResults = new();
-        private readonly List<ISearchResult> _filteredResults = new();
+        private readonly List<AccessTrackedResult> _rawResults = new();
+        private readonly List<AccessTrackedResult> _filteredResults = new();
         private readonly object _sync = new();
+
+        // Wrapper to track access time for LRU eviction
+        private class AccessTrackedResult
+        {
+            public ISearchResult Result { get; set; }
+            public DateTime LastAccessTime { get; set; }
+
+            public AccessTrackedResult(ISearchResult result)
+            {
+                Result = result;
+                LastAccessTime = DateTime.UtcNow;
+            }
+
+            public void MarkAccessed()
+            {
+                LastAccessTime = DateTime.UtcNow;
+            }
+        }
 
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
-            var toAdd = new List<ISearchResult>();
+            var toAdd = new List<AccessTrackedResult>();
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                toAdd.Add(result);
+                toAdd.Add(new AccessTrackedResult(result));
             }
             if (toAdd.Count == 0) return;
             lock (_sync)
@@ -39,14 +57,14 @@ namespace FindPluginCore.Implementations.Storage
         public void AddFilteredBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
-            var toAdd = new List<ISearchResult>();
+            var toAdd = new List<AccessTrackedResult>();
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                toAdd.Add(result);
+                toAdd.Add(new AccessTrackedResult(result));
             }
             if (toAdd.Count == 0) return;
             lock (_sync)
@@ -58,20 +76,27 @@ namespace FindPluginCore.Implementations.Storage
         public void GetRawResultsInBatches(Action<List<ISearchResult>> onBatch, int batchSize = 1000, CancellationToken cancellationToken = default)
         {
             if (onBatch == null) throw new ArgumentNullException(nameof(onBatch));
-            List<ISearchResult> snapshot;
+            List<AccessTrackedResult> snapshot;
             lock (_sync)
             {
-                snapshot = new List<ISearchResult>(_rawResults);
+                snapshot = new List<AccessTrackedResult>(_rawResults);
             }
 
             var batch = new List<ISearchResult>(batchSize);
-            foreach (var result in snapshot)
+            foreach (var trackedResult in snapshot)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                batch.Add(result);
+                
+                // Mark as accessed (important for LRU tracking)
+                lock (_sync)
+                {
+                    trackedResult.MarkAccessed();
+                }
+                
+                batch.Add(trackedResult.Result);
                 if (batch.Count == batchSize)
                 {
                     onBatch(batch);
@@ -87,20 +112,27 @@ namespace FindPluginCore.Implementations.Storage
         public void GetFilteredResultsInBatches(Action<List<ISearchResult>> onBatch, int batchSize = 1000, CancellationToken cancellationToken = default)
         {
             if (onBatch == null) throw new ArgumentNullException(nameof(onBatch));
-            List<ISearchResult> snapshot;
+            List<AccessTrackedResult> snapshot;
             lock (_sync)
             {
-                snapshot = new List<ISearchResult>(_filteredResults);
+                snapshot = new List<AccessTrackedResult>(_filteredResults);
             }
 
             var batch = new List<ISearchResult>(batchSize);
-            foreach (var result in snapshot)
+            foreach (var trackedResult in snapshot)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                batch.Add(result);
+                
+                // Mark as accessed (important for LRU tracking)
+                lock (_sync)
+                {
+                    trackedResult.MarkAccessed();
+                }
+                
+                batch.Add(trackedResult.Result);
                 if (batch.Count == batchSize)
                 {
                     onBatch(batch);
@@ -115,24 +147,24 @@ namespace FindPluginCore.Implementations.Storage
 
         public (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory) GetStatistics()
         {
-            List<ISearchResult> rawSnapshot, filteredSnapshot;
+            List<AccessTrackedResult> rawSnapshot, filteredSnapshot;
             lock (_sync)
             {
-                rawSnapshot = new List<ISearchResult>(_rawResults);
-                filteredSnapshot = new List<ISearchResult>(_filteredResults);
+                rawSnapshot = new List<AccessTrackedResult>(_rawResults);
+                filteredSnapshot = new List<AccessTrackedResult>(_filteredResults);
             }
 
             int rawRecordCount = rawSnapshot.Count;
             int filteredRecordCount = filteredSnapshot.Count;
             long sizeInMemory = 0;
             
-            foreach (var result in rawSnapshot)
+            foreach (var trackedResult in rawSnapshot)
             {
-                sizeInMemory += CalculateResultSize(result);
+                sizeInMemory += CalculateResultSize(trackedResult.Result);
             }
-            foreach (var result in filteredSnapshot)
+            foreach (var trackedResult in filteredSnapshot)
             {
-                sizeInMemory += CalculateResultSize(result);
+                sizeInMemory += CalculateResultSize(trackedResult.Result);
             }
             
             long sizeOnDisk = 0;
@@ -187,6 +219,64 @@ namespace FindPluginCore.Implementations.Storage
         {
             // No unmanaged resources to release for in-memory storage.
             // Method provided so callers can use 'using' with ISearchStorage.
+        }
+
+        /// <summary>
+        /// Efficiently removes the least recently accessed (oldest) raw results for spilling to disk.
+        /// Returns the removed items sorted by last access time (oldest first).
+        /// </summary>
+        public List<ISearchResult> RemoveOldestRaw(int count)
+        {
+            lock (_sync)
+            {
+                if (_rawResults.Count == 0) return new List<ISearchResult>();
+
+                // Sort by LastAccessTime (oldest first) and take the requested count
+                var toRemove = _rawResults
+                    .OrderBy(r => r.LastAccessTime)
+                    .Take(count)
+                    .ToList();
+
+                if (toRemove.Count == 0) return new List<ISearchResult>();
+
+                // Remove from the main list
+                foreach (var item in toRemove)
+                {
+                    _rawResults.Remove(item);
+                }
+
+                // Return the actual ISearchResult objects
+                return toRemove.Select(r => r.Result).ToList();
+            }
+        }
+
+        /// <summary>
+        /// Efficiently removes the least recently accessed (oldest) filtered results for spilling to disk.
+        /// Returns the removed items sorted by last access time (oldest first).
+        /// </summary>
+        public List<ISearchResult> RemoveOldestFiltered(int count)
+        {
+            lock (_sync)
+            {
+                if (_filteredResults.Count == 0) return new List<ISearchResult>();
+
+                // Sort by LastAccessTime (oldest first) and take the requested count
+                var toRemove = _filteredResults
+                    .OrderBy(r => r.LastAccessTime)
+                    .Take(count)
+                    .ToList();
+
+                if (toRemove.Count == 0) return new List<ISearchResult>();
+
+                // Remove from the main list
+                foreach (var item in toRemove)
+                {
+                    _filteredResults.Remove(item);
+                }
+
+                // Return the actual ISearchResult objects
+                return toRemove.Select(r => r.Result).ToList();
+            }
         }
     }
 }

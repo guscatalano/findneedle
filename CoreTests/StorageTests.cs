@@ -94,12 +94,20 @@ public class StorageTests
         return (() => new SqliteStorage(searchedFile), () => { /* TestCleanup will delete dbPath */ });
     }
 
+    private (Func<ISearchStorage> create, Action cleanup) HybridFactory()
+    {
+        var (searchedFile, dbPath) = CreateUniqueSearchFile();
+        // Use small memory threshold (10MB) to test spilling behavior
+        return (() => new HybridStorage(searchedFile, memoryThresholdMB: 10), () => { /* TestCleanup will delete dbPath */ });
+    }
+
     private (Func<ISearchStorage> create, Action cleanup) GetFactoryByKind(string kind)
     {
         return kind switch
         {
             "InMemory" => InMemoryFactory(),
             "Sqlite" => SqliteFactory(),
+            "Hybrid" => HybridFactory(),
             _ => throw new ArgumentException("Unknown storage kind: " + kind, nameof(kind)),
         };
     }
@@ -109,6 +117,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void ContentVerification(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -131,6 +140,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void ContentAndDateRoundtrip(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -160,6 +170,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void DisposeReopen(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -182,6 +193,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void NullBatch_Throws(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -194,6 +206,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void PreCancelledToken_PreventsWork(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -212,6 +225,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void BatchingBehavior(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -239,6 +253,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void Concurrency_AddsArePresent(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -268,6 +283,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void CancellationDuringWrite_StopsEarly(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -294,6 +310,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void CancellationDuringRead_StopsEarly(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -319,6 +336,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void ExactBatching_Boundaries(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -345,6 +363,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void Ordering_IsPreserved(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -363,6 +382,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void Isolation_RawVsFiltered(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -454,6 +474,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void Statistics_AreAccurate(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -472,6 +493,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void LargePayloads_HandleAndBatch(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -493,6 +515,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     public void MutationSafety_CallbackMutatingBatchDoesNotAffectStorage(string kind)
     {
         var factory = GetFactoryByKind(kind);
@@ -515,6 +538,7 @@ public class StorageTests
     [DataTestMethod]
     [DataRow("InMemory")]
     [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
     [TestCategory("Performance")]
     public void Performance_InsertOneMillion(string kind)
     {

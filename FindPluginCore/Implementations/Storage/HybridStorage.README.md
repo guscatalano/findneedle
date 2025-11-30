@@ -1,0 +1,153 @@
+# HybridStorage Implementation
+
+## Overview
+
+`HybridStorage` is an adaptive storage implementation that combines the speed of in-memory caching with the persistence and capacity of SQLite database storage. **All data is written to both memory (for fast access) and SQLite (for persistence)**, ensuring data survives across sessions while maintaining high performance.
+
+## Key Features
+
+### 1. **Write-Through Persistence**
+- All writes go to both memory and SQLite simultaneously
+- Data persists across application restarts
+- No data loss on crashes or normal termination
+
+### 2. **Automatic Memory Management**
+- Monitors memory usage in real-time
+- Automatically reduces memory cache when threshold is approached
+- Configurable memory threshold
+
+### 3. **SQLite as Source of Truth**
+- All data stored in SQLite database
+- Can reopen and access data from previous sessions
+- Memory acts as a performance cache
+
+### 4. **Transparent Operation**
+- Implements `ISearchStorage` interface identically to other storage types
+- Reads from SQLite (single source of truth)
+- Applications using it don't need to know about the hybrid nature
+
+### 5. **Thread-Safe**
+- All operations are thread-safe using lock-based synchronization
+- Safe for concurrent reads and writes
+
+
+## Architecture
+
+```
+???????????????????????????????????????????????????????????????
+?                      HybridStorage                          ?
+???????????????????????????????????????????????????????????????
+?  Configuration:                                              ?
+?  - Memory Threshold (MB)                                     ?
+?  - Spill Percentage (0-1)                                    ?
+?  - Promotion Threshold (access count)                        ?
+???????????????????????????????????????????????????????????????
+?                                                              ?
+?  ??????????????????????????    ??????????????????????????  ?
+?  ?   InMemoryStorage      ?    ?   SqliteStorage        ?  ?
+?  ?   (Performance Cache)  ?    ?   (Source of Truth)    ?  ?
+?  ?                        ?    ?                        ?  ?
+?  ?  - Fast access         ??????  - All data persisted  ?  ?
+?  ?  - Limited capacity    ??????  - Survives restarts   ?  ?
+?  ?  - Volatile cache      ?    ?  - Unlimited capacity  ?  ?
+?  ??????????????????????????    ??????????????????????????  ?
+?           ?                              ?                   ?
+?           ?                              ?                   ?
+?           ????????? Write-Through ????????                   ?
+?                   (all writes)                               ?
+?                                                              ?
+?  ?????????????????????????????????????????????????????????? ?
+?  ?         Access Tracking (LRU)                          ? ?
+?  ?  - Raw Results Access Counts                           ? ?
+?  ?  - Filtered Results Access Counts                      ? ?
+?  ?????????????????????????????????????????????????????????? ?
+???????????????????????????????????????????????????????????????
+```
+
+## Usage
+
+### Basic Usage
+
+```csharp
+using var storage = new HybridStorage(
+    searchedFilePath: @"C:\logs\application.evtx",
+    memoryThresholdMB: 100,      // Start spilling at 100MB
+    spillPercentage: 0.5,         // Spill 50% of data when threshold reached
+    promotionThreshold: 3         // Promote to memory after 3 accesses
+);
+
+// Add data - automatically managed
+storage.AddRawBatch(searchResults);
+
+// Read data - transparently reads from both memory and disk
+storage.GetRawResultsInBatches(batch => 
+{
+    ProcessBatch(batch);
+}, batchSize: 1000);
+```
+
+### Constructor Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `searchedFilePath` | `string` | *required* | Path to the file being searched (used for SQLite DB location) |
+| `memoryThresholdMB` | `int` | `100` | Memory threshold in MB before spilling to disk |
+| `spillPercentage` | `double` | `0.5` | Percentage of data to spill (0.0-1.0) |
+| `promotionThreshold` | `int` | `3` | Number of accesses before promoting from disk to memory |
+
+### Configuration Guidelines
+
+#### Memory Threshold
+- **Small datasets (< 1M records)**: 50-100 MB
+- **Medium datasets (1M-10M records)**: 100-500 MB
+- **Large datasets (> 10M records)**: 500-2000 MB
+- **Consider**: Available system memory, concurrent applications
+
+#### Spill Percentage
+- **Conservative (0.3-0.4)**: Keeps more data in memory, spills less frequently
+- **Balanced (0.5)**: Even split between memory and disk
+- **Aggressive (0.6-0.8)**: Keeps memory usage low, relies more on disk
+
+#### Promotion Threshold
+- **Low (1-2)**: Promotes data quickly, more memory churn
+- **Medium (3-5)**: Balanced approach
+- **High (6-10)**: Only promotes frequently accessed data
+
+## How It Works
+
+### Write Path (AddRawBatch/AddFilteredBatch)
+
+```
+1. Calculate size of incoming batch
+2. Check: Will this exceed memory threshold?
+   ?? YES ? Reduce memory cache usage
+   ?? NO  ? Continue
+3. Write to InMemoryStorage (cache)
+4. Write to SqliteStorage (persistent)
+5. Update memory usage tracking
+```
+
+### Read Path (GetRawResultsInBatches/GetFilteredResultsInBatches)
+
+```
+1. Read from SqliteStorage (source of truth)
+2. Track accesses for all items
+3. Deliver batches to callback
+```
+
+**Note**: Future optimization could check memory cache first for hot data, falling back to SQLite for cache misses.
+
+### Memory Management
+
+```
+When: Current Memory + Batch Size > Threshold
+Then: Reduce memory cache by (spillPercentage)
+      Data remains accessible in SQLite
+```
+
+### Persistence
+
+All data is written to SQLite immediately, ensuring:
+- **Durability**: Data survives crashes and restarts
+- **Consistency**: SQLite is always the complete dataset
+- **Recovery**: Can reopen storage and access all previous data
