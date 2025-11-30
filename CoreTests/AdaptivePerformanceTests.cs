@@ -120,6 +120,11 @@ public class AdaptivePerformanceTests
             var overallSw = Stopwatch.StartNew();
             bool timedOut = false;
             int batchesCompleted = 0;
+            
+            // Track overhead separately
+            double totalGetStatisticsTimeMs = 0;
+            double totalBatchCreationTimeMs = 0;
+            int getStatisticsCallCount = 0;
 
             // Write all batches with timeout check
             for (int batchNum = 0; batchNum < totalBatches; batchNum++)
@@ -133,10 +138,15 @@ public class AdaptivePerformanceTests
                     break;
                 }
 
+                // Measure batch creation time
+                var batchCreationSw = Stopwatch.StartNew();
                 var batch = Enumerable.Range(0, batchSize)
                     .Select(i => (ISearchResult)new DummySearchResult($"{storageKind}{batchNum:D5}-{i:D5}"))
                     .ToList();
+                batchCreationSw.Stop();
+                totalBatchCreationTimeMs += batchCreationSw.Elapsed.TotalMilliseconds;
 
+                // Measure pure write time
                 var sw = Stopwatch.StartNew();
                 storage.AddRawBatch(batch);
                 sw.Stop();
@@ -148,7 +158,15 @@ public class AdaptivePerformanceTests
                 // Record data point every 10 batches for graphing
                 if (batchNum % 10 == 0 || batchNum == totalBatches - 1)
                 {
+                    // Measure GetStatistics time
+                    var statsSw = Stopwatch.StartNew();
                     var stats = storage.GetStatistics();
+                    statsSw.Stop();
+                    
+                    var statsTime = statsSw.Elapsed.TotalMilliseconds;
+                    totalGetStatisticsTimeMs += statsTime;
+                    getStatisticsCallCount++;
+                    
                     performanceData.Add(new PerformanceDataPoint
                     {
                         BatchNumber = batchNum + 1,
@@ -176,6 +194,11 @@ public class AdaptivePerformanceTests
             var baseline = writeTimings.Take(Math.Min(10, writeTimings.Count)).Average(); // First 10 batches as baseline
             var actualRecords = batchesCompleted * batchSize;
             
+            // Calculate time breakdown
+            var totalWriteTimeMs = writeTimings.Sum();
+            var totalElapsedMs = overallSw.Elapsed.TotalMilliseconds;
+            var otherOverheadMs = totalElapsedMs - totalWriteTimeMs - totalGetStatisticsTimeMs - totalBatchCreationTimeMs;
+            
             results[storageKind] = new WriteTestResult
             {
                 StorageKind = storageKind,
@@ -190,7 +213,12 @@ public class AdaptivePerformanceTests
                 FinalMemoryMB = finalStats.sizeInMemory / 1024.0 / 1024.0,
                 FinalDiskMB = finalStats.sizeOnDisk / 1024.0 / 1024.0,
                 PerformanceData = performanceData,
-                TimedOut = timedOut
+                TimedOut = timedOut,
+                TotalWriteTimeMs = totalWriteTimeMs,
+                TotalGetStatisticsTimeMs = totalGetStatisticsTimeMs,
+                GetStatisticsCallCount = getStatisticsCallCount,
+                TotalBatchCreationTimeMs = totalBatchCreationTimeMs,
+                OtherOverheadMs = otherOverheadMs
             };
 
             if (timedOut)
@@ -202,6 +230,12 @@ public class AdaptivePerformanceTests
                 Console.WriteLine($"? {storageKind} completed in {overallSw.Elapsed.TotalSeconds:F2}s");
             }
             Console.WriteLine($"  Avg: {writeTimings.Average():F2}ms, Median: {GetMedian(writeTimings):F2}ms, Baseline: {baseline:F2}ms");
+            Console.WriteLine();
+            Console.WriteLine($"  Time Breakdown:");
+            Console.WriteLine($"    Pure writes:      {totalWriteTimeMs / 1000.0,8:F2}s ({totalWriteTimeMs / totalElapsedMs * 100,5:F1}%)");
+            Console.WriteLine($"    GetStatistics:    {totalGetStatisticsTimeMs / 1000.0,8:F2}s ({totalGetStatisticsTimeMs / totalElapsedMs * 100,5:F1}%) - {getStatisticsCallCount} calls");
+            Console.WriteLine($"    Batch creation:   {totalBatchCreationTimeMs / 1000.0,8:F2}s ({totalBatchCreationTimeMs / totalElapsedMs * 100,5:F1}%)");
+            Console.WriteLine($"    Other overhead:   {otherOverheadMs / 1000.0,8:F2}s ({otherOverheadMs / totalElapsedMs * 100,5:F1}%)");
             Console.WriteLine();
 
             factory.cleanup();
@@ -538,6 +572,11 @@ public class AdaptivePerformanceTests
         public double FinalDiskMB { get; set; }
         public List<PerformanceDataPoint> PerformanceData { get; set; }
         public bool TimedOut { get; set; }
+        public double TotalWriteTimeMs { get; set; }
+        public double TotalGetStatisticsTimeMs { get; set; }
+        public int GetStatisticsCallCount { get; set; }
+        public double TotalBatchCreationTimeMs { get; set; }
+        public double OtherOverheadMs { get; set; }
     }
 
     private class PerformanceDataPoint
