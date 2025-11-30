@@ -407,6 +407,43 @@ public class AdaptivePerformanceTests
             </table>
         </div>
 
+        <div class='card'>
+            <h2>? Time Breakdown - Where Did The Time Go?</h2>
+            <table>
+                <tr>
+                    <th>Storage Type</th>
+                    <th>Pure Writes</th>
+                    <th>GetStatistics</th>
+                    <th>Batch Creation</th>
+                    <th>Other Overhead</th>
+                </tr>
+                <tr>
+                    <td><strong>SQLite</strong></td>
+                    <td>{sqlite.TotalWriteTimeMs / 1000.0:F2}s ({sqlite.TotalWriteTimeMs / (sqlite.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td>{sqlite.TotalGetStatisticsTimeMs / 1000.0:F2}s ({sqlite.TotalGetStatisticsTimeMs / (sqlite.TotalTimeSeconds * 1000) * 100:F1}%) <br/><small>{sqlite.GetStatisticsCallCount} calls, {sqlite.TotalGetStatisticsTimeMs / sqlite.GetStatisticsCallCount:F2}ms avg</small></td>
+                    <td>{sqlite.TotalBatchCreationTimeMs / 1000.0:F2}s ({sqlite.TotalBatchCreationTimeMs / (sqlite.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td>{sqlite.OtherOverheadMs / 1000.0:F2}s ({sqlite.OtherOverheadMs / (sqlite.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                </tr>
+                <tr class='{(hybrid.TotalGetStatisticsTimeMs / (hybrid.TotalTimeSeconds * 1000) > 0.5 ? "timeout" : "")}'>
+                    <td><strong>Hybrid</strong></td>
+                    <td>{hybrid.TotalWriteTimeMs / 1000.0:F2}s ({hybrid.TotalWriteTimeMs / (hybrid.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td style='font-weight: bold; color: {(hybrid.TotalGetStatisticsTimeMs / (hybrid.TotalTimeSeconds * 1000) > 0.5 ? "#f5576c" : "inherit")};'>{hybrid.TotalGetStatisticsTimeMs / 1000.0:F2}s ({hybrid.TotalGetStatisticsTimeMs / (hybrid.TotalTimeSeconds * 1000) * 100:F1}%) {(hybrid.TotalGetStatisticsTimeMs / (hybrid.TotalTimeSeconds * 1000) > 0.5 ? "?? BOTTLENECK!" : "")}<br/><small>{hybrid.GetStatisticsCallCount} calls, {hybrid.TotalGetStatisticsTimeMs / hybrid.GetStatisticsCallCount:F2}ms avg</small></td>
+                    <td>{hybrid.TotalBatchCreationTimeMs / 1000.0:F2}s ({hybrid.TotalBatchCreationTimeMs / (hybrid.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td>{hybrid.OtherOverheadMs / 1000.0:F2}s ({hybrid.OtherOverheadMs / (hybrid.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                </tr>
+                <tr>
+                    <td><strong>InMemory</strong></td>
+                    <td>{inMemory.TotalWriteTimeMs / 1000.0:F2}s ({inMemory.TotalWriteTimeMs / (inMemory.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td>{inMemory.TotalGetStatisticsTimeMs / 1000.0:F2}s ({inMemory.TotalGetStatisticsTimeMs / (inMemory.TotalTimeSeconds * 1000) * 100:F1}%) <br/><small>{inMemory.GetStatisticsCallCount} calls, {inMemory.TotalGetStatisticsTimeMs / inMemory.GetStatisticsCallCount:F2}ms avg</small></td>
+                    <td>{inMemory.TotalBatchCreationTimeMs / 1000.0:F2}s ({inMemory.TotalBatchCreationTimeMs / (inMemory.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td>{inMemory.OtherOverheadMs / 1000.0:F2}s ({inMemory.OtherOverheadMs / (inMemory.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                </tr>
+            </table>
+            <p style='margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;'>
+                <strong>?? Key Insight:</strong> If GetStatistics takes more than 50% of total time, it's a bottleneck that needs optimization!
+            </p>
+        </div>
+
         <div class='card chart-container'>
             <h2>Write Time Over Records</h2>
             <div id='writeTimeChart'></div>
