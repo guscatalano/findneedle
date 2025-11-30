@@ -217,31 +217,17 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
-                // Check if we need to spill (lazy spilling triggered by any operation)
-                // Only if not in SQLite-only mode
-                if (!_useOnlySqlite && _currentMemoryUsage > _memoryThresholdBytes)
-                {
-                    // Spill both raw and filtered if over threshold
-                    var memStats = _memoryStorage.GetStatistics();
-                    if (memStats.rawRecordCount > 0)
-                    {
-                        SpillRawToDisk(default);
-                    }
-                    if (memStats.filteredRecordCount > 0)
-                    {
-                        SpillFilteredToDisk(default);
-                    }
-                }
-                
-                var memStatsAfter = _memoryStorage.GetStatistics();
+                // Just get statistics from both storages - don't trigger spilling!
+                // Spilling should only happen during write operations, not during statistics queries
+                var memStats = _memoryStorage.GetStatistics();
                 var diskStats = _diskStorage.GetStatistics();
 
-                // Total record count is memory + disk (not just disk anymore)
+                // Total record count is memory + disk
                 return (
-                    rawRecordCount: memStatsAfter.rawRecordCount + diskStats.rawRecordCount,
-                    filteredRecordCount: memStatsAfter.filteredRecordCount + diskStats.filteredRecordCount,
+                    rawRecordCount: memStats.rawRecordCount + diskStats.rawRecordCount,
+                    filteredRecordCount: memStats.filteredRecordCount + diskStats.filteredRecordCount,
                     sizeOnDisk: diskStats.sizeOnDisk,
-                    sizeInMemory: _useOnlySqlite ? 0 : memStatsAfter.sizeInMemory
+                    sizeInMemory: _useOnlySqlite ? 0 : memStats.sizeInMemory
                 );
             }
         }
