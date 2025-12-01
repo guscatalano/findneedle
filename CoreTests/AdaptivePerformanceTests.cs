@@ -67,7 +67,8 @@ public class AdaptivePerformanceTests
 
     private (Func<ISearchStorage> create, Action cleanup) CreateStorageFactory(string kind)
     {
-        var searchedFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        // Create unique path for each storage type to avoid database collisions
+        var searchedFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}_{kind}");
         var dbPath = CachedStorage.GetCacheFilePath(searchedFile, ".db");
         _createdDbPaths.Add(dbPath);
         if (File.Exists(dbPath))
@@ -78,6 +79,7 @@ public class AdaptivePerformanceTests
             "InMemory" => (() => new InMemoryStorage(), () => { }),
             "Sqlite" => (() => new SqliteStorage(searchedFile), () => { }),
             "Hybrid" => (() => new HybridStorage(searchedFile, memoryThresholdMB: 100), () => { }),
+            "HybridCapped" => (() => new HybridStorage(searchedFile, memoryThresholdMB: 100, maxRecordsInMemory: 1_000_000), () => { }),
             _ => throw new ArgumentException("Unknown storage kind: " + kind)
         };
     }
@@ -97,12 +99,14 @@ public class AdaptivePerformanceTests
         const int totalBatches = totalRecords / batchSize; // 600 batches
         const double timeoutSeconds = 80.0;
 
-        var storageTypes = new[] { "Sqlite", "Hybrid", "InMemory" };
+        var storageTypes = new[] { "Sqlite", "Hybrid", "HybridCapped", "InMemory" };
         var results = new Dictionary<string, WriteTestResult>();
 
         Console.WriteLine("=== COMPARATIVE WRITE PERFORMANCE TEST ===");
         Console.WriteLine($"Target: {totalRecords:N0} records ({totalBatches} batches of {batchSize:N0})");
         Console.WriteLine($"Timeout: {timeoutSeconds}s per storage type");
+        Console.WriteLine($"Hybrid: No record cap (memory threshold only)");
+        Console.WriteLine($"HybridCapped: 1,000,000 record cap in memory");
         Console.WriteLine();
 
         // Run test for each storage type
@@ -293,19 +297,23 @@ public class AdaptivePerformanceTests
 
         var sqlite = results["Sqlite"];
         var hybrid = results["Hybrid"];
+        var hybridCapped = results["HybridCapped"];
         var inMemory = results["InMemory"];
 
         // Prepare data for Plotly
         var sqliteRecords = string.Join(",", sqlite.PerformanceData.Select(d => d.TotalRecords));
         var hybridRecords = string.Join(",", hybrid.PerformanceData.Select(d => d.TotalRecords));
+        var hybridCappedRecords = string.Join(",", hybridCapped.PerformanceData.Select(d => d.TotalRecords));
         var inMemoryRecords = string.Join(",", inMemory.PerformanceData.Select(d => d.TotalRecords));
 
         var sqliteTimes = string.Join(",", sqlite.PerformanceData.Select(d => d.WriteTimeMs.ToString("F2")));
         var hybridTimes = string.Join(",", hybrid.PerformanceData.Select(d => d.WriteTimeMs.ToString("F2")));
+        var hybridCappedTimes = string.Join(",", hybridCapped.PerformanceData.Select(d => d.WriteTimeMs.ToString("F2")));
         var inMemoryTimes = string.Join(",", inMemory.PerformanceData.Select(d => d.WriteTimeMs.ToString("F2")));
 
         var sqliteStatus = sqlite.TimedOut ? "?? TIMEOUT" : $"{sqlite.TotalTimeSeconds:F1}s";
         var hybridStatus = hybrid.TimedOut ? "?? TIMEOUT" : $"{hybrid.TotalTimeSeconds:F1}s";
+        var hybridCappedStatus = hybridCapped.TimedOut ? "?? TIMEOUT" : $"{hybridCapped.TotalTimeSeconds:F1}s";
         var inMemoryStatus = inMemory.TimedOut ? "?? TIMEOUT" : $"{inMemory.TotalTimeSeconds:F1}s";
 
         var html = $@"<!DOCTYPE html>
@@ -319,7 +327,7 @@ public class AdaptivePerformanceTests
         h1 {{ color: white; text-align: center; font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
         .subtitle {{ color: rgba(255,255,255,0.9); text-align: center; font-size: 1.2em; margin-bottom: 30px; }}
         .card {{ background: white; padding: 25px; margin: 20px 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }}
-        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }}
         .stat-box {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }}
         .stat-box.timeout {{ background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }}
         .stat-box h3 {{ margin: 0 0 10px 0; font-size: 1.1em; opacity: 0.9; }}
@@ -337,7 +345,7 @@ public class AdaptivePerformanceTests
 <body>
     <div class='container'>
         <h1>?? Write Performance Comparison</h1>
-        <div class='subtitle'>Target: {targetRecords:N0} Records • SQLite vs Hybrid vs InMemory</div>
+        <div class='subtitle'>Target: {targetRecords:N0} Records • SQLite vs Hybrid vs Hybrid (1M cap) vs InMemory</div>
         
         <div class='stats-grid'>
             <div class='stat-box{(sqlite.TimedOut ? " timeout" : "")}'>
@@ -348,7 +356,12 @@ public class AdaptivePerformanceTests
             <div class='stat-box{(hybrid.TimedOut ? " timeout" : "")}'>
                 <h3>Hybrid</h3>
                 <div class='value'>{hybridStatus}</div>
-                <div class='label'>{hybrid.TotalRecords:N0} records • {hybrid.AverageWriteMs:F2}ms avg</div>
+                <div class='label'>{hybrid.TotalRecords:N0} records • {hybrid.AverageWriteMs:F2}ms avg<br/><small>No cap</small></div>
+            </div>
+            <div class='stat-box{(hybridCapped.TimedOut ? " timeout" : "")}'>
+                <h3>Hybrid (Capped)</h3>
+                <div class='value'>{hybridCappedStatus}</div>
+                <div class='label'>{hybridCapped.TotalRecords:N0} records • {hybridCapped.AverageWriteMs:F2}ms avg<br/><small>1M record cap</small></div>
             </div>
             <div class='stat-box{(inMemory.TimedOut ? " timeout" : "")}'>
                 <h3>InMemory</h3>
@@ -371,7 +384,7 @@ public class AdaptivePerformanceTests
                     <th>Min</th>
                     <th>Max</th>
                 </tr>
-                <tr class='{(sqlite.TimedOut ? "timeout" : (sqlite.TotalTimeSeconds < hybrid.TotalTimeSeconds && sqlite.TotalTimeSeconds < inMemory.TotalTimeSeconds ? "winner" : ""))}'>
+                <tr class='{(sqlite.TimedOut ? "timeout" : (sqlite.TotalTimeSeconds < hybrid.TotalTimeSeconds && sqlite.TotalTimeSeconds < hybridCapped.TotalTimeSeconds && sqlite.TotalTimeSeconds < inMemory.TotalTimeSeconds ? "winner" : ""))}'>
                     <td><strong>SQLite</strong></td>
                     <td>{(sqlite.TimedOut ? "?? TIMEOUT" : "? PASS")}</td>
                     <td>{sqlite.TotalTimeSeconds:F2}s</td>
@@ -382,7 +395,7 @@ public class AdaptivePerformanceTests
                     <td>{sqlite.MinWriteMs:F2}ms</td>
                     <td>{sqlite.MaxWriteMs:F2}ms</td>
                 </tr>
-                <tr class='{(hybrid.TimedOut ? "timeout" : (hybrid.TotalTimeSeconds < sqlite.TotalTimeSeconds && hybrid.TotalTimeSeconds < inMemory.TotalTimeSeconds ? "winner" : ""))}'>
+                <tr class='{(hybrid.TimedOut ? "timeout" : (hybrid.TotalTimeSeconds < sqlite.TotalTimeSeconds && hybrid.TotalTimeSeconds < hybridCapped.TotalTimeSeconds && hybrid.TotalTimeSeconds < inMemory.TotalTimeSeconds ? "winner" : ""))}'>
                     <td><strong>Hybrid</strong></td>
                     <td>{(hybrid.TimedOut ? "?? TIMEOUT" : "? PASS")}</td>
                     <td>{hybrid.TotalTimeSeconds:F2}s</td>
@@ -393,7 +406,18 @@ public class AdaptivePerformanceTests
                     <td>{hybrid.MinWriteMs:F2}ms</td>
                     <td>{hybrid.MaxWriteMs:F2}ms</td>
                 </tr>
-                <tr class='{(inMemory.TimedOut ? "timeout" : (inMemory.TotalTimeSeconds < sqlite.TotalTimeSeconds && inMemory.TotalTimeSeconds < hybrid.TotalTimeSeconds ? "winner" : ""))}'>
+                <tr class='{(hybridCapped.TimedOut ? "timeout" : (hybridCapped.TotalTimeSeconds < sqlite.TotalTimeSeconds && hybridCapped.TotalTimeSeconds < hybrid.TotalTimeSeconds && hybridCapped.TotalTimeSeconds < inMemory.TotalTimeSeconds ? "winner" : ""))}'>
+                    <td><strong>Hybrid (Capped)</strong></td>
+                    <td>{(hybridCapped.TimedOut ? "?? TIMEOUT" : "? PASS")}</td>
+                    <td>{hybridCapped.TotalTimeSeconds:F2}s</td>
+                    <td>{hybridCapped.TotalRecords:N0}</td>
+                    <td>{hybridCapped.AverageWriteMs:F2}ms</td>
+                    <td>{hybridCapped.MedianWriteMs:F2}ms</td>
+                    <td>{hybridCapped.BaselineWriteMs:F2}ms</td>
+                    <td>{hybridCapped.MinWriteMs:F2}ms</td>
+                    <td>{hybridCapped.MaxWriteMs:F2}ms</td>
+                </tr>
+                <tr class='{(inMemory.TimedOut ? "timeout" : (inMemory.TotalTimeSeconds < sqlite.TotalTimeSeconds && inMemory.TotalTimeSeconds < hybrid.TotalTimeSeconds && inMemory.TotalTimeSeconds < hybridCapped.TotalTimeSeconds ? "winner" : ""))}'>
                     <td><strong>InMemory</strong></td>
                     <td>{(inMemory.TimedOut ? "?? TIMEOUT" : "? PASS")}</td>
                     <td>{inMemory.TotalTimeSeconds:F2}s</td>
@@ -430,6 +454,13 @@ public class AdaptivePerformanceTests
                     <td style='font-weight: bold; color: {(hybrid.TotalGetStatisticsTimeMs / (hybrid.TotalTimeSeconds * 1000) > 0.5 ? "#f5576c" : "inherit")};'>{hybrid.TotalGetStatisticsTimeMs / 1000.0:F2}s ({hybrid.TotalGetStatisticsTimeMs / (hybrid.TotalTimeSeconds * 1000) * 100:F1}%) {(hybrid.TotalGetStatisticsTimeMs / (hybrid.TotalTimeSeconds * 1000) > 0.5 ? "?? BOTTLENECK!" : "")}<br/><small>{hybrid.GetStatisticsCallCount} calls, {hybrid.TotalGetStatisticsTimeMs / hybrid.GetStatisticsCallCount:F2}ms avg</small></td>
                     <td>{hybrid.TotalBatchCreationTimeMs / 1000.0:F2}s ({hybrid.TotalBatchCreationTimeMs / (hybrid.TotalTimeSeconds * 1000) * 100:F1}%)</td>
                     <td>{hybrid.OtherOverheadMs / 1000.0:F2}s ({hybrid.OtherOverheadMs / (hybrid.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                </tr>
+                <tr>
+                    <td><strong>Hybrid (Capped)</strong></td>
+                    <td>{hybridCapped.TotalWriteTimeMs / 1000.0:F2}s ({hybridCapped.TotalWriteTimeMs / (hybridCapped.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td>{hybridCapped.TotalGetStatisticsTimeMs / 1000.0:F2}s ({hybridCapped.TotalGetStatisticsTimeMs / (hybridCapped.TotalTimeSeconds * 1000) * 100:F1}%) <br/><small>{hybridCapped.GetStatisticsCallCount} calls, {hybridCapped.TotalGetStatisticsTimeMs / hybridCapped.GetStatisticsCallCount:F2}ms avg</small></td>
+                    <td>{hybridCapped.TotalBatchCreationTimeMs / 1000.0:F2}s ({hybridCapped.TotalBatchCreationTimeMs / (hybridCapped.TotalTimeSeconds * 1000) * 100:F1}%)</td>
+                    <td>{hybridCapped.OtherOverheadMs / 1000.0:F2}s ({hybridCapped.OtherOverheadMs / (hybridCapped.TotalTimeSeconds * 1000) * 100:F1}%)</td>
                 </tr>
                 <tr>
                     <td><strong>InMemory</strong></td>
@@ -484,6 +515,15 @@ public class AdaptivePerformanceTests
             line: {{ color: '#4ECDC4', width: 3 }}
         }};
 
+        var hybridCappedTrace = {{
+            x: [{hybridCappedRecords}],
+            y: [{hybridCappedTimes}],
+            name: 'Hybrid (Capped){(hybridCapped.TimedOut ? " (timeout)" : "")}',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#FFD93D', width: 3 }}
+        }};
+
         var inMemoryTrace = {{
             x: [{inMemoryRecords}],
             y: [{inMemoryTimes}],
@@ -501,11 +541,12 @@ public class AdaptivePerformanceTests
             paper_bgcolor: 'white'
         }};
 
-        Plotly.newPlot('writeTimeChart', [sqliteTrace, hybridTrace, inMemoryTrace], writeTimeLayout, {{responsive: true}});
+        Plotly.newPlot('writeTimeChart', [sqliteTrace, hybridTrace, hybridCappedTrace, inMemoryTrace], writeTimeLayout, {{responsive: true}});
 
         // Performance Degradation (ratio to baseline)
         var sqliteBaseline = {sqlite.BaselineWriteMs:F2};
         var hybridBaseline = {hybrid.BaselineWriteMs:F2};
+        var hybridCappedBaseline = {hybridCapped.BaselineWriteMs:F2};
         var inMemoryBaseline = {inMemory.BaselineWriteMs:F2};
 
         var sqliteDegradation = {{
@@ -524,6 +565,15 @@ public class AdaptivePerformanceTests
             type: 'scatter',
             mode: 'lines',
             line: {{ color: '#4ECDC4', width: 3 }}
+        }};
+
+        var hybridCappedDegradation = {{
+            x: [{hybridCappedRecords}],
+            y: [{hybridCappedTimes}].map(t => t / hybridCappedBaseline),
+            name: 'Hybrid (Capped)',
+            type: 'scatter',
+            mode: 'lines',
+            line: {{ color: '#FFD93D', width: 3 }}
         }};
 
         var inMemoryDegradation = {{
@@ -551,18 +601,18 @@ public class AdaptivePerformanceTests
             }}]
         }};
 
-        Plotly.newPlot('degradationChart', [sqliteDegradation, hybridDegradation, inMemoryDegradation], degradationLayout, {{responsive: true}});
+        Plotly.newPlot('degradationChart', [sqliteDegradation, hybridDegradation, hybridCappedDegradation, inMemoryDegradation], degradationLayout, {{responsive: true}});
 
         // Bar Chart Comparison
         var barTrace = {{
-            x: ['SQLite', 'Hybrid', 'InMemory'],
-            y: [{sqlite.TotalTimeSeconds:F2}, {hybrid.TotalTimeSeconds:F2}, {inMemory.TotalTimeSeconds:F2}],
+            x: ['SQLite', 'Hybrid', 'Hybrid (Capped)', 'InMemory'],
+            y: [{sqlite.TotalTimeSeconds:F2}, {hybrid.TotalTimeSeconds:F2}, {hybridCapped.TotalTimeSeconds:F2}, {inMemory.TotalTimeSeconds:F2}],
             type: 'bar',
             marker: {{
-                color: [{(sqlite.TimedOut ? "'#f5576c'" : "'#FF6B6B'")}, {(hybrid.TimedOut ? "'#f5576c'" : "'#4ECDC4'")}, {(inMemory.TimedOut ? "'#f5576c'" : "'#95E1D3'")}],
+                color: [{(sqlite.TimedOut ? "'#f5576c'" : "'#FF6B6B'")}, {(hybrid.TimedOut ? "'#f5576c'" : "'#4ECDC4'")}, {(hybridCapped.TimedOut ? "'#f5576c'" : "'#FFD93D'")}, {(inMemory.TimedOut ? "'#f5576c'" : "'#95E1D3'")}],
                 line: {{ color: 'white', width: 2 }}
             }},
-            text: ['{sqlite.TotalTimeSeconds:F2}s{(sqlite.TimedOut ? " (timeout)" : "")}', '{hybrid.TotalTimeSeconds:F2}s{(hybrid.TimedOut ? " (timeout)" : "")}', '{inMemory.TotalTimeSeconds:F2}s{(inMemory.TimedOut ? " (timeout)" : "")}'],
+            text: ['{sqlite.TotalTimeSeconds:F2}s{(sqlite.TimedOut ? " (timeout)" : "")}', '{hybrid.TotalTimeSeconds:F2}s{(hybrid.TimedOut ? " (timeout)" : "")}', '{hybridCapped.TotalTimeSeconds:F2}s{(hybridCapped.TimedOut ? " (timeout)" : "")}', '{inMemory.TotalTimeSeconds:F2}s{(inMemory.TimedOut ? " (timeout)" : "")}'],
             textposition: 'outside'
         }};
 

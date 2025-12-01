@@ -17,6 +17,10 @@ namespace FindPluginCore.Implementations.Storage
         private readonly List<AccessTrackedResult> _filteredResults = new();
         private readonly object _sync = new();
 
+        // Cache statistics to avoid expensive recalculation on every call
+        private (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory)? _cachedStats = null;
+        private bool _statsInvalid = true;
+
         // Wrapper to track access time for LRU eviction
         private class AccessTrackedResult
         {
@@ -51,6 +55,7 @@ namespace FindPluginCore.Implementations.Storage
             lock (_sync)
             {
                 _rawResults.AddRange(toAdd);
+                _statsInvalid = true; // Invalidate cache
             }
         }
 
@@ -70,6 +75,7 @@ namespace FindPluginCore.Implementations.Storage
             lock (_sync)
             {
                 _filteredResults.AddRange(toAdd);
+                _statsInvalid = true; // Invalidate cache
             }
         }
 
@@ -147,28 +153,41 @@ namespace FindPluginCore.Implementations.Storage
 
         public (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory) GetStatistics()
         {
-            List<AccessTrackedResult> rawSnapshot, filteredSnapshot;
             lock (_sync)
             {
-                rawSnapshot = new List<AccessTrackedResult>(_rawResults);
-                filteredSnapshot = new List<AccessTrackedResult>(_filteredResults);
-            }
+                // Return cached statistics if still valid
+                if (!_statsInvalid && _cachedStats.HasValue)
+                {
+                    return _cachedStats.Value;
+                }
 
-            int rawRecordCount = rawSnapshot.Count;
-            int filteredRecordCount = filteredSnapshot.Count;
-            long sizeInMemory = 0;
-            
-            foreach (var trackedResult in rawSnapshot)
-            {
-                sizeInMemory += CalculateResultSize(trackedResult.Result);
+                // Recalculate statistics
+                int rawRecordCount = _rawResults.Count; // O(1) - just get Count
+                int filteredRecordCount = _filteredResults.Count; // O(1)
+                long sizeInMemory = 0;
+                
+                // Only calculate size if we actually have records
+                if (rawRecordCount > 0 || filteredRecordCount > 0)
+                {
+                    foreach (var trackedResult in _rawResults)
+                    {
+                        sizeInMemory += CalculateResultSize(trackedResult.Result);
+                    }
+                    foreach (var trackedResult in _filteredResults)
+                    {
+                        sizeInMemory += CalculateResultSize(trackedResult.Result);
+                    }
+                }
+                
+                long sizeOnDisk = 0;
+                var stats = (rawRecordCount, filteredRecordCount, sizeOnDisk, sizeInMemory);
+                
+                // Cache the result
+                _cachedStats = stats;
+                _statsInvalid = false;
+                
+                return stats;
             }
-            foreach (var trackedResult in filteredSnapshot)
-            {
-                sizeInMemory += CalculateResultSize(trackedResult.Result);
-            }
-            
-            long sizeOnDisk = 0;
-            return (rawRecordCount, filteredRecordCount, sizeOnDisk, sizeInMemory);
         }
 
         private static long CalculateResultSize(ISearchResult result)
@@ -239,11 +258,13 @@ namespace FindPluginCore.Implementations.Storage
 
                 if (toRemove.Count == 0) return new List<ISearchResult>();
 
-                // Remove from the main list
-                foreach (var item in toRemove)
-                {
-                    _rawResults.Remove(item);
-                }
+                // Create a HashSet for O(1) lookup during removal
+                var toRemoveSet = new HashSet<AccessTrackedResult>(toRemove);
+
+                // Use RemoveAll for efficient O(n) bulk removal instead of O(n²)
+                _rawResults.RemoveAll(item => toRemoveSet.Contains(item));
+
+                _statsInvalid = true; // Invalidate cache after removing
 
                 // Return the actual ISearchResult objects
                 return toRemove.Select(r => r.Result).ToList();
@@ -268,11 +289,13 @@ namespace FindPluginCore.Implementations.Storage
 
                 if (toRemove.Count == 0) return new List<ISearchResult>();
 
-                // Remove from the main list
-                foreach (var item in toRemove)
-                {
-                    _filteredResults.Remove(item);
-                }
+                // Create a HashSet for O(1) lookup during removal
+                var toRemoveSet = new HashSet<AccessTrackedResult>(toRemove);
+
+                // Use RemoveAll for efficient O(n) bulk removal instead of O(n²)
+                _filteredResults.RemoveAll(item => toRemoveSet.Contains(item));
+
+                _statsInvalid = true; // Invalidate cache after removing
 
                 // Return the actual ISearchResult objects
                 return toRemove.Select(r => r.Result).ToList();

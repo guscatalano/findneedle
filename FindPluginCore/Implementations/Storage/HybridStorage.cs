@@ -26,6 +26,7 @@ namespace FindPluginCore.Implementations.Storage
         private readonly long _memoryThresholdBytes;
         private readonly double _spillPercentage;
         private readonly int _promotionThreshold;
+        private readonly int _maxRecordsInMemory; // NEW: Cap on total records in memory
         
         // Tracking for LRU promotion
         private readonly Dictionary<string, AccessTracker> _rawAccessTracking = new();
@@ -35,6 +36,7 @@ namespace FindPluginCore.Implementations.Storage
         private long _currentMemoryUsage;
         private bool _hasSpilledRaw;
         private bool _hasSpilledFiltered;
+        private int _currentRecordCount; // NEW: Track record count directly without calling GetStatistics()
         
         // Performance tracking for adaptive strategy
         private bool _useOnlySqlite = false; // When true, bypass InMemory entirely
@@ -51,11 +53,13 @@ namespace FindPluginCore.Implementations.Storage
         /// <param name="memoryThresholdMB">Memory threshold in MB before spilling to disk (default: 100MB)</param>
         /// <param name="spillPercentage">Percentage of data to spill when threshold is reached (default: 0.5 = 50%)</param>
         /// <param name="promotionThreshold">Number of accesses before promoting from disk to memory (default: 3)</param>
+        /// <param name="maxRecordsInMemory">Maximum number of records to keep in memory before spilling (default: int.MaxValue = no cap)</param>
         public HybridStorage(
             string searchedFilePath, 
             int memoryThresholdMB = 100,
             double spillPercentage = 0.5,
-            int promotionThreshold = 3)
+            int promotionThreshold = 3,
+            int maxRecordsInMemory = int.MaxValue)
         {
             if (string.IsNullOrEmpty(searchedFilePath))
                 throw new ArgumentNullException(nameof(searchedFilePath));
@@ -65,12 +69,15 @@ namespace FindPluginCore.Implementations.Storage
                 throw new ArgumentOutOfRangeException(nameof(spillPercentage), "Must be between 0 and 1");
             if (promotionThreshold <= 0)
                 throw new ArgumentOutOfRangeException(nameof(promotionThreshold), "Must be greater than 0");
+            if (maxRecordsInMemory <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxRecordsInMemory), "Must be greater than 0");
 
             _memoryStorage = new InMemoryStorage();
             _diskStorage = new SqliteStorage(searchedFilePath);
             _memoryThresholdBytes = memoryThresholdMB * 1024L * 1024L;
             _spillPercentage = spillPercentage;
             _promotionThreshold = promotionThreshold;
+            _maxRecordsInMemory = maxRecordsInMemory;
             
             // Check if there's existing data on disk from a previous session
             var diskStats = _diskStorage.GetStatistics();
@@ -106,12 +113,39 @@ namespace FindPluginCore.Implementations.Storage
                 }
                 else
                 {
+                    // Check if adding this batch would exceed the cap
+                    if (_currentRecordCount + batchList.Count > _maxRecordsInMemory)
+                    {
+                        // Calculate how much to spill to make room for this batch AND stay under threshold
+                        // Spill enough to get down to 70% of capacity, providing buffer for future batches
+                        int targetCount = (int)(_maxRecordsInMemory * 0.7);
+                        int itemsToSpill = _currentRecordCount - targetCount;
+                        
+                        if (itemsToSpill > 0)
+                        {
+                            // Spill the calculated amount to make room
+                            var memStats = _memoryStorage.GetStatistics();
+                            int actualItemsToSpill = Math.Min(itemsToSpill, memStats.rawRecordCount);
+                            
+                            if (actualItemsToSpill > 0)
+                            {
+                                var itemsToDisk = _memoryStorage.RemoveOldestRaw(actualItemsToSpill);
+                                long memoryFreed = CalculateBatchSize(itemsToDisk);
+                                _currentMemoryUsage -= memoryFreed;
+                                _currentRecordCount -= itemsToDisk.Count;
+                                _diskStorage.AddRawBatch(itemsToDisk, cancellationToken);
+                                _hasSpilledRaw = true;
+                            }
+                        }
+                    }
+                    
                     // Use InMemory with performance tracking
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     _memoryStorage.AddRawBatch(batchList, cancellationToken);
                     sw.Stop();
                     
                     _currentMemoryUsage += batchSize;
+                    _currentRecordCount += batchList.Count; // Track record count
                     TrackHybridWriteTime(sw.Elapsed.TotalMilliseconds);
                     
                     // Check if we should switch to SQLite-only mode
@@ -139,6 +173,7 @@ namespace FindPluginCore.Implementations.Storage
                 {
                     _memoryStorage.AddFilteredBatch(batchList, cancellationToken);
                     _currentMemoryUsage += batchSize;
+                    _currentRecordCount += batchList.Count; // Track record count
                 }
             }
         }
@@ -186,7 +221,7 @@ namespace FindPluginCore.Implementations.Storage
             {
                 if (_useOnlySqlite)
                 {
-                    // SQLite-only mode: read only from disk
+                    // SQLite-only mode: read from disk
                     _diskStorage.GetFilteredResultsInBatches(onBatch, batchSize, cancellationToken);
                 }
                 else
@@ -263,6 +298,7 @@ namespace FindPluginCore.Implementations.Storage
             // Calculate memory freed
             long memoryFreed = CalculateBatchSize(itemsToDisk);
             _currentMemoryUsage -= memoryFreed;
+            _currentRecordCount -= itemsToDisk.Count; // Update tracked count
             
             // Write spilled items to disk
             _diskStorage.AddRawBatch(itemsToDisk, cancellationToken);
@@ -287,6 +323,7 @@ namespace FindPluginCore.Implementations.Storage
             // Calculate memory freed
             long memoryFreed = CalculateBatchSize(itemsToDisk);
             _currentMemoryUsage -= memoryFreed;
+            _currentRecordCount -= itemsToDisk.Count; // Update tracked count
             
             // Write spilled items to disk
             _diskStorage.AddFilteredBatch(itemsToDisk, cancellationToken);
@@ -516,6 +553,7 @@ namespace FindPluginCore.Implementations.Storage
             _memoryStorage.Dispose();
             _memoryStorage = null; // No longer needed
             _currentMemoryUsage = 0;
+            _currentRecordCount = 0; // Reset tracked count
 
             // Log the switch for visibility
             System.Diagnostics.Debug.WriteLine(
