@@ -46,6 +46,13 @@ namespace FindPluginCore.Implementations.Storage
         private const int PERFORMANCE_CHECK_INTERVAL = 5; // Check every 5 writes (was 20)
         private const double WRITE_TIME_THRESHOLD_MS = 50.0; // Switch to SQLite if writes exceed 50ms (was 80ms)
 
+        // NEW: Async spilling with backpressure
+        private readonly SemaphoreSlim _spillSemaphore = new(1, 1);
+        private int _pendingSpillCount = 0;
+        private const int MAX_PENDING_SPILLS = 2; // Allow max 2 concurrent spills
+        private const double SOFT_CAP_MULTIPLIER = 1.0; // Trigger async spill at 100% of cap
+        private const double HARD_CAP_MULTIPLIER = 1.3; // Block at 130% of cap (backpressure)
+        
         /// <summary>
         /// Creates a hybrid storage instance.
         /// </summary>
@@ -113,33 +120,43 @@ namespace FindPluginCore.Implementations.Storage
                 }
                 else
                 {
-                    // Check if adding this batch would exceed the cap
+                    // NEW: Check for hard cap (backpressure) - block if exceeded
+                    int hardCap = (int)(_maxRecordsInMemory * HARD_CAP_MULTIPLIER);
+                    if (_currentRecordCount + batchList.Count > hardCap)
+                    {
+                        // We've exceeded hard cap - must wait for pending spills to complete
+                        Monitor.Exit(_sync);
+                        try
+                        {
+                            _spillSemaphore.Wait(cancellationToken);
+                            _spillSemaphore.Release();
+                        }
+                        finally
+                        {
+                            Monitor.Enter(_sync);
+                        }
+                    }
+                    
+                    // Check if adding this batch would exceed the soft cap (trigger async spill)
                     if (_currentRecordCount + batchList.Count > _maxRecordsInMemory)
                     {
-                        // Calculate how much to spill to make room for this batch AND stay under threshold
-                        // Spill enough to get down to 70% of capacity, providing buffer for future batches
-                        int targetCount = (int)(_maxRecordsInMemory * 0.7);
-                        int itemsToSpill = _currentRecordCount - targetCount;
-                        
-                        if (itemsToSpill > 0)
+                        // Only start new spill if we don't have too many pending
+                        if (_pendingSpillCount < MAX_PENDING_SPILLS && _spillSemaphore.CurrentCount > 0)
                         {
-                            // Spill the calculated amount to make room
-                            var memStats = _memoryStorage.GetStatistics();
-                            int actualItemsToSpill = Math.Min(itemsToSpill, memStats.rawRecordCount);
+                            // Calculate how much to spill to get down to 70% of capacity
+                            int targetCount = (int)(_maxRecordsInMemory * 0.7);
+                            int itemsToSpill = _currentRecordCount - targetCount;
                             
-                            if (actualItemsToSpill > 0)
+                            if (itemsToSpill > 0)
                             {
-                                var itemsToDisk = _memoryStorage.RemoveOldestRaw(actualItemsToSpill);
-                                long memoryFreed = CalculateBatchSize(itemsToDisk);
-                                _currentMemoryUsage -= memoryFreed;
-                                _currentRecordCount -= itemsToDisk.Count;
-                                _diskStorage.AddRawBatch(itemsToDisk, cancellationToken);
-                                _hasSpilledRaw = true;
+                                // Start async spill in background (non-blocking)
+                                _pendingSpillCount++;
+                                _ = Task.Run(() => SpillRawToDiskAsync(itemsToSpill, cancellationToken));
                             }
                         }
                     }
                     
-                    // Use InMemory with performance tracking
+                    // Add batch to memory immediately (doesn't wait for spill)
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     _memoryStorage.AddRawBatch(batchList, cancellationToken);
                     sw.Stop();
@@ -271,8 +288,28 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
+                // Wait for all pending spills to complete before disposing
+                while (_pendingSpillCount > 0)
+                {
+                    Monitor.Exit(_sync);
+                    try
+                    {
+                        // Wait for spill semaphore to be available (all spills done)
+                        _spillSemaphore.Wait();
+                        _spillSemaphore.Release();
+                        
+                        // Small delay to allow background tasks to update _pendingSpillCount
+                        Thread.Sleep(10);
+                    }
+                    finally
+                    {
+                        Monitor.Enter(_sync);
+                    }
+                }
+                
                 _memoryStorage?.Dispose();
                 _diskStorage?.Dispose();
+                _spillSemaphore?.Dispose();
                 _rawAccessTracking.Clear();
                 _filteredAccessTracking.Clear();
             }
@@ -280,6 +317,62 @@ namespace FindPluginCore.Implementations.Storage
 
         // Private helper methods
 
+        // NEW: Async spilling that runs in background
+        private async Task SpillRawToDiskAsync(int itemsToSpill, CancellationToken cancellationToken)
+        {
+            await _spillSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                List<ISearchResult> itemsToDisk;
+                long memoryFreed;
+                int actualItemsRemoved;
+                
+                // Remove items from memory (quick, inside lock)
+                lock (_sync)
+                {
+                    var memStats = _memoryStorage.GetStatistics();
+                    int actualItemsToSpill = Math.Min(itemsToSpill, memStats.rawRecordCount);
+                    
+                    if (actualItemsToSpill <= 0)
+                    {
+                        _pendingSpillCount--;
+                        return;
+                    }
+                    
+                    itemsToDisk = _memoryStorage.RemoveOldestRaw(actualItemsToSpill);
+                    memoryFreed = CalculateBatchSize(itemsToDisk);
+                    actualItemsRemoved = itemsToDisk.Count;
+                    
+                    _currentMemoryUsage -= memoryFreed;
+                    _currentRecordCount -= actualItemsRemoved;
+                }
+                
+                // Write to SQLite (slow, outside lock so other operations can proceed)
+                _diskStorage.AddRawBatch(itemsToDisk, cancellationToken);
+                
+                // Update state (quick, inside lock)
+                lock (_sync)
+                {
+                    _hasSpilledRaw = true;
+                    _pendingSpillCount--;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't crash
+                System.Diagnostics.Debug.WriteLine($"[HybridStorage] Async spill failed: {ex.Message}");
+                lock (_sync)
+                {
+                    _pendingSpillCount--;
+                }
+            }
+            finally
+            {
+                _spillSemaphore.Release();
+            }
+        }
+
+        // Keep synchronous version for lazy spilling during reads
         private void SpillRawToDisk(CancellationToken cancellationToken)
         {
             // Get count of items in memory
