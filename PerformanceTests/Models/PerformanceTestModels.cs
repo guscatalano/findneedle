@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using FindNeedlePluginLib;
 using FindNeedlePluginLib.Interfaces;
 
-namespace CoreTests.Models;
+namespace PerformanceTests.Models;
 
 /// <summary>
 /// Test result data for a single search result used in performance tests.

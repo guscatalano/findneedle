@@ -9,12 +9,12 @@ using FindNeedlePluginLib;
 using FindNeedlePluginLib.Interfaces;
 using FindNeedleCoreUtils;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using CoreTests.Models;
-using CoreTests.Configuration;
-using CoreTests.Helpers;
-using CoreTests.Reporting;
+using PerformanceTests.Models;
+using PerformanceTests.Configuration;
+using PerformanceTests.Helpers;
+using PerformanceTests.Reporting;
 
-namespace CoreTests;
+namespace PerformanceTests;
 
 [TestClass]
 [DoNotParallelize]

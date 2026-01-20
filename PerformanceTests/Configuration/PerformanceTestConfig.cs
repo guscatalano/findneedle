@@ -1,4 +1,4 @@
-namespace CoreTests.Configuration;
+namespace PerformanceTests.Configuration;
 
 /// <summary>
 /// Configuration constants for performance tests.

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace CoreTests.Helpers;
+namespace PerformanceTests.Helpers;
 
 /// <summary>
 /// Helper methods for statistical calculations in performance tests.

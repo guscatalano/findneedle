@@ -48,5 +48,12 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Configuration\" />
+    <Folder Include="Helpers\" />
+    <Folder Include="Models\" />
+    <Folder Include="Reporting\" />
+  </ItemGroup>
+
 
 </Project>

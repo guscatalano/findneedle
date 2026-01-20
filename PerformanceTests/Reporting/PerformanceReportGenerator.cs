@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using CoreTests.Models;
+using PerformanceTests.Models;
 
-namespace CoreTests.Reporting;
+namespace PerformanceTests.Reporting;
 
 /// <summary>
 /// Generates HTML performance comparison reports with interactive Plotly.js charts.
@@ -83,7 +83,7 @@ public static class PerformanceReportGenerator
 <body>
     <div class='container'>
         <h1>?? Write Performance Comparison</h1>
-        <div class='subtitle'>Target: {targetRecords:N0} Records · SQLite vs Hybrid vs Hybrid (1M cap) vs InMemory</div>
+        <div class='subtitle'>Target: {targetRecords:N0} Records — SQLite vs Hybrid vs Hybrid (1M cap) vs InMemory</div>
         
         {GenerateStatsGrid(sqlite, hybrid, hybridCapped, inMemory, sqliteStatus, hybridStatus, hybridCappedStatus, inMemoryStatus)}
         {GenerateDetailedResultsTable(sqlite, hybrid, hybridCapped, inMemory)}
@@ -105,7 +105,7 @@ public static class PerformanceReportGenerator
         </div>
 
         <div class='footer'>
-            Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss} · Target: {targetRecords:N0} records
+            Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss} — Target: {targetRecords:N0} records
         </div>
     </div>
 
@@ -148,22 +148,22 @@ public static class PerformanceReportGenerator
             <div class='stat-box{(sqlite.TimedOut ? " timeout" : "")}'>
                 <h3>SQLite</h3>
                 <div class='value'>{sqliteStatus}</div>
-                <div class='label'>{sqlite.TotalRecords:N0} records · {sqlite.AverageWriteMs:F2}ms avg</div>
+                <div class='label'>{sqlite.TotalRecords:N0} records — {sqlite.AverageWriteMs:F2}ms avg</div>
             </div>
             <div class='stat-box{(hybrid.TimedOut ? " timeout" : "")}'>
                 <h3>Hybrid</h3>
                 <div class='value'>{hybridStatus}</div>
-                <div class='label'>{hybrid.TotalRecords:N0} records · {hybrid.AverageWriteMs:F2}ms avg<br/><small>No cap</small></div>
+                <div class='label'>{hybrid.TotalRecords:N0} records — {hybrid.AverageWriteMs:F2}ms avg<br/><small>No cap</small></div>
             </div>
             <div class='stat-box{(hybridCapped.TimedOut ? " timeout" : "")}'>
                 <h3>Hybrid (Capped)</h3>
                 <div class='value'>{hybridCappedStatus}</div>
-                <div class='label'>{hybridCapped.TotalRecords:N0} records · {hybridCapped.AverageWriteMs:F2}ms avg<br/><small>1M record cap</small></div>
+                <div class='label'>{hybridCapped.TotalRecords:N0} records — {hybridCapped.AverageWriteMs:F2}ms avg<br/><small>1M record cap</small></div>
             </div>
             <div class='stat-box{(inMemory.TimedOut ? " timeout" : "")}'>
                 <h3>InMemory</h3>
                 <div class='value'>{inMemoryStatus}</div>
-                <div class='label'>{inMemory.TotalRecords:N0} records · {inMemory.AverageWriteMs:F2}ms avg</div>
+                <div class='label'>{inMemory.TotalRecords:N0} records — {inMemory.AverageWriteMs:F2}ms avg</div>
             </div>
         </div>";
     }
@@ -173,10 +173,10 @@ public static class PerformanceReportGenerator
         WriteTestResult hybridCapped, WriteTestResult inMemory)
     {
         bool IsFastest(WriteTestResult r) => !r.TimedOut && 
-            r.TotalTimeSeconds < sqlite.TotalTimeSeconds &&
-            r.TotalTimeSeconds < hybrid.TotalTimeSeconds &&
-            r.TotalTimeSeconds < hybridCapped.TotalTimeSeconds &&
-            r.TotalTimeSeconds < inMemory.TotalTimeSeconds;
+            r.TotalTimeSeconds <= sqlite.TotalTimeSeconds &&
+            r.TotalTimeSeconds <= hybrid.TotalTimeSeconds &&
+            r.TotalTimeSeconds <= hybridCapped.TotalTimeSeconds &&
+            r.TotalTimeSeconds <= inMemory.TotalTimeSeconds;
 
         return $@"<div class='card'>
             <h2>Detailed Results</h2>
