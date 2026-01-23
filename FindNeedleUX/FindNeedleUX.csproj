@@ -67,6 +67,9 @@
     <None Remove="Windows\Location\LocationStart.xaml" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Pages\DiagramToolsPage.xaml" />
+  </ItemGroup>
+  <ItemGroup>
     <Page Remove="Pages\WelcomePage.xaml" />
     <Page Remove="Windows\LogsWindow.xaml" />
   </ItemGroup>
@@ -127,6 +130,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\findneedle\findneedle.csproj" />
+    <ProjectReference Include="..\FindNeedlePluginUtils\FindNeedlePluginUtils.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Update="Assets\appicon.ico">
@@ -134,6 +138,9 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <None Update="Pages\DiagramToolsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </None>
     <None Update="Pages\WelcomePage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
@@ -143,6 +150,9 @@
   </ItemGroup>
   <ItemGroup>
     <Page Update="Pages\LogsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Pages\DiagramToolsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>

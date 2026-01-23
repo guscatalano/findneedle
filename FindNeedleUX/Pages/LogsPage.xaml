@@ -13,21 +13,24 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <StackPanel Orientation="Horizontal" Margin="10" Grid.Row="0">
+        <StackPanel Orientation="Horizontal" Margin="10" Grid.Row="0" Spacing="10">
             <ToggleSwitch x:Name="DebugToggleSwitch" Header="Debug Logging" Toggled="DebugToggleSwitch_Toggled"/>
             <TextBlock x:Name="DebugStatusText" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            <Button Content="Copy Selected" Click="CopySelected_Click" VerticalAlignment="Center"/>
+            <Button Content="Copy All" Click="CopyAll_Click" VerticalAlignment="Center"/>
+            <Button Content="Clear" Click="Clear_Click" VerticalAlignment="Center"/>
         </StackPanel>
         <ListView x:Name="LogListView"
            SelectionMode="Extended"
            IsItemClickEnabled="False"
            Margin="10"
            FontFamily="Consolas"
-           FontSize="14"
+           FontSize="12"
            Grid.Row="1"
            ItemsSource="{x:Bind LogLines, Mode=OneWay}">
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding}" TextWrapping="NoWrap" IsTextSelectionEnabled="True"/>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>

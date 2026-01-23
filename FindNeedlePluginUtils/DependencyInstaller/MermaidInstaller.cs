@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using FindNeedlePluginLib;
 
 namespace FindNeedlePluginUtils.DependencyInstaller;
 
@@ -23,16 +24,22 @@ public class MermaidInstaller : IDependencyInstaller
     {
         _installDirectory = installDirectory ?? GetDefaultInstallDirectory();
         _httpClient = httpClient ?? new HttpClient();
+        Log($"MermaidInstaller initialized with directory: {_installDirectory}");
     }
+
+    private static void Log(string message) => Logger.Instance.Log($"[MermaidInstaller] {message}");
 
     private static string GetDefaultInstallDirectory()
     {
+        // Use standard LocalAppData - for packaged apps, file system virtualization
+        // will transparently redirect to the package-specific location
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return Path.Combine(appData, "FindNeedle", "Dependencies", "Mermaid");
     }
 
     public DependencyStatus GetStatus()
     {
+        Log("Getting status...");
         var status = new DependencyStatus
         {
             Name = DependencyName,
@@ -45,6 +52,11 @@ public class MermaidInstaller : IDependencyInstaller
         {
             status.InstalledPath = GetMmdcPath();
             status.InstalledVersion = GetVersion();
+            Log($"Status: Installed at {status.InstalledPath}, version {status.InstalledVersion}");
+        }
+        else
+        {
+            Log("Status: Not installed");
         }
 
         return status;
@@ -53,23 +65,30 @@ public class MermaidInstaller : IDependencyInstaller
     public bool IsInstalled()
     {
         var mmdcPath = GetMmdcPath();
-        return mmdcPath != null && File.Exists(mmdcPath);
+        var installed = mmdcPath != null && File.Exists(mmdcPath);
+        Log($"IsInstalled check: mmdcPath={mmdcPath ?? "null"}, exists={installed}");
+        return installed;
     }
 
     public string? GetMmdcPath()
     {
         var mmdcCmd = Path.Combine(_installDirectory, "node_modules", ".bin", "mmdc.cmd");
+        Log($"Looking for mmdc.cmd at: {mmdcCmd}");
         return File.Exists(mmdcCmd) ? mmdcCmd : null;
     }
 
     public string? GetNodePath()
     {
         var nodeDir = Path.Combine(_installDirectory, "node");
+        Log($"Looking for Node.js in: {nodeDir}");
         
         // Check for node.exe directly or in subdirectories
         var nodeExe = Path.Combine(nodeDir, "node.exe");
         if (File.Exists(nodeExe))
+        {
+            Log($"Found node.exe at: {nodeExe}");
             return nodeExe;
+        }
 
         // Check subdirectories (Node extracts with version folder)
         if (Directory.Exists(nodeDir))
@@ -78,10 +97,14 @@ public class MermaidInstaller : IDependencyInstaller
             {
                 var nestedNode = Path.Combine(dir, "node.exe");
                 if (File.Exists(nestedNode))
+                {
+                    Log($"Found node.exe at: {nestedNode}");
                     return nestedNode;
+                }
             }
         }
 
+        Log("Node.exe not found");
         return null;
     }
 
@@ -93,6 +116,7 @@ public class MermaidInstaller : IDependencyInstaller
         var nodeDir = Path.GetDirectoryName(nodePath);
         var npmCmd = Path.Combine(nodeDir!, "npm.cmd");
         
+        Log($"Looking for npm.cmd at: {npmCmd}, exists={File.Exists(npmCmd)}");
         return File.Exists(npmCmd) ? npmCmd : null;
     }
 
@@ -100,26 +124,38 @@ public class MermaidInstaller : IDependencyInstaller
     {
         try
         {
+            // Don't try to run mmdc if not properly installed
+            if (!IsInstalled())
+            {
+                Log("GetVersion: Not installed, skipping version check");
+                return null;
+            }
+
             var mmdcPath = GetMmdcPath();
             if (mmdcPath == null) return null;
+
+            var nodePath = GetNodePath();
+            var nodeDir = nodePath != null ? Path.GetDirectoryName(nodePath) : null;
 
             var psi = new ProcessStartInfo
             {
                 FileName = mmdcPath,
                 Arguments = "--version",
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _installDirectory
+                WorkingDirectory = nodeDir ?? _installDirectory
             };
 
             // Set PATH to include our Node installation
-            var nodePath = GetNodePath();
-            if (nodePath != null)
+            if (nodeDir != null)
             {
-                var nodeDir = Path.GetDirectoryName(nodePath);
-                psi.Environment["PATH"] = nodeDir + ";" + Environment.GetEnvironmentVariable("PATH");
+                var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+                psi.Environment["PATH"] = nodeDir + ";" + currentPath;
             }
+
+            Log($"GetVersion: Running mmdc from {mmdcPath}");
 
             using var process = Process.Start(psi);
             var output = process?.StandardOutput.ReadToEnd();
@@ -127,8 +163,9 @@ public class MermaidInstaller : IDependencyInstaller
 
             return output?.Trim();
         }
-        catch
+        catch (Exception ex)
         {
+            Log($"GetVersion failed: {ex.Message}");
             return "Unknown";
         }
     }
@@ -137,27 +174,38 @@ public class MermaidInstaller : IDependencyInstaller
         IProgress<InstallProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        Log("Starting installation...");
         try
         {
+            Log($"Creating install directory: {_installDirectory}");
             Directory.CreateDirectory(_installDirectory);
 
             // Install Node.js if needed
             if (GetNodePath() == null)
             {
+                Log("Node.js not found, downloading...");
                 progress?.Report(new InstallProgress { Status = "Downloading Node.js runtime...", PercentComplete = 0 });
                 await DownloadAndExtractNodeAsync(progress, cancellationToken);
             }
+            else
+            {
+                Log("Node.js already installed, skipping download");
+            }
 
             // Install mermaid-cli via npm
+            Log("Installing Mermaid CLI via npm...");
             progress?.Report(new InstallProgress { Status = "Installing Mermaid CLI...", PercentComplete = 60 });
             await InstallMermaidCliAsync(progress, cancellationToken);
 
             progress?.Report(new InstallProgress { Status = "Installation complete!", PercentComplete = 100 });
 
-            return InstallResult.Succeeded(GetMmdcPath()!);
+            var mmdcPath = GetMmdcPath();
+            Log($"Installation complete! mmdc path: {mmdcPath}");
+            return InstallResult.Succeeded(mmdcPath!);
         }
         catch (Exception ex)
         {
+            Log($"Installation failed with exception: {ex}");
             return InstallResult.Failed($"Installation failed: {ex.Message}");
         }
     }
@@ -179,28 +227,43 @@ public class MermaidInstaller : IDependencyInstaller
         try
         {
             // Download
+            Log($"Downloading Node.js from: {NodeWindowsX64Url}");
             progress?.Report(new InstallProgress { Status = "Downloading Node.js...", PercentComplete = 10 });
 
             using (var response = await _httpClient.GetAsync(NodeWindowsX64Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
             {
                 response.EnsureSuccessStatusCode();
+                var contentLength = response.Content.Headers.ContentLength;
+                Log($"Download response received, content length: {contentLength}");
 
                 await using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None);
                 await response.Content.CopyToAsync(fileStream, cancellationToken);
+                Log($"Download complete, file size: {new FileInfo(zipPath).Length}");
             }
 
             // Extract
+            Log($"Extracting Node.js to: {nodeDir}");
             progress?.Report(new InstallProgress { Status = "Extracting Node.js...", PercentComplete = 40 });
 
             if (Directory.Exists(nodeDir))
+            {
+                Log("Removing existing node directory");
                 Directory.Delete(nodeDir, true);
+            }
 
             ZipFile.ExtractToDirectory(zipPath, nodeDir, overwriteFiles: true);
+            
+            // List what was extracted
+            var extractedDirs = Directory.GetDirectories(nodeDir);
+            Log($"Extracted {extractedDirs.Length} directories: {string.Join(", ", extractedDirs.Select(Path.GetFileName))}");
         }
         finally
         {
             if (File.Exists(zipPath))
+            {
+                Log("Cleaning up zip file");
                 File.Delete(zipPath);
+            }
         }
     }
 
@@ -210,11 +273,17 @@ public class MermaidInstaller : IDependencyInstaller
     {
         var npmPath = GetNpmPath();
         if (npmPath == null)
+        {
+            Log("ERROR: npm not found after Node.js extraction");
             throw new InvalidOperationException("npm not found. Node.js installation may have failed.");
+        }
 
         var nodePath = GetNodePath();
         var nodeDir = Path.GetDirectoryName(nodePath);
 
+        Log($"Running npm install in: {_installDirectory}");
+        Log($"Using npm at: {npmPath}");
+        Log($"Node directory for PATH: {nodeDir}");
         progress?.Report(new InstallProgress { Status = "Running npm install...", PercentComplete = 70, IsIndeterminate = true });
 
         var psi = new ProcessStartInfo
@@ -240,17 +309,46 @@ public class MermaidInstaller : IDependencyInstaller
 
         await process.WaitForExitAsync(cancellationToken);
 
+        var output = await outputTask;
         var error = await errorTask;
+
+        Log($"npm install exit code: {process.ExitCode}");
+        if (!string.IsNullOrWhiteSpace(output))
+            Log($"npm stdout: {output}");
+        if (!string.IsNullOrWhiteSpace(error))
+            Log($"npm stderr: {error}");
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"npm install failed: {error}");
+            throw new InvalidOperationException($"npm install failed (exit code {process.ExitCode}): {error}");
         }
 
         // Verify installation
         if (!IsInstalled())
         {
+            Log("ERROR: mmdc.cmd not found after npm install");
+            // List what files exist in node_modules
+            var nodeModulesPath = Path.Combine(_installDirectory, "node_modules");
+            if (Directory.Exists(nodeModulesPath))
+            {
+                var binPath = Path.Combine(nodeModulesPath, ".bin");
+                if (Directory.Exists(binPath))
+                {
+                    var binFiles = Directory.GetFiles(binPath);
+                    Log($"Files in node_modules/.bin: {string.Join(", ", binFiles.Select(Path.GetFileName))}");
+                }
+                else
+                {
+                    Log("node_modules/.bin directory does not exist");
+                }
+            }
+            else
+            {
+                Log("node_modules directory does not exist");
+            }
             throw new InvalidOperationException("mermaid-cli installation completed but mmdc was not found.");
         }
+        
+        Log("Mermaid CLI installation verified successfully");
     }
 }

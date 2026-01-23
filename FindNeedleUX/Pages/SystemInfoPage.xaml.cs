@@ -4,18 +4,11 @@ using Microsoft.UI.Xaml;
 using FindPluginCore.GlobalConfiguration;
 using System.Diagnostics;
 using Windows.Storage.Pickers;
-using Windows.Storage;
-using System.Threading.Tasks;
-using Windows.Foundation;
-using System.Runtime.InteropServices.WindowsRuntime;
-using FindNeedleUX; // For WindowUtil
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace FindNeedleUX.Pages;
+
 /// <summary>
-/// An empty page that can be used on its own or navigated to within a Frame.
+/// System information and configuration page.
 /// </summary>
 public sealed partial class SystemInfoPage : Page
 {
@@ -48,7 +41,7 @@ public sealed partial class SystemInfoPage : Page
             if (!string.IsNullOrEmpty(tag))
             {
                 GlobalSettings.DefaultResultViewer = tag;
-                this.sysout.Text = SystemInfoMiddleware.GetPanelText(); // Refresh info
+                this.sysout.Text = SystemInfoMiddleware.GetPanelText();
             }
         }
     }

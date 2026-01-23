@@ -122,6 +122,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: SystemInfoPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SystemInfoPage));
                 break;
+            case "diagramtools":
+                Logger.Instance.Log("Navigated: DiagramToolsPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
+                break;
             case "logs":
                 Logger.Instance.Log("Navigated: LogsPage");
                 var logsWindow = new FindNeedleUX.Windows.LogsWindow();

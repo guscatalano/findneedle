@@ -2,14 +2,23 @@
 using System.Runtime.InteropServices;
 using System.Reflection;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using FindPluginCore.GlobalConfiguration; // Add for settings
 using Windows.ApplicationModel; // Correct namespace for Package
 using findneedle.PluginSubsystem; // For PluginManager
 using Microsoft.Win32;
+using FindNeedlePluginUtils.DependencyInstaller;
 
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
 {
+    private static readonly Lazy<UmlDependencyManager> _umlDependencyManager = new(() => new UmlDependencyManager());
+    
+    /// <summary>
+    /// Gets the singleton UML dependency manager instance.
+    /// </summary>
+    public static UmlDependencyManager UmlDependencyManager => _umlDependencyManager.Value;
     public static string StoreUrl => "https://www.microsoft.com/store/productId/9NWLTBV4NRDL?ocid=libraryshare";
     public static string MsStoreUrl => "ms-windows-store://pdp/?productid=9NWLTBV4NRDL";
     public static string GithubReleasesUrl => "https://github.com/guscatalano/findneedle/releases";
@@ -190,5 +199,64 @@ public class SystemInfoMiddleware
         {
             return "Unknown";
         }
+    }
+
+    /// <summary>
+    /// Gets a formatted text describing UML diagram generation capabilities.
+    /// </summary>
+    public static string GetUmlCapabilitiesText()
+    {
+        var lines = new System.Collections.Generic.List<string>
+        {
+            "UML Diagram Capabilities:"
+        };
+
+        foreach (var status in UmlDependencyManager.GetAllStatuses())
+        {
+            var installed = status.IsInstalled ? "✓ Installed" : "✗ Not Installed";
+            lines.Add($"  {status.Name}: {installed}");
+            
+            if (status.IsInstalled && !string.IsNullOrEmpty(status.InstalledPath))
+            {
+                lines.Add($"    Path: {status.InstalledPath}");
+            }
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Gets the status of PlantUML installation.
+    /// </summary>
+    public static DependencyStatus GetPlantUmlStatus() => UmlDependencyManager.PlantUml.GetStatus();
+
+    /// <summary>
+    /// Gets the status of Mermaid CLI installation.
+    /// </summary>
+    public static DependencyStatus GetMermaidStatus() => UmlDependencyManager.Mermaid.GetStatus();
+
+    /// <summary>
+    /// Installs PlantUML asynchronously.
+    /// </summary>
+    public static Task<InstallResult> InstallPlantUmlAsync(
+        IProgress<InstallProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+        => UmlDependencyManager.PlantUml.InstallAsync(progress, cancellationToken);
+
+    /// <summary>
+    /// Installs Mermaid CLI asynchronously.
+    /// </summary>
+    public static Task<InstallResult> InstallMermaidAsync(
+        IProgress<InstallProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+        => UmlDependencyManager.Mermaid.InstallAsync(progress, cancellationToken);
+
+    /// <summary>
+    /// Gets the install directory for UML dependencies (for diagnostics).
+    /// </summary>
+    public static string GetUmlInstallDirectory()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return Path.Combine(appData, "FindNeedle", "Dependencies");
     }
 }

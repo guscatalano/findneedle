@@ -256,17 +256,25 @@ public class PluginManager
                 // --- END: Registry plugin loading ---
                 foreach (var pluginModuleDescriptor in config.entries)
                 {
-                    FindNeedlePluginLib.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
-                    pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
-                    if (!File.Exists(pluginModuleDescriptor.path))
+                    try
                     {
-                        FindNeedlePluginLib.Logger.Instance.Log($"ERROR: Can't find plugin module for {pluginModuleDescriptor.path}");
-                        throw new Exception($"Can't find plugin module for {pluginModuleDescriptor.path}");
-                    }
+                        FindNeedlePluginLib.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
+                        pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
+                        if (!File.Exists(pluginModuleDescriptor.path))
+                        {
+                            FindNeedlePluginLib.Logger.Instance.Log($"WARNING: Can't find plugin module for {pluginModuleDescriptor.path}, skipping...");
+                            continue;
+                        }
 
-                    InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);
-                    loadedPluginsModules.Add(loadedPluginModule);
-                    FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.path}");
+                        InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);
+                        loadedPluginsModules.Add(loadedPluginModule);
+                        FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.path}");
+                    }
+                    catch (Exception ex)
+                    {
+                        FindNeedlePluginLib.Logger.Instance.Log($"WARNING: Failed to load plugin module {pluginModuleDescriptor.path}: {ex.Message}");
+                        // Continue loading other plugins
+                    }
                 }
                 FindNeedlePluginLib.Logger.Instance.Log($"Finished loading plugins. Total loaded: {loadedPluginsModules.Count}");
             }

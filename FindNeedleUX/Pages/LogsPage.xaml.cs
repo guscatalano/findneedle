@@ -13,17 +13,16 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Windows.ApplicationModel.DataTransfer;
 using FindPluginCore;
 using FindPluginCore.GlobalConfiguration;
 using FindNeedleUX; // For WindowUtil
 using FindNeedlePluginLib; // For Logger
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
-
 namespace FindNeedleUX.Pages;
+
 /// <summary>
-/// An empty page that can be used on its own or navigated to within a Frame.
+/// Log viewer page with copy functionality.
 /// </summary>
 public sealed partial class LogsPage : Page
 {
@@ -41,7 +40,6 @@ public sealed partial class LogsPage : Page
         Logger.Instance.LogCallback = AddLogLine;
         DebugToggleSwitch.IsOn = GlobalSettings.Debug;
         UpdateDebugStatusText();
-        // Removed pop-out logic from constructor
     }
 
     public void AddLogLine(string line)
@@ -71,5 +69,56 @@ public sealed partial class LogsPage : Page
     private void UpdateDebugStatusText()
     {
         DebugStatusText.Text = $"Debug is {(GlobalSettings.Debug ? "ON" : "OFF")}";
+    }
+
+    private void CopySelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (LogListView.SelectedItems.Count == 0)
+        {
+            Logger.Instance.Log("No log lines selected to copy");
+            return;
+        }
+
+        var selectedLines = LogListView.SelectedItems.Cast<string>().ToList();
+        var text = string.Join(Environment.NewLine, selectedLines);
+        
+        CopyToClipboard(text);
+        Logger.Instance.Log($"Copied {selectedLines.Count} log lines to clipboard");
+    }
+
+    private void CopyAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (LogLines.Count == 0)
+        {
+            Logger.Instance.Log("No log lines to copy");
+            return;
+        }
+
+        var text = string.Join(Environment.NewLine, LogLines);
+        
+        CopyToClipboard(text);
+        Logger.Instance.Log($"Copied all {LogLines.Count} log lines to clipboard");
+    }
+
+    private static void CopyToClipboard(string text)
+    {
+        try
+        {
+            var dataPackage = new DataPackage();
+            dataPackage.RequestedOperation = DataPackageOperation.Copy;
+            dataPackage.SetText(text);
+            Clipboard.SetContent(dataPackage);
+            Clipboard.Flush(); // Ensures data persists after app closes
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"Failed to copy to clipboard: {ex.Message}");
+        }
+    }
+
+    private void Clear_Click(object sender, RoutedEventArgs e)
+    {
+        LogLines.Clear();
+        Logger.Instance.Log("Log view cleared");
     }
 }
