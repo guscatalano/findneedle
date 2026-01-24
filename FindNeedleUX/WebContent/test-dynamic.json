@@ -104,4 +104,16 @@
     { "time": "2024-01-15T14:22:34.000Z", "type": "annotation", "text": "Slack opened on external display" },
     { "time": "2024-01-15T14:22:38.500Z", "type": "annotation", "text": "External monitor disconnected - windows return to primary" }
   ]
+
+  ,
+  "mouse": {
+    "keyframes": [
+      { "time": "2024-01-15T14:22:30.000Z", "x": 150, "y": 150 },
+      { "time": "2024-01-15T14:22:32.000Z", "x": 400, "y": 300 },
+      { "time": "2024-01-15T14:22:33.000Z", "x": 200, "y": 1200 },
+      { "time": "2024-01-15T14:22:35.000Z", "x": 1300, "y": 1300 },
+      { "time": "2024-01-15T14:22:38.000Z", "x": 900, "y": 400 },
+      { "time": "2024-01-15T14:22:40.000Z", "x": 100, "y": 100 }
+    ]
+  }
 }

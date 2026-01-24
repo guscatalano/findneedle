@@ -194,11 +194,63 @@
             pointer-events: none;
             z-index: 1000;
         }
+        /* Side panel docking */
+        #side-panel {
+            position: absolute;
+            z-index: 1001;
+            color: #fff;
+            font-size: 13px;
+            padding: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+            background: linear-gradient(180deg, rgba(10,10,20,0.9), rgba(10,10,20,0.85));
+            border-radius: 8px;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+        #side-panel.dock-right {
+            right: 12px;
+            top: 80px;
+            width: 320px;
+            max-height: calc(100vh - 160px);
+            overflow: auto;
+        }
+        #side-panel.dock-bottom {
+            left: 12px;
+            right: 12px;
+            bottom: 12px;
+            height: 220px;
+            max-height: 50vh;
+            overflow: auto;
+            border-radius: 8px;
+        }
+        #side-panel.hidden-panel { display: none; }
+        /* Small dock buttons styling */
+        .dock-btn { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: #fff; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+        .dock-btn.active { background: rgba(255,255,255,0.04); }
+        /* Minimized draggable tile (snaps to sides) */
+        #panel-min {
+            position: fixed;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.04);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            cursor: grab;
+            z-index: 3000;
+            box-shadow: 0 6px 28px rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.05);
+            font-weight: 700;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
     <!-- Canvas with dual monitors (dynamic, populated by JS) -->
     <div id="canvas"></div>
+    <!-- Side info panel -->
+    <div id="side-panel" aria-hidden="false"></div>
     
     <!-- Timeline controls -->
     <div id="controls">
@@ -221,6 +273,12 @@
         </div>
     </div>
 
+    <!--
+        NOTE: For local file:// testing this page was used with the browser's
+        strict file origin policy relaxed. In Firefox you can set
+        `security.fileuri.strict_origin_policy` to `false` for testing only.
+        Do NOT disable this setting in production — it weakens security.
+    -->
     <script>
     // =============================
     // Timeline Animation Loader
@@ -248,6 +306,166 @@
     // Utility: Parse ISO timestamp to ms
     function parseTime(t) {
         return (typeof t === 'string') ? Date.parse(t) : t;
+    }
+
+    // Create side info panel (controls + info boxes)
+    function setupInfoPanel() {
+        let panel = document.getElementById('side-panel');
+        if (!panel) return;
+        panel.innerHTML = '';
+        panel.classList.remove('dock-right','dock-bottom','hidden-panel');
+        panel.classList.add('dock-right');
+        // create minimized draggable tile to reopen when minimized
+        let minTile = document.getElementById('panel-min');
+        if (!minTile) {
+            minTile = document.createElement('div');
+            minTile.id = 'panel-min';
+            minTile.textContent = '?';
+            document.body.appendChild(minTile);
+            // drag logic
+            let dragging = false, dx=0, dy=0;
+            minTile.addEventListener('mousedown', (ev)=>{
+                dragging = true; dx = ev.clientX - minTile.offsetLeft; dy = ev.clientY - minTile.offsetTop; minTile.style.cursor = 'grabbing'; ev.preventDefault();
+            });
+            window.addEventListener('mousemove', (ev)=>{
+                if (!dragging) return;
+                let nx = ev.clientX - dx, ny = ev.clientY - dy;
+                // constrain inside viewport
+                nx = Math.max(8, Math.min(window.innerWidth - minTile.offsetWidth - 8, nx));
+                ny = Math.max(8, Math.min(window.innerHeight - minTile.offsetHeight - 8, ny));
+                minTile.style.left = nx + 'px'; minTile.style.top = ny + 'px';
+            });
+            window.addEventListener('mouseup', ()=>{
+                if (!dragging) return; dragging = false; minTile.style.cursor = 'grab';
+                // snap to nearest side (left or right or bottom)
+                const midX = window.innerWidth / 2;
+                const leftDist = parseFloat(minTile.style.left || 0);
+                const top = parseFloat(minTile.style.top || 0);
+                if (leftDist + minTile.offsetWidth/2 < midX) {
+                    minTile.style.left = '8px';
+                } else {
+                    minTile.style.left = (window.innerWidth - minTile.offsetWidth - 8) + 'px';
+                }
+                // if near bottom, snap bottom
+                if (top > window.innerHeight * 0.6) {
+                    minTile.style.top = (window.innerHeight - minTile.offsetHeight - 8) + 'px';
+                }
+            });
+            minTile.addEventListener('click', ()=>{ panel.classList.remove('hidden-panel'); minTile.style.display = 'none'; });
+        }
+        // Header with show/hide all
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.gap = '8px';
+        header.style.alignItems = 'center';
+        const title = document.createElement('strong');
+        title.textContent = 'Details';
+        header.appendChild(title);
+        const btnShowAll = document.createElement('button');
+        btnShowAll.textContent = 'Show All';
+        btnShowAll.className = 'btn';
+        btnShowAll.style.padding = '6px 10px';
+        btnShowAll.addEventListener('click', () => {
+            panel.querySelectorAll('.panel-toggle').forEach(cb => { cb.checked = true; cb.dispatchEvent(new Event('change')); });
+        });
+        const btnHideAll = document.createElement('button');
+        btnHideAll.textContent = 'Hide All';
+        btnHideAll.className = 'btn';
+        btnHideAll.style.padding = '6px 10px';
+        btnHideAll.addEventListener('click', () => {
+            panel.querySelectorAll('.panel-toggle').forEach(cb => { cb.checked = false; cb.dispatchEvent(new Event('change')); });
+        });
+        const ctrlWrap = document.createElement('div');
+        ctrlWrap.style.marginLeft = 'auto';
+        // Dock controls
+        const btnDockRight = document.createElement('button'); btnDockRight.className='dock-btn'; btnDockRight.textContent='Dock Right';
+        const btnDockBottom = document.createElement('button'); btnDockBottom.className='dock-btn'; btnDockBottom.textContent='Dock Bottom';
+        const btnToggle = document.createElement('button'); btnToggle.className='dock-btn'; btnToggle.textContent='Minimize';
+        btnDockRight.addEventListener('click', ()=>{ panel.classList.remove('dock-bottom'); panel.classList.add('dock-right'); btnDockRight.classList.add('active'); btnDockBottom.classList.remove('active'); });
+        btnDockBottom.addEventListener('click', ()=>{ panel.classList.remove('dock-right'); panel.classList.add('dock-bottom'); btnDockBottom.classList.add('active'); btnDockRight.classList.remove('active'); });
+        btnToggle.addEventListener('click', ()=>{
+            // minimize to small draggable tile instead of hiding completely
+            panel.classList.add('hidden-panel');
+            const min = document.getElementById('panel-min');
+            if (min) {
+                // position based on current dock side
+                const rect = panel.getBoundingClientRect();
+                if (panel.classList.contains('dock-bottom')) {
+                    // place centered along bottom dock
+                    const left = Math.max(8, Math.min(window.innerWidth - min.offsetWidth - 8, rect.left + (rect.width - min.offsetWidth) / 2));
+                    min.style.left = left + 'px';
+                    min.style.top = (window.innerHeight - min.offsetHeight - 8) + 'px';
+                } else {
+                    // default to right dock placement
+                    min.style.left = (window.innerWidth - min.offsetWidth - 8) + 'px';
+                    // place near top of panel but ensure visible
+                    const top = Math.max(8, Math.min(window.innerHeight - min.offsetHeight - 8, rect.top + 8));
+                    min.style.top = top + 'px';
+                }
+                min.style.display = 'flex';
+            }
+        });
+        // update minimized tile visibility helper
+        const updateMinVisibility = () => {
+            const min = document.getElementById('panel-min');
+            if (!min) return;
+            const hidden = panel.classList.contains('hidden-panel');
+            min.style.display = hidden ? 'flex' : 'none';
+        };
+        // call on toggle click
+        btnToggle.addEventListener('click', updateMinVisibility);
+        // ensure initial state
+        updateMinVisibility();
+        btnDockRight.classList.add('active');
+        ctrlWrap.appendChild(btnDockRight);
+        ctrlWrap.appendChild(btnDockBottom);
+        ctrlWrap.appendChild(btnToggle);
+        ctrlWrap.appendChild(btnShowAll);
+        ctrlWrap.appendChild(btnHideAll);
+        header.appendChild(ctrlWrap);
+        panel.appendChild(header);
+
+        // Toggles and info for each window
+        for (const w of windows) {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.gap = '8px';
+            row.style.marginTop = '8px';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = true;
+            cb.className = 'panel-toggle';
+            cb.dataset.target = 'info-' + w.id;
+            const lbl = document.createElement('label');
+            lbl.textContent = w.label || w.id;
+            row.appendChild(cb);
+            row.appendChild(lbl);
+            panel.appendChild(row);
+
+            const info = document.createElement('div');
+            info.id = 'info-' + w.id;
+            info.className = 'panel-item';
+            info.style.marginTop = '6px';
+            info.style.padding = '8px';
+            info.style.background = 'rgba(255,255,255,0.03)';
+            info.style.border = '1px solid rgba(255,255,255,0.03)';
+            info.style.borderRadius = '6px';
+            panel.appendChild(info);
+
+            cb.addEventListener('change', (e) => {
+                info.style.display = e.target.checked ? '' : 'none';
+            });
+        }
+
+        // Mouse toggle + info
+        const row = document.createElement('div');
+        row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.gap = '8px'; row.style.marginTop = '8px';
+        const cbMouse = document.createElement('input'); cbMouse.type = 'checkbox'; cbMouse.checked = true; cbMouse.className = 'panel-toggle'; cbMouse.dataset.target = 'info-mouse';
+        const lblMouse = document.createElement('label'); lblMouse.textContent = 'Mouse';
+        row.appendChild(cbMouse); row.appendChild(lblMouse); panel.appendChild(row);
+        const infoMouse = document.createElement('div'); infoMouse.id = 'info-mouse'; infoMouse.className = 'panel-item'; infoMouse.style.marginTop='6px'; infoMouse.style.padding='8px'; infoMouse.style.background='rgba(255,255,255,0.03)'; infoMouse.style.border='1px solid rgba(255,255,255,0.03)'; infoMouse.style.borderRadius='6px'; panel.appendChild(infoMouse);
+        cbMouse.addEventListener('change', (e)=>{ infoMouse.style.display = e.target.checked ? '' : 'none'; });
     }
 
     // Utility: Format ms as HH:mm:ss.SSS
@@ -376,14 +594,29 @@
             keyframes: w.keyframes.map(kf => ({ ...kf, time: parseTime(kf.time) }))
         }));
 
-        // Default mouse path (absolute times) if none provided
-        mousePath = [
-            { time: timelineStart, x: 200, y: 200 },
-            { time: timelineStart + Math.floor(timelineDuration * 0.25), x: 600, y: 350 },
-            { time: timelineStart + Math.floor(timelineDuration * 0.5), x: 900, y: 800 },
-            { time: timelineStart + Math.floor(timelineDuration * 0.75), x: 700, y: 400 },
-            { time: timelineEnd, x: 800, y: 300 }
-        ];
+        // Mouse path: prefer JSON-provided path, otherwise use a default
+        if (timelineData.mouse && Array.isArray(timelineData.mouse.keyframes)) {
+            mousePath = timelineData.mouse.keyframes.map(kf => ({
+                x: kf.x || 0,
+                y: kf.y || 0,
+                time: parseTime(kf.time)
+            }));
+        } else if (Array.isArray(timelineData.mousePath)) {
+            mousePath = timelineData.mousePath.map(kf => ({
+                x: kf.x || 0,
+                y: kf.y || 0,
+                time: parseTime(kf.time)
+            }));
+        } else {
+            // Default mouse path (absolute times) if none provided
+            mousePath = [
+                { time: timelineStart, x: 200, y: 200 },
+                { time: timelineStart + Math.floor(timelineDuration * 0.25), x: 600, y: 350 },
+                { time: timelineStart + Math.floor(timelineDuration * 0.5), x: 900, y: 800 },
+                { time: timelineStart + Math.floor(timelineDuration * 0.75), x: 700, y: 400 },
+                { time: timelineEnd, x: 800, y: 300 }
+            ];
+        }
 
         // Compute virtual desktop size
         let minX = 0, minY = 0, maxX = 1920, maxY = 1080;
@@ -401,6 +634,7 @@
 
         setupUI();
         setupMonitors();
+        setupInfoPanel();
         currentTime = timelineStart;
         render(timelineStart);
     }
@@ -649,6 +883,31 @@ function getMouseAt(t) {
                 mouseEl.style.display = '';
             } else {
                 mouseEl.style.display = 'none';
+            }
+        }
+
+        // Update side panel info contents
+        const panel = document.getElementById('side-panel');
+        if (panel) {
+            // ensure dock buttons reflect panel state
+            const btns = panel.querySelectorAll('.dock-btn');
+            // no-op here; buttons update state themselves
+            for (const w of windows) {
+                const info = document.getElementById('info-' + w.id);
+                if (!info) continue;
+                const v = interpolateKeyframes(w.keyframes, t);
+                info.innerHTML = `<div><strong>${w.label || w.id}</strong></div>` +
+                                 `<div>pos: ${Math.round(v.x)}, ${Math.round(v.y)}</div>` +
+                                 `<div>size: ${Math.round(v.width)}×${Math.round(v.height)}</div>`;
+            }
+            const infoMouse = document.getElementById('info-mouse');
+            if (infoMouse) {
+                const mp = getMouseAt(t);
+                if (mp) {
+                    infoMouse.innerHTML = `<div><strong>Mouse</strong></div><div>pos: ${Math.round(mp.x)}, ${Math.round(mp.y)}</div>`;
+                } else {
+                    infoMouse.innerHTML = `<div><strong>Mouse</strong></div><div>pos: -</div>`;
+                }
             }
         }
     }
