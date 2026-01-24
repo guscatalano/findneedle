@@ -27,20 +27,12 @@ public class PlantUmlInstaller : IDependencyInstaller
 
     public PlantUmlInstaller(string? installDirectory = null, HttpClient? httpClient = null)
     {
-        _installDirectory = installDirectory ?? GetDefaultInstallDirectory();
+        _installDirectory = installDirectory ?? PackagedAppPaths.PlantUmlDir;
         _httpClient = httpClient ?? new HttpClient();
         Log($"PlantUmlInstaller initialized with directory: {_installDirectory}");
     }
 
     private static void Log(string message) => Logger.Instance.Log($"[PlantUmlInstaller] {message}");
-
-    private static string GetDefaultInstallDirectory()
-    {
-        // Use standard LocalAppData - for packaged apps, file system virtualization
-        // will transparently redirect to the package-specific location
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(appData, "FindNeedle", "Dependencies", "PlantUML");
-    }
 
     public DependencyStatus GetStatus()
     {

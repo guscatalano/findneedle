@@ -254,9 +254,6 @@ public class SystemInfoMiddleware
     /// <summary>
     /// Gets the install directory for UML dependencies (for diagnostics).
     /// </summary>
-    public static string GetUmlInstallDirectory()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(appData, "FindNeedle", "Dependencies");
-    }
+    public static string GetUmlInstallDirectory() => 
+        FindNeedlePluginUtils.PackagedAppPaths.DependenciesBaseDir;
 }

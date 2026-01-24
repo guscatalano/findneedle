@@ -94,30 +94,8 @@ public class PlantUMLGenerator : IUMLGenerator
         if (File.Exists(expectedOutput))
             File.Delete(expectedOutput);
 
-        // Check if we're running as a packaged app
-        string? packageFamilyName = null;
-        try
-        {
-            packageFamilyName = global::Windows.ApplicationModel.Package.Current.Id.FamilyName;
-        }
-        catch
-        {
-            // Not a packaged app
-        }
-
-        int exitCode;
-        if (!string.IsNullOrEmpty(packageFamilyName))
-        {
-            // For packaged apps, use Invoke-CommandInDesktopPackage to run Java in the correct context
-            Logger.Instance.Log($"[PlantUMLGenerator] Running as packaged app, using Invoke-CommandInDesktopPackage");
-            exitCode = RunJavaViaPackageContext(packageFamilyName, javaPath, jarPath, inputPath, javaBinDir);
-        }
-        else
-        {
-            // For unpackaged apps, run Java directly
-            Logger.Instance.Log($"[PlantUMLGenerator] Running as unpackaged app, launching Java directly");
-            exitCode = RunJavaDirectly(javaPath, jarPath, inputPath, javaBinDir);
-        }
+        // Run Java via the packaged app command runner (handles MSIX context automatically)
+        int exitCode = PackagedAppCommandRunner.RunJavaJar(javaPath, jarPath, inputPath, javaBinDir);
 
         Logger.Instance.Log($"[PlantUMLGenerator] Process completed, exit code: {exitCode}");
         Logger.Instance.Log($"[PlantUMLGenerator] Looking for output at: {expectedOutput}");
@@ -146,76 +124,6 @@ public class PlantUMLGenerator : IUMLGenerator
         // Include the command in the error for debugging
         var command = $"\"{javaPath}\" -jar \"{jarPath}\" \"{inputPath}\"";
         throw new Exception($"Failed to generate PlantUML image. Exit code: {exitCode}.\nCommand: {command}\nWorking directory: {javaBinDir}\nExpected output: {expectedOutput}");
-    }
-
-    private int RunJavaViaPackageContext(string packageFamilyName, string javaPath, string jarPath, string inputPath, string workingDir)
-    {
-        // Build the command to run Java
-        var javaCommand = $"\"{javaPath}\" -jar \"{jarPath}\" \"{inputPath}\"";
-        
-        // Use PowerShell to invoke the command in the desktop package context
-        var psCommand = $"Invoke-CommandInDesktopPackage -PackageFamilyName '{packageFamilyName}' -AppId 'App' -Command 'cmd.exe' -Args '/c cd /d \"{workingDir}\" && {javaCommand}' -PreventBreakaway";
-        
-        Logger.Instance.Log($"[PlantUMLGenerator] PowerShell command: {psCommand}");
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{psCommand}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = workingDir
-        };
-
-        using var process = Process.Start(psi);
-        if (process == null)
-        {
-            throw new Exception("Failed to start PowerShell process");
-        }
-
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit(60000);
-
-        if (!string.IsNullOrWhiteSpace(stdout))
-            Logger.Instance.Log($"[PlantUMLGenerator] PowerShell stdout: {stdout}");
-        if (!string.IsNullOrWhiteSpace(stderr))
-            Logger.Instance.Log($"[PlantUMLGenerator] PowerShell stderr: {stderr}");
-
-        return process.ExitCode;
-    }
-
-    private int RunJavaDirectly(string javaPath, string jarPath, string inputPath, string workingDir)
-    {
-        ProcessStartInfo processStartInfo = new ProcessStartInfo
-        {
-            FileName = javaPath,
-            Arguments = $"-jar \"{jarPath}\" \"{inputPath}\"",
-            UseShellExecute = true,
-            CreateNoWindow = true,
-            WorkingDirectory = workingDir
-        };
-
-        Logger.Instance.Log($"[PlantUMLGenerator] Starting Java via shell...");
-
-        using var process = Process.Start(processStartInfo);
-        if (process == null)
-        {
-            throw new Exception("Failed to start Java process");
-        }
-
-        // Wait for process to complete (with timeout)
-        var completed = process.WaitForExit(60000); // 60 second timeout
-        
-        if (!completed)
-        {
-            try { process.Kill(); } catch { }
-            throw new Exception("PlantUML generation timed out after 60 seconds");
-        }
-
-        return process.ExitCode;
     }
 
     private string GenerateImageViaWebService(string plantUmlContent, string outputPath)

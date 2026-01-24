@@ -22,20 +22,12 @@ public class MermaidInstaller : IDependencyInstaller
 
     public MermaidInstaller(string? installDirectory = null, HttpClient? httpClient = null)
     {
-        _installDirectory = installDirectory ?? GetDefaultInstallDirectory();
+        _installDirectory = installDirectory ?? PackagedAppPaths.MermaidDir;
         _httpClient = httpClient ?? new HttpClient();
         Log($"MermaidInstaller initialized with directory: {_installDirectory}");
     }
 
     private static void Log(string message) => Logger.Instance.Log($"[MermaidInstaller] {message}");
-
-    private static string GetDefaultInstallDirectory()
-    {
-        // Use standard LocalAppData - for packaged apps, file system virtualization
-        // will transparently redirect to the package-specific location
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(appData, "FindNeedle", "Dependencies", "Mermaid");
-    }
 
     public DependencyStatus GetStatus()
     {
@@ -47,6 +39,7 @@ public class MermaidInstaller : IDependencyInstaller
             IsInstalled = IsInstalled(),
             InstallInstructions = "Click Install to download Mermaid CLI and a portable Node.js runtime (~80MB)"
         };
+
 
         if (status.IsInstalled)
         {
