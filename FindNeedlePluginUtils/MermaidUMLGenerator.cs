@@ -29,9 +29,10 @@ public class MermaidUMLGenerator : IUMLGenerator
 
     public string InputFileExtension => ".mmd";
 
+    // Only ImageFile is supported - Browser mode was removed as it requires internet (CDN)
     public UmlOutputType[] SupportedOutputTypes => IsSupported(UmlOutputType.ImageFile)
-        ? [UmlOutputType.ImageFile, UmlOutputType.Browser]
-        : [UmlOutputType.Browser];
+        ? [UmlOutputType.ImageFile]
+        : [];
 
     public string GenerateUML(string inputPath, UmlOutputType outputType = UmlOutputType.ImageFile)
     {
@@ -48,7 +49,6 @@ public class MermaidUMLGenerator : IUMLGenerator
         return outputType switch
         {
             UmlOutputType.ImageFile => GenerateImageFile(inputPath),
-            UmlOutputType.Browser => GenerateBrowserHtml(inputPath),
             _ => throw new ArgumentException($"Unknown output type: {outputType}")
         };
     }
@@ -57,7 +57,6 @@ public class MermaidUMLGenerator : IUMLGenerator
     {
         return outputType switch
         {
-            UmlOutputType.Browser => true, // Always supported
             UmlOutputType.ImageFile => IsMermaidCliAvailable(),
             _ => false
         };
@@ -158,47 +157,6 @@ public class MermaidUMLGenerator : IUMLGenerator
 
             throw new Exception($"Failed to generate Mermaid UML image output: {stderr}");
         }
-    }
-
-    private string GenerateBrowserHtml(string inputPath)
-    {
-        var mermaidContent = File.ReadAllText(inputPath);
-        var outputPath = Path.ChangeExtension(inputPath, ".html");
-
-        var html = $$"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Mermaid Diagram</title>
-                <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-                <style>
-                    body { 
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        margin: 20px;
-                        background: #f5f5f5;
-                    }
-                    .mermaid { 
-                        background: white; 
-                        padding: 20px; 
-                        border-radius: 8px;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    }
-                    h1 { color: #333; font-size: 1.2em; }
-                </style>
-            </head>
-            <body>
-                <h1>Mermaid Diagram</h1>
-                <pre class="mermaid">
-            {{mermaidContent}}
-                </pre>
-                <script>mermaid.initialize({startOnLoad:true, theme:'default'});</script>
-            </body>
-            </html>
-            """;
-
-        File.WriteAllText(outputPath, html);
-        return outputPath;
     }
 
     private string? GetMermaidCliPath()

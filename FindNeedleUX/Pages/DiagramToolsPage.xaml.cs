@@ -17,36 +17,11 @@ public sealed partial class DiagramToolsPage : Page
 {
     private CancellationTokenSource? _installCancellationTokenSource;
 
-    /// <summary>
-    /// When true, PlantUML will use the web service instead of local Java.
-    /// </summary>
-    public static bool UseWebService { get; set; } = false;
-
-    /// <summary>
-    /// When true, test will fall back to browser mode if local generation fails.
-    /// </summary>
-    public static bool EnableBrowserFallback { get; set; } = false;
-
     public DiagramToolsPage()
     {
         this.InitializeComponent();
         InstallDirectoryText.Text = SystemInfoMiddleware.GetUmlInstallDirectory();
-        UseWebServiceCheckBox.IsChecked = UseWebService;
-        EnableBrowserFallbackCheckBox.IsChecked = EnableBrowserFallback;
         RefreshStatus();
-    }
-
-    private void UseWebServiceCheckBox_Changed(object sender, RoutedEventArgs e)
-    {
-        UseWebService = UseWebServiceCheckBox.IsChecked == true;
-        FindNeedlePluginUtils.PlantUMLGenerator.UseWebServiceForGeneration = UseWebService;
-        FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] UseWebService changed to: {UseWebService}");
-    }
-
-    private void EnableBrowserFallbackCheckBox_Changed(object sender, RoutedEventArgs e)
-    {
-        EnableBrowserFallback = EnableBrowserFallbackCheckBox.IsChecked == true;
-        FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] EnableBrowserFallback changed to: {EnableBrowserFallback}");
     }
 
     private void RefreshStatus()
@@ -393,93 +368,41 @@ Invoke-CommandInDesktopPackage -Command 'cmd.exe' -PackageFamilyName '{packageFa
             await File.WriteAllTextAsync(inputPath, content);
             FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Test file created: {inputPath}");
 
-            string? outputPath = null;
-            string outputType = "image";
 
-            // Run the generator - try ImageFile first, fall back to Browser
+            string? outputPath = null;
+
+            // Run the generator
             await Task.Run(() =>
             {
                 if (toolName == "PlantUML")
                 {
                     var generator = new FindNeedlePluginUtils.PlantUMLGenerator();
                     
-                    // Try image file first
-                    if (generator.IsSupported(FindNeedlePluginUtils.UmlOutputType.ImageFile))
+                    if (!generator.IsSupported(FindNeedlePluginUtils.UmlOutputType.ImageFile))
                     {
-                        try
-                        {
-                            outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.ImageFile);
-                            outputType = "image";
-                        }
-                        catch (Exception imgEx)
-                        {
-                            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Image generation failed: {imgEx.Message}");
-                            
-                            // Only fall back to browser mode if enabled
-                            if (!EnableBrowserFallback)
-                            {
-                                throw; // Re-throw the exception
-                            }
-                            
-                            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Falling back to browser mode");
-                            outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.Browser);
-                            outputType = "browser";
-                        }
+                        throw new InvalidOperationException("PlantUML is not installed. Please install via the Install button.");
                     }
-                    else
-                    {
-                        // Use browser mode directly (if fallback enabled)
-                        if (!EnableBrowserFallback)
-                        {
-                            throw new InvalidOperationException("Local image generation not supported and browser fallback is disabled.");
-                        }
-                        outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.Browser);
-                        outputType = "browser";
-                    }
+                    
+                    outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.ImageFile);
                 }
                 else
                 {
                     var generator = new FindNeedlePluginUtils.MermaidUMLGenerator();
                     
-                    if (generator.IsSupported(FindNeedlePluginUtils.UmlOutputType.ImageFile))
+                    if (!generator.IsSupported(FindNeedlePluginUtils.UmlOutputType.ImageFile))
                     {
-                        try
-                        {
-                            outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.ImageFile);
-                            outputType = "image";
-                        }
-                        catch (Exception imgEx)
-                        {
-                            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Image generation failed: {imgEx.Message}");
-                            
-                            if (!EnableBrowserFallback)
-                            {
-                                throw;
-                            }
-                            
-                            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Falling back to browser mode");
-                            outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.Browser);
-                            outputType = "browser";
-                        }
+                        throw new InvalidOperationException("Mermaid CLI is not installed. Please install via the Install button.");
                     }
-                    else
-                    {
-                        if (!EnableBrowserFallback)
-                        {
-                            throw new InvalidOperationException("Local image generation not supported and browser fallback is disabled.");
-                        }
-                        outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.Browser);
-                        outputType = "browser";
-                    }
+                    
+                    outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.ImageFile);
                 }
             });
 
             // Check if output was created
             if (outputPath != null && File.Exists(outputPath))
             {
-                var modeText = outputType == "browser" ? " (browser mode - uses web service)" : "";
-                InstallProgressText.Text = $"{toolName} test successful{modeText}! Opening...";
-                FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Test successful! Output: {outputPath} (mode: {outputType})");
+                InstallProgressText.Text = $"{toolName} test successful! Opening...";
+                FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Test successful! Output: {outputPath}");
 
                 // Open the generated file
                 Process.Start(new ProcessStartInfo

@@ -28,9 +28,10 @@ public class PlantUMLGenerator : IUMLGenerator
 
     public string InputFileExtension => ".pu";
 
+    // Only ImageFile is supported - Browser mode was removed as it requires internet
     public UmlOutputType[] SupportedOutputTypes => IsSupported(UmlOutputType.ImageFile)
-        ? [UmlOutputType.ImageFile, UmlOutputType.Browser]
-        : [UmlOutputType.Browser];
+        ? [UmlOutputType.ImageFile]
+        : [];
 
     public string GenerateUML(string inputPath, UmlOutputType outputType = UmlOutputType.ImageFile)
     {
@@ -47,7 +48,6 @@ public class PlantUMLGenerator : IUMLGenerator
         return outputType switch
         {
             UmlOutputType.ImageFile => GenerateImageFile(inputPath),
-            UmlOutputType.Browser => GenerateBrowserHtml(inputPath),
             _ => throw new ArgumentException($"Unknown output type: {outputType}")
         };
     }
@@ -56,7 +56,6 @@ public class PlantUMLGenerator : IUMLGenerator
     {
         return outputType switch
         {
-            UmlOutputType.Browser => true, // Always supported
             UmlOutputType.ImageFile => GetJavaPath() != null && File.Exists(GetPlantUMLPath()),
             _ => false
         };
@@ -66,13 +65,6 @@ public class PlantUMLGenerator : IUMLGenerator
     {
         var plantUmlContent = File.ReadAllText(inputPath);
         var outputPath = Path.ChangeExtension(inputPath, ".png");
-
-        // Check if user wants to use web service
-        if (UseWebServiceForGeneration)
-        {
-            Logger.Instance.Log($"[PlantUMLGenerator] Using web service (user preference)");
-            return GenerateImageViaWebService(plantUmlContent, outputPath);
-        }
 
         var javaPath = GetJavaPath();
         var jarPath = GetPlantUMLPath();
@@ -124,138 +116,6 @@ public class PlantUMLGenerator : IUMLGenerator
         // Include the command in the error for debugging
         var command = $"\"{javaPath}\" -jar \"{jarPath}\" \"{inputPath}\"";
         throw new Exception($"Failed to generate PlantUML image. Exit code: {exitCode}.\nCommand: {command}\nWorking directory: {javaBinDir}\nExpected output: {expectedOutput}");
-    }
-
-    private string GenerateImageViaWebService(string plantUmlContent, string outputPath)
-    {
-        var encoded = EncodePlantUmlForWeb(plantUmlContent);
-        var url = $"https://www.plantuml.com/plantuml/png/{encoded}";
-
-        Logger.Instance.Log($"[PlantUMLGenerator] Downloading PNG from PlantUML web service...");
-
-        using var httpClient = new System.Net.Http.HttpClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(30);
-
-        try
-        {
-            var response = httpClient.GetAsync(url).GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
-
-            var pngBytes = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
-            File.WriteAllBytes(outputPath, pngBytes);
-
-            Logger.Instance.Log($"[PlantUMLGenerator] PNG downloaded successfully: {outputPath} ({pngBytes.Length} bytes)");
-            return outputPath;
-        }
-        catch (Exception ex)
-        {
-            Logger.Instance.Log($"[PlantUMLGenerator] Web service failed: {ex.Message}");
-            throw new Exception($"Failed to generate PlantUML diagram via web service: {ex.Message}", ex);
-        }
-    }
-
-    /// <summary>
-    /// Gets or sets whether to use the web service for PNG generation instead of local Java.
-    /// This is set by the DiagramToolsPage checkbox.
-    /// </summary>
-    public static bool UseWebServiceForGeneration { get; set; } = false;
-
-    private string GenerateBrowserHtml(string inputPath)
-    {
-        var plantUmlContent = File.ReadAllText(inputPath);
-        var outputPath = Path.ChangeExtension(inputPath, ".html");
-
-        // PlantUML uses a specific encoding for web rendering
-        var encoded = EncodePlantUmlForWeb(plantUmlContent);
-        var encodedSource = System.Web.HttpUtility.HtmlEncode(plantUmlContent);
-
-        var html = $$"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>PlantUML Diagram</title>
-                <style>
-                    body { 
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        margin: 20px;
-                        background: #f5f5f5;
-                    }
-                    .diagram { 
-                        background: white; 
-                        padding: 20px; 
-                        border-radius: 8px;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    }
-                    h1 { color: #333; font-size: 1.2em; }
-                    pre { 
-                        background: #f8f8f8; 
-                        padding: 15px; 
-                        border-radius: 4px;
-                        overflow-x: auto;
-                    }
-                    img { max-width: 100%; height: auto; }
-                </style>
-            </head>
-            <body>
-                <h1>PlantUML Diagram</h1>
-                <div class="diagram">
-                    <img src="https://www.plantuml.com/plantuml/svg/{{encoded}}" alt="PlantUML Diagram" />
-                </div>
-                <h2>Source</h2>
-                <pre>{{encodedSource}}</pre>
-            </body>
-            </html>
-            """;
-
-        File.WriteAllText(outputPath, html);
-        return outputPath;
-    }
-
-    private static string EncodePlantUmlForWeb(string plantUml)
-    {
-        // PlantUML web service uses a custom encoding
-        var compressed = Deflate(System.Text.Encoding.UTF8.GetBytes(plantUml));
-        return Encode64(compressed);
-    }
-
-    private static byte[] Deflate(byte[] data)
-    {
-        using var output = new MemoryStream();
-        using (var deflate = new System.IO.Compression.DeflateStream(output, System.IO.Compression.CompressionLevel.Optimal))
-        {
-            deflate.Write(data, 0, data.Length);
-        }
-        return output.ToArray();
-    }
-
-    private static string Encode64(byte[] data)
-    {
-        var result = new System.Text.StringBuilder();
-        for (int i = 0; i < data.Length; i += 3)
-        {
-            int b1 = data[i] & 0xFF;
-            int b2 = (i + 1 < data.Length) ? data[i + 1] & 0xFF : 0;
-            int b3 = (i + 2 < data.Length) ? data[i + 2] & 0xFF : 0;
-
-            result.Append(Encode6bit(b1 >> 2));
-            result.Append(Encode6bit(((b1 & 0x3) << 4) | (b2 >> 4)));
-            result.Append(Encode6bit(((b2 & 0xF) << 2) | (b3 >> 6)));
-            result.Append(Encode6bit(b3 & 0x3F));
-        }
-        return result.ToString();
-    }
-
-    private static char Encode6bit(int b)
-    {
-        if (b < 10) return (char)(48 + b);        // 0-9
-        b -= 10;
-        if (b < 26) return (char)(65 + b);        // A-Z
-        b -= 26;
-        if (b < 26) return (char)(97 + b);        // a-z
-        b -= 26;
-        if (b == 0) return '-';
-        return '_';
     }
 
     public string GetPlantUMLPath()
