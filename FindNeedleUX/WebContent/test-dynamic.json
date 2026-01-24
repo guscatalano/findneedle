@@ -1,0 +1,107 @@
+{
+  "$schema": "./timeline-schema.json",
+  "version": "1.1",
+  "metadata": {
+    "title": "Dynamic Monitor Setup - Monitor Added Mid-Session",
+    "description": "Demonstrates a second monitor being connected, windows moving to it, then disconnecting",
+    "author": "FindNeedle",
+    "created": "2024-01-15"
+  },
+
+  "timeline": {
+    "start": "2024-01-15T14:22:30.000Z",
+    "end": "2024-01-15T14:22:40.000Z",
+    "playbackSpeed": 1.0,
+    "loop": true
+  },
+
+  "monitors": [
+    {
+      "id": "primary",
+      "label": "Primary Display",
+      "keyframes": [
+        { "time": "2024-01-15T14:22:30.000Z", "x": 0, "y": 0, "width": 1920, "height": 1080, "visible": true }
+      ]
+    },
+    {
+      "id": "secondary",
+      "label": "External Monitor",
+      "keyframes": [
+        { "time": "2024-01-15T14:22:30.000Z", "x": 0, "y": 1080, "width": 1920, "height": 1080, "visible": false },
+        { "time": "2024-01-15T14:22:32.000Z", "x": 0, "y": 1080, "width": 1920, "height": 1080, "visible": true },
+        { "time": "2024-01-15T14:22:38.000Z", "x": 0, "y": 1080, "width": 1920, "height": 1080, "visible": true },
+        { "time": "2024-01-15T14:22:38.500Z", "x": 0, "y": 1080, "width": 1920, "height": 1080, "visible": false }
+      ]
+    }
+  ],
+
+  "windows": [
+    {
+      "id": "browser",
+      "label": "Browser",
+      "style": {
+        "gradient": ["#667eea", "#764ba2"],
+        "borderRadius": 8
+      },
+      "keyframes": [
+        { "time": "2024-01-15T14:22:30.000Z", "x": 50,   "y": 50,   "width": 800, "height": 600, "visible": true },
+        { "time": "2024-01-15T14:22:31.500Z", "x": 50,   "y": 50,   "width": 800, "height": 600 },
+        { "time": "2024-01-15T14:22:33.000Z", "x": 100,  "y": 1150, "width": 1200, "height": 800 },
+        { "time": "2024-01-15T14:22:37.000Z", "x": 100,  "y": 1150, "width": 1200, "height": 800 },
+        { "time": "2024-01-15T14:22:38.500Z", "x": 50,   "y": 50,   "width": 800, "height": 600 },
+        { "time": "2024-01-15T14:22:40.000Z", "x": 50,   "y": 50,   "width": 800, "height": 600 }
+      ]
+    },
+    {
+      "id": "vscode",
+      "label": "VS Code",
+      "style": {
+        "gradient": ["#0078d4", "#005a9e"],
+        "borderRadius": 8
+      },
+      "keyframes": [
+        { "time": "2024-01-15T14:22:30.000Z", "x": 900,  "y": 100,  "width": 950, "height": 900, "visible": true },
+        { "time": "2024-01-15T14:22:32.500Z", "x": 0,    "y": 0,    "width": 1920, "height": 1080 },
+        { "time": "2024-01-15T14:22:38.000Z", "x": 0,    "y": 0,    "width": 1920, "height": 1080 },
+        { "time": "2024-01-15T14:22:40.000Z", "x": 500,  "y": 100,  "width": 1000, "height": 800 }
+      ]
+    },
+    {
+      "id": "terminal",
+      "label": "Terminal",
+      "style": {
+        "gradient": ["#1e1e1e", "#2d2d2d"],
+        "borderRadius": 6
+      },
+      "keyframes": [
+        { "time": "2024-01-15T14:22:30.000Z", "x": 100, "y": 700,  "width": 600, "height": 300, "visible": true },
+        { "time": "2024-01-15T14:22:33.500Z", "x": 600, "y": 1500, "width": 700, "height": 400 },
+        { "time": "2024-01-15T14:22:37.500Z", "x": 600, "y": 1500, "width": 700, "height": 400 },
+        { "time": "2024-01-15T14:22:39.000Z", "x": 100, "y": 700,  "width": 600, "height": 300 },
+        { "time": "2024-01-15T14:22:40.000Z", "x": 100, "y": 700,  "width": 600, "height": 300 }
+      ]
+    },
+    {
+      "id": "slack",
+      "label": "Slack",
+      "style": {
+        "gradient": ["#4a154b", "#611f69"],
+        "borderRadius": 8
+      },
+      "keyframes": [
+        { "time": "2024-01-15T14:22:30.000Z", "visible": false },
+        { "time": "2024-01-15T14:22:34.000Z", "x": 1400, "y": 1200, "width": 450, "height": 700, "visible": true },
+        { "time": "2024-01-15T14:22:37.500Z", "x": 1400, "y": 1200, "width": 450, "height": 700 },
+        { "time": "2024-01-15T14:22:38.500Z", "x": 1400, "y": 200,  "width": 450, "height": 700 },
+        { "time": "2024-01-15T14:22:40.000Z", "x": 1400, "y": 200,  "width": 450, "height": 700 }
+      ]
+    }
+  ],
+
+  "events": [
+    { "time": "2024-01-15T14:22:32.000Z", "type": "annotation", "text": "External monitor connected" },
+    { "time": "2024-01-15T14:22:33.000Z", "type": "annotation", "text": "Browser moved to external display" },
+    { "time": "2024-01-15T14:22:34.000Z", "type": "annotation", "text": "Slack opened on external display" },
+    { "time": "2024-01-15T14:22:38.500Z", "type": "annotation", "text": "External monitor disconnected - windows return to primary" }
+  ]
+}

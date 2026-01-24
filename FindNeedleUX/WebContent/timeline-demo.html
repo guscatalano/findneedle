@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Timeline Scrubbing Demo - 3 Moving Boxes</title>
+    <title>Timeline Demo - Dual Monitor Setup</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -15,24 +15,87 @@
             flex-direction: column;
         }
         
-        /* Canvas area where boxes move */
+        /* Canvas area containing monitors */
         #canvas {
             flex: 1;
             position: relative;
             overflow: hidden;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(135deg, #0d0d1a 0%, #1a1a2e 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            gap: 8px;
         }
         
+        /* Monitor frame styling */
+        .monitor {
+            position: absolute;
+            background: #2a2a3e;
+            border: 3px solid #444;
+            border-radius: 8px;
+            box-shadow: 
+                0 0 0 2px #222,
+                0 10px 30px rgba(0,0,0,0.5),
+                inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        
+        .monitor::before {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 15px;
+            background: linear-gradient(to bottom, #333, #222);
+            border-radius: 0 0 4px 4px;
+        }
+        
+        .monitor-screen {
+            position: relative;
+            background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+            overflow: hidden;
+            border-radius: 4px;
+            margin: 4px;
+        }
+        
+        .monitor-label {
+            position: absolute;
+            top: 8px;
+            left: 12px;
+            font-size: 11px;
+            opacity: 0.5;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .monitor-resolution {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            font-size: 10px;
+            opacity: 0.4;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        /* Boxes that move on screen */
         .box {
             position: absolute;
-            border-radius: 8px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            font-size: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
             transition: none;
+            z-index: 20;
+            pointer-events: none;
         }
         
         #box1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
@@ -78,7 +141,7 @@
         #time-display {
             font-family: monospace;
             font-size: 16px;
-            min-width: 80px;
+            min-width: 100px;
         }
         
         .btn {
@@ -119,12 +182,8 @@
     </style>
 </head>
 <body>
-    <!-- Canvas where boxes animate -->
-    <div id="canvas">
-        <div id="box1" class="box">Client</div>
-        <div id="box2" class="box">Server</div>
-        <div id="box3" class="box">Database</div>
-    </div>
+    <!-- Canvas with dual monitors (dynamic, populated by JS) -->
+    <div id="canvas"></div>
     
     <!-- Timeline controls -->
     <div id="controls">
@@ -140,209 +199,392 @@
             <span id="speed-display">1x</span>
         </div>
         <div id="info">
-            <strong>Controls:</strong> Drag the timeline slider to scrub through time. 
-            Click Play to animate. Adjust speed with the speed slider.
+            <strong>Setup:</strong> Two stacked 1080p monitors (1920×1080 each). 
+            Windows move between monitors over time.
             <br><br>
-            <strong>Animation:</strong> 3 boxes (Client, Server, Database) move and resize over a 5 second timeline.
+            <strong>Controls:</strong> Drag slider to scrub | Space = Play/Pause | ?/? = Step | Home = Reset
         </div>
     </div>
 
     <script>
-        // =====================================================
-        // ANIMATION DATA - Define keyframes for each box
-        // =====================================================
-        const DURATION = 5; // Total animation duration in seconds
-        
-        // Keyframes: { time (0-1), x, y, width, height }
-        // time is normalized (0 = start, 1 = end)
-        const animations = {
-            box1: [
-                { time: 0.0, x: 50,  y: 50,  width: 120, height: 80 },
-                { time: 0.25, x: 250, y: 80, width: 140, height: 90 },
-                { time: 0.5, x: 500, y: 150, width: 160, height: 100 },
-                { time: 0.75, x: 650, y: 80,  width: 130, height: 85 },
-                { time: 1.0, x: 400, y: 200, width: 140, height: 90 }
-            ],
-            box2: [
-                { time: 0.0, x: 200, y: 350, width: 100, height: 60 },
-                { time: 0.2, x: 350, y: 280, width: 120, height: 70 },
-                { time: 0.5, x: 150, y: 180, width: 150, height: 90 },
-                { time: 0.8, x: 500, y: 320, width: 170, height: 100 },
-                { time: 1.0, x: 300, y: 380, width: 130, height: 75 }
-            ],
-            box3: [
-                { time: 0.0, x: 600, y: 250, width: 90,  height: 90 },
-                { time: 0.15, x: 700, y: 150, width: 100, height: 100 },
-                { time: 0.4, x: 450, y: 350, width: 120, height: 80 },
-                { time: 0.6, x: 200, y: 280, width: 140, height: 95 },
-                { time: 0.85, x: 550, y: 420, width: 110, height: 70 },
-                { time: 1.0, x: 620, y: 300, width: 125, height: 85 }
-            ]
-        };
+    // =============================
+    // Timeline Animation Loader
+    // =============================
+    let timelineData = null;
+    let timelineStart = 0;
+    let timelineEnd = 0;
+    let timelineDuration = 0;
+    let timelinePlaybackSpeed = 1.0;
+    let timelineLoop = true;
+    let monitors = [];
+    let windows = [];
+    let monitorElements = {};
+    let windowElements = {};
+    let SCALE = 1, OFFSET_X = 0, OFFSET_Y = 0;
+    let VIRTUAL_WIDTH = 1920, VIRTUAL_HEIGHT = 1080;
+    let isPlaying = false, currentTime = 0, lastFrameTime = 0;
+    let playBtn, resetBtn, timelineSlider, speedSlider, speedDisplay;
 
-        // =====================================================
-        // INTERPOLATION - Calculate values between keyframes
-        // =====================================================
-        function lerp(a, b, t) {
-            return a + (b - a) * t;
-        }
-        
-        // Ease in-out function for smooth animation
-        function easeInOut(t) {
-            return t < 0.5 
-                ? 2 * t * t 
-                : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        }
-        
-        function getValueAtTime(keyframes, currentTime) {
-            // Clamp time to valid range
-            currentTime = Math.max(0, Math.min(1, currentTime));
-            
-            // Find the two keyframes we're between
-            let prev = keyframes[0];
-            let next = keyframes[keyframes.length - 1];
-            
-            for (let i = 0; i < keyframes.length - 1; i++) {
-                if (currentTime >= keyframes[i].time && currentTime <= keyframes[i + 1].time) {
-                    prev = keyframes[i];
-                    next = keyframes[i + 1];
-                    break;
-                }
+    // Utility: Parse ISO timestamp to ms
+    function parseTime(t) {
+        return (typeof t === 'string') ? Date.parse(t) : t;
+    }
+
+    // Utility: Format ms as HH:mm:ss.SSS
+    function formatTime(ms) {
+        const d = new Date(ms);
+        return d.toISOString().replace('T', ' ').replace('Z', '').slice(0, 23);
+    }
+
+    // Load JSON and initialize (with embedded fallback for file:// access)
+    async function loadTimeline() {
+        let data = null;
+        try {
+            const resp = await fetch('test.json');
+            if (!resp.ok) throw new Error('Fetch failed');
+            data = await resp.json();
+        } catch (err) {
+            console.warn('Failed to fetch test.json, using embedded fallback:', err);
+            const EMBEDDED_JSON = `{
+  "$schema": "./timeline-schema.json",
+  "version": "1.1",
+  "metadata": {
+    "title": "Dual Monitor Window Movement Demo",
+    "description": "Windows moving between two stacked 1080p monitors",
+    "author": "FindNeedle",
+    "created": "2024-01-15"
+  },
+
+  "timeline": {
+    "start": "2024-01-15T10:30:00.000Z",
+    "end": "2024-01-15T10:30:05.000Z",
+    "playbackSpeed": 1.0,
+    "loop": true
+  },
+
+  "monitors": [
+    {
+      "id": "monitor1",
+      "label": "Monitor 1 (Top)",
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 0, "y": 0, "width": 1920, "height": 1080, "visible": true }
+      ]
+    },
+    {
+      "id": "monitor2", 
+      "label": "Monitor 2 (Bottom)",
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 0, "y": 1080, "width": 1920, "height": 1080, "visible": true }
+      ]
+    }
+  ],
+
+  "windows": [
+    {
+      "id": "windowA",
+      "label": "Window A",
+      "style": {
+        "gradient": ["#667eea", "#764ba2"],
+        "borderRadius": 6
+      },
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 100,  "y": 100,  "width": 300, "height": 200, "visible": true },
+        { "time": "2024-01-15T10:30:01.500Z", "x": 800,  "y": 400,  "width": 350, "height": 220 },
+        { "time": "2024-01-15T10:30:02.500Z", "x": 600,  "y": 1200, "width": 400, "height": 250 },
+        { "time": "2024-01-15T10:30:04.000Z", "x": 1200, "y": 1400, "width": 320, "height": 200 },
+        { "time": "2024-01-15T10:30:05.000Z", "x": 400,  "y": 300,  "width": 300, "height": 200 }
+      ]
+    },
+    {
+      "id": "windowB",
+      "label": "Window B",
+      "style": {
+        "gradient": ["#f093fb", "#f5576c"],
+        "borderRadius": 6
+      },
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 1000, "y": 1300, "width": 280, "height": 180, "visible": true },
+        { "time": "2024-01-15T10:30:01.250Z", "x": 1400, "y": 1600, "width": 300, "height": 200 },
+        { "time": "2024-01-15T10:30:02.500Z", "x": 1200, "y": 600,  "width": 350, "height": 220 },
+        { "time": "2024-01-15T10:30:03.750Z", "x": 200,  "y": 400,  "width": 320, "height": 200 },
+        { "time": "2024-01-15T10:30:05.000Z", "x": 700,  "y": 1500, "width": 280, "height": 180 }
+      ]
+    },
+    {
+      "id": "windowC",
+      "label": "Window C",
+      "style": {
+        "gradient": ["#4facfe", "#00f2fe"],
+        "borderRadius": 6
+      },
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 1400, "y": 200,  "width": 250, "height": 160, "visible": true },
+        { "time": "2024-01-15T10:30:01.000Z", "x": 1500, "y": 900,  "width": 280, "height": 180 },
+        { "time": "2024-01-15T10:30:02.000Z", "x": 800,  "y": 980,  "width": 400, "height": 200 },
+        { "time": "2024-01-15T10:30:03.000Z", "x": 300,  "y": 1400, "width": 300, "height": 180 },
+        { "time": "2024-01-15T10:30:04.000Z", "x": 100,  "y": 1800, "width": 260, "height": 170 },
+        { "time": "2024-01-15T10:30:05.000Z", "x": 1300, "y": 500,  "width": 250, "height": 160 }
+      ]
+    }
+  ]
+}`;
+            try {
+                data = JSON.parse(EMBEDDED_JSON);
+            } catch (parseErr) {
+                console.error('Embedded JSON parse failed', parseErr);
+                throw parseErr;
             }
-            
-            // Calculate how far between the two keyframes (0-1)
-            const range = next.time - prev.time;
-            const localT = range > 0 ? (currentTime - prev.time) / range : 0;
-            
-            // Apply easing
-            const easedT = easeInOut(localT);
-            
-            return {
-                x: lerp(prev.x, next.x, easedT),
-                y: lerp(prev.y, next.y, easedT),
-                width: lerp(prev.width, next.width, easedT),
-                height: lerp(prev.height, next.height, easedT)
-            };
         }
 
-        // =====================================================
-        // RENDER - Update box positions based on time
-        // =====================================================
-        function render(normalizedTime) {
-            for (const [id, keyframes] of Object.entries(animations)) {
-                const el = document.getElementById(id);
-                const values = getValueAtTime(keyframes, normalizedTime);
-                
-                el.style.left = values.x + 'px';
-                el.style.top = values.y + 'px';
-                el.style.width = values.width + 'px';
-                el.style.height = values.height + 'px';
+        timelineData = data;
+
+        // Parse timeline
+        const t = timelineData.timeline;
+        timelineStart = parseTime(t.start);
+        timelineEnd = parseTime(t.end);
+        timelineDuration = timelineEnd - timelineStart;
+        timelinePlaybackSpeed = t.playbackSpeed || 1.0;
+        timelineLoop = t.loop !== false;
+
+        // Parse monitors/windows
+        monitors = timelineData.monitors.map(m => ({
+            ...m,
+            keyframes: m.keyframes.map(kf => ({ ...kf, time: parseTime(kf.time) }))
+        }));
+        windows = timelineData.windows.map(w => ({
+            ...w,
+            keyframes: w.keyframes.map(kf => ({ ...kf, time: parseTime(kf.time) }))
+        }));
+
+        // Compute virtual desktop size
+        let minX = 0, minY = 0, maxX = 1920, maxY = 1080;
+        for (const m of monitors) {
+            for (const kf of m.keyframes) {
+                minX = Math.min(minX, kf.x);
+                minY = Math.min(minY, kf.y);
+                maxX = Math.max(maxX, kf.x + kf.width);
+                maxY = Math.max(maxY, kf.y + kf.height);
             }
-            
-            // Update time display
-            const currentSeconds = (normalizedTime * DURATION).toFixed(2);
-            document.getElementById('time-display').textContent = 
-                `${currentSeconds}s / ${DURATION.toFixed(2)}s`;
         }
+        VIRTUAL_WIDTH = maxX - minX;
+        VIRTUAL_HEIGHT = maxY - minY;
 
-        // =====================================================
-        // CONTROLS - Play, pause, scrub
-        // =====================================================
-        let isPlaying = false;
-        let currentTime = 0;
-        let lastFrameTime = 0;
-        let playbackSpeed = 1;
-        
-        const timeline = document.getElementById('timeline');
-        const playBtn = document.getElementById('playBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const speedSlider = document.getElementById('speed');
-        const speedDisplay = document.getElementById('speed-display');
-        
-        // Scrub with slider
-        timeline.addEventListener('input', (e) => {
-            currentTime = e.target.value / 1000;
+        setupUI();
+        setupMonitors();
+        currentTime = timelineStart;
+        render(timelineStart);
+    }
+
+    // Setup UI and DOM
+    function setupUI() {
+        playBtn = document.getElementById('playBtn');
+        resetBtn = document.getElementById('resetBtn');
+        timelineSlider = document.getElementById('timeline');
+        speedSlider = document.getElementById('speed');
+        speedDisplay = document.getElementById('speed-display');
+
+        // Set slider range to ms
+        timelineSlider.min = timelineStart;
+        timelineSlider.max = timelineEnd;
+        timelineSlider.value = timelineStart;
+
+        // Playback speed
+        speedSlider.value = timelinePlaybackSpeed;
+        speedDisplay.textContent = timelinePlaybackSpeed + 'x';
+
+        // Handlers
+        timelineSlider.addEventListener('input', (e) => {
+            currentTime = parseInt(e.target.value);
             render(currentTime);
-            
-            // Stop playing when manually scrubbing
             if (isPlaying) {
                 isPlaying = false;
                 playBtn.textContent = '? Play';
                 playBtn.classList.remove('active');
             }
         });
-        
-        // Speed control
         speedSlider.addEventListener('input', (e) => {
-            playbackSpeed = parseFloat(e.target.value);
-            speedDisplay.textContent = playbackSpeed + 'x';
+            timelinePlaybackSpeed = parseFloat(e.target.value);
+            speedDisplay.textContent = timelinePlaybackSpeed + 'x';
         });
-        
-        // Play/Pause button
         playBtn.addEventListener('click', () => {
             isPlaying = !isPlaying;
             playBtn.textContent = isPlaying ? '? Pause' : '? Play';
             playBtn.classList.toggle('active', isPlaying);
-            
             if (isPlaying) {
                 lastFrameTime = performance.now();
                 requestAnimationFrame(animate);
             }
         });
-        
-        // Reset button
         resetBtn.addEventListener('click', () => {
-            currentTime = 0;
-            timeline.value = 0;
-            render(0);
-            
+            currentTime = timelineStart;
+            timelineSlider.value = timelineStart;
+            render(currentTime);
             isPlaying = false;
             playBtn.textContent = '? Play';
             playBtn.classList.remove('active');
         });
-        
-        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
-                e.preventDefault();
-                playBtn.click();
+                e.preventDefault(); playBtn.click();
             } else if (e.code === 'Home') {
                 resetBtn.click();
             } else if (e.code === 'ArrowLeft') {
-                currentTime = Math.max(0, currentTime - 0.02);
-                timeline.value = currentTime * 1000;
+                currentTime = Math.max(timelineStart, currentTime - 50);
+                timelineSlider.value = currentTime;
                 render(currentTime);
             } else if (e.code === 'ArrowRight') {
-                currentTime = Math.min(1, currentTime + 0.02);
-                timeline.value = currentTime * 1000;
+                currentTime = Math.min(timelineEnd, currentTime + 50);
+                timelineSlider.value = currentTime;
                 render(currentTime);
             }
         });
-        
-        // Animation loop
-        function animate(timestamp) {
-            if (!isPlaying) return;
-            
-            const delta = (timestamp - lastFrameTime) / 1000; // Convert to seconds
-            lastFrameTime = timestamp;
-            
-            currentTime += (delta / DURATION) * playbackSpeed;
-            
-            if (currentTime >= 1) {
-                currentTime = 0; // Loop
-            }
-            
-            timeline.value = currentTime * 1000;
-            render(currentTime);
-            
-            requestAnimationFrame(animate);
+    }
+
+    // Setup monitors/windows DOM
+    function setupMonitors() {
+        const canvas = document.getElementById('canvas');
+        canvas.innerHTML = '';
+        monitorElements = {};
+        windowElements = {};
+
+        // Calculate scale
+        const controlsHeight = document.getElementById('controls').offsetHeight;
+        const availableWidth = window.innerWidth - 40;
+        const availableHeight = window.innerHeight - controlsHeight - 80;
+        const scaleX = availableWidth / VIRTUAL_WIDTH;
+        const scaleY = availableHeight / VIRTUAL_HEIGHT;
+        SCALE = Math.min(scaleX, scaleY, 0.5);
+        OFFSET_X = 0; OFFSET_Y = 0;
+
+        // Create monitor frames
+        for (const m of monitors) {
+            const frame = document.createElement('div');
+            frame.className = 'monitor';
+            frame.id = m.id + '-frame';
+            const screen = document.createElement('div');
+            screen.className = 'monitor-screen';
+            screen.id = m.id;
+            const label = document.createElement('span');
+            label.className = 'monitor-label';
+            label.textContent = m.label;
+            const res = document.createElement('span');
+            res.className = 'monitor-resolution';
+            res.textContent = '';
+            screen.appendChild(label);
+            screen.appendChild(res);
+            frame.appendChild(screen);
+            canvas.appendChild(frame);
+            monitorElements[m.id] = { frame, screen, label, res };
         }
-        
-        // Initial render
-        render(0);
-        
-        // Focus for keyboard shortcuts
-        document.body.focus();
+        // Create window boxes
+        for (const w of windows) {
+            const box = document.createElement('div');
+            box.className = 'box';
+            box.id = w.id;
+            box.textContent = w.label;
+            canvas.appendChild(box);
+            windowElements[w.id] = box;
+        }
+    }
+
+    // Interpolate keyframes for a given time
+    function interpolateKeyframes(keyframes, t) {
+        if (!keyframes || keyframes.length === 0) return null;
+        // If before first, clamp
+        if (t <= keyframes[0].time) return { ...keyframes[0] };
+        // If after last, clamp
+        if (t >= keyframes[keyframes.length - 1].time) return { ...keyframes[keyframes.length - 1] };
+        // Find prev/next
+        let prev = keyframes[0], next = keyframes[keyframes.length - 1];
+        for (let i = 0; i < keyframes.length - 1; i++) {
+            if (t >= keyframes[i].time && t <= keyframes[i + 1].time) {
+                prev = keyframes[i];
+                next = keyframes[i + 1];
+                break;
+            }
+        }
+        const range = next.time - prev.time;
+        const localT = range > 0 ? (t - prev.time) / range : 0;
+        // Easing
+        const easedT = localT < 0.5 ? 2 * localT * localT : 1 - Math.pow(-2 * localT + 2, 2) / 2;
+        // Interpolate
+        const interp = {};
+        for (const k of ['x','y','width','height','opacity']) {
+            if (prev[k] !== undefined && next[k] !== undefined)
+                interp[k] = prev[k] + (next[k] - prev[k]) * easedT;
+            else if (prev[k] !== undefined) interp[k] = prev[k];
+        }
+        // Visibility
+        interp.visible = (prev.visible === false || next.visible === false) ? false : true;
+        return interp;
+    }
+
+    // Render everything for a given ms timestamp
+    function render(t) {
+        // Monitors
+        for (const m of monitors) {
+            const kf = interpolateKeyframes(m.keyframes, t);
+            const el = monitorElements[m.id];
+            if (!kf || !el) continue;
+            // Position/size
+            el.frame.style.display = kf.visible === false ? 'none' : '';
+            el.frame.style.left = (kf.x * SCALE + OFFSET_X) + 'px';
+            el.frame.style.top = (kf.y * SCALE + OFFSET_Y) + 'px';
+            el.frame.style.width = (kf.width * SCALE) + 'px';
+            el.frame.style.height = (kf.height * SCALE + 24) + 'px'; // +24 for stand
+            el.screen.style.width = (kf.width * SCALE) + 'px';
+            el.screen.style.height = (kf.height * SCALE) + 'px';
+            el.res.textContent = `${Math.round(kf.width)}×${Math.round(kf.height)}`;
+        }
+        // Windows
+        for (const w of windows) {
+            const kf = interpolateKeyframes(w.keyframes, t);
+            const el = windowElements[w.id];
+            if (!kf || !el) continue;
+            el.style.display = kf.visible === false ? 'none' : '';
+            el.style.left = (kf.x * SCALE + OFFSET_X) + 'px';
+            el.style.top = (kf.y * SCALE + OFFSET_Y) + 'px';
+            el.style.width = (kf.width * SCALE) + 'px';
+            el.style.height = (kf.height * SCALE) + 'px';
+            // Style
+            if (w.style && w.style.gradient) {
+                el.style.background = `linear-gradient(135deg, ${w.style.gradient[0]} 0%, ${w.style.gradient[1]} 100%)`;
+            } else if (w.style && w.style.color) {
+                el.style.background = w.style.color;
+            }
+            el.style.borderRadius = (w.style && w.style.borderRadius ? w.style.borderRadius : 6) + 'px';
+            el.style.opacity = kf.opacity !== undefined ? kf.opacity : (w.style && w.style.opacity !== undefined ? w.style.opacity : 1.0);
+        }
+        // Timeline slider and time display
+        timelineSlider.value = t;
+        const timeDisplay = document.getElementById('time-display');
+        timeDisplay.textContent = `${formatTime(t)} / ${formatTime(timelineEnd)}`;
+    }
+
+    // Animation loop
+    function animate(ts) {
+        if (!isPlaying) return;
+        const now = performance.now();
+        const delta = now - lastFrameTime;
+        lastFrameTime = now;
+        let nextTime = currentTime + delta * timelinePlaybackSpeed;
+        if (nextTime > timelineEnd) {
+            if (timelineLoop) nextTime = timelineStart;
+            else { isPlaying = false; playBtn.textContent = '? Play'; playBtn.classList.remove('active'); return; }
+        }
+        currentTime = nextTime;
+        render(currentTime);
+        requestAnimationFrame(animate);
+    }
+
+    // Responsive
+    window.addEventListener('resize', () => {
+        setupMonitors();
+        render(currentTime);
+    });
+
+    // Start
+    loadTimeline();
     </script>
 </body>
 </html>

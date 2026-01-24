@@ -1,0 +1,83 @@
+{
+  "$schema": "./timeline-schema.json",
+  "version": "1.1",
+  "metadata": {
+    "title": "Dual Monitor Window Movement Demo",
+    "description": "Windows moving between two stacked 1080p monitors",
+    "author": "FindNeedle",
+    "created": "2024-01-15"
+  },
+
+  "timeline": {
+    "start": "2024-01-15T10:30:00.000Z",
+    "end": "2024-01-15T10:30:05.000Z",
+    "playbackSpeed": 1.0,
+    "loop": true
+  },
+
+  "monitors": [
+    {
+      "id": "monitor1",
+      "label": "Monitor 1 (Top)",
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 0, "y": 0, "width": 1920, "height": 1080, "visible": true }
+      ]
+    },
+    {
+      "id": "monitor2", 
+      "label": "Monitor 2 (Bottom)",
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 0, "y": 1080, "width": 1920, "height": 1080, "visible": true }
+      ]
+    }
+  ],
+
+  "windows": [
+    {
+      "id": "windowA",
+      "label": "Window A",
+      "style": {
+        "gradient": ["#667eea", "#764ba2"],
+        "borderRadius": 6
+      },
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 100,  "y": 100,  "width": 300, "height": 200, "visible": true },
+        { "time": "2024-01-15T10:30:01.500Z", "x": 800,  "y": 400,  "width": 350, "height": 220 },
+        { "time": "2024-01-15T10:30:02.500Z", "x": 600,  "y": 1200, "width": 400, "height": 250 },
+        { "time": "2024-01-15T10:30:04.000Z", "x": 1200, "y": 1400, "width": 320, "height": 200 },
+        { "time": "2024-01-15T10:30:05.000Z", "x": 400,  "y": 300,  "width": 300, "height": 200 }
+      ]
+    },
+    {
+      "id": "windowB",
+      "label": "Window B",
+      "style": {
+        "gradient": ["#f093fb", "#f5576c"],
+        "borderRadius": 6
+      },
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 1000, "y": 1300, "width": 280, "height": 180, "visible": true },
+        { "time": "2024-01-15T10:30:01.250Z", "x": 1400, "y": 1600, "width": 300, "height": 200 },
+        { "time": "2024-01-15T10:30:02.500Z", "x": 1200, "y": 600,  "width": 350, "height": 220 },
+        { "time": "2024-01-15T10:30:03.750Z", "x": 200,  "y": 400,  "width": 320, "height": 200 },
+        { "time": "2024-01-15T10:30:05.000Z", "x": 700,  "y": 1500, "width": 280, "height": 180 }
+      ]
+    },
+    {
+      "id": "windowC",
+      "label": "Window C",
+      "style": {
+        "gradient": ["#4facfe", "#00f2fe"],
+        "borderRadius": 6
+      },
+      "keyframes": [
+        { "time": "2024-01-15T10:30:00.000Z", "x": 1400, "y": 200,  "width": 250, "height": 160, "visible": true },
+        { "time": "2024-01-15T10:30:01.000Z", "x": 1500, "y": 900,  "width": 280, "height": 180 },
+        { "time": "2024-01-15T10:30:02.000Z", "x": 800,  "y": 980,  "width": 400, "height": 200 },
+        { "time": "2024-01-15T10:30:03.000Z", "x": 300,  "y": 1400, "width": 300, "height": 180 },
+        { "time": "2024-01-15T10:30:04.000Z", "x": 100,  "y": 1800, "width": 260, "height": 170 },
+        { "time": "2024-01-15T10:30:05.000Z", "x": 1300, "y": 500,  "width": 250, "height": 160 }
+      ]
+    }
+  ]
+}
