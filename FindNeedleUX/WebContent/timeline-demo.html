@@ -240,6 +240,10 @@
     let isPlaying = false, currentTime = 0, lastFrameTime = 0;
     let playBtn, resetBtn, timelineSlider, speedSlider, speedDisplay;
     let mousePath = [];
+    let canvasEl = null;
+    let isPanning = false;
+    let panStartX = 0, panStartY = 0;
+    let panOriginX = 0, panOriginY = 0;
 
     // Utility: Parse ISO timestamp to ms
     function parseTime(t) {
@@ -469,6 +473,7 @@
     // Setup monitors/windows DOM
     function setupMonitors() {
         const canvas = document.getElementById('canvas');
+        canvasEl = canvas;
         canvas.innerHTML = '';
         monitorElements = {};
         windowElements = {};
@@ -520,6 +525,31 @@
             mouseEl.className = 'mouse-cursor';
             canvas.appendChild(mouseEl);
         }
+
+        // Mouse middle-button panning
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 1) { // middle button
+                isPanning = true;
+                panStartX = e.clientX; panStartY = e.clientY;
+                panOriginX = OFFSET_X; panOriginY = OFFSET_Y;
+                document.body.style.cursor = 'grabbing';
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 1 && isPanning) {
+                isPanning = false;
+                document.body.style.cursor = '';
+            }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            const dx = e.clientX - panStartX;
+            const dy = e.clientY - panStartY;
+            OFFSET_X = panOriginX + dx;
+            OFFSET_Y = panOriginY + dy;
+            render(currentTime);
+        });
     }
 
     // Interpolate keyframes for a given time
@@ -661,6 +691,24 @@ function getMouseAt(t) {
         OFFSET_Y = OFFSET_Y - (my - OFFSET_Y) * (factor - 1);
         render(currentTime);
     }, { passive: false });
+
+    // Keyboard arrow panning
+    document.addEventListener('keydown', (e) => {
+        const panStep = 50; // pixels
+        if (e.key === 'ArrowLeft') {
+            OFFSET_X += panStep;
+            render(currentTime);
+        } else if (e.key === 'ArrowRight') {
+            OFFSET_X -= panStep;
+            render(currentTime);
+        } else if (e.key === 'ArrowUp') {
+            OFFSET_Y += panStep;
+            render(currentTime);
+        } else if (e.key === 'ArrowDown') {
+            OFFSET_Y -= panStep;
+            render(currentTime);
+        }
+    });
 
     // Start
     loadTimeline();
