@@ -192,11 +192,57 @@ public sealed partial class DiagramToolsPage : Page
         {
             // Create directory if it doesn't exist
             Directory.CreateDirectory(path);
+            
+            // For packaged apps, the path is virtualized. We need to get the actual location.
+            string actualPath = path;
+            if (FindNeedlePluginUtils.PackagedAppPaths.IsPackagedApp)
+            {
+                // For packaged apps, LocalAppData is virtualized to the package's LocalCache\Local folder
+                // The actual path is: %LOCALAPPDATA%\Packages\{PackageFamilyName}\LocalCache\Local\FindNeedle\Dependencies
+                var packageFamilyName = FindNeedlePluginUtils.PackagedAppPaths.PackageFamilyName;
+                if (!string.IsNullOrEmpty(packageFamilyName))
+                {
+                    var realLocalAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    actualPath = Path.Combine(realLocalAppData, "Packages", packageFamilyName, "LocalCache", "Local", "FindNeedle", "Dependencies");
+                    
+                    // Ensure directory exists
+                    Directory.CreateDirectory(actualPath);
+                    
+                    
+                    FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Opening virtualized path: {actualPath}");
+                }
+            }
+            
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = actualPath,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            InstallProgressPanel.Visibility = Visibility.Visible;
+            InstallProgressText.Text = $"Could not open folder: {ex.Message}";
+            InstallProgressBar.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OpenTestOutputFolder_Click(object sender, RoutedEventArgs e)
+    {
+        // Test output goes to the system temp folder, which is NOT virtualized for packaged apps
+        var path = Path.Combine(Path.GetTempPath(), "FindNeedle_DiagramTest");
+        try
+        {
+            // Create directory if it doesn't exist
+            Directory.CreateDirectory(path);
+            
             Process.Start(new ProcessStartInfo
             {
                 FileName = path,
                 UseShellExecute = true
             });
+            
+            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Opened test output folder: {path}");
         }
         catch (Exception ex)
         {

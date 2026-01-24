@@ -114,44 +114,32 @@ public class MermaidInstaller : IDependencyInstaller
         return File.Exists(npmCmd) ? npmCmd : null;
     }
 
+
     private string? GetVersion()
     {
         try
         {
-            // Don't try to run mmdc if not properly installed
             if (!IsInstalled())
             {
                 Log("GetVersion: Not installed, skipping version check");
                 return null;
             }
 
-            var mmdcPath = GetMmdcPath();
-            if (mmdcPath == null) return null;
-
-            var nodePath = GetNodePath();
-            var nodeDir = nodePath != null ? Path.GetDirectoryName(nodePath) : null;
-
-            Log($"GetVersion: Running mmdc --version from {mmdcPath}");
-
-            // Use PackagedAppCommandRunner to handle both packaged and unpackaged scenarios
-            var pathAdditions = nodeDir != null ? new[] { nodeDir } : null;
-            var (exitCode, output) = PackagedAppCommandRunner.RunCommandWithOutput(
-                mmdcPath, 
-                "--version", 
-                nodeDir ?? _installDirectory, 
-                10000, 
-                pathAdditions);
-
-            Log($"GetVersion: Exit code {exitCode}, output: {output}");
-
-            if (exitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            // Read version from package.json instead of running mmdc --version
+            // This avoids spawning processes and popup windows
+            var packageJsonPath = Path.Combine(_installDirectory, "node_modules", "@mermaid-js", "mermaid-cli", "package.json");
+            
+            if (!File.Exists(packageJsonPath))
             {
-                // mmdc --version outputs just the version number like "11.4.2"
-                // But via PowerShell we might get extra output, so extract just the version
-                return ParseVersion(output);
+                Log($"GetVersion: package.json not found at {packageJsonPath}");
+                return null;
             }
 
-            return null;
+            var json = File.ReadAllText(packageJsonPath);
+            var version = ParseVersionFromPackageJson(json);
+            
+            Log($"GetVersion: Found version {version} from package.json");
+            return version;
         }
         catch (Exception ex)
         {
@@ -161,35 +149,34 @@ public class MermaidInstaller : IDependencyInstaller
     }
 
     /// <summary>
-    /// Parses the version number from mmdc --version output.
+    /// Parses the version from package.json content.
     /// </summary>
-    private static string? ParseVersion(string output)
+    private static string? ParseVersionFromPackageJson(string json)
     {
-        if (string.IsNullOrWhiteSpace(output))
-            return null;
+        // Simple parsing - look for "version": "x.y.z"
+        // We avoid full JSON parsing to keep it lightweight
+        var versionPattern = "\"version\"";
+        var idx = json.IndexOf(versionPattern, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return null;
 
-        // mmdc --version typically outputs just a version like "11.4.2"
-        // But PowerShell may add extra output. Look for a version pattern.
-        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var line in lines)
-        {
-            var trimmed = line.Trim();
-            // Check if it looks like a version number (starts with digit, contains dots)
-            if (!string.IsNullOrEmpty(trimmed) && 
-                char.IsDigit(trimmed[0]) && 
-                trimmed.Contains('.'))
-            {
-                return trimmed;
-            }
-        }
+        // Find the colon after "version"
+        var colonIdx = json.IndexOf(':', idx + versionPattern.Length);
+        if (colonIdx < 0) return null;
 
-        // If no version pattern found, return first non-empty line
-        return lines.Length > 0 ? lines[0].Trim() : null;
+        // Find the opening quote
+        var startQuote = json.IndexOf('"', colonIdx + 1);
+        if (startQuote < 0) return null;
+
+        // Find the closing quote
+        var endQuote = json.IndexOf('"', startQuote + 1);
+        if (endQuote < 0) return null;
+
+        return json.Substring(startQuote + 1, endQuote - startQuote - 1);
     }
 
     /// <summary>
     /// Gets the installed Mermaid CLI version asynchronously.
-    /// This runs mmdc --version which can take a few seconds.
+    /// Reads from package.json - fast and doesn't spawn processes.
     /// </summary>
     public async Task<string?> GetVersionAsync()
     {

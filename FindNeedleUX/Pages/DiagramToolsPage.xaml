@@ -140,6 +140,7 @@
             
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="10">
                 <Button Content="Open Install Folder" Click="OpenInstallFolder_Click"/>
+                <Button Content="Open Test Output Folder" Click="OpenTestOutputFolder_Click"/>
                 <Button Content="Open Command Prompt" Click="OpenCommandPrompt_Click"/>
             </StackPanel>
         </StackPanel>
