@@ -240,4 +240,133 @@ public static class PackagedAppCommandRunner
         var arguments = $"-jar \"{jarPath}\" \"{inputPath}\"";
         return RunCommand(javaPath, arguments, workingDirectory, timeoutMs);
     }
+
+    /// <summary>
+    /// Runs a command and returns both the exit code and captured output.
+    /// Useful for commands like --version where you need the output.
+    /// </summary>
+    public static (int ExitCode, string Output) RunCommandWithOutput(string executablePath, string arguments, string workingDirectory, int timeoutMs = 60000, string[]? pathAdditions = null)
+    {
+        if (IsPackagedApp)
+        {
+            return RunCommandWithOutputViaPackageContext(executablePath, arguments, workingDirectory, timeoutMs, pathAdditions);
+        }
+        else
+        {
+            return RunCommandWithOutputDirectly(executablePath, arguments, workingDirectory, timeoutMs, pathAdditions);
+        }
+    }
+
+    private static (int ExitCode, string Output) RunCommandWithOutputViaPackageContext(string executablePath, string arguments, string workingDirectory, int timeoutMs, string[]? pathAdditions = null)
+    {
+        var packageFamilyName = PackageFamilyName!;
+        
+        var guid = Guid.NewGuid().ToString("N");
+        var sentinelFile = Path.Combine(Path.GetTempPath(), $"PackagedAppCmd_{guid}.txt");
+        var outputFile = Path.Combine(Path.GetTempPath(), $"PackagedAppCmd_{guid}_output.txt");
+        
+        try
+        {
+            var escapedWorkingDir = workingDirectory.Replace("'", "''");
+            var escapedExePath = executablePath.Replace("'", "''");
+            var escapedArgs = arguments.Replace("'", "''");
+            var escapedSentinelFile = sentinelFile.Replace("'", "''");
+            var escapedOutputFile = outputFile.Replace("'", "''");
+            
+            var pathSetup = "";
+            if (pathAdditions != null && pathAdditions.Length > 0)
+            {
+                var escapedPaths = string.Join(";", pathAdditions.Select(p => p.Replace("'", "''")));
+                pathSetup = $"$env:PATH = ''{escapedPaths};'' + $env:PATH; ";
+            }
+            
+            var innerCommand = $"{pathSetup}Set-Location ''{escapedWorkingDir}''; " +
+                               $"& ''{escapedExePath}'' {escapedArgs} *> ''{escapedOutputFile}''; " +
+                               $"$LASTEXITCODE | Out-File -FilePath ''{escapedSentinelFile}'' -Encoding ASCII";
+            var innerArgs = $"-WindowStyle Hidden -NoProfile -Command \"{innerCommand}\"";
+            
+            var psCommand = $"Invoke-CommandInDesktopPackage -PackageFamilyName '{packageFamilyName}' -AppId 'App' -Command 'powershell.exe' -Args '{innerArgs}' -PreventBreakaway";
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{psCommand}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = workingDirectory
+            };
+
+            using var process = Process.Start(psi);
+            process?.WaitForExit(30000);
+
+            var startTime = DateTime.UtcNow;
+            var pollInterval = 500;
+            
+            while (!File.Exists(sentinelFile))
+            {
+                var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+                if (elapsed > timeoutMs)
+                {
+                    return (-1, "Command timed out");
+                }
+                Thread.Sleep(pollInterval);
+            }
+
+            Thread.Sleep(100);
+            
+            var output = File.Exists(outputFile) ? File.ReadAllText(outputFile).Trim() : "";
+            var exitCodeText = File.ReadAllText(sentinelFile).Trim();
+            var exitCode = int.TryParse(exitCodeText, out var code) ? code : -1;
+            
+            return (exitCode, output);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(sentinelFile)) File.Delete(sentinelFile);
+                if (File.Exists(outputFile)) File.Delete(outputFile);
+            }
+            catch { }
+        }
+    }
+
+    private static (int ExitCode, string Output) RunCommandWithOutputDirectly(string executablePath, string arguments, string workingDirectory, int timeoutMs, string[]? pathAdditions = null)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = executablePath,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory
+        };
+
+        if (pathAdditions != null && pathAdditions.Length > 0)
+        {
+            var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+            psi.Environment["PATH"] = string.Join(";", pathAdditions) + ";" + currentPath;
+        }
+
+        using var process = Process.Start(psi);
+        if (process == null)
+        {
+            return (-1, "Failed to start process");
+        }
+
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        var completed = process.WaitForExit(timeoutMs);
+
+        if (!completed)
+        {
+            try { process.Kill(); } catch { }
+            return (-1, "Command timed out");
+        }
+
+        var output = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
+        return (process.ExitCode, output);
+    }
 }

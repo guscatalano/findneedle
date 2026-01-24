@@ -65,15 +65,46 @@ public sealed partial class DiagramToolsPage : Page
 
         // Update Mermaid status
         var mermaidStatus = SystemInfoMiddleware.GetMermaidStatus();
-        MermaidStatusIcon.Text = mermaidStatus.IsInstalled ? "?" : "?";
+        MermaidStatusIcon.Text = mermaidStatus.IsInstalled ? "✓" : "✗";
         MermaidStatusIcon.Foreground = mermaidStatus.IsInstalled
             ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green)
             : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
         MermaidStatusText.Text = mermaidStatus.IsInstalled ? "Installed" : "Not installed";
         MermaidPathDisplay.Text = mermaidStatus.InstalledPath ?? "Not found";
-        MermaidVersionDisplay.Text = !string.IsNullOrEmpty(mermaidStatus.InstalledVersion) 
-            ? $"Version: {mermaidStatus.InstalledVersion}" : "";
         InstallMermaidButton.Content = mermaidStatus.IsInstalled ? "Reinstall" : "Install";
+        
+        // For Mermaid, fetch version asynchronously since it's slow
+        if (mermaidStatus.IsInstalled)
+        {
+            MermaidVersionDisplay.Text = "Version: checking...";
+            _ = FetchMermaidVersionAsync();
+        }
+        else
+        {
+            MermaidVersionDisplay.Text = "";
+        }
+    }
+
+    private async Task FetchMermaidVersionAsync()
+    {
+        try
+        {
+            var version = await SystemInfoMiddleware.GetMermaidVersionAsync();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                MermaidVersionDisplay.Text = !string.IsNullOrEmpty(version) 
+                    ? $"Version: {version}" 
+                    : "";
+            });
+        }
+        catch (Exception ex)
+        {
+            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Failed to get Mermaid version: {ex.Message}");
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                MermaidVersionDisplay.Text = "";
+            });
+        }
     }
 
     private async void InstallPlantUml_Click(object sender, RoutedEventArgs e)

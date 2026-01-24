@@ -236,6 +236,12 @@ public class SystemInfoMiddleware
     public static DependencyStatus GetMermaidStatus() => UmlDependencyManager.Mermaid.GetStatus();
 
     /// <summary>
+    /// Gets the Mermaid CLI version asynchronously.
+    /// This is separate from GetMermaidStatus() because it can take several seconds.
+    /// </summary>
+    public static Task<string?> GetMermaidVersionAsync() => UmlDependencyManager.Mermaid.GetVersionAsync();
+
+    /// <summary>
     /// Installs PlantUML asynchronously.
     /// </summary>
     public static Task<InstallResult> InstallPlantUmlAsync(

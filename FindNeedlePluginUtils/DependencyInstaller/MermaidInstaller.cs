@@ -44,8 +44,9 @@ public class MermaidInstaller : IDependencyInstaller
         if (status.IsInstalled)
         {
             status.InstalledPath = GetMmdcPath();
-            status.InstalledVersion = GetVersion();
-            Log($"Status: Installed at {status.InstalledPath}, version {status.InstalledVersion}");
+            // Don't fetch version here - it's slow. Use GetVersionAsync() instead.
+            status.InstalledVersion = null;
+            Log($"Status: Installed at {status.InstalledPath}");
         }
         else
         {
@@ -130,37 +131,72 @@ public class MermaidInstaller : IDependencyInstaller
             var nodePath = GetNodePath();
             var nodeDir = nodePath != null ? Path.GetDirectoryName(nodePath) : null;
 
-            var psi = new ProcessStartInfo
-            {
-                FileName = mmdcPath,
-                Arguments = "--version",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = nodeDir ?? _installDirectory
-            };
+            Log($"GetVersion: Running mmdc --version from {mmdcPath}");
 
-            // Set PATH to include our Node installation
-            if (nodeDir != null)
+            // Use PackagedAppCommandRunner to handle both packaged and unpackaged scenarios
+            var pathAdditions = nodeDir != null ? new[] { nodeDir } : null;
+            var (exitCode, output) = PackagedAppCommandRunner.RunCommandWithOutput(
+                mmdcPath, 
+                "--version", 
+                nodeDir ?? _installDirectory, 
+                10000, 
+                pathAdditions);
+
+            Log($"GetVersion: Exit code {exitCode}, output: {output}");
+
+            if (exitCode == 0 && !string.IsNullOrWhiteSpace(output))
             {
-                var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-                psi.Environment["PATH"] = nodeDir + ";" + currentPath;
+                // mmdc --version outputs just the version number like "11.4.2"
+                // But via PowerShell we might get extra output, so extract just the version
+                return ParseVersion(output);
             }
 
-            Log($"GetVersion: Running mmdc from {mmdcPath}");
-
-            using var process = Process.Start(psi);
-            var output = process?.StandardOutput.ReadToEnd();
-            process?.WaitForExit(5000);
-
-            return output?.Trim();
+            return null;
         }
         catch (Exception ex)
         {
             Log($"GetVersion failed: {ex.Message}");
-            return "Unknown";
+            return null;
         }
+    }
+
+    /// <summary>
+    /// Parses the version number from mmdc --version output.
+    /// </summary>
+    private static string? ParseVersion(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+            return null;
+
+        // mmdc --version typically outputs just a version like "11.4.2"
+        // But PowerShell may add extra output. Look for a version pattern.
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            // Check if it looks like a version number (starts with digit, contains dots)
+            if (!string.IsNullOrEmpty(trimmed) && 
+                char.IsDigit(trimmed[0]) && 
+                trimmed.Contains('.'))
+            {
+                return trimmed;
+            }
+        }
+
+        // If no version pattern found, return first non-empty line
+        return lines.Length > 0 ? lines[0].Trim() : null;
+    }
+
+    /// <summary>
+    /// Gets the installed Mermaid CLI version asynchronously.
+    /// This runs mmdc --version which can take a few seconds.
+    /// </summary>
+    public async Task<string?> GetVersionAsync()
+    {
+        if (!IsInstalled())
+            return null;
+
+        return await Task.Run(() => GetVersion());
     }
 
     public async Task<InstallResult> InstallAsync(
