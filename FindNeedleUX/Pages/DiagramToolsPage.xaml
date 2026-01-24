@@ -99,6 +99,23 @@
                 </Grid>
             </Border>
 
+            <!-- Test Options -->
+            <TextBlock Text="Test Options" FontWeight="SemiBold" FontSize="18" Margin="0,20,0,5"/>
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                    CornerRadius="8" Padding="15" Margin="0,5,0,15">
+                <StackPanel>
+                    <TextBlock Text="Preferred Output Format" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <StackPanel Orientation="Horizontal" Spacing="20">
+                        <RadioButton x:Name="OutputPngRadio" Content="PNG Image" GroupName="OutputFormat" 
+                                     IsChecked="True" Checked="OutputFormat_Changed"/>
+                        <RadioButton x:Name="OutputBrowserRadio" Content="Browser (HTML)" GroupName="OutputFormat"
+                                     Checked="OutputFormat_Changed"/>
+                    </StackPanel>
+                    <TextBlock Text="PNG generates a static image file. Browser generates an interactive HTML file." 
+                               Opacity="0.6" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
             <!-- Install Directory Info -->
             <TextBlock Text="Installation Directory" FontWeight="SemiBold" Margin="0,20,0,5"/>
             <TextBlock x:Name="InstallDirectoryText" Text="" Opacity="0.6" FontSize="11" 

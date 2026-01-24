@@ -7,6 +7,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using FindNeedlePluginUtils.DependencyInstaller;
+using FindNeedlePluginUtils;
 
 namespace FindNeedleUX.Pages;
 
@@ -16,12 +17,21 @@ namespace FindNeedleUX.Pages;
 public sealed partial class DiagramToolsPage : Page
 {
     private CancellationTokenSource? _installCancellationTokenSource;
+    private UmlOutputType _preferredOutputType = UmlOutputType.ImageFile;
 
     public DiagramToolsPage()
     {
         this.InitializeComponent();
         InstallDirectoryText.Text = SystemInfoMiddleware.GetUmlInstallDirectory();
         RefreshStatus();
+    }
+
+    private void OutputFormat_Changed(object sender, RoutedEventArgs e)
+    {
+        _preferredOutputType = OutputPngRadio.IsChecked == true 
+            ? UmlOutputType.ImageFile 
+            : UmlOutputType.Browser;
+        FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Output format changed to: {_preferredOutputType}");
     }
 
     private void RefreshStatus()
@@ -368,6 +378,8 @@ Invoke-CommandInDesktopPackage -Command 'cmd.exe' -PackageFamilyName '{packageFa
             await File.WriteAllTextAsync(inputPath, content);
             FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Test file created: {inputPath}");
 
+            // Determine output type to use
+            var outputType = _preferredOutputType;
 
             string? outputPath = null;
 
@@ -376,32 +388,53 @@ Invoke-CommandInDesktopPackage -Command 'cmd.exe' -PackageFamilyName '{packageFa
             {
                 if (toolName == "PlantUML")
                 {
-                    var generator = new FindNeedlePluginUtils.PlantUMLGenerator();
+                    var generator = new PlantUMLGenerator();
                     
-                    if (!generator.IsSupported(FindNeedlePluginUtils.UmlOutputType.ImageFile))
+                    if (!generator.IsSupported(outputType))
                     {
-                        throw new InvalidOperationException("PlantUML is not installed. Please install via the Install button.");
+                        // Fall back to the other type if preferred is not supported
+                        var fallbackType = outputType == UmlOutputType.ImageFile ? UmlOutputType.Browser : UmlOutputType.ImageFile;
+                        if (generator.IsSupported(fallbackType))
+                        {
+                            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] {outputType} not supported, falling back to {fallbackType}");
+                            outputType = fallbackType;
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("PlantUML is not installed. Please install via the Install button.");
+                        }
                     }
                     
-                    outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.ImageFile);
+                    outputPath = generator.GenerateUML(inputPath, outputType);
                 }
                 else
                 {
-                    var generator = new FindNeedlePluginUtils.MermaidUMLGenerator();
+                    var generator = new MermaidUMLGenerator();
                     
-                    if (!generator.IsSupported(FindNeedlePluginUtils.UmlOutputType.ImageFile))
+                    if (!generator.IsSupported(outputType))
                     {
-                        throw new InvalidOperationException("Mermaid CLI is not installed. Please install via the Install button.");
+                        // Fall back to the other type if preferred is not supported
+                        var fallbackType = outputType == UmlOutputType.ImageFile ? UmlOutputType.Browser : UmlOutputType.ImageFile;
+                        if (generator.IsSupported(fallbackType))
+                        {
+                            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] {outputType} not supported, falling back to {fallbackType}");
+                            outputType = fallbackType;
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Mermaid CLI is not installed. Please install via the Install button.");
+                        }
                     }
                     
-                    outputPath = generator.GenerateUML(inputPath, FindNeedlePluginUtils.UmlOutputType.ImageFile);
+                    outputPath = generator.GenerateUML(inputPath, outputType);
                 }
             });
 
             // Check if output was created
             if (outputPath != null && File.Exists(outputPath))
             {
-                InstallProgressText.Text = $"{toolName} test successful! Opening...";
+                var formatText = outputType == UmlOutputType.Browser ? " (HTML)" : " (PNG)";
+                InstallProgressText.Text = $"{toolName} test successful{formatText}! Opening...";
                 FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Test successful! Output: {outputPath}");
 
                 // Open the generated file

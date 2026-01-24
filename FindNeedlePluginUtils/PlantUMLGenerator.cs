@@ -28,9 +28,9 @@ public class PlantUMLGenerator : IUMLGenerator
 
     public string InputFileExtension => ".pu";
 
-    // Only ImageFile is supported - Browser mode was removed as it requires internet
+    // ImageFile generates PNG locally; Browser mode wraps the PNG in HTML for viewing
     public UmlOutputType[] SupportedOutputTypes => IsSupported(UmlOutputType.ImageFile)
-        ? [UmlOutputType.ImageFile]
+        ? [UmlOutputType.ImageFile, UmlOutputType.Browser]
         : [];
 
     public string GenerateUML(string inputPath, UmlOutputType outputType = UmlOutputType.ImageFile)
@@ -42,12 +42,13 @@ public class PlantUMLGenerator : IUMLGenerator
 
         if (!IsSupported(outputType))
         {
-            throw new Exception($"Output type '{outputType}' is not supported. Java and PlantUML jar are required for image generation.");
+            throw new Exception($"Output type '{outputType}' is not supported. Java and PlantUML jar are required.");
         }
 
         return outputType switch
         {
             UmlOutputType.ImageFile => GenerateImageFile(inputPath),
+            UmlOutputType.Browser => GenerateBrowserHtml(inputPath),
             _ => throw new ArgumentException($"Unknown output type: {outputType}")
         };
     }
@@ -56,7 +57,9 @@ public class PlantUMLGenerator : IUMLGenerator
     {
         return outputType switch
         {
+            // Both modes require local PlantUML installation
             UmlOutputType.ImageFile => GetJavaPath() != null && File.Exists(GetPlantUMLPath()),
+            UmlOutputType.Browser => GetJavaPath() != null && File.Exists(GetPlantUMLPath()),
             _ => false
         };
     }
@@ -116,6 +119,64 @@ public class PlantUMLGenerator : IUMLGenerator
         // Include the command in the error for debugging
         var command = $"\"{javaPath}\" -jar \"{jarPath}\" \"{inputPath}\"";
         throw new Exception($"Failed to generate PlantUML image. Exit code: {exitCode}.\nCommand: {command}\nWorking directory: {javaBinDir}\nExpected output: {expectedOutput}");
+    }
+
+    private string GenerateBrowserHtml(string inputPath)
+    {
+        // First generate the PNG locally
+        var pngPath = GenerateImageFile(inputPath);
+        
+        // Read the PNG and convert to base64 data URI (so HTML is self-contained)
+        var pngBytes = File.ReadAllBytes(pngPath);
+        var base64Png = Convert.ToBase64String(pngBytes);
+        
+        var plantUmlSource = File.ReadAllText(inputPath);
+        var encodedSource = System.Web.HttpUtility.HtmlEncode(plantUmlSource);
+        
+        var outputPath = Path.ChangeExtension(inputPath, ".html");
+
+        var html = $$"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>PlantUML Diagram</title>
+                <style>
+                    body { 
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        margin: 20px;
+                        background: #f5f5f5;
+                    }
+                    .diagram { 
+                        background: white; 
+                        padding: 20px; 
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    h1 { color: #333; font-size: 1.2em; }
+                    pre { 
+                        background: #f8f8f8; 
+                        padding: 15px; 
+                        border-radius: 4px;
+                        overflow-x: auto;
+                    }
+                    img { max-width: 100%; height: auto; }
+                </style>
+            </head>
+            <body>
+                <h1>PlantUML Diagram</h1>
+                <div class="diagram">
+                    <img src="data:image/png;base64,{{base64Png}}" alt="PlantUML Diagram" />
+                </div>
+                <h2>Source</h2>
+                <pre>{{encodedSource}}</pre>
+            </body>
+            </html>
+            """;
+
+        File.WriteAllText(outputPath, html);
+        Logger.Instance.Log($"[PlantUMLGenerator] Generated browser HTML with embedded PNG: {outputPath}");
+        return outputPath;
     }
 
     public string GetPlantUMLPath()
