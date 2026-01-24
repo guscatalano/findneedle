@@ -77,56 +77,87 @@ public class MermaidUMLGenerator : IUMLGenerator
         Logger.Instance.Log($"[MermaidUMLGenerator] Using mmdc at: {mmdcPath}");
         Logger.Instance.Log($"[MermaidUMLGenerator] Node directory: {nodeDir}");
 
-        var processStartInfo = new ProcessStartInfo
-        {
-            FileName = mmdcPath,
-            Arguments = $"-i \"{inputPath}\" -o \"{outputPath}\"",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = nodeDir // Set working directory to Node folder
-        };
+        var arguments = $"-i \"{inputPath}\" -o \"{outputPath}\"";
 
-        // Set PATH to include our Node installation
-        if (nodeDir != null)
+        // For packaged apps, use PackagedAppCommandRunner to escape the AppContainer sandbox
+        if (PackagedAppCommandRunner.IsPackagedApp)
         {
-            var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-            processStartInfo.Environment["PATH"] = nodeDir + ";" + currentPath;
+            Logger.Instance.Log($"[MermaidUMLGenerator] Running via PackagedAppCommandRunner (packaged app)");
+            
+            try
+            {
+                // Pass the Node directory as a PATH addition so mmdc.cmd can find node.exe
+                var pathAdditions = nodeDir != null ? new[] { nodeDir } : null;
+                var exitCode = PackagedAppCommandRunner.RunCommand(mmdcPath, arguments, nodeDir ?? Path.GetDirectoryName(mmdcPath)!, 60000, pathAdditions);
+                Logger.Instance.Log($"[MermaidUMLGenerator] Process exit code: {exitCode}");
+                
+                if (File.Exists(outputPath))
+                {
+                    Logger.Instance.Log($"[MermaidUMLGenerator] Successfully generated: {outputPath}");
+                    return outputPath;
+                }
+                
+                throw new Exception($"Failed to generate Mermaid UML image output (exit code {exitCode})");
+            }
+            catch (TimeoutException)
+            {
+                throw new Exception("Mermaid CLI timed out after 60 seconds");
+            }
         }
-
-        Logger.Instance.Log($"[MermaidUMLGenerator] Starting process...");
-
-        using var process = new Process { StartInfo = processStartInfo };
-        
-        try
+        else
         {
-            process.Start();
+            // For unpackaged apps, run mmdc directly
+            Logger.Instance.Log($"[MermaidUMLGenerator] Starting process directly (unpackaged app)...");
+            
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = mmdcPath,
+                Arguments = arguments,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = nodeDir // Set working directory to Node folder
+            };
+
+            // Set PATH to include our Node installation
+            if (nodeDir != null)
+            {
+                var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+                processStartInfo.Environment["PATH"] = nodeDir + ";" + currentPath;
+            }
+
+            using var process = new Process { StartInfo = processStartInfo };
+            
+            try
+            {
+                process.Start();
+            }
+            catch (Exception ex)
+            {
+                Logger.Instance.Log($"[MermaidUMLGenerator] Failed to start mmdc process: {ex.Message}");
+                throw new Exception($"Failed to start Mermaid CLI: {ex.Message}", ex);
+            }
+
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            Logger.Instance.Log($"[MermaidUMLGenerator] Process exit code: {process.ExitCode}");
+            if (!string.IsNullOrWhiteSpace(stdout))
+                Logger.Instance.Log($"[MermaidUMLGenerator] stdout: {stdout}");
+            if (!string.IsNullOrWhiteSpace(stderr))
+                Logger.Instance.Log($"[MermaidUMLGenerator] stderr: {stderr}");
+
+            if (File.Exists(outputPath))
+            {
+                Logger.Instance.Log($"[MermaidUMLGenerator] Successfully generated: {outputPath}");
+                return outputPath;
+            }
+
+            throw new Exception($"Failed to generate Mermaid UML image output: {stderr}");
         }
-        catch (Exception ex)
-        {
-            Logger.Instance.Log($"[MermaidUMLGenerator] Failed to start mmdc process: {ex.Message}");
-            throw new Exception($"Failed to start Mermaid CLI: {ex.Message}", ex);
-        }
-
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        Logger.Instance.Log($"[MermaidUMLGenerator] Process exit code: {process.ExitCode}");
-        if (!string.IsNullOrWhiteSpace(stdout))
-            Logger.Instance.Log($"[MermaidUMLGenerator] stdout: {stdout}");
-        if (!string.IsNullOrWhiteSpace(stderr))
-            Logger.Instance.Log($"[MermaidUMLGenerator] stderr: {stderr}");
-
-        if (File.Exists(outputPath))
-        {
-            Logger.Instance.Log($"[MermaidUMLGenerator] Successfully generated: {outputPath}");
-            return outputPath;
-        }
-
-        throw new Exception($"Failed to generate Mermaid UML image output: {stderr}");
     }
 
     private string GenerateBrowserHtml(string inputPath)

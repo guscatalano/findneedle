@@ -279,41 +279,62 @@ public class MermaidInstaller : IDependencyInstaller
         Log($"Node directory for PATH: {nodeDir}");
         progress?.Report(new InstallProgress { Status = "Running npm install...", PercentComplete = 70, IsIndeterminate = true });
 
-        var psi = new ProcessStartInfo
+        // For packaged apps, use PackagedAppCommandRunner to run npm in the correct context
+        if (PackagedAppCommandRunner.IsPackagedApp)
         {
-            FileName = npmPath,
-            Arguments = "install @mermaid-js/mermaid-cli",
-            WorkingDirectory = _installDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        // Ensure our Node is in PATH
-        psi.Environment["PATH"] = nodeDir + ";" + Environment.GetEnvironmentVariable("PATH");
-
-        using var process = new Process { StartInfo = psi };
-        process.Start();
-
-        // Read output asynchronously to prevent deadlock
-        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        await process.WaitForExitAsync(cancellationToken);
-
-        var output = await outputTask;
-        var error = await errorTask;
-
-        Log($"npm install exit code: {process.ExitCode}");
-        if (!string.IsNullOrWhiteSpace(output))
-            Log($"npm stdout: {output}");
-        if (!string.IsNullOrWhiteSpace(error))
-            Log($"npm stderr: {error}");
-
-        if (process.ExitCode != 0)
+            Log("Running npm via PackagedAppCommandRunner (packaged app)");
+            // Pass the Node directory as a PATH addition so npm.cmd can find node.exe
+            var pathAdditions = nodeDir != null ? new[] { nodeDir } : null;
+            var exitCode = await Task.Run(() => 
+                PackagedAppCommandRunner.RunCommand(npmPath, "install @mermaid-js/mermaid-cli", _installDirectory, 300000, pathAdditions), // 5 min timeout for npm
+                cancellationToken);
+            
+            Log($"npm install exit code: {exitCode}");
+            
+            if (exitCode != 0)
+            {
+                throw new InvalidOperationException($"npm install failed (exit code {exitCode})");
+            }
+        }
+        else
         {
-            throw new InvalidOperationException($"npm install failed (exit code {process.ExitCode}): {error}");
+            // For unpackaged apps, run npm directly
+            var psi = new ProcessStartInfo
+            {
+                FileName = npmPath,
+                Arguments = "install @mermaid-js/mermaid-cli",
+                WorkingDirectory = _installDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            // Ensure our Node is in PATH
+            psi.Environment["PATH"] = nodeDir + ";" + Environment.GetEnvironmentVariable("PATH");
+
+            using var process = new Process { StartInfo = psi };
+            process.Start();
+
+            // Read output asynchronously to prevent deadlock
+            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            await process.WaitForExitAsync(cancellationToken);
+
+            var output = await outputTask;
+            var error = await errorTask;
+
+            Log($"npm install exit code: {process.ExitCode}");
+            if (!string.IsNullOrWhiteSpace(output))
+                Log($"npm stdout: {output}");
+            if (!string.IsNullOrWhiteSpace(error))
+                Log($"npm stderr: {error}");
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"npm install failed (exit code {process.ExitCode}): {error}");
+            }
         }
 
         // Verify installation

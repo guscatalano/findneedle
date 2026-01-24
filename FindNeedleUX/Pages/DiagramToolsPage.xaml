@@ -99,17 +99,27 @@
                 </Grid>
             </Border>
 
-            <!-- Generation Options -->
-            <TextBlock Text="Generation Options" FontWeight="SemiBold" FontSize="18" Margin="0,20,0,5"/>
+            <!-- Online Services Options -->
+            <TextBlock Text="Online Services" FontWeight="SemiBold" FontSize="18" Margin="0,20,0,5"/>
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
                     CornerRadius="8" Padding="15" Margin="0,5,0,15">
                 <StackPanel>
+                    <!-- Warning -->
+                    <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}" 
+                            CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚠️" FontSize="14" Margin="0,0,8,0"/>
+                            <TextBlock Text="These options use external web services (plantuml.com, mermaid.live). Diagram content will be sent over the internet and may be logged by third parties."
+                                       TextWrapping="Wrap" FontSize="12" Opacity="0.9"/>
+                        </StackPanel>
+                    </Border>
+                    
                     <CheckBox x:Name="UseWebServiceCheckBox" 
-                              Content="Use web service for PlantUML (requires internet, no Java needed)"
+                              Content="Use web service for PNG generation (no local Java needed)"
                               IsChecked="False"
                               Checked="UseWebServiceCheckBox_Changed"
                               Unchecked="UseWebServiceCheckBox_Changed"/>
-                    <TextBlock Text="When enabled, diagrams are generated using plantuml.com instead of local Java."
+                    <TextBlock Text="Generate PNG images using plantuml.com instead of local Java installation."
                                Opacity="0.6" FontSize="11" Margin="28,2,0,0" TextWrapping="Wrap"/>
                     
                     <CheckBox x:Name="EnableBrowserFallbackCheckBox" 
@@ -118,21 +128,8 @@
                               Margin="0,10,0,0"
                               Checked="EnableBrowserFallbackCheckBox_Changed"
                               Unchecked="EnableBrowserFallbackCheckBox_Changed"/>
-                    <TextBlock Text="When enabled, test will fall back to browser mode if local generation fails."
+                    <TextBlock Text="If local generation fails, open diagram in browser using online rendering."
                                Opacity="0.6" FontSize="11" Margin="28,2,0,0" TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Browser Fallback Info -->
-            <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" 
-                    CornerRadius="8" Padding="15" Margin="0,20,0,10">
-                <StackPanel>
-                    <TextBlock Text="🌐 Browser Rendering" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                    <TextBlock TextWrapping="Wrap" Opacity="0.8" FontSize="12">
-                        Even without local tools installed, diagrams can still be rendered using online services 
-                        (PlantUML server or Mermaid.js CDN) when opened in a browser. Local installation is 
-                        required for generating PNG/SVG image files directly.
-                    </TextBlock>
                 </StackPanel>
             </Border>
 

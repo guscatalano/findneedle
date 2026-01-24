@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.IO;
+using System.Threading;
 using FindNeedlePluginLib;
 
 namespace FindNeedlePluginUtils;
@@ -50,12 +52,13 @@ public static class PackagedAppCommandRunner
     /// <param name="arguments">Arguments to pass to the executable.</param>
     /// <param name="workingDirectory">Working directory for the process.</param>
     /// <param name="timeoutMs">Timeout in milliseconds (default 60 seconds).</param>
+    /// <param name="pathAdditions">Additional directories to add to PATH (e.g., Node.js directory).</param>
     /// <returns>The process exit code.</returns>
-    public static int RunCommand(string executablePath, string arguments, string workingDirectory, int timeoutMs = 60000)
+    public static int RunCommand(string executablePath, string arguments, string workingDirectory, int timeoutMs = 60000, string[]? pathAdditions = null)
     {
         if (IsPackagedApp)
         {
-            return RunCommandViaPackageContext(executablePath, arguments, workingDirectory, timeoutMs);
+            return RunCommandViaPackageContext(executablePath, arguments, workingDirectory, timeoutMs, pathAdditions);
         }
         else
         {
@@ -65,61 +68,129 @@ public static class PackagedAppCommandRunner
 
     /// <summary>
     /// Runs a command via Invoke-CommandInDesktopPackage for packaged apps.
-    /// Uses PowerShell with -WindowStyle Hidden to prevent window flash.
+    /// Uses a sentinel file approach to wait for the command to actually complete,
+    /// since Invoke-CommandInDesktopPackage returns immediately without waiting.
     /// </summary>
-    private static int RunCommandViaPackageContext(string executablePath, string arguments, string workingDirectory, int timeoutMs)
+    private static int RunCommandViaPackageContext(string executablePath, string arguments, string workingDirectory, int timeoutMs, string[]? pathAdditions = null)
     {
         var packageFamilyName = PackageFamilyName!;
         
-        // Escape single quotes for PowerShell by doubling them
-        var escapedWorkingDir = workingDirectory.Replace("'", "''");
-        var escapedExePath = executablePath.Replace("'", "''");
-        var escapedArgs = arguments.Replace("'", "''");
+        // Create unique files to track completion and capture output
+        var guid = Guid.NewGuid().ToString("N");
+        var sentinelFile = Path.Combine(Path.GetTempPath(), $"PackagedAppCmd_{guid}.txt");
+        var outputFile = Path.Combine(Path.GetTempPath(), $"PackagedAppCmd_{guid}_output.txt");
         
-        // Build the inner PowerShell command
-        // The inner command runs in the package context with hidden window
-        var innerCommand = $"Set-Location ''{escapedWorkingDir}''; & ''{escapedExePath}'' {escapedArgs}";
-        var innerArgs = $"-WindowStyle Hidden -NoProfile -Command \"{innerCommand}\"";
-        
-        // Build the outer Invoke-CommandInDesktopPackage call
-        var psCommand = $"Invoke-CommandInDesktopPackage -PackageFamilyName '{packageFamilyName}' -AppId 'App' -Command 'powershell.exe' -Args '{innerArgs}' -PreventBreakaway";
-        
-        Logger.Instance.Log($"[PackagedAppCommandRunner] Running via Invoke-CommandInDesktopPackage");
-        Logger.Instance.Log($"[PackagedAppCommandRunner] Inner command: {innerCommand}");
-
-        var psi = new ProcessStartInfo
+        try
         {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{psCommand}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = workingDirectory
-        };
+            // Escape single quotes for PowerShell by doubling them
+            var escapedWorkingDir = workingDirectory.Replace("'", "''");
+            var escapedExePath = executablePath.Replace("'", "''");
+            var escapedArgs = arguments.Replace("'", "''");
+            var escapedSentinelFile = sentinelFile.Replace("'", "''");
+            var escapedOutputFile = outputFile.Replace("'", "''");
+            
+            // Build PATH setup command if needed
+            var pathSetup = "";
+            if (pathAdditions != null && pathAdditions.Length > 0)
+            {
+                var escapedPaths = string.Join(";", pathAdditions.Select(p => p.Replace("'", "''")));
+                pathSetup = $"$env:PATH = ''{escapedPaths};'' + $env:PATH; ";
+            }
+            
+            // Build the inner PowerShell command that runs the actual command and captures output
+            // Redirect both stdout and stderr to the output file, then write exit code to sentinel file
+            var innerCommand = $"{pathSetup}Set-Location ''{escapedWorkingDir}''; " +
+                               $"& ''{escapedExePath}'' {escapedArgs} *> ''{escapedOutputFile}''; " +
+                               $"$LASTEXITCODE | Out-File -FilePath ''{escapedSentinelFile}'' -Encoding ASCII";
+            var innerArgs = $"-WindowStyle Hidden -NoProfile -Command \"{innerCommand}\"";
+            
+            // Build the outer Invoke-CommandInDesktopPackage call
+            var psCommand = $"Invoke-CommandInDesktopPackage -PackageFamilyName '{packageFamilyName}' -AppId 'App' -Command 'powershell.exe' -Args '{innerArgs}' -PreventBreakaway";
+            
+            Logger.Instance.Log($"[PackagedAppCommandRunner] Running via Invoke-CommandInDesktopPackage");
+            Logger.Instance.Log($"[PackagedAppCommandRunner] Inner command: {innerCommand}");
+            Logger.Instance.Log($"[PackagedAppCommandRunner] Sentinel file: {sentinelFile}");
 
-        using var process = Process.Start(psi);
-        if (process == null)
-        {
-            throw new Exception("Failed to start PowerShell process");
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{psCommand}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = workingDirectory
+            };
+
+            using var process = Process.Start(psi);
+            if (process == null)
+            {
+                throw new Exception("Failed to start PowerShell process");
+            }
+
+            // Wait for the Invoke-CommandInDesktopPackage call to complete (this is fast, it just spawns the process)
+            process.WaitForExit(30000);
+
+            // Now wait for the actual command to complete by polling for the sentinel file
+            var startTime = DateTime.UtcNow;
+            var pollInterval = 500; // ms
+            
+            while (!File.Exists(sentinelFile))
+            {
+                var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+                if (elapsed > timeoutMs)
+                {
+                    Logger.Instance.Log($"[PackagedAppCommandRunner] Timeout waiting for command to complete after {timeoutMs}ms");
+                    throw new TimeoutException($"Command timed out after {timeoutMs}ms");
+                }
+                
+                Thread.Sleep(pollInterval);
+            }
+
+            // Give a small delay for files to be fully written
+            Thread.Sleep(100);
+            
+            // Log captured output for debugging
+            if (File.Exists(outputFile))
+            {
+                var output = File.ReadAllText(outputFile);
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    Logger.Instance.Log($"[PackagedAppCommandRunner] Command output: {output}");
+                }
+            }
+            
+            // Read the exit code from sentinel file
+            var exitCodeText = File.ReadAllText(sentinelFile).Trim();
+            if (int.TryParse(exitCodeText, out var exitCode))
+            {
+                Logger.Instance.Log($"[PackagedAppCommandRunner] Command completed with exit code: {exitCode}");
+                return exitCode;
+            }
+            else
+            {
+                Logger.Instance.Log($"[PackagedAppCommandRunner] Could not parse exit code from sentinel file: '{exitCodeText}'");
+                // If we can't parse, assume success if the file was created
+                return 0;
+            }
         }
-
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        var completed = process.WaitForExit(timeoutMs);
-
-        if (!completed)
+        finally
         {
-            try { process.Kill(); } catch { }
-            throw new TimeoutException($"Command timed out after {timeoutMs}ms");
+            // Clean up temp files
+            try
+            {
+                if (File.Exists(sentinelFile))
+                {
+                    File.Delete(sentinelFile);
+                }
+                if (File.Exists(outputFile))
+                {
+                    File.Delete(outputFile);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
         }
-
-        if (!string.IsNullOrWhiteSpace(stdout))
-            Logger.Instance.Log($"[PackagedAppCommandRunner] stdout: {stdout}");
-        if (!string.IsNullOrWhiteSpace(stderr))
-            Logger.Instance.Log($"[PackagedAppCommandRunner] stderr: {stderr}");
-
-        return process.ExitCode;
     }
 
     /// <summary>
