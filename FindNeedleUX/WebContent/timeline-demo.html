@@ -15,6 +15,8 @@
             flex-direction: column;
         }
         
+    
+
         /* Canvas area containing monitors */
         #canvas {
             flex: 1;
@@ -179,6 +181,19 @@
         #speed {
             width: 100px;
         }
+        
+        /* Mouse cursor */
+        .mouse-cursor {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.95);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -224,6 +239,7 @@
     let VIRTUAL_WIDTH = 1920, VIRTUAL_HEIGHT = 1080;
     let isPlaying = false, currentTime = 0, lastFrameTime = 0;
     let playBtn, resetBtn, timelineSlider, speedSlider, speedDisplay;
+    let mousePath = [];
 
     // Utility: Parse ISO timestamp to ms
     function parseTime(t) {
@@ -356,6 +372,15 @@
             keyframes: w.keyframes.map(kf => ({ ...kf, time: parseTime(kf.time) }))
         }));
 
+        // Default mouse path (absolute times) if none provided
+        mousePath = [
+            { time: timelineStart, x: 200, y: 200 },
+            { time: timelineStart + Math.floor(timelineDuration * 0.25), x: 600, y: 350 },
+            { time: timelineStart + Math.floor(timelineDuration * 0.5), x: 900, y: 800 },
+            { time: timelineStart + Math.floor(timelineDuration * 0.75), x: 700, y: 400 },
+            { time: timelineEnd, x: 800, y: 300 }
+        ];
+
         // Compute virtual desktop size
         let minX = 0, minY = 0, maxX = 1920, maxY = 1080;
         for (const m of monitors) {
@@ -365,6 +390,7 @@
                 maxX = Math.max(maxX, kf.x + kf.width);
                 maxY = Math.max(maxY, kf.y + kf.height);
             }
+
         }
         VIRTUAL_WIDTH = maxX - minX;
         VIRTUAL_HEIGHT = maxY - minY;
@@ -485,6 +511,15 @@
             canvas.appendChild(box);
             windowElements[w.id] = box;
         }
+
+        // Create mouse cursor element
+        let mouseEl = document.getElementById('mouse-cursor');
+        if (!mouseEl) {
+            mouseEl = document.createElement('div');
+            mouseEl.id = 'mouse-cursor';
+            mouseEl.className = 'mouse-cursor';
+            canvas.appendChild(mouseEl);
+        }
     }
 
     // Interpolate keyframes for a given time
@@ -518,6 +553,20 @@
         interp.visible = (prev.visible === false || next.visible === false) ? false : true;
         return interp;
     }
+
+// Get mouse position at time t by interpolating mousePath
+function getMouseAt(t) {
+    if (!mousePath || mousePath.length === 0) return null;
+    if (t <= mousePath[0].time) return { x: mousePath[0].x, y: mousePath[0].y };
+    if (t >= mousePath[mousePath.length-1].time) return { x: mousePath[mousePath.length-1].x, y: mousePath[mousePath.length-1].y };
+    let prev = mousePath[0], next = mousePath[mousePath.length-1];
+    for (let i=0;i<mousePath.length-1;i++){
+        if (t>=mousePath[i].time && t<=mousePath[i+1].time){ prev = mousePath[i]; next = mousePath[i+1]; break; }
+    }
+    const localT = (t - prev.time) / (next.time - prev.time);
+    const eased = localT < 0.5 ? 2*localT*localT : 1 - Math.pow(-2*localT+2,2)/2;
+    return { x: prev.x + (next.x - prev.x)*eased, y: prev.y + (next.y - prev.y)*eased };
+}
 
     // Render everything for a given ms timestamp
     function render(t) {
@@ -559,6 +608,19 @@
         timelineSlider.value = t;
         const timeDisplay = document.getElementById('time-display');
         timeDisplay.textContent = `${formatTime(t)} / ${formatTime(timelineEnd)}`;
+
+        // Mouse cursor
+        const mouseEl = document.getElementById('mouse-cursor');
+        if (mouseEl) {
+            const pos = getMouseAt(t);
+            if (pos) {
+                mouseEl.style.left = (pos.x * SCALE + OFFSET_X) + 'px';
+                mouseEl.style.top = (pos.y * SCALE + OFFSET_Y) + 'px';
+                mouseEl.style.display = '';
+            } else {
+                mouseEl.style.display = 'none';
+            }
+        }
     }
 
     // Animation loop
@@ -582,6 +644,23 @@
         setupMonitors();
         render(currentTime);
     });
+
+    // Zoom handling with wheel
+    document.getElementById('canvas').addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = -e.deltaY || e.wheelDelta;
+        const factor = delta > 0 ? 1.1 : 0.9;
+        // Clamp SCALE
+        SCALE = Math.max(0.1, Math.min(2, SCALE * factor));
+        // Optionally adjust OFFSET to zoom to mouse position
+        const rect = e.currentTarget.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        // adjust offsets so zoom centers on mouse
+        OFFSET_X = OFFSET_X - (mx - OFFSET_X) * (factor - 1);
+        OFFSET_Y = OFFSET_Y - (my - OFFSET_Y) * (factor - 1);
+        render(currentTime);
+    }, { passive: false });
 
     // Start
     loadTimeline();
