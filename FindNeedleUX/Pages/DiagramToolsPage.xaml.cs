@@ -26,6 +26,142 @@ public sealed partial class DiagramToolsPage : Page
         RefreshStatus();
     }
 
+    private void OpenDemo_Click(object sender, RoutedEventArgs e)
+    {
+        // kept for compatibility but UI now exposes explicit external/in-app options
+    }
+
+    private void OpenDemoExternal_Click(object sender, RoutedEventArgs e)
+    {
+        FindNeedlePluginLib.Logger.Instance.Log("[DiagramToolsPage] OpenDemoExternal_Click invoked");
+        InstallProgressPanel.Visibility = Visibility.Visible;
+        InstallProgressText.Text = "Opening demo (external)...";
+        try
+        {
+            var fullPath = FindTimelineDemoFullPath();
+            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] FindTimelineDemoFullPath -> {fullPath}");
+            if (fullPath == null)
+            {
+                InstallProgressText.Text = "Could not find timeline-demo.html in expected locations.";
+                var notFoundDlg = new ContentDialog() { Title = "Demo file not found", Content = "Could not locate timeline-demo.html. Check that WebContent/timeline-demo.html is present.", CloseButtonText = "OK" };
+                DispatcherQueue.TryEnqueue(() => { try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { } _ = notFoundDlg.ShowAsync(); });
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
+            InstallProgressPanel.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] OpenDemoExternal failed: {ex.Message}");
+            InstallProgressPanel.Visibility = Visibility.Visible;
+            InstallProgressText.Text = $"Could not open demo (external): {ex.Message}";
+        }
+    }
+
+    private void OpenDemoInApp_Click(object sender, RoutedEventArgs e)
+    {
+        FindNeedlePluginLib.Logger.Instance.Log("[DiagramToolsPage] OpenDemoInApp_Click invoked");
+        InstallProgressPanel.Visibility = Visibility.Visible;
+        InstallProgressText.Text = "Opening demo (in-app)...";
+        try
+        {
+            var fullPath = FindTimelineDemoFullPath();
+            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] FindTimelineDemoFullPath -> {fullPath}");
+            if (fullPath == null)
+            {
+                InstallProgressText.Text = "Could not find timeline-demo.html in expected locations.";
+                var notFoundDlg = new ContentDialog() { Title = "Demo file not found", Content = "Could not locate timeline-demo.html. Check that WebContent/timeline-demo.html is present.", CloseButtonText = "OK" };
+                try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { }
+                _ = notFoundDlg.ShowAsync();
+                return;
+            }
+
+            // Try to use WebView2 control if available
+            try
+            {
+                var webView2 = new Microsoft.UI.Xaml.Controls.WebView2();
+                // assign XamlRoot so control can be used in a dialog
+                webView2.XamlRoot = this.XamlRoot;
+                // Use file:// URI for local files
+                webView2.Source = new Uri("file:///" + fullPath.Replace('\\', '/'));
+                var xamlWindow = new ContentDialog();
+                xamlWindow.XamlRoot = this.XamlRoot;
+                xamlWindow.Title = "Desktop Session Replay";
+                xamlWindow.Content = webView2;
+                xamlWindow.PrimaryButtonText = "Close";
+                _ = xamlWindow.ShowAsync();
+                InstallProgressPanel.Visibility = Visibility.Collapsed;
+                // don't show additional dialogs here (they caused XamlRoot errors on some hosts)
+            }
+            catch (Exception ex2)
+            {
+                FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] WebView2 failed, falling back: {ex2.Message}");
+                // Fallback: open externally
+                Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
+                InstallProgressPanel.Visibility = Visibility.Collapsed;
+                var fallbackDlg = new ContentDialog() { Title = "WebView2 fallback", Content = "Opened demo in external browser because in-app view failed: " + ex2.Message, CloseButtonText = "OK" };
+                DispatcherQueue.TryEnqueue(() => {
+                    try { fallbackDlg.XamlRoot = this.XamlRoot; } catch { }
+                    _ = fallbackDlg.ShowAsync();
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] OpenDemoInApp failed: {ex.Message}");
+            InstallProgressPanel.Visibility = Visibility.Visible;
+            InstallProgressText.Text = $"Could not open demo (in-app): {ex.Message}";
+        }
+    }
+
+    // Try multiple candidate locations to find timeline-demo.html. Returns full path or null.
+    private string? FindTimelineDemoFullPath()
+    {
+        // Try obvious locations relative to AppContext.BaseDirectory
+        var candidates = new System.Collections.Generic.List<string>();
+        var baseDir = AppContext.BaseDirectory;
+        candidates.Add(Path.Combine(baseDir, "WebContent", "timeline-demo.html"));
+        candidates.Add(Path.Combine(baseDir, "..", "WebContent", "timeline-demo.html"));
+        candidates.Add(Path.Combine(baseDir, "..", "..", "FindNeedleUX", "WebContent", "timeline-demo.html"));
+
+        // Walk parent dirs to find repository layout
+        var dirInfo = new DirectoryInfo(baseDir);
+        for (int i = 0; i < 6 && dirInfo != null; i++)
+        {
+            var tryPath = Path.Combine(dirInfo.FullName, "FindNeedleUX", "WebContent", "timeline-demo.html");
+            candidates.Add(tryPath);
+            var tryPath2 = Path.Combine(dirInfo.FullName, "WebContent", "timeline-demo.html");
+            candidates.Add(tryPath2);
+            dirInfo = dirInfo.Parent;
+        }
+
+        foreach (var c in candidates)
+        {
+            try
+            {
+                var full = Path.GetFullPath(c);
+                if (File.Exists(full)) return full;
+            }
+            catch { }
+        }
+
+        // If packaged, try package installed location (UWP/WinUI)
+        try
+        {
+            var pkg = global::Windows.ApplicationModel.Package.Current;
+            if (pkg != null)
+            {
+                var installed = pkg.InstalledLocation.Path;
+                var p = Path.Combine(installed, "WebContent", "timeline-demo.html");
+                if (File.Exists(p)) return p;
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
     private void OutputFormat_Changed(object sender, RoutedEventArgs e)
     {
         _preferredOutputType = OutputPngRadio.IsChecked == true 

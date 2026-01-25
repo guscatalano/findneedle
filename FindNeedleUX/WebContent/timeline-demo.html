@@ -266,7 +266,7 @@
             <span id="speed-display">1x</span>
         </div>
         <div id="info">
-            <strong>Setup:</strong> Two stacked 1080p monitors (1920×1080 each). 
+            <strong>Setup:</strong> Two stacked 1080p monitors (1920ï¿½1080 each). 
             Windows move between monitors over time.
             <br><br>
             <strong>Controls:</strong> Drag slider to scrub | Space = Play/Pause | ?/? = Step | Home = Reset
@@ -277,7 +277,7 @@
         NOTE: For local file:// testing this page was used with the browser's
         strict file origin policy relaxed. In Firefox you can set
         `security.fileuri.strict_origin_policy` to `false` for testing only.
-        Do NOT disable this setting in production — it weakens security.
+        Do NOT disable this setting in production ï¿½ it weakens security.
     -->
     <script>
     // =============================
@@ -847,7 +847,7 @@ function getMouseAt(t) {
             el.frame.style.height = (kf.height * SCALE + 24) + 'px'; // +24 for stand
             el.screen.style.width = (kf.width * SCALE) + 'px';
             el.screen.style.height = (kf.height * SCALE) + 'px';
-            el.res.textContent = `${Math.round(kf.width)}×${Math.round(kf.height)}`;
+            el.res.textContent = `${Math.round(kf.width)}ï¿½${Math.round(kf.height)}`;
         }
         // Windows
         for (const w of windows) {
@@ -898,7 +898,7 @@ function getMouseAt(t) {
                 const v = interpolateKeyframes(w.keyframes, t);
                 info.innerHTML = `<div><strong>${w.label || w.id}</strong></div>` +
                                  `<div>pos: ${Math.round(v.x)}, ${Math.round(v.y)}</div>` +
-                                 `<div>size: ${Math.round(v.width)}×${Math.round(v.height)}</div>`;
+                                 `<div>size: ${Math.round(v.width)}ï¿½${Math.round(v.height)}</div>`;
             }
             const infoMouse = document.getElementById('info-mouse');
             if (infoMouse) {
