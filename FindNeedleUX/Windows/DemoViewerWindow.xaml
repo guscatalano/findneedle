@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Page
+<Window
+    x:Class="FindNeedleUX.Windows.DemoViewerWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    x:Class="FindNeedleUX.Windows.DemoViewerWindow">
+    xmlns:local="using:FindNeedleUX.Windows"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="DemoViewerWindow">
   <Grid>
-    <TextBlock Text="DemoViewerWindow placeholder" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <WebView2 x:Name="DemoWebView" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
   </Grid>
-</Page>
+</Window>

@@ -63,7 +63,7 @@ public sealed partial class DiagramToolsPage : Page
     {
         FindNeedlePluginLib.Logger.Instance.Log("[DiagramToolsPage] OpenDemoInApp_Click invoked");
         InstallProgressPanel.Visibility = Visibility.Visible;
-        InstallProgressText.Text = "Opening demo (in-app)...";
+        InstallProgressText.Text = "Opening demo in new window...";
         try
         {
             var fullPath = FindTimelineDemoFullPath();
@@ -75,42 +75,15 @@ public sealed partial class DiagramToolsPage : Page
                 DispatcherQueue.TryEnqueue(() => { try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { } _ = notFoundDlg.ShowAsync(); });
                 return;
             }
-
-            // Try to use WebView2 control in a ContentDialog (sized so it's usable)
-            try
-            {
-                var webView2 = new Microsoft.UI.Xaml.Controls.WebView2();
-                webView2.XamlRoot = this.XamlRoot;
-                webView2.Width = 1100;
-                webView2.Height = 700;
-                webView2.Source = new Uri("file:///" + fullPath.Replace('\\', '/'));
-                var dialog = new ContentDialog()
-                {
-                    XamlRoot = this.XamlRoot,
-                    Title = "Desktop Session Replay",
-                    Content = webView2,
-                    PrimaryButtonText = "Close",
-                    MaxWidth = 1200,
-                    MaxHeight = 800
-                };
-                InstallProgressPanel.Visibility = Visibility.Collapsed;
-                await dialog.ShowAsync();
-            }
-            catch (Exception ex2)
-            {
-                FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] WebView2 failed, falling back: {ex2.Message}");
-                // Fallback: open externally
-                Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
-                InstallProgressPanel.Visibility = Visibility.Collapsed;
-                var fallbackDlg = new ContentDialog() { Title = "WebView2 fallback", Content = "Opened demo in external browser because in-app view failed: " + ex2.Message, CloseButtonText = "OK" };
-                DispatcherQueue.TryEnqueue(() => { try { fallbackDlg.XamlRoot = this.XamlRoot; } catch { } _ = fallbackDlg.ShowAsync(); });
-            }
+            var demoWindow = new FindNeedleUX.Windows.DemoViewerWindow(fullPath);
+            demoWindow.Activate();
+            InstallProgressPanel.Visibility = Visibility.Collapsed;
         }
         catch (Exception ex)
         {
             FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] OpenDemoInApp failed: {ex.Message}");
             InstallProgressPanel.Visibility = Visibility.Visible;
-            InstallProgressText.Text = $"Could not open demo (in-app): {ex.Message}";
+            InstallProgressText.Text = $"Could not open demo window: {ex.Message}";
         }
     }
 
