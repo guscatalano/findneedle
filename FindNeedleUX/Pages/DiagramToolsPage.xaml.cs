@@ -59,7 +59,7 @@ public sealed partial class DiagramToolsPage : Page
         }
     }
 
-    private void OpenDemoInApp_Click(object sender, RoutedEventArgs e)
+    private async void OpenDemoInApp_Click(object sender, RoutedEventArgs e)
     {
         FindNeedlePluginLib.Logger.Instance.Log("[DiagramToolsPage] OpenDemoInApp_Click invoked");
         InstallProgressPanel.Visibility = Visibility.Visible;
@@ -72,27 +72,29 @@ public sealed partial class DiagramToolsPage : Page
             {
                 InstallProgressText.Text = "Could not find timeline-demo.html in expected locations.";
                 var notFoundDlg = new ContentDialog() { Title = "Demo file not found", Content = "Could not locate timeline-demo.html. Check that WebContent/timeline-demo.html is present.", CloseButtonText = "OK" };
-                try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { }
-                _ = notFoundDlg.ShowAsync();
+                DispatcherQueue.TryEnqueue(() => { try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { } _ = notFoundDlg.ShowAsync(); });
                 return;
             }
 
-            // Try to use WebView2 control if available
+            // Try to use WebView2 control in a ContentDialog (sized so it's usable)
             try
             {
                 var webView2 = new Microsoft.UI.Xaml.Controls.WebView2();
-                // assign XamlRoot so control can be used in a dialog
                 webView2.XamlRoot = this.XamlRoot;
-                // Use file:// URI for local files
+                webView2.Width = 1100;
+                webView2.Height = 700;
                 webView2.Source = new Uri("file:///" + fullPath.Replace('\\', '/'));
-                var xamlWindow = new ContentDialog();
-                xamlWindow.XamlRoot = this.XamlRoot;
-                xamlWindow.Title = "Desktop Session Replay";
-                xamlWindow.Content = webView2;
-                xamlWindow.PrimaryButtonText = "Close";
-                _ = xamlWindow.ShowAsync();
+                var dialog = new ContentDialog()
+                {
+                    XamlRoot = this.XamlRoot,
+                    Title = "Desktop Session Replay",
+                    Content = webView2,
+                    PrimaryButtonText = "Close",
+                    MaxWidth = 1200,
+                    MaxHeight = 800
+                };
                 InstallProgressPanel.Visibility = Visibility.Collapsed;
-                // don't show additional dialogs here (they caused XamlRoot errors on some hosts)
+                await dialog.ShowAsync();
             }
             catch (Exception ex2)
             {
@@ -101,10 +103,7 @@ public sealed partial class DiagramToolsPage : Page
                 Process.Start(new ProcessStartInfo { FileName = fullPath, UseShellExecute = true });
                 InstallProgressPanel.Visibility = Visibility.Collapsed;
                 var fallbackDlg = new ContentDialog() { Title = "WebView2 fallback", Content = "Opened demo in external browser because in-app view failed: " + ex2.Message, CloseButtonText = "OK" };
-                DispatcherQueue.TryEnqueue(() => {
-                    try { fallbackDlg.XamlRoot = this.XamlRoot; } catch { }
-                    _ = fallbackDlg.ShowAsync();
-                });
+                DispatcherQueue.TryEnqueue(() => { try { fallbackDlg.XamlRoot = this.XamlRoot; } catch { } _ = fallbackDlg.ShowAsync(); });
             }
         }
         catch (Exception ex)

@@ -41,6 +41,7 @@
   <ItemGroup>
     <None Remove="Assets\appicon.ico" />
     <None Remove="Pages\LocationWizard.xaml" />
+    <None Remove="Windows\DemoViewerWindow.xaml" />
     <None Remove="Pages\LogsPage.xaml" />
     <None Remove="Pages\PluginsPage.xaml" />
     <None Remove="Pages\ResultsVCommunityPage.xaml" />
@@ -71,8 +72,11 @@
   </ItemGroup>
   <ItemGroup>
     <Page Remove="Pages\WelcomePage.xaml" />
+    <Page Remove="Windows\DemoViewerWindow2.xaml" />
     <Page Remove="Windows\LogsWindow.xaml" />
   </ItemGroup>
+
+  
 
   <ItemGroup>
     <Resource Include="..\findneedle\PluginConfig.json" Link="PluginConfig.json">
@@ -154,6 +158,9 @@
       <Generator>MSBuild:Compile</Generator>
     </None>
     <None Update="Pages\WelcomePage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </None>
+    <None Update="Windows\DemoViewerWindow2.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
     <None Update="Windows\LogsWindow.xaml">
