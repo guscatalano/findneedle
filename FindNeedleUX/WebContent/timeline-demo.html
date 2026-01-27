@@ -247,16 +247,23 @@
     </style>
 </head>
 <body>
+    <!-- Toolbar at the top -->
+    <div id="toolbar" style="width: 100%; background: #23234a; padding: 10px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); z-index: 2000;">
+        <button id="loadJsonBtn" class="btn" title="Load JSON file">📂 Load JSON</button>
+        <button id="toggleInfoBtn" class="btn" title="Hide Window Info">🛈 Hide Window Info</button>
+        <button id="togglePlaybackBtn" class="btn" title="Hide Playback Controls">🎬 Hide Playback Controls</button>
+        <span style="flex: 1;"></span>
+    </div>
     <!-- Canvas with dual monitors (dynamic, populated by JS) -->
     <div id="canvas"></div>
     <!-- Side info panel -->
     <div id="side-panel" aria-hidden="false"></div>
-    
-    <!-- Timeline controls -->
+    <!-- Timeline controls (keep existing for now) -->
     <div id="controls">
         <div id="timeline-container">
-            <button id="playBtn" class="btn">? Play</button>
-            <button id="resetBtn" class="btn">? Reset</button>
+            <button id="playPauseBtn" class="btn" title="Play"><span id="playPauseIcon">▶️</span> <span id="playPauseLabel">Play</span></button>
+            <button id="stopBtn" class="btn" title="Stop">⏹️ Stop</button>
+            <button id="resetBtn" class="btn">⏮️ Reset</button>
             <input type="range" id="timeline" min="0" max="1000" value="0">
             <span id="time-display">0.00s / 5.00s</span>
         </div>
@@ -266,10 +273,10 @@
             <span id="speed-display">1x</span>
         </div>
         <div id="info">
-            <strong>Setup:</strong> Two stacked 1080p monitors (1920�1080 each). 
+            <strong>Setup:</strong> Two stacked 1080p monitors (1920×1080 each). 
             Windows move between monitors over time.
             <br><br>
-            <strong>Controls:</strong> Drag slider to scrub | Space = Play/Pause | ?/? = Step | Home = Reset
+            <strong>Controls:</strong> Drag slider to scrub | Space = Play/Pause | ←/→ = Step | Home = Reset
         </div>
     </div>
 
@@ -296,7 +303,8 @@
     let SCALE = 1, OFFSET_X = 0, OFFSET_Y = 0;
     let VIRTUAL_WIDTH = 1920, VIRTUAL_HEIGHT = 1080;
     let isPlaying = false, currentTime = 0, lastFrameTime = 0;
-    let playBtn, resetBtn, timelineSlider, speedSlider, speedDisplay;
+    let playPauseBtn, playPauseIcon, playPauseLabel, stopBtn, toggleInfoBtn, loadJsonBtn;
+    let resetBtn, timelineSlider, speedSlider, speedDisplay;
     let mousePath = [];
     let canvasEl = null;
     let isPanning = false;
@@ -641,7 +649,12 @@
 
     // Setup UI and DOM
     function setupUI() {
-        playBtn = document.getElementById('playBtn');
+        playPauseBtn = document.getElementById('playPauseBtn');
+        playPauseIcon = document.getElementById('playPauseIcon');
+        playPauseLabel = document.getElementById('playPauseLabel');
+        stopBtn = document.getElementById('stopBtn');
+        toggleInfoBtn = document.getElementById('toggleInfoBtn');
+        loadJsonBtn = document.getElementById('loadJsonBtn');
         resetBtn = document.getElementById('resetBtn');
         timelineSlider = document.getElementById('timeline');
         speedSlider = document.getElementById('speed');
@@ -655,6 +668,21 @@
         // Playback speed
         speedSlider.value = timelinePlaybackSpeed;
         speedDisplay.textContent = timelinePlaybackSpeed + 'x';
+        // Playback controls toggle (hide/show #controls div)
+        const togglePlaybackBtn = document.getElementById('togglePlaybackBtn');
+        const controlsDiv = document.getElementById('controls');
+        function updatePlaybackToggleButton() {
+            const isHidden = controlsDiv.style.display === 'none';
+            togglePlaybackBtn.innerHTML = isHidden ? '🎬 Show Playback Controls' : '🎬 Hide Playback Controls';
+        }
+        togglePlaybackBtn.addEventListener('click', () => {
+            const isHidden = controlsDiv.style.display === 'none';
+            controlsDiv.style.display = isHidden ? '' : 'none';
+            updatePlaybackToggleButton();
+        });
+        // Set initial state (visible) and update button
+        controlsDiv.style.display = '';
+        updatePlaybackToggleButton();
 
         // Handlers
         timelineSlider.addEventListener('input', (e) => {
@@ -662,34 +690,38 @@
             render(currentTime);
             if (isPlaying) {
                 isPlaying = false;
-                playBtn.textContent = '? Play';
-                playBtn.classList.remove('active');
+                updatePlayPauseButton();
             }
         });
         speedSlider.addEventListener('input', (e) => {
             timelinePlaybackSpeed = parseFloat(e.target.value);
             speedDisplay.textContent = timelinePlaybackSpeed + 'x';
         });
-        playBtn.addEventListener('click', () => {
+        playPauseBtn.addEventListener('click', () => {
             isPlaying = !isPlaying;
-            playBtn.textContent = isPlaying ? '? Pause' : '? Play';
-            playBtn.classList.toggle('active', isPlaying);
+            updatePlayPauseButton();
             if (isPlaying) {
                 lastFrameTime = performance.now();
                 requestAnimationFrame(animate);
             }
+        });
+        stopBtn.addEventListener('click', () => {
+            isPlaying = false;
+            currentTime = timelineStart;
+            timelineSlider.value = timelineStart;
+            render(currentTime);
+            updatePlayPauseButton();
         });
         resetBtn.addEventListener('click', () => {
             currentTime = timelineStart;
             timelineSlider.value = timelineStart;
             render(currentTime);
             isPlaying = false;
-            playBtn.textContent = '? Play';
-            playBtn.classList.remove('active');
+            updatePlayPauseButton();
         });
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
-                e.preventDefault(); playBtn.click();
+                e.preventDefault(); playPauseBtn.click();
             } else if (e.code === 'Home') {
                 resetBtn.click();
             } else if (e.code === 'ArrowLeft') {
@@ -702,6 +734,102 @@
                 render(currentTime);
             }
         });
+
+        // Info button toggle
+        toggleInfoBtn.addEventListener('click', () => {
+            const panel = document.getElementById('side-panel');
+            const isHidden = panel.classList.contains('hidden-panel');
+            if (isHidden) {
+                panel.classList.remove('hidden-panel');
+                toggleInfoBtn.innerHTML = '🛈 Hide Window Info';
+            } else {
+                panel.classList.add('hidden-panel');
+                toggleInfoBtn.innerHTML = '🛈 Show Window Info';
+            }
+        });
+
+        // Load JSON button
+        loadJsonBtn.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json,application/json';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const text = await file.text();
+                try {
+                    const data = JSON.parse(text);
+                    timelineData = data;
+                    // Parse timeline
+                    const t = timelineData.timeline;
+                    timelineStart = parseTime(t.start);
+                    timelineEnd = parseTime(t.end);
+                    timelineDuration = timelineEnd - timelineStart;
+                    timelinePlaybackSpeed = t.playbackSpeed || 1.0;
+                    timelineLoop = t.loop !== false;
+                    // Parse monitors/windows
+                    monitors = timelineData.monitors.map(m => ({
+                        ...m,
+                        keyframes: m.keyframes.map(kf => ({ ...kf, time: parseTime(kf.time) }))
+                    }));
+                    windows = timelineData.windows.map(w => ({
+                        ...w,
+                        keyframes: w.keyframes.map(kf => ({ ...kf, time: parseTime(kf.time) }))
+                    }));
+                    // Mouse path
+                    if (timelineData.mouse && Array.isArray(timelineData.mouse.keyframes)) {
+                        mousePath = timelineData.mouse.keyframes.map(kf => ({
+                            x: kf.x || 0,
+                            y: kf.y || 0,
+                            time: parseTime(kf.time)
+                        }));
+                    } else if (Array.isArray(timelineData.mousePath)) {
+                        mousePath = timelineData.mousePath.map(kf => ({
+                            x: kf.x || 0,
+                            y: kf.y || 0,
+                            time: parseTime(kf.time)
+                        }));
+                    } else {
+                        mousePath = [
+                            { time: timelineStart, x: 200, y: 200 },
+                            { time: timelineStart + Math.floor(timelineDuration * 0.25), x: 600, y: 350 },
+                            { time: timelineStart + Math.floor(timelineDuration * 0.5), x: 900, y: 800 },
+                            { time: timelineStart + Math.floor(timelineDuration * 0.75), x: 700, y: 400 },
+                            { time: timelineEnd, x: 800, y: 300 }
+                        ];
+                    }
+                    VIRTUAL_WIDTH = 1920; VIRTUAL_HEIGHT = 1080;
+                    for (const m of monitors) {
+                        for (const kf of m.keyframes) {
+                            VIRTUAL_WIDTH = Math.max(VIRTUAL_WIDTH, kf.x + kf.width);
+                            VIRTUAL_HEIGHT = Math.max(VIRTUAL_HEIGHT, kf.y + kf.height);
+                        }
+                    }
+                    setupMonitors();
+                    setupInfoPanel();
+                    currentTime = timelineStart;
+                    render(timelineStart);
+                } catch (err) {
+                    alert('Invalid JSON file.');
+                }
+            };
+            input.click();
+        });
+
+        // Helper to update play/pause button
+        function updatePlayPauseButton() {
+            if (isPlaying) {
+                playPauseIcon.textContent = '⏸️';
+                playPauseLabel.textContent = 'Pause';
+                playPauseBtn.classList.add('active');
+            } else {
+                playPauseIcon.textContent = '▶️';
+                playPauseLabel.textContent = 'Play';
+                playPauseBtn.classList.remove('active');
+            }
+        }
+        window.updatePlayPauseButton = updatePlayPauseButton;
+        updatePlayPauseButton();
     }
 
     // Setup monitors/windows DOM

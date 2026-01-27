@@ -72,7 +72,6 @@
   </ItemGroup>
   <ItemGroup>
     <Page Remove="Pages\WelcomePage.xaml" />
-    <Page Remove="Windows\DemoViewerWindow2.xaml" />
     <Page Remove="Windows\LogsWindow.xaml" />
   </ItemGroup>
 
@@ -158,9 +157,6 @@
       <Generator>MSBuild:Compile</Generator>
     </None>
     <None Update="Pages\WelcomePage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
-    <None Update="Windows\DemoViewerWindow2.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
     <None Update="Windows\LogsWindow.xaml">
