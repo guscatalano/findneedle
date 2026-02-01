@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using FindNeedlePluginLib;
-using FindNeedlePluginUtils.DependencyInstaller;
+using FindNeedleToolInstallers;
 
 namespace FindNeedlePluginUtils;
 
@@ -10,40 +10,34 @@ public class PlantUMLGenerator : IUMLGenerator
 {
     private static string? _cachedPlantUMLPath = null;
     private static string? _cachedJavaPath = null;
-    private static PlantUmlInstaller? _installer = null;
+    
+    private readonly IPlantUmlInstaller? _installer;
 
-    private static PlantUmlInstaller Installer => _installer ??= new PlantUmlInstaller();
+    public PlantUMLGenerator(IPlantUmlInstaller? installer = null)
+    {
+        _installer = installer;
+    }
 
-    /// <summary>
-    /// Clears cached paths. Call after installing dependencies.
-    /// </summary>
-    public static void ClearCache()
+    public void ClearCache()
     {
         _cachedPlantUMLPath = null;
         _cachedJavaPath = null;
-        _installer = null;
     }
 
     public string Name => "PlantUML";
-
     public string InputFileExtension => ".pu";
 
-    // ImageFile generates PNG locally; Browser mode wraps the PNG in HTML for viewing
     public UmlOutputType[] SupportedOutputTypes => IsSupported(UmlOutputType.ImageFile)
         ? [UmlOutputType.ImageFile, UmlOutputType.Browser]
         : [];
 
     public string GenerateUML(string inputPath, UmlOutputType outputType = UmlOutputType.ImageFile)
     {
-        if (!Path.Exists(inputPath))
-        {
+        if (!File.Exists(inputPath))
             throw new Exception("Invalid input file path");
-        }
 
         if (!IsSupported(outputType))
-        {
             throw new Exception($"Output type '{outputType}' is not supported. Java and PlantUML jar are required.");
-        }
 
         return outputType switch
         {
@@ -57,7 +51,6 @@ public class PlantUMLGenerator : IUMLGenerator
     {
         return outputType switch
         {
-            // Both modes require local PlantUML installation
             UmlOutputType.ImageFile => GetJavaPath() != null && File.Exists(GetPlantUMLPath()),
             UmlOutputType.Browser => GetJavaPath() != null && File.Exists(GetPlantUMLPath()),
             _ => false
@@ -66,9 +59,7 @@ public class PlantUMLGenerator : IUMLGenerator
 
     private string GenerateImageFile(string inputPath)
     {
-        var plantUmlContent = File.ReadAllText(inputPath);
         var outputPath = Path.ChangeExtension(inputPath, ".png");
-
         var javaPath = GetJavaPath();
         var jarPath = GetPlantUMLPath();
 
@@ -85,18 +76,14 @@ public class PlantUMLGenerator : IUMLGenerator
 
         var expectedOutput = Path.ChangeExtension(inputPath, ".png");
         
-        // Delete existing output to detect if generation succeeds
         if (File.Exists(expectedOutput))
             File.Delete(expectedOutput);
 
-        // Run Java via the packaged app command runner (handles MSIX context automatically)
         int exitCode = PackagedAppCommandRunner.RunJavaJar(javaPath, jarPath, inputPath, javaBinDir);
 
         Logger.Instance.Log($"[PlantUMLGenerator] Process completed, exit code: {exitCode}");
         Logger.Instance.Log($"[PlantUMLGenerator] Looking for output at: {expectedOutput}");
 
-        // Wait a bit for the file to be written (especially when using Invoke-CommandInDesktopPackage)
-        // Poll for the file up to 10 seconds
         for (int i = 0; i < 20; i++)
         {
             if (File.Exists(expectedOutput))
@@ -108,7 +95,6 @@ public class PlantUMLGenerator : IUMLGenerator
             Logger.Instance.Log($"[PlantUMLGenerator] Waiting for output file... ({i + 1}/20)");
         }
 
-        // Check if file was created in a different location (virtualized path)
         var inputDir = Path.GetDirectoryName(inputPath);
         if (inputDir != null && Directory.Exists(inputDir))
         {
@@ -116,23 +102,17 @@ public class PlantUMLGenerator : IUMLGenerator
             Logger.Instance.Log($"[PlantUMLGenerator] PNG files in input directory: {string.Join(", ", pngFiles)}");
         }
 
-        // Include the command in the error for debugging
         var command = $"\"{javaPath}\" -jar \"{jarPath}\" \"{inputPath}\"";
         throw new Exception($"Failed to generate PlantUML image. Exit code: {exitCode}.\nCommand: {command}\nWorking directory: {javaBinDir}\nExpected output: {expectedOutput}");
     }
 
     private string GenerateBrowserHtml(string inputPath)
     {
-        // First generate the PNG locally
         var pngPath = GenerateImageFile(inputPath);
-        
-        // Read the PNG and convert to base64 data URI (so HTML is self-contained)
         var pngBytes = File.ReadAllBytes(pngPath);
         var base64Png = Convert.ToBase64String(pngBytes);
-        
         var plantUmlSource = File.ReadAllText(inputPath);
         var encodedSource = System.Web.HttpUtility.HtmlEncode(plantUmlSource);
-        
         var outputPath = Path.ChangeExtension(inputPath, ".html");
 
         var html = $$"""
@@ -184,30 +164,27 @@ public class PlantUMLGenerator : IUMLGenerator
         if (_cachedPlantUMLPath != null)
             return _cachedPlantUMLPath;
 
-        // First check if installed via our installer
-        var installerPath = Installer.GetPlantUmlJarPath();
+        if (_installer == null)
+        {
+            try
+            {
+                var mgr = new UmlDependencyManager();
+                return mgr.PlantUml.GetPlantUmlJarPath() ?? "";
+            }
+            catch { }
+        }
+
+        var installerPath = _installer?.GetPlantUmlJarPath();
         if (installerPath != null)
         {
             _cachedPlantUMLPath = installerPath;
             return _cachedPlantUMLPath;
         }
 
-        // Use PluginSubsystemAccessorProvider if available
-        var accessor = PluginSubsystemAccessorProvider.Accessor;
-        if (accessor != null && !string.IsNullOrWhiteSpace(accessor.PlantUMLPath))
-        {
-            _cachedPlantUMLPath = accessor.PlantUMLPath;
-            return _cachedPlantUMLPath;
-        }
-
-        // Fallback to default
         _cachedPlantUMLPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "plantuml-mit-1.2025.2.jar");
         return _cachedPlantUMLPath;
     }
 
-    /// <summary>
-    /// Gets the path to the Java executable, checking local installation first.
-    /// </summary>
     public string? GetJavaPath()
     {
         if (_cachedJavaPath != null)
@@ -216,8 +193,7 @@ public class PlantUMLGenerator : IUMLGenerator
             return _cachedJavaPath;
         }
 
-        // ONLY use our portable Java installation to avoid system Java issues (jli.dll errors)
-        var installerJava = Installer.GetJavaPath();
+        var installerJava = _installer?.GetJavaPath();
         if (installerJava != null)
         {
             Logger.Instance.Log($"[PlantUMLGenerator] Found Java via installer: {installerJava}");
@@ -225,8 +201,44 @@ public class PlantUMLGenerator : IUMLGenerator
             return _cachedJavaPath;
         }
 
-        Logger.Instance.Log($"[PlantUMLGenerator] No portable Java installation found. Please install via Diagram Tools page.");
+        try
+        {
+            var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+            if (!string.IsNullOrEmpty(javaHome))
+            {
+                var javaFromHome = Path.Combine(javaHome, "bin", "java.exe");
+                if (File.Exists(javaFromHome))
+                {
+                    Logger.Instance.Log($"[PlantUMLGenerator] Found Java via JAVA_HOME: {javaFromHome}");
+                    _cachedJavaPath = javaFromHome;
+                    return _cachedJavaPath;
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            foreach (var dir in pathEnv.Split(Path.PathSeparator))
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(dir)) continue;
+                    var candidate = Path.Combine(dir.Trim(), "java.exe");
+                    if (File.Exists(candidate))
+                    {
+                        Logger.Instance.Log($"[PlantUMLGenerator] Found Java on PATH: {candidate}");
+                        _cachedJavaPath = candidate;
+                        return _cachedJavaPath;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+
+        Logger.Instance.Log($"[PlantUMLGenerator] No Java runtime found (installer, JAVA_HOME or PATH). Please install via the Diagram Tools page or ensure Java is on PATH.");
         return null;
     }
-
 }

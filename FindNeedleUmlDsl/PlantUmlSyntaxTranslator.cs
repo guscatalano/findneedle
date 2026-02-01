@@ -1,10 +1,8 @@
 using System.Text;
+using System.Collections.Generic;
 
-namespace FindNeedlePluginUtils.UmlDsl;
+namespace FindNeedleUmlDsl;
 
-/// <summary>
-/// Translates resolved UML elements to PlantUML syntax.
-/// </summary>
 public class PlantUmlSyntaxTranslator : IUmlSyntaxTranslator
 {
     public string SyntaxName => "PlantUML";
@@ -38,7 +36,7 @@ public class PlantUmlSyntaxTranslator : IUmlSyntaxTranslator
                 "collections" => "collections",
                 _ => "participant"
             };
-            
+
             if (displayName != p.Id)
             {
                 sb.AppendLine($"{keyword} \"{displayName}\" as {p.Id}");

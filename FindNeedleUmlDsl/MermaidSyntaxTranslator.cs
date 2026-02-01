@@ -1,10 +1,8 @@
 using System.Text;
+using System.Collections.Generic;
 
-namespace FindNeedlePluginUtils.UmlDsl;
+namespace FindNeedleUmlDsl;
 
-/// <summary>
-/// Translates resolved UML elements to Mermaid syntax.
-/// </summary>
 public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
 {
     public string SyntaxName => "Mermaid";
@@ -14,10 +12,7 @@ public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
     {
         var sb = new StringBuilder();
         sb.AppendLine("sequenceDiagram");
-        if (!string.IsNullOrEmpty(definition.Title))
-        {
-            sb.AppendLine($"    title {definition.Title}");
-        }
+        if (!string.IsNullOrEmpty(definition.Title)) sb.AppendLine($"    title {definition.Title}");
         return sb.ToString();
     }
 
@@ -27,20 +22,8 @@ public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
         foreach (var p in participants)
         {
             var displayName = p.DisplayName ?? p.Id;
-            var keyword = p.Type.ToLower() switch
-            {
-                "actor" => "actor",
-                _ => "participant"
-            };
-
-            if (displayName != p.Id)
-            {
-                sb.AppendLine($"    {keyword} {p.Id} as {displayName}");
-            }
-            else
-            {
-                sb.AppendLine($"    {keyword} {p.Id}");
-            }
+            var keyword = p.Type.ToLower() switch { "actor" => "actor", _ => "participant" };
+            if (displayName != p.Id) sb.AppendLine($"    {keyword} {p.Id} as {displayName}"); else sb.AppendLine($"    {keyword} {p.Id}");
         }
         return sb.ToString();
     }
@@ -72,8 +55,7 @@ public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
             "response" => "-->>",
             _ => "->>"
         };
-        
-        // Mermaid requires escaping special characters in messages
+
         var text = EscapeText(element.Text);
         return $"{element.From}{arrow}{element.To}: {text}";
     }
@@ -90,17 +72,7 @@ public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
         return $"{position}: {EscapeText(element.Text)}";
     }
 
-    private static string EscapeText(string text)
-    {
-        // Mermaid has issues with certain characters
-        return text
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;");
-    }
+    private static string EscapeText(string text) => text.Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 
-    public string GenerateFooter()
-    {
-        return string.Empty; // Mermaid doesn't need a footer
-    }
+    public string GenerateFooter() => string.Empty;
 }

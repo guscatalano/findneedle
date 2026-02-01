@@ -1,0 +1,29 @@
+{
+  "title": "Session Management",
+  "participants": [
+    { "id": "LSM", "displayName": "Local Session Manager", "type": "participant" },
+    { "id": "User", "type": "actor" }
+  ],
+  "rules": [
+    {
+      "name": "Logon",
+      "match": "user logged on",
+      "action": {
+        "type": "message",
+        "from": "User",
+        "to": "LSM",
+        "text": "Logon request"
+      }
+    },
+    {
+      "name": "SessionCreated",
+      "match": "SessionId=",
+      "action": {
+        "type": "message",
+        "from": "LSM",
+        "to": "User",
+        "text": "Session {afterMatch:untilSpace}"
+      }
+    }
+  ]
+}

@@ -6,8 +6,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using FindNeedlePluginUtils.DependencyInstaller;
+using FindNeedleToolInstallers;
 using FindNeedlePluginUtils;
+using FindNeedlePluginLib;
 
 namespace FindNeedleUX.Pages;
 
@@ -246,7 +247,7 @@ public sealed partial class DiagramToolsPage : Page
             }
             else
             {
-                InstallProgressText.Text = $"Failed to install {name}: {result.ErrorMessage}";
+                InstallProgressText.Text = $"Failed to install {name}: {result.Message}";
             }
         }
         catch (OperationCanceledException)
@@ -259,10 +260,6 @@ public sealed partial class DiagramToolsPage : Page
         }
         finally
         {
-            // Clear caches so generators pick up newly installed dependencies
-            FindNeedlePluginUtils.PlantUMLGenerator.ClearCache();
-            FindNeedlePluginUtils.MermaidUMLGenerator.ClearCache();
-
             // Re-enable buttons and refresh status
             InstallPlantUmlButton.IsEnabled = true;
             InstallMermaidButton.IsEnabled = true;
@@ -271,7 +268,6 @@ public sealed partial class DiagramToolsPage : Page
             // Delay hiding progress panel so user can see result
             await Task.Delay(3000);
             InstallProgressPanel.Visibility = Visibility.Collapsed;
-
 
             RefreshStatus();
         }
@@ -496,8 +492,8 @@ Invoke-CommandInDesktopPackage -Command 'cmd.exe' -PackageFamilyName '{packageFa
             {
                 if (toolName == "PlantUML")
                 {
-                    var generator = new PlantUMLGenerator();
-                    
+                    var manager = SystemInfoMiddleware.UmlDependencyManager;
+                    var generator = new PlantUMLGenerator(manager.PlantUml);
                     if (!generator.IsSupported(outputType))
                     {
                         // Fall back to the other type if preferred is not supported
@@ -517,8 +513,8 @@ Invoke-CommandInDesktopPackage -Command 'cmd.exe' -PackageFamilyName '{packageFa
                 }
                 else
                 {
-                    var generator = new MermaidUMLGenerator();
-                    
+                    var manager = SystemInfoMiddleware.UmlDependencyManager;
+                    var generator = new MermaidUMLGenerator(manager.Mermaid);
                     if (!generator.IsSupported(outputType))
                     {
                         // Fall back to the other type if preferred is not supported

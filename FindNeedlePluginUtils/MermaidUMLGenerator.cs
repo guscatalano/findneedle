@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using FindNeedlePluginLib;
-using FindNeedlePluginUtils.DependencyInstaller;
+using FindNeedleToolInstallers;
 
 namespace FindNeedlePluginUtils;
 
@@ -11,25 +11,23 @@ public class MermaidUMLGenerator : IUMLGenerator
     private static string? _cachedMermaidCliPath = null;
     private static string? _cachedNodePath = null;
     private bool? _mermaidCliAvailable = null;
-    private static MermaidInstaller? _installer = null;
 
-    private static MermaidInstaller Installer => _installer ??= new MermaidInstaller();
+    private readonly IMermaidInstaller? _installer;
 
-    /// <summary>
-    /// Clears cached paths. Call after installing dependencies.
-    /// </summary>
-    public static void ClearCache()
+    public MermaidUMLGenerator(IMermaidInstaller? installer = null)
+    {
+        _installer = installer;
+    }
+
+    public void ClearCache()
     {
         _cachedMermaidCliPath = null;
         _cachedNodePath = null;
-        _installer = null;
     }
 
     public string Name => "Mermaid";
-
     public string InputFileExtension => ".mmd";
 
-    // ImageFile requires mmdc to be installed; Browser mode works with just the mermaid.js from node_modules
     public UmlOutputType[] SupportedOutputTypes => IsSupported(UmlOutputType.ImageFile)
         ? [UmlOutputType.ImageFile, UmlOutputType.Browser]
         : IsSupported(UmlOutputType.Browser) ? [UmlOutputType.Browser] : [];
@@ -37,14 +35,10 @@ public class MermaidUMLGenerator : IUMLGenerator
     public string GenerateUML(string inputPath, UmlOutputType outputType = UmlOutputType.ImageFile)
     {
         if (!File.Exists(inputPath))
-        {
             throw new Exception("Invalid input file path");
-        }
 
         if (!IsSupported(outputType))
-        {
             throw new Exception($"Output type '{outputType}' is not supported. Mermaid CLI (mmdc) is required for image generation.");
-        }
 
         return outputType switch
         {
@@ -59,7 +53,7 @@ public class MermaidUMLGenerator : IUMLGenerator
         return outputType switch
         {
             UmlOutputType.ImageFile => IsMermaidCliAvailable(),
-            UmlOutputType.Browser => GetMermaidJsPath() != null, // Browser mode needs mermaid.js from node_modules
+            UmlOutputType.Browser => GetMermaidJsPath() != null,
             _ => false
         };
     }
@@ -75,29 +69,51 @@ public class MermaidUMLGenerator : IUMLGenerator
         var nodePath = GetNodePath();
         var nodeDir = nodePath != null ? Path.GetDirectoryName(nodePath) : null;
 
+        if (nodeDir == null && mmdcPath != null)
+        {
+            try
+            {
+                var binDir = Path.GetDirectoryName(mmdcPath)!;
+                var installRoot = Path.GetFullPath(Path.Combine(binDir, "..", ".."));
+                var candidateNode = Path.Combine(installRoot, "node", "node.exe");
+                if (File.Exists(candidateNode))
+                {
+                    nodeDir = Path.GetDirectoryName(candidateNode);
+                    Logger.Instance.Log($"[MermaidUMLGenerator] Located bundled node at: {candidateNode}");
+                }
+                else if (Directory.Exists(installRoot))
+                {
+                    var found = Directory.EnumerateFiles(installRoot, "node.exe", SearchOption.AllDirectories).FirstOrDefault();
+                    if (!string.IsNullOrEmpty(found))
+                    {
+                        nodeDir = Path.GetDirectoryName(found);
+                        Logger.Instance.Log($"[MermaidUMLGenerator] Located node under install root: {found}");
+                    }
+                }
+            }
+            catch { }
+        }
+
         Logger.Instance.Log($"[MermaidUMLGenerator] Using mmdc at: {mmdcPath}");
         Logger.Instance.Log($"[MermaidUMLGenerator] Node directory: {nodeDir}");
 
         var arguments = $"-i \"{inputPath}\" -o \"{outputPath}\"";
 
-        // For packaged apps, use PackagedAppCommandRunner to escape the AppContainer sandbox
         if (PackagedAppCommandRunner.IsPackagedApp)
         {
             Logger.Instance.Log($"[MermaidUMLGenerator] Running via PackagedAppCommandRunner (packaged app)");
-            
             try
             {
-                // Pass the Node directory as a PATH addition so mmdc.cmd can find node.exe
                 var pathAdditions = nodeDir != null ? new[] { nodeDir } : null;
                 var exitCode = PackagedAppCommandRunner.RunCommand(mmdcPath, arguments, nodeDir ?? Path.GetDirectoryName(mmdcPath)!, 60000, pathAdditions);
                 Logger.Instance.Log($"[MermaidUMLGenerator] Process exit code: {exitCode}");
-                
+
                 if (File.Exists(outputPath))
                 {
                     Logger.Instance.Log($"[MermaidUMLGenerator] Successfully generated: {outputPath}");
                     return outputPath;
                 }
-                
+
                 throw new Exception($"Failed to generate Mermaid UML image output (exit code {exitCode})");
             }
             catch (TimeoutException)
@@ -107,9 +123,8 @@ public class MermaidUMLGenerator : IUMLGenerator
         }
         else
         {
-            // For unpackaged apps, run mmdc directly
             Logger.Instance.Log($"[MermaidUMLGenerator] Starting process directly (unpackaged app)...");
-            
+
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = mmdcPath,
@@ -119,10 +134,9 @@ public class MermaidUMLGenerator : IUMLGenerator
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = nodeDir // Set working directory to Node folder
+                WorkingDirectory = nodeDir
             };
 
-            // Set PATH to include our Node installation
             if (nodeDir != null)
             {
                 var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
@@ -130,7 +144,7 @@ public class MermaidUMLGenerator : IUMLGenerator
             }
 
             using var process = new Process { StartInfo = processStartInfo };
-            
+
             try
             {
                 process.Start();
@@ -166,14 +180,10 @@ public class MermaidUMLGenerator : IUMLGenerator
         var mermaidContent = File.ReadAllText(inputPath);
         var outputPath = Path.ChangeExtension(inputPath, ".html");
 
-        // Get path to local mermaid.js from node_modules (no internet required)
         var mermaidJsPath = GetMermaidJsPath();
         if (mermaidJsPath == null)
-        {
             throw new InvalidOperationException("Mermaid JS library not found. Please install Mermaid CLI via Diagram Tools page.");
-        }
 
-        // Read the mermaid.js content to embed inline (avoids file:// security issues)
         var mermaidJsContent = File.ReadAllText(mermaidJsPath);
 
         var html = $$"""
@@ -215,12 +225,8 @@ public class MermaidUMLGenerator : IUMLGenerator
         return outputPath;
     }
 
-    /// <summary>
-    /// Gets the path to mermaid.min.js from the installed node_modules.
-    /// </summary>
     private string? GetMermaidJsPath()
     {
-        // Look for mermaid.min.js in the node_modules from our installation
         var mermaidDir = PackagedAppPaths.MermaidDir;
         var possiblePaths = new[]
         {
@@ -250,8 +256,7 @@ public class MermaidUMLGenerator : IUMLGenerator
             return _cachedMermaidCliPath;
         }
 
-        // ONLY use our portable installation to avoid system Node issues
-        var installerPath = Installer.GetMmdcPath();
+        var installerPath = _installer?.GetMmdcPath();
         if (installerPath != null)
         {
             Logger.Instance.Log($"[MermaidUMLGenerator] Found mmdc via installer: {installerPath}");
@@ -268,13 +273,58 @@ public class MermaidUMLGenerator : IUMLGenerator
         if (_cachedNodePath != null)
             return _cachedNodePath;
 
-        // ONLY use our portable installation
-        var installerPath = Installer.GetNodePath();
-        if (installerPath != null)
+        var installerPath = _installer?.GetNodePath();
+        if (!string.IsNullOrEmpty(installerPath) && File.Exists(installerPath))
         {
             _cachedNodePath = installerPath;
             return _cachedNodePath;
         }
+
+        try
+        {
+            var mmdc = _installer?.GetMmdcPath();
+            if (!string.IsNullOrEmpty(mmdc))
+            {
+                var binDir = Path.GetDirectoryName(mmdc)!;
+                var candidates = new[]
+                {
+                    Path.Combine(binDir, "..", "..", "node", "node.exe"),
+                    Path.Combine(binDir, "..", "node", "node.exe"),
+                    Path.Combine(binDir, "..", "..", "..", "node", "node.exe"),
+                    Path.Combine(Path.GetDirectoryName(binDir) ?? binDir, "node.exe"),
+                };
+
+                foreach (var cand in candidates)
+                {
+                    try
+                    {
+                        var full = Path.GetFullPath(cand);
+                        if (File.Exists(full))
+                        {
+                            _cachedNodePath = full;
+                            return _cachedNodePath;
+                        }
+                    }
+                    catch { }
+                }
+
+                try
+                {
+                    var installRoot = Path.GetFullPath(Path.Combine(binDir, "..", ".."));
+                    if (Directory.Exists(installRoot))
+                    {
+                        var found = Directory.EnumerateFiles(installRoot, "node.exe", SearchOption.AllDirectories).FirstOrDefault();
+                        if (!string.IsNullOrEmpty(found) && File.Exists(found))
+                        {
+                            _cachedNodePath = found;
+                            return _cachedNodePath;
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
 
         return null;
     }
@@ -284,8 +334,7 @@ public class MermaidUMLGenerator : IUMLGenerator
         if (_mermaidCliAvailable.HasValue)
             return _mermaidCliAvailable.Value;
 
-        // Only check our portable installation
-        _mermaidCliAvailable = Installer.IsInstalled();
+        _mermaidCliAvailable = _installer?.IsInstalled() ?? false;
         Logger.Instance.Log($"[MermaidUMLGenerator] IsMermaidCliAvailable: {_mermaidCliAvailable.Value}");
         return _mermaidCliAvailable.Value;
     }

@@ -1,7 +1,15 @@
-namespace FindNeedlePluginUtils.DependencyInstaller;
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace FindNeedleToolInstallers;
 
 /// <summary>
 /// Manages UML generator dependencies and their installation.
+/// Provides a high-level API for installing and accessing PlantUML and Mermaid CLI tools.
 /// </summary>
 public class UmlDependencyManager
 {
@@ -88,30 +96,6 @@ public class UmlDependencyManager
         }
 
         return results;
-    }
-
-    /// <summary>
-    /// Creates a PlantUMLGenerator configured to use the locally installed PlantUML.
-    /// </summary>
-    public PlantUMLGenerator? CreatePlantUmlGenerator()
-    {
-        if (!_plantUmlInstaller.IsInstalled())
-            return null;
-
-        // The generator needs to be configured with the local paths
-        // This would require modifications to PlantUMLGenerator to accept custom paths
-        return new PlantUMLGenerator();
-    }
-
-    /// <summary>
-    /// Creates a MermaidUMLGenerator configured to use the locally installed Mermaid CLI.
-    /// </summary>
-    public MermaidUMLGenerator? CreateMermaidGenerator()
-    {
-        if (!_mermaidInstaller.IsInstalled())
-            return null;
-
-        return new MermaidUMLGenerator();
     }
 
     /// <summary>

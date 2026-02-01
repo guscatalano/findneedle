@@ -1,4 +1,4 @@
-using FindNeedlePluginUtils.UmlDsl;
+using FindNeedleUmlDsl;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FindNeedlePluginUtilsTests;

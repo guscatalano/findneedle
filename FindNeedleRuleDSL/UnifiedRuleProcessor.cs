@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FindNeedlePluginUtils.UmlDsl;
+namespace FindNeedleRuleDSL;
 
 public class UnifiedRuleProcessor
 {
@@ -17,7 +17,6 @@ public class UnifiedRuleProcessor
 
     public IEnumerable<(UnifiedRule Rule, object Result, UnifiedRuleAction Action)> Process(IEnumerable<object> results, Func<object, string> getData)
     {
-        // Only process rules for sections that match the provider
         var enabledSections = _ruleSet.Sections.Where(s => s.Providers.Contains(_provider, StringComparer.OrdinalIgnoreCase));
         foreach (var section in enabledSections)
         {

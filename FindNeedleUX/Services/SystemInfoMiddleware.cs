@@ -8,7 +8,8 @@ using FindPluginCore.GlobalConfiguration; // Add for settings
 using Windows.ApplicationModel; // Correct namespace for Package
 using findneedle.PluginSubsystem; // For PluginManager
 using Microsoft.Win32;
-using FindNeedlePluginUtils.DependencyInstaller;
+using FindNeedleToolInstallers;
+using FindNeedlePluginUtils;
 
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
@@ -228,32 +229,43 @@ public class SystemInfoMiddleware
     /// <summary>
     /// Gets the status of PlantUML installation.
     /// </summary>
-    public static DependencyStatus GetPlantUmlStatus() => UmlDependencyManager.PlantUml.GetStatus();
+    public static FindNeedleToolInstallers.DependencyStatus GetPlantUmlStatus() => UmlDependencyManager.PlantUml.GetStatus();
 
     /// <summary>
     /// Gets the status of Mermaid CLI installation.
     /// </summary>
-    public static DependencyStatus GetMermaidStatus() => UmlDependencyManager.Mermaid.GetStatus();
+    public static FindNeedleToolInstallers.DependencyStatus GetMermaidStatus() => UmlDependencyManager.Mermaid.GetStatus();
 
     /// <summary>
     /// Gets the Mermaid CLI version asynchronously.
     /// This is separate from GetMermaidStatus() because it can take several seconds.
     /// </summary>
-    public static Task<string?> GetMermaidVersionAsync() => UmlDependencyManager.Mermaid.GetVersionAsync();
+    public static Task<string?> GetMermaidVersionAsync()
+    {
+        try
+        {
+            var status = UmlDependencyManager.Mermaid.GetStatus();
+            return Task.FromResult(status?.InstalledVersion);
+        }
+        catch
+        {
+            return Task.FromResult<string?>(null);
+        }
+    }
 
     /// <summary>
     /// Installs PlantUML asynchronously.
     /// </summary>
-    public static Task<InstallResult> InstallPlantUmlAsync(
-        IProgress<InstallProgress>? progress = null,
+    public static Task<FindNeedleToolInstallers.InstallResult> InstallPlantUmlAsync(
+        IProgress<FindNeedleToolInstallers.InstallProgress>? progress = null,
         CancellationToken cancellationToken = default)
         => UmlDependencyManager.PlantUml.InstallAsync(progress, cancellationToken);
 
     /// <summary>
     /// Installs Mermaid CLI asynchronously.
     /// </summary>
-    public static Task<InstallResult> InstallMermaidAsync(
-        IProgress<InstallProgress>? progress = null,
+    public static Task<FindNeedleToolInstallers.InstallResult> InstallMermaidAsync(
+        IProgress<FindNeedleToolInstallers.InstallProgress>? progress = null,
         CancellationToken cancellationToken = default)
         => UmlDependencyManager.Mermaid.InstallAsync(progress, cancellationToken);
 

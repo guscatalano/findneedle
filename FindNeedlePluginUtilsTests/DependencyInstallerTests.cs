@@ -1,4 +1,4 @@
-using FindNeedlePluginUtils.DependencyInstaller;
+using FindNeedleToolInstallers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FindNeedlePluginUtilsTests;
@@ -65,7 +65,7 @@ public class DependencyInstallerTests
     [TestMethod]
     public void UmlDependencyManager_GetAllStatuses_ReturnsBothDependencies()
     {
-        var manager = new UmlDependencyManager();
+        var manager = new FindNeedleToolInstallers.UmlDependencyManager();
 
         var statuses = manager.GetAllStatuses().ToList();
 
@@ -77,7 +77,7 @@ public class DependencyInstallerTests
     [TestMethod]
     public void UmlDependencyManager_AllInstallers_ReturnsBothInstallers()
     {
-        var manager = new UmlDependencyManager();
+        var manager = new FindNeedleToolInstallers.UmlDependencyManager();
 
         var installers = manager.AllInstallers.ToList();
 
@@ -87,7 +87,7 @@ public class DependencyInstallerTests
     [TestMethod]
     public void UmlDependencyManager_GetInstallationSummary_ReturnsNonEmptyString()
     {
-        var manager = new UmlDependencyManager();
+        var manager = new FindNeedleToolInstallers.UmlDependencyManager();
 
         var summary = manager.GetInstallationSummary();
 
@@ -112,8 +112,8 @@ public class DependencyInstallerTests
         var result = InstallResult.Succeeded("/path/to/tool");
 
         Assert.IsTrue(result.Success);
-        Assert.AreEqual("/path/to/tool", result.InstalledPath);
-        Assert.IsNull(result.ErrorMessage);
+        Assert.AreEqual("/path/to/tool", result.Path);
+        Assert.IsNull(result.Message);
     }
 
     [TestMethod]
@@ -122,8 +122,8 @@ public class DependencyInstallerTests
         var result = InstallResult.Failed("Something went wrong");
 
         Assert.IsFalse(result.Success);
-        Assert.AreEqual("Something went wrong", result.ErrorMessage);
-        Assert.IsNull(result.InstalledPath);
+        Assert.AreEqual("Something went wrong", result.Message);
+        Assert.IsNull(result.Path);
     }
 
     [TestMethod]
