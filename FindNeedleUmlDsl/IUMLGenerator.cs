@@ -1,4 +1,4 @@
-namespace FindNeedlePluginUtils;
+namespace FindNeedlePluginLib;
 
 /// <summary>
 /// Specifies the output type for UML generation.

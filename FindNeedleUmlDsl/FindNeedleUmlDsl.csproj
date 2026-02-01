@@ -1,12 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <RootNamespace>FindNeedleUmlDsl</RootNamespace>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-  </PropertyGroup>
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<PropertyGroup>
+  <TargetFramework>net8.0-windows10.0.19041</TargetFramework>
+  <ImplicitUsings>enable</ImplicitUsings>
+  <Nullable>enable</Nullable>
+  <RootNamespace>FindNeedleUmlDsl</RootNamespace>
+  <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  <UseWindowsForms>false</UseWindowsForms>
+  <UseWpf>false</UseWpf>
+  <Platforms>AnyCPU;x64</Platforms>
+</PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+    <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
+    <ProjectReference Include="..\FindNeedlePluginUtils\FindNeedlePluginUtils.csproj" />
     <ProjectReference Include="..\FindNeedleRuleDSL\FindNeedleRuleDSL.csproj" />
   </ItemGroup>
 </Project>

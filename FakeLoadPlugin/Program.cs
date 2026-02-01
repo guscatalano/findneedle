@@ -35,7 +35,7 @@ public class Program
         var startMsg = "Starting at " + DateTime.Now.ToString() + Environment.NewLine;
         File.WriteAllText(logPath, ""); //Clear log file
         WriteToConsoleAndFile(startMsg);
-        if (args.Count() == 0)
+        if (args.Count() == 0 || string.IsNullOrEmpty(args[0]))
         {
             WriteToConsoleAndFile("No arguments were passed");
             Environment.Exit(-1);

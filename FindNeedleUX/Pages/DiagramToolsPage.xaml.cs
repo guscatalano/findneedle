@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using FindNeedleToolInstallers;
 using FindNeedlePluginUtils;
 using FindNeedlePluginLib;
+using FindNeedleUmlDsl;
 
 namespace FindNeedleUX.Pages;
 

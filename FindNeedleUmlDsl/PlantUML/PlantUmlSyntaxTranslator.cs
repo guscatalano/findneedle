@@ -1,7 +1,7 @@
 using System.Text;
 using System.Collections.Generic;
 
-namespace FindNeedleUmlDsl;
+namespace FindNeedleUmlDsl.PlantUML;
 
 public class PlantUmlSyntaxTranslator : IUmlSyntaxTranslator
 {

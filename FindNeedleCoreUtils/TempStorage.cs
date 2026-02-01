@@ -88,8 +88,8 @@ public class TempStorage : IDisposable
      */
     public string GenerateRandomFolderName(string hint)
     {
-        var n = new Random();
-        return hint + "_" + DateTime.Now.Day + DateTime.Now.Month + DateTime.Now.Hour + DateTime.Now.Minute + DateTime.Now.Second + "_" + n.Next(10000);
+        var uniqueId = Guid.NewGuid().ToString("N").Substring(0, 8);
+        return hint + "_" + DateTime.Now.Day + DateTime.Now.Month + DateTime.Now.Hour + DateTime.Now.Minute + DateTime.Now.Second + DateTime.Now.Millisecond + "_" + uniqueId;
     }
 
     public string tempPath

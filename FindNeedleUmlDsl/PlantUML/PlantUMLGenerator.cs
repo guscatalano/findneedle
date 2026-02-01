@@ -2,9 +2,10 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using FindNeedlePluginLib;
+using FindNeedlePluginUtils;
 using FindNeedleToolInstallers;
 
-namespace FindNeedlePluginUtils;
+namespace FindNeedleUmlDsl.PlantUML;
 
 public class PlantUMLGenerator : IUMLGenerator
 {

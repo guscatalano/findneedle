@@ -1,5 +1,5 @@
-using FindNeedlePluginUtils;
 using FindNeedlePluginLib;
+using FindNeedleUmlDsl;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FindNeedlePluginUtilsTests;

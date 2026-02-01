@@ -18,7 +18,7 @@ namespace FindPluginCore.Implementations.Storage
     /// </summary>
     public class HybridStorage : ISearchStorage
     {
-        private InMemoryStorage _memoryStorage;
+        private InMemoryStorage? _memoryStorage;
         private readonly SqliteStorage _diskStorage;
         private readonly object _sync = new();
         
@@ -124,16 +124,25 @@ namespace FindPluginCore.Implementations.Storage
                     int hardCap = (int)(_maxRecordsInMemory * HARD_CAP_MULTIPLIER);
                     if (_currentRecordCount + batchList.Count > hardCap)
                     {
-                        // We've exceeded hard cap - must wait for pending spills to complete
-                        Monitor.Exit(_sync);
-                        try
+                        // Check if cancellation was already requested before attempting backpressure wait
+                        if (!cancellationToken.IsCancellationRequested)
                         {
-                            _spillSemaphore.Wait(cancellationToken);
-                            _spillSemaphore.Release();
+                            // We've exceeded hard cap - must wait for pending spills to complete
+                            Monitor.Exit(_sync);
+                            try
+                            {
+                                _spillSemaphore.Wait(cancellationToken);
+                                _spillSemaphore.Release();
+                            }
+                            finally
+                            {
+                                Monitor.Enter(_sync);
+                            }
                         }
-                        finally
+                        else
                         {
-                            Monitor.Enter(_sync);
+                            // Token is already cancelled - skip backpressure wait and return early
+                            return;
                         }
                     }
                     
@@ -304,6 +313,49 @@ namespace FindPluginCore.Implementations.Storage
                     finally
                     {
                         Monitor.Enter(_sync);
+                    }
+                }
+                
+                // Flush any remaining in-memory data to disk before disposal
+                // This ensures data persists across storage instances
+                if (_memoryStorage != null && !_useOnlySqlite)
+                {
+                    var memStats = _memoryStorage.GetStatistics();
+                    
+                    if (memStats.rawRecordCount > 0)
+                    {
+                        var allRaw = new List<ISearchResult>();
+                        _memoryStorage.GetRawResultsInBatches(batch => allRaw.AddRange(batch), 10000, default);
+                        if (allRaw.Count > 0)
+                        {
+                            try
+                            {
+                                _diskStorage.AddRawBatch(allRaw, default);
+                                _hasSpilledRaw = true;
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[HybridStorage] Failed to flush raw data to disk during disposal: {ex.Message}");
+                            }
+                        }
+                    }
+
+                    if (memStats.filteredRecordCount > 0)
+                    {
+                        var allFiltered = new List<ISearchResult>();
+                        _memoryStorage.GetFilteredResultsInBatches(batch => allFiltered.AddRange(batch), 10000, default);
+                        if (allFiltered.Count > 0)
+                        {
+                            try
+                            {
+                                _diskStorage.AddFilteredBatch(allFiltered, default);
+                                _hasSpilledFiltered = true;
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[HybridStorage] Failed to flush filtered data to disk during disposal: {ex.Message}");
+                            }
+                        }
                     }
                 }
                 

@@ -1,4 +1,5 @@
 using FindNeedleUmlDsl;
+using FindNeedleUmlDsl.PlantUML;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FindNeedlePluginUtilsTests;
