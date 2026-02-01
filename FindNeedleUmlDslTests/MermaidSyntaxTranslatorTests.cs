@@ -2,7 +2,7 @@ using FindNeedleUmlDsl;
 using FindNeedleUmlDsl.MermaidUML;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace FindNeedlePluginUtilsTests;
+namespace FindNeedleUmlDslTests;
 
 [TestClass]
 public class MermaidSyntaxTranslatorTests

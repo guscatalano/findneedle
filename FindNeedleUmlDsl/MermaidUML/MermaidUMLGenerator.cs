@@ -54,7 +54,7 @@ public class MermaidUMLGenerator : IUMLGenerator
         return outputType switch
         {
             UmlOutputType.ImageFile => IsMermaidCliAvailable(),
-            UmlOutputType.Browser => GetMermaidJsPath() != null,
+            UmlOutputType.Browser => true,
             _ => false
         };
     }
@@ -182,10 +182,20 @@ public class MermaidUMLGenerator : IUMLGenerator
         var outputPath = Path.ChangeExtension(inputPath, ".html");
 
         var mermaidJsPath = GetMermaidJsPath();
-        if (mermaidJsPath == null)
-            throw new InvalidOperationException("Mermaid JS library not found. Please install Mermaid CLI via Diagram Tools page.");
-
-        var mermaidJsContent = File.ReadAllText(mermaidJsPath);
+        string mermaidScript;
+        
+        if (mermaidJsPath != null)
+        {
+            var mermaidJsContent = File.ReadAllText(mermaidJsPath);
+            mermaidScript = mermaidJsContent;
+            Logger.Instance.Log($"[MermaidUMLGenerator] Using local mermaid.js: {mermaidJsPath}");
+        }
+        else
+        {
+            // Fallback to CDN version
+            mermaidScript = "<script src=\"https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js\"></script>";
+            Logger.Instance.Log($"[MermaidUMLGenerator] Using CDN mermaid.js");
+        }
 
         var html = $$"""
             <!DOCTYPE html>
@@ -207,9 +217,7 @@ public class MermaidUMLGenerator : IUMLGenerator
                     }
                     h1 { color: #333; font-size: 1.2em; }
                 </style>
-                <script>
-                {{mermaidJsContent}}
-                </script>
+                {{mermaidScript}}
             </head>
             <body>
                 <h1>Mermaid Diagram</h1>

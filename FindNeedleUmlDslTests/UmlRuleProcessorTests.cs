@@ -3,7 +3,7 @@ using FindNeedleUmlDsl.MermaidUML;
 using FindNeedleUmlDsl.PlantUML;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace FindNeedlePluginUtilsTests;
+namespace FindNeedleUmlDslTests;
 
 [TestClass]
 public class UmlRuleProcessorTests
@@ -350,6 +350,19 @@ public class UmlRuleProcessorTests
     [TestMethod]
     public void LoadRules_FromDefinitionObject_Works()
     {
+        var rule = new UmlRule
+        {
+            Name = "TestRule",
+            Match = "test",
+            Action = new UmlAction
+            {
+                Type = "message",
+                From = "A",
+                To = "B",
+                Text = "Test message"
+            }
+        };
+
         var definition = new UmlRuleDefinition
         {
             Title = "Test",
@@ -357,21 +370,7 @@ public class UmlRuleProcessorTests
             {
                 new() { Id = "A", Type = "participant" }
             },
-            Rules = new List<UmlRule>
-            {
-                new()
-                {
-                    Name = "TestRule",
-                    Match = "test",
-                    Action = new UmlAction
-                    {
-                        Type = "message",
-                        From = "A",
-                        To = "B",
-                        Text = "Test message"
-                    }
-                }
-            }
+            Rules = new List<UmlRule> { rule }
         };
 
         var processor = new UmlRuleProcessor(new PlantUmlSyntaxTranslator());

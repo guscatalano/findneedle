@@ -15,7 +15,7 @@ public class ETLProcessorLargeETLTests
     public void CanProcessVeryLargeSampleETLFile()
     {
         // Use the provided large ETL file
-        string sampleEtl = @"C:\Users\crimson\Desktop\samplelogs\test1.etl";
+        string sampleEtl = @"C:\Users\crimson\Desktop\stuff\samplelogs\test1.etl";
         
         if (!File.Exists(sampleEtl))
         {

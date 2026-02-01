@@ -2,7 +2,7 @@ using FindNeedlePluginLib;
 using FindNeedleUmlDsl;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace FindNeedlePluginUtilsTests;
+namespace FindNeedleUmlDslTests;
 
 [TestClass]
 public class UmlGeneratorTests

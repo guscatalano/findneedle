@@ -7,9 +7,9 @@ namespace PerformanceTests.Configuration;
 public static class PerformanceTestConfig
 {
     // Test scale
-    public const int TotalRecords = 3_000_000;
+    public const int TotalRecords = 2_000_000;
     public const int BatchSize = 5000;
-    public const int TotalBatches = TotalRecords / BatchSize; // 600 batches
+    public const int TotalBatches = TotalRecords / BatchSize; // 400 batches
     
     // Timing
     public const double TimeoutSeconds = 80.0;

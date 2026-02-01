@@ -36,7 +36,8 @@ public class PlantUmlInstaller : IDependencyInstaller, IPlantUmlInstaller
             Name = DependencyName,
             Description = Description,
             IsInstalled = IsInstalled(),
-            InstalledPath = GetPlantUmlJarPath()
+            InstalledPath = GetPlantUmlJarPath(),
+            InstallInstructions = "Download PlantUML JAR file and Java runtime"
         };
     }
 

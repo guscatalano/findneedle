@@ -30,7 +30,7 @@ public class PlantUMLGenerator : IUMLGenerator
 
     public UmlOutputType[] SupportedOutputTypes => IsSupported(UmlOutputType.ImageFile)
         ? [UmlOutputType.ImageFile, UmlOutputType.Browser]
-        : [];
+        : IsSupported(UmlOutputType.Browser) ? [UmlOutputType.Browser] : [];
 
     public string GenerateUML(string inputPath, UmlOutputType outputType = UmlOutputType.ImageFile)
     {
@@ -53,7 +53,7 @@ public class PlantUMLGenerator : IUMLGenerator
         return outputType switch
         {
             UmlOutputType.ImageFile => GetJavaPath() != null && File.Exists(GetPlantUMLPath()),
-            UmlOutputType.Browser => GetJavaPath() != null && File.Exists(GetPlantUMLPath()),
+            UmlOutputType.Browser => true,
             _ => false
         };
     }
@@ -109,12 +109,34 @@ public class PlantUMLGenerator : IUMLGenerator
 
     private string GenerateBrowserHtml(string inputPath)
     {
-        var pngPath = GenerateImageFile(inputPath);
-        var pngBytes = File.ReadAllBytes(pngPath);
-        var base64Png = Convert.ToBase64String(pngBytes);
         var plantUmlSource = File.ReadAllText(inputPath);
         var encodedSource = System.Web.HttpUtility.HtmlEncode(plantUmlSource);
         var outputPath = Path.ChangeExtension(inputPath, ".html");
+
+        // Try to generate a local image if Java and PlantUML jar are available
+        string imageHtml = "";
+        try
+        {
+            if (GetJavaPath() != null && File.Exists(GetPlantUMLPath()))
+            {
+                var pngPath = GenerateImageFile(inputPath);
+                var pngBytes = File.ReadAllBytes(pngPath);
+                var base64Png = Convert.ToBase64String(pngBytes);
+                imageHtml = $"<img src=\"data:image/png;base64,{base64Png}\" alt=\"PlantUML Diagram\" />";
+                Logger.Instance.Log($"[PlantUMLGenerator] Using local generated image");
+            }
+        }
+        catch { }
+
+        // If we couldn't generate a local image, use the web service
+        if (string.IsNullOrEmpty(imageHtml))
+        {
+            // Encode the PlantUML source for the web service
+            var sourceBytes = System.Text.Encoding.UTF8.GetBytes(plantUmlSource);
+            var base64Source = Convert.ToBase64String(sourceBytes);
+            imageHtml = $"<img src=\"https://www.plantuml.com/plantuml/png/{base64Source}\" alt=\"PlantUML Diagram\" />";
+            Logger.Instance.Log($"[PlantUMLGenerator] Using PlantUML web service");
+        }
 
         var html = $$"""
             <!DOCTYPE html>
@@ -147,7 +169,7 @@ public class PlantUMLGenerator : IUMLGenerator
             <body>
                 <h1>PlantUML Diagram</h1>
                 <div class="diagram">
-                    <img src="data:image/png;base64,{{base64Png}}" alt="PlantUML Diagram" />
+                    {{imageHtml}}
                 </div>
                 <h2>Source</h2>
                 <pre>{{encodedSource}}</pre>
@@ -156,7 +178,7 @@ public class PlantUMLGenerator : IUMLGenerator
             """;
 
         File.WriteAllText(outputPath, html);
-        Logger.Instance.Log($"[PlantUMLGenerator] Generated browser HTML with embedded PNG: {outputPath}");
+        Logger.Instance.Log($"[PlantUMLGenerator] Generated browser HTML: {outputPath}");
         return outputPath;
     }
 

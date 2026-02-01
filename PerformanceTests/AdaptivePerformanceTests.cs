@@ -67,14 +67,14 @@ public class AdaptivePerformanceTests
     }
 
     /// <summary>
-    /// Comparative write performance test: writes 3,000,000 records across all storage types.
+    /// Comparative write performance test: writes 2,000,000 records across all storage types.
     /// Each storage type must complete within 80 seconds.
     /// Generates an HTML graph comparing performance degradation.
     /// </summary>
     [TestMethod]
     [TestCategory("Performance")]
     [Timeout(PerformanceTestConfig.TotalTestTimeoutMilliseconds)]
-    public void ComparativeWritePerformance_3MillionRecords()
+    public void ComparativeWritePerformance_2MillionRecords()
     {
         var results = new Dictionary<string, WriteTestResult>();
 

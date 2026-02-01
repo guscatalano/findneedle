@@ -24,11 +24,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FindNeedlePluginUtils\FindNeedlePluginUtils.csproj" />
-    <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+    <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
     <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
   </ItemGroup>
 
-
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
 
 </Project>
