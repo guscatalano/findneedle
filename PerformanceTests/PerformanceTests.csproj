@@ -7,7 +7,9 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
