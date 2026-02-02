@@ -5,6 +5,7 @@ using findneedle.Implementations.FileExtensions;
 using FindNeedlePluginLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Text.Json;
+using TestUtilities.Helpers;
 
 namespace ETWPluginTests;
 
@@ -12,10 +13,19 @@ namespace ETWPluginTests;
 public class ETLProcessorLargeETLTests
 {
     private const string SampleEtlPath = @"C:\Users\crimson\Desktop\stuff\samplelogs\test1.etl";
+    private TestContext? _testContext;
+
+    public TestContext TestContext
+    {
+        get => _testContext ?? throw new InvalidOperationException("TestContext not initialized");
+        set => _testContext = value;
+    }
 
     [TestInitialize]
     public void TestInitialize()
     {
+        PerformanceTestInitializer.CheckSystemRequirements(TestContext);
+
         if (!File.Exists(SampleEtlPath))
         {
             throw new AssertInconclusiveException($"Sample ETL file does not exist: {SampleEtlPath}. Skipping large file tests.");
@@ -23,6 +33,8 @@ public class ETLProcessorLargeETLTests
     }
 
     [TestMethod]
+    [RequiresMinimumSpecs(MinimumRamGb = 2, MinimumProcessorCount = 2, 
+        Reason = "Large ETL file processing requires adequate system resources")]
     public void CanProcessVeryLargeSampleETLFile()
     {
         // Use the provided large ETL file

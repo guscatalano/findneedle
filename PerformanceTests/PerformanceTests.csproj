@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
+    <ProjectReference Include="..\TestUtilities\TestUtilities.csproj" />
   </ItemGroup>
 
   <ItemGroup>

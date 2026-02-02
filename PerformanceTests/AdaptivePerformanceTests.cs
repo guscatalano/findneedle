@@ -13,6 +13,7 @@ using PerformanceTests.Models;
 using PerformanceTests.Configuration;
 using PerformanceTests.Helpers;
 using PerformanceTests.Reporting;
+using TestUtilities.Helpers;
 
 namespace PerformanceTests;
 
@@ -21,11 +22,19 @@ namespace PerformanceTests;
 public class AdaptivePerformanceTests
 {
     private readonly List<string> _createdDbPaths = new();
+    private TestContext? _testContext;
+
+    public TestContext TestContext
+    {
+        get => _testContext ?? throw new InvalidOperationException("TestContext not initialized");
+        set => _testContext = value;
+    }
 
     [TestInitialize]
     public void TestInitialize()
     {
         _createdDbPaths.Clear();
+        PerformanceTestInitializer.CheckSystemRequirements(TestContext);
     }
 
     [TestCleanup]
@@ -73,6 +82,8 @@ public class AdaptivePerformanceTests
     /// </summary>
     [TestMethod]
     [TestCategory("Performance")]
+    [RequiresMinimumSpecs(MinimumRamGb = 4, MinimumProcessorCount = 2, 
+        Reason = "Stress test with 2M records requires adequate CPU and memory")]
     [Timeout(PerformanceTestConfig.TotalTestTimeoutMilliseconds)]
     public void ComparativeWritePerformance_2MillionRecords()
     {
