@@ -1,6 +1,7 @@
 using FindNeedleToolInstallers;
 using System.Diagnostics;
 using System.IO;
+using TestUtilities.Helpers;
 
 namespace FindNeedleUmlInstallerTests;
 
@@ -51,6 +52,11 @@ public class PlantUmlInstallationIntegrationTests
     [Timeout(120000)] // 2 minutes - installation can take time
     public async Task PlantUmlInstaller_CanInstall()
     {
+        if (!SystemSpecificationChecker.IsWindows())
+        {
+            Assert.Inconclusive("PlantUML installation tests only run on Windows");
+        }
+
         // Act - Perform installation
         Console.WriteLine($"Installing PlantUML to: {_testInstallDirectory}");
         var progress = new Progress<InstallProgress>(p =>

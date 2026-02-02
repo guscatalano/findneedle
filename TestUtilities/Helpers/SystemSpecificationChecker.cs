@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 
 namespace TestUtilities.Helpers;
 
@@ -64,5 +65,29 @@ public class SystemSpecificationChecker
             return $"Skipped: {GetSystemSpecificationSummary()}";
         }
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Checks if the current platform is Windows.
+    /// </summary>
+    public static bool IsWindows()
+    {
+        return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    }
+
+    /// <summary>
+    /// Checks if the current platform is Linux.
+    /// </summary>
+    public static bool IsLinux()
+    {
+        return RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    }
+
+    /// <summary>
+    /// Checks if the current platform is macOS.
+    /// </summary>
+    public static bool IsMacOS()
+    {
+        return RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
     }
 }

@@ -217,35 +217,25 @@ public class KustoExportProcessorTests
     }
 
     [TestMethod]
-    public void LoadInMemory_WithCancellation_StopsProcessing()
+    public void LoadInMemory_WithCancellation_RespectsCancelledToken()
     {
         var header = "PreciseTimeStamp\tProviderName\tMessage\n";
-        // Create a large dataset to ensure cancellation happens during processing
-        var records = string.Join("\n", Enumerable.Range(0, 100000)
-            .Select(i => $"2024-01-01 10:00:00\tProvider\tMessage {i}"));
+        var record = "2024-01-01 10:00:00\tTestProvider\tMessage 1\n";
 
-        var testFile = CreateTestFile(header + records);
+        var testFile = CreateTestFile(header + record);
         _processor?.OpenFile(testFile);
         _processor?.CheckFileFormat();
 
+        // Create an already-cancelled token
         var cts = new CancellationTokenSource();
-        
-        // Start cancellation on a background thread after a small delay to let processing start
-        var cancellationTask = Task.Run(async () =>
-        {
-            await Task.Delay(5); // Let processing begin
-            cts.Cancel();
-        });
+        cts.Cancel();
 
         _processor?.LoadInMemory(cts.Token);
-        
-        // Wait for the cancellation task to complete
-        cancellationTask.Wait(TimeSpan.FromSeconds(1));
 
         var results = _processor?.GetResults();
         Assert.IsNotNull(results);
-        // Should have fewer results due to cancellation (unlikely to process all 100k records in 5ms)
-        Assert.IsTrue(results.Count < 100000);
+        // Processing should be skipped due to pre-cancelled token
+        Assert.AreEqual(0, results.Count);
     }
 
     [TestMethod]

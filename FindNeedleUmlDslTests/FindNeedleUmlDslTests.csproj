@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
     <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
+    <ProjectReference Include="..\TestUtilities\TestUtilities.csproj" />
   </ItemGroup>
 
   <ItemGroup>
