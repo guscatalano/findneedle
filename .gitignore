@@ -364,3 +364,4 @@ FodyWeavers.xsd
 /ETWPluginTests/SampleFiles
 /ETWPluginTests/SampleFiles/dumpfile.xml
 /ETWPluginTests/SampleFiles/report.xsl
+/build_output.txt
