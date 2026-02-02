@@ -434,7 +434,7 @@ public sealed partial class PluginsPage : Page
             foreach (var module in manager.loadedPluginsModules)
             {
                 var modulePath = module.dll != null ? module.dll.Location : "Unknown";
-                var moduleVM = new ModuleViewModel { ModulePath = modulePath, LoadedSuccessfully = module.LoadedSuccessfully, LoadException = module.LoadException, LoadExceptionString = module.LoadExceptionString };
+                var moduleVM = new ModuleViewModel { ModulePath = modulePath, LoadedSuccessfully = module.LoadedSuccessfully, LoadException = module.LoadException ?? null!, LoadExceptionString = module.LoadExceptionString };
                 foreach (var plugin in module.description)
                 {
                     moduleVM.Plugins.Add(new PluginListItemViewModel

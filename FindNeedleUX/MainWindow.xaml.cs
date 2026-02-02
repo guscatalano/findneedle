@@ -309,11 +309,11 @@ public sealed partial class MainWindow : Window
             return;
         }
         string etlPath = file.Path;
-        List<string> providers = null;
-        Dictionary<string, string> sysInfo = null;
-        ETLSummary reportSummary = null;
-        string error = null;
-        string tempPath = null;
+        List<string> providers = null!;
+        Dictionary<string, string> sysInfo = null!;
+        ETLSummary reportSummary = null!;
+        string error = null!;
+        string tempPath = null!;
         await Task.Run(() =>
         {
             try
@@ -416,8 +416,8 @@ public sealed partial class MainWindow : Window
             return;
         }
         string binaryPath = file.Path;
-        List<(Guid guid, string? name)> providers = null;
-        string error = null;
+        List<(Guid guid, string? name)> providers = null!;
+        string error = null!;
         await Task.Run(() =>
         {
             try

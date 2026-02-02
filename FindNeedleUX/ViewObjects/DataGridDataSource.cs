@@ -19,7 +19,7 @@ public class SearchDataSource
 {
     private static ObservableCollection<SearchSourceDataItem> _items;
     private static List<string> _mountains;
-    private static CollectionViewSource groupedItems;
+    private static CollectionViewSource? groupedItems;
     private string _cachedSortedColumn = string.Empty;
 
     // Loading data

@@ -7,6 +7,7 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
 	  <NuGetAudit>false</NuGetAudit>
 	  <Platforms>AnyCPU;x64</Platforms>
+	  <NoWarn>$(NoWarn);CS8602</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

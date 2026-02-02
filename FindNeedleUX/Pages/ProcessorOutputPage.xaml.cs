@@ -319,8 +319,8 @@ public sealed partial class ProcessorOutputPage : Page
 
     private class ProcessorButtonTag
     {
-        public object Processor { get; set; }
-        public TextBox OutputBox { get; set; }
-        public WebView2 WebView { get; set; }
+        public object? Processor { get; set; }
+        public TextBox? OutputBox { get; set; }
+        public WebView2? WebView { get; set; }
     }
 }

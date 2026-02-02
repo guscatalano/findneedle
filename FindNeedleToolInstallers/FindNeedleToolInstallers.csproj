@@ -6,5 +6,6 @@
     <RootNamespace>FindNeedleToolInstallers</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Platforms>AnyCPU;x64</Platforms>
+    <NoWarn>$(NoWarn);IDE0007</NoWarn>
   </PropertyGroup>
 </Project>

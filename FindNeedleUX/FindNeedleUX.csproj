@@ -23,6 +23,8 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
      <SelfContained>true</SelfContained>
 	  <NuGetAudit>false</NuGetAudit>
+	  <Nullable>enable</Nullable>
+	  <NoWarn>$(NoWarn);CS8618;CS8603;CS8601;CS8602;CS8600;CS8604;CS8612;CS8625;CS8765;CS8769;CS0105;IDE0007;IDE0059;IDE0044;WinUIEx1001</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(AppxPackageSigningEnabled)' != 'false'">

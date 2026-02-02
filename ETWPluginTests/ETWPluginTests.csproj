@@ -10,6 +10,7 @@
 		<Platforms>x86;x64</Platforms>
 		<RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
 	  <NuGetAudit>false</NuGetAudit>
+	  <NoWarn>$(NoWarn);IDE0007</NoWarn>
   </PropertyGroup>
 
 
