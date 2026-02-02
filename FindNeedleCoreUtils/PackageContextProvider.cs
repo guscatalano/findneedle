@@ -4,7 +4,7 @@ namespace FindNeedleCoreUtils;
 /// Abstraction for detecting packaged app status.
 /// This allows tests to inject mock implementations to simulate different app contexts.
 /// </summary>
-internal interface IPackageContextProvider
+public interface IPackageContextProvider
 {
     /// <summary>
     /// Gets the package family name if running as a packaged app, or null if unpackaged.
@@ -20,7 +20,7 @@ internal interface IPackageContextProvider
 /// <summary>
 /// Production implementation that detects actual package context.
 /// </summary>
-internal class ProductionPackageContextProvider : IPackageContextProvider
+public class ProductionPackageContextProvider : IPackageContextProvider
 {
     private static string? _cachedPackageFamilyName;
     private static bool _packageCheckDone;
@@ -51,7 +51,7 @@ internal class ProductionPackageContextProvider : IPackageContextProvider
 /// <summary>
 /// Test implementation that allows simulating packaged or unpackaged context.
 /// </summary>
-internal class TestPackageContextProvider : IPackageContextProvider
+public class TestPackageContextProvider : IPackageContextProvider
 {
     private readonly string? _packageFamilyName;
     private readonly bool _isPackagedApp;
@@ -70,7 +70,7 @@ internal class TestPackageContextProvider : IPackageContextProvider
 /// Global provider for package context detection.
 /// Can be overridden for testing.
 /// </summary>
-internal static class PackageContextProviderFactory
+public static class PackageContextProviderFactory
 {
     private static IPackageContextProvider? _testProvider;
 
@@ -80,7 +80,7 @@ internal static class PackageContextProviderFactory
     /// <summary>
     /// Set a test provider (use in tests only).
     /// </summary>
-    internal static void SetTestProvider(IPackageContextProvider? provider)
+    public static void SetTestProvider(IPackageContextProvider? provider)
     {
         _testProvider = provider;
     }
@@ -88,7 +88,7 @@ internal static class PackageContextProviderFactory
     /// <summary>
     /// Reset to production provider.
     /// </summary>
-    internal static void ResetToProduction()
+    public static void ResetToProduction()
     {
         _testProvider = null;
     }

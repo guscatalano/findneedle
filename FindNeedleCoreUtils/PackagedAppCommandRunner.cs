@@ -169,21 +169,28 @@ public static class PackagedAppCommandRunner
             WorkingDirectory = workingDirectory
         };
 
-        using var process = Process.Start(psi);
-        if (process == null)
+        try
         {
-            throw new Exception($"Failed to start process: {executablePath}");
+            using var process = Process.Start(psi);
+            if (process == null)
+            {
+                throw new Exception($"Failed to start process: {executablePath}");
+            }
+
+            var completed = process.WaitForExit(timeoutMs);
+
+            if (!completed)
+            {
+                try { process.Kill(); } catch { }
+                throw new TimeoutException($"Command timed out after {timeoutMs}ms");
+            }
+
+            return process.ExitCode;
         }
-
-        var completed = process.WaitForExit(timeoutMs);
-
-        if (!completed)
+        catch (Exception ex) when (!(ex is TimeoutException))
         {
-            try { process.Kill(); } catch { }
-            throw new TimeoutException($"Command timed out after {timeoutMs}ms");
+            throw new Exception($"Failed to start process: {executablePath}", ex);
         }
-
-        return process.ExitCode;
     }
 
     /// <summary>

@@ -6,7 +6,7 @@ namespace FindNeedleCoreUtils;
 /// Helper utilities for building and escaping commands for PowerShell execution.
 /// This is extracted to make the logic testable without needing to actually run commands.
 /// </summary>
-internal static class PowerShellCommandBuilder
+public static class PowerShellCommandBuilder
 {
     /// <summary>
     /// Escapes a string for use in PowerShell single-quoted strings by doubling single quotes.
