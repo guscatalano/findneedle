@@ -9,7 +9,7 @@ using Windows.ApplicationModel; // Correct namespace for Package
 using findneedle.PluginSubsystem; // For PluginManager
 using Microsoft.Win32;
 using FindNeedleToolInstallers;
-using FindNeedlePluginUtils;
+using FindNeedleCoreUtils;
 
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
@@ -273,5 +273,5 @@ public class SystemInfoMiddleware
     /// Gets the install directory for UML dependencies (for diagnostics).
     /// </summary>
     public static string GetUmlInstallDirectory() => 
-        FindNeedlePluginUtils.PackagedAppPaths.DependenciesBaseDir;
+        PackagedAppPaths.DependenciesBaseDir;
 }

@@ -208,6 +208,10 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
                     return InstallResult.Failed($"npm not found in bundled node runtime.\n{log}");
                 }
 
+                // Add bundled node directory to PATH so that npm post-install scripts can find node.exe
+                var existingPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                psiBundled.Environment["PATH"] = $"{nodeRoot}{Path.PathSeparator}{existingPath}";
+
                 using var proc2 = Process.Start(psiBundled)!;
                 var stdout2 = proc2.StandardOutput.ReadToEndAsync();
                 var stderr2 = proc2.StandardError.ReadToEndAsync();
@@ -241,8 +245,16 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
                     return InstallResult.Failed($"mermaid-cli installed but mmdc binary not found after installation.\n{log}");
                 }
 
+                // Create a wrapper script that sets up the environment for mmdc
+                var wrapperPath = CreateMermaidWrapper(mmdcPath);
+                if (wrapperPath == null)
+                {
+                    Log("Warning: Failed to create mmdc wrapper, using direct path");
+                    wrapperPath = mmdcPath;
+                }
+
                 progress?.Report(new InstallProgress { Status = "mermaid-cli installed", PercentComplete = 100, IsIndeterminate = false });
-                return InstallResult.Succeeded(mmdcPath);
+                return InstallResult.Succeeded(wrapperPath);
             }
             catch (OperationCanceledException)
             {
@@ -271,17 +283,34 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
         return null;
     }
 
-    private static string? GetBundledNodePath()
+    private string? GetBundledNodePath()
     {
-        var nodeExe = Path.Combine(_staticInstallRoot(), "node", "node.exe");
+        var nodeExe = Path.Combine(_installDirectory, "node", "node.exe");
         return File.Exists(nodeExe) ? nodeExe : null;
     }
 
-    // Helper to compute install root consistently
-    private static string _staticInstallRoot()
+    private string? CreateMermaidWrapper(string mmdcPath)
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(appData, "FindNeedle", "Dependencies", "Mermaid");
+        try
+        {
+            var nodeDir = Path.Combine(_installDirectory, "node");
+            var wrapperPath = Path.Combine(_installDirectory, "node_modules", ".bin", "mmdc-wrapper.cmd");
+
+            var wrapperContent = $"""
+@echo off
+setlocal enabledelayedexpansion
+set NODE_PATH={nodeDir}
+set PATH={nodeDir};!PATH!
+call "{mmdcPath}" %*
+""";
+
+            File.WriteAllText(wrapperPath, wrapperContent);
+            return wrapperPath;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void CopyDirectory(string sourceDir, string destinationDir)

@@ -2,9 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using FindNeedlePluginLib;
 
-namespace FindNeedlePluginUtils;
+namespace FindNeedleCoreUtils;
 
 /// <summary>
 /// Runs external commands in the correct context for packaged (MSIX) apps.
@@ -13,36 +12,15 @@ namespace FindNeedlePluginUtils;
 /// </summary>
 public static class PackagedAppCommandRunner
 {
-    private static string? _cachedPackageFamilyName;
-    private static bool _packageCheckDone;
-
     /// <summary>
     /// Gets the package family name if running as a packaged app, or null if unpackaged.
     /// </summary>
-    public static string? PackageFamilyName
-    {
-        get
-        {
-            if (!_packageCheckDone)
-            {
-                try
-                {
-                    _cachedPackageFamilyName = global::Windows.ApplicationModel.Package.Current.Id.FamilyName;
-                }
-                catch
-                {
-                    _cachedPackageFamilyName = null;
-                }
-                _packageCheckDone = true;
-            }
-            return _cachedPackageFamilyName;
-        }
-    }
+    public static string? PackageFamilyName => PackageContextProviderFactory.Current.PackageFamilyName;
 
     /// <summary>
     /// Returns true if the app is running as a packaged MSIX app.
     /// </summary>
-    public static bool IsPackagedApp => PackageFamilyName != null;
+    public static bool IsPackagedApp => PackageContextProviderFactory.Current.IsPackagedApp;
 
     /// <summary>
     /// Runs a command and returns the exit code.
@@ -107,10 +85,7 @@ public static class PackagedAppCommandRunner
             // Build the outer Invoke-CommandInDesktopPackage call
             var psCommand = $"Invoke-CommandInDesktopPackage -PackageFamilyName '{packageFamilyName}' -AppId 'App' -Command 'powershell.exe' -Args '{innerArgs}' -PreventBreakaway";
             
-            Logger.Instance.Log($"[PackagedAppCommandRunner] Running via Invoke-CommandInDesktopPackage");
-            Logger.Instance.Log($"[PackagedAppCommandRunner] Inner command: {innerCommand}");
-            Logger.Instance.Log($"[PackagedAppCommandRunner] Sentinel file: {sentinelFile}");
-
+            
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
@@ -138,7 +113,6 @@ public static class PackagedAppCommandRunner
                 var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
                 if (elapsed > timeoutMs)
                 {
-                    Logger.Instance.Log($"[PackagedAppCommandRunner] Timeout waiting for command to complete after {timeoutMs}ms");
                     throw new TimeoutException($"Command timed out after {timeoutMs}ms");
                 }
                 
@@ -148,26 +122,14 @@ public static class PackagedAppCommandRunner
             // Give a small delay for files to be fully written
             Thread.Sleep(100);
             
-            // Log captured output for debugging
-            if (File.Exists(outputFile))
-            {
-                var output = File.ReadAllText(outputFile);
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    Logger.Instance.Log($"[PackagedAppCommandRunner] Command output: {output}");
-                }
-            }
-            
             // Read the exit code from sentinel file
             var exitCodeText = File.ReadAllText(sentinelFile).Trim();
             if (int.TryParse(exitCodeText, out var exitCode))
             {
-                Logger.Instance.Log($"[PackagedAppCommandRunner] Command completed with exit code: {exitCode}");
                 return exitCode;
             }
             else
             {
-                Logger.Instance.Log($"[PackagedAppCommandRunner] Could not parse exit code from sentinel file: '{exitCodeText}'");
                 // If we can't parse, assume success if the file was created
                 return 0;
             }
@@ -198,8 +160,6 @@ public static class PackagedAppCommandRunner
     /// </summary>
     private static int RunCommandDirectly(string executablePath, string arguments, string workingDirectory, int timeoutMs)
     {
-        Logger.Instance.Log($"[PackagedAppCommandRunner] Running directly: {executablePath} {arguments}");
-
         var psi = new ProcessStartInfo
         {
             FileName = executablePath,

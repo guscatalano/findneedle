@@ -1,7 +1,6 @@
 using FindNeedleToolInstallers;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace FindNeedleUmlDslTests;
+namespace FindNeedleToolInstallerTests;
 
 [TestClass]
 public class DependencyInstallerTests
@@ -65,7 +64,7 @@ public class DependencyInstallerTests
     [TestMethod]
     public void UmlDependencyManager_GetAllStatuses_ReturnsBothDependencies()
     {
-        var manager = new FindNeedleToolInstallers.UmlDependencyManager();
+        var manager = new UmlDependencyManager();
 
         var statuses = manager.GetAllStatuses().ToList();
 
@@ -77,7 +76,7 @@ public class DependencyInstallerTests
     [TestMethod]
     public void UmlDependencyManager_AllInstallers_ReturnsBothInstallers()
     {
-        var manager = new FindNeedleToolInstallers.UmlDependencyManager();
+        var manager = new UmlDependencyManager();
 
         var installers = manager.AllInstallers.ToList();
 
@@ -87,7 +86,7 @@ public class DependencyInstallerTests
     [TestMethod]
     public void UmlDependencyManager_GetInstallationSummary_ReturnsNonEmptyString()
     {
-        var manager = new FindNeedleToolInstallers.UmlDependencyManager();
+        var manager = new UmlDependencyManager();
 
         var summary = manager.GetInstallationSummary();
 
@@ -145,8 +144,6 @@ public class DependencyInstallerTests
         var customPath = Path.Combine(Path.GetTempPath(), "TestPlantUML");
         var installer = new PlantUmlInstaller(customPath);
 
-        // The installer should use the custom path (we can't easily verify this
-        // without actually installing, but we can verify it doesn't throw)
         var status = installer.GetStatus();
 
         Assert.IsNotNull(status);

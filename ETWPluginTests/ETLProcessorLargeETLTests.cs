@@ -11,17 +11,22 @@ namespace ETWPluginTests;
 [TestClass]
 public class ETLProcessorLargeETLTests
 {
+    private const string SampleEtlPath = @"C:\Users\crimson\Desktop\stuff\samplelogs\test1.etl";
+
+    [TestInitialize]
+    public void TestInitialize()
+    {
+        if (!File.Exists(SampleEtlPath))
+        {
+            throw new AssertInconclusiveException($"Sample ETL file does not exist: {SampleEtlPath}. Skipping large file tests.");
+        }
+    }
+
     [TestMethod]
     public void CanProcessVeryLargeSampleETLFile()
     {
         // Use the provided large ETL file
-        string sampleEtl = @"C:\Users\crimson\Desktop\stuff\samplelogs\test1.etl";
-        
-        if (!File.Exists(sampleEtl))
-        {
-            Assert.Inconclusive($"Sample ETL file does not exist: {sampleEtl}");
-            return;
-        }
+        string sampleEtl = SampleEtlPath;
         var fileInfo = new FileInfo(sampleEtl);
         Assert.IsTrue(fileInfo.Length > 1024 * 100, "Sample ETL file is too small to be a valid test");
 

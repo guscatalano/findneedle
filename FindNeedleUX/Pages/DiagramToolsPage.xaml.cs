@@ -7,7 +7,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using FindNeedleToolInstallers;
-using FindNeedlePluginUtils;
+using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 using FindNeedleUmlDsl;
 
@@ -283,13 +283,14 @@ public sealed partial class DiagramToolsPage : Page
             // Create directory if it doesn't exist
             Directory.CreateDirectory(path);
             
+            
             // For packaged apps, the path is virtualized. We need to get the actual location.
             string actualPath = path;
-            if (FindNeedlePluginUtils.PackagedAppPaths.IsPackagedApp)
+            if (PackagedAppPaths.IsPackagedApp)
             {
                 // For packaged apps, LocalAppData is virtualized to the package's LocalCache\Local folder
                 // The actual path is: %LOCALAPPDATA%\Packages\{PackageFamilyName}\LocalCache\Local\FindNeedle\Dependencies
-                var packageFamilyName = FindNeedlePluginUtils.PackagedAppPaths.PackageFamilyName;
+                var packageFamilyName = PackagedAppPaths.PackageFamilyName;
                 if (!string.IsNullOrEmpty(packageFamilyName))
                 {
                     var realLocalAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);

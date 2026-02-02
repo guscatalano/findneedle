@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using FindNeedlePluginLib;
-using FindNeedlePluginUtils;
+using FindNeedleCoreUtils;
 using FindNeedleToolInstallers;
 
 namespace FindNeedleUmlDsl.MermaidUML;

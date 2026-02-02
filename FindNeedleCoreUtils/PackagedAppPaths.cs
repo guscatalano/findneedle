@@ -1,8 +1,7 @@
 using System;
 using System.IO;
-using FindNeedlePluginLib;
 
-namespace FindNeedlePluginUtils;
+namespace FindNeedleCoreUtils;
 
 /// <summary>
 /// Provides correct file system paths for packaged (MSIX) and unpackaged apps.
@@ -51,12 +50,12 @@ public static class PackagedAppPaths
     /// <summary>
     /// Returns true if the app is running as a packaged MSIX app.
     /// </summary>
-    public static bool IsPackagedApp => PackagedAppCommandRunner.IsPackagedApp;
+    public static bool IsPackagedApp => PackageContextProviderFactory.Current.IsPackagedApp;
 
     /// <summary>
     /// Gets the package family name if running as a packaged app, or null if unpackaged.
     /// </summary>
-    public static string? PackageFamilyName => PackagedAppCommandRunner.PackageFamilyName;
+    public static string? PackageFamilyName => PackageContextProviderFactory.Current.PackageFamilyName;
 
     /// <summary>
     /// Ensures a directory exists, creating it if necessary.
@@ -66,7 +65,6 @@ public static class PackagedAppPaths
         if (!Directory.Exists(path))
         {
             Directory.CreateDirectory(path);
-            Logger.Instance.Log($"[PackagedAppPaths] Created directory: {path}");
         }
     }
 
@@ -88,12 +86,7 @@ public static class PackagedAppPaths
     /// </summary>
     public static void LogPathInfo()
     {
-        Logger.Instance.Log($"[PackagedAppPaths] IsPackagedApp: {IsPackagedApp}");
-        Logger.Instance.Log($"[PackagedAppPaths] PackageFamilyName: {PackageFamilyName ?? "null"}");
-        Logger.Instance.Log($"[PackagedAppPaths] LocalAppData: {LocalAppData}");
-        Logger.Instance.Log($"[PackagedAppPaths] DependenciesBaseDir: {DependenciesBaseDir}");
-        Logger.Instance.Log($"[PackagedAppPaths] PlantUmlDir: {PlantUmlDir}");
-        Logger.Instance.Log($"[PackagedAppPaths] MermaidDir: {MermaidDir}");
-        Logger.Instance.Log($"[PackagedAppPaths] TempDir: {TempDir}");
+        var info = $"IsPackagedApp: {IsPackagedApp}, PackageFamilyName: {PackageFamilyName ?? "null"}, LocalAppData: {LocalAppData}, DependenciesBaseDir: {DependenciesBaseDir}, PlantUmlDir: {PlantUmlDir}, MermaidDir: {MermaidDir}, TempDir: {TempDir}";
+        System.Diagnostics.Debug.WriteLine($"[PackagedAppPaths] {info}");
     }
 }
