@@ -1,0 +1,66 @@
+{
+  "title": "Crash Detection Rules",
+  "sections": [
+    {
+      "name": "DotNetCrashes",
+      "providers": ["EventLog", "ETW"],
+      "rules": [
+        {
+          "name": "DotNetApplicationCrash",
+          "match": "A .NET application failed",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "DotNetCrash"
+          }
+        },
+        {
+          "name": "ApplicationHang",
+          "match": "Application Hang",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "ApplicationHang"
+          }
+        },
+        {
+          "name": "NativeCodeCrash",
+          "match": "faulting application",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "NativeCrash"
+          }
+        },
+        {
+          "name": "AccessViolation",
+          "match": "access violation",
+          "unmatch": "allowed",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "AccessViolation"
+          }
+        },
+        {
+          "name": "OutOfMemory",
+          "match": "OutOfMemoryException",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "OutOfMemory"
+          }
+        },
+        {
+          "name": "StackOverflow",
+          "match": "StackOverflowException",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "StackOverflow"
+          }
+        }
+      ]
+    }
+  ]
+}

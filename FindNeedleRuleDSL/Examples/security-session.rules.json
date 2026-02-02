@@ -1,0 +1,123 @@
+{
+  "title": "Security and Session Management Events",
+  "sections": [
+    {
+      "name": "UserSessions",
+      "providers": ["EventLog", "ETW"],
+      "rules": [
+        {
+          "name": "UserLogon",
+          "match": "user logged on",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "UserLogon"
+          }
+        },
+        {
+          "name": "UserLogoff",
+          "match": "user logged off",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "UserLogoff"
+          }
+        },
+        {
+          "name": "FailedLogon",
+          "match": "logon failed",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "FailedLogon"
+          }
+        },
+        {
+          "name": "SessionCreated",
+          "match": "SessionId=",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "SessionCreated"
+          }
+        }
+      ]
+    },
+    {
+      "name": "SecurityEvents",
+      "providers": ["EventLog"],
+      "rules": [
+        {
+          "name": "PrivilegeEscalation",
+          "match": "privilege escalation",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "PrivilegeEscalation"
+          }
+        },
+        {
+          "name": "UnauthorizedAccessAttempt",
+          "match": "access denied",
+          "unmatch": "expected",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "UnauthorizedAccess"
+          }
+        },
+        {
+          "name": "SuspiciousActivity",
+          "match": "suspicious activity detected",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "Suspicious"
+          }
+        },
+        {
+          "name": "PermissionChange",
+          "match": "permission changed",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "PermissionChange"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AbnormalBehavior",
+      "providers": ["ETW"],
+      "rules": [
+        {
+          "name": "UnusualLocationLogon",
+          "match": "logon from unusual location",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "UnusualLocation"
+          }
+        },
+        {
+          "name": "MultipleFailedAttempts",
+          "match": "multiple failed logon attempts",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "BruteForceAttempt"
+          }
+        },
+        {
+          "name": "OutOfHoursActivity",
+          "match": "activity outside business hours",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "OutOfHoursActivity"
+          }
+        }
+      ]
+    }
+  ]
+}
