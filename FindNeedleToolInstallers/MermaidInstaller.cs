@@ -81,7 +81,17 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
                     Log($"Using system npm: {systemNpm}");
                     progress?.Report(new InstallProgress { Status = "Using system npm to install mermaid-cli...", PercentComplete = 10, IsIndeterminate = true });
 
-                    var psi = new ProcessStartInfo { FileName = systemNpm, Arguments = $"install --prefix \"{_installDirectory}\" @mermaid-js/mermaid-cli", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+                    // On Windows, npm is a script file and cannot be executed directly without cmd.exe
+                    ProcessStartInfo psi;
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        psi = new ProcessStartInfo { FileName = "cmd.exe", Arguments = $"/c \"{systemNpm}\" install --prefix \"{_installDirectory}\" @mermaid-js/mermaid-cli", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+                    }
+                    else
+                    {
+                        psi = new ProcessStartInfo { FileName = systemNpm, Arguments = $"install --prefix \"{_installDirectory}\" @mermaid-js/mermaid-cli", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+                    }
+
                     using var proc = Process.Start(psi)!;
                     var stdoutTask = proc.StandardOutput.ReadToEndAsync();
                     var stderrTask = proc.StandardError.ReadToEndAsync();
