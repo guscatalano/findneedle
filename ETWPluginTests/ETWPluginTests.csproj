@@ -67,10 +67,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
-    <ProjectReference Include="..\LogETWApp\LogETWApp.csproj" >
-      <Private>false</Private>
-      <ExcludeAssets>all</ExcludeAssets>
-    </ProjectReference>
+    <ProjectReference Include="..\LogETWApp\LogETWApp.csproj" />
     <ProjectReference Include="..\TestUtilities\TestUtilities.csproj" />
   </ItemGroup>
 
@@ -97,7 +94,13 @@
           SkipUnchangedFiles="true"
           Condition="'@(LogETWAppBinaries)' != ''" />
     
-    <Message Text="Copied @(LogETWAppBinaries->Count()) files to $(OutDir)TestDependencies" Importance="high" />
+    <!-- Also copy to root output for assembly loading -->
+    <Copy SourceFiles="@(LogETWAppBinaries)" 
+          DestinationFolder="$(OutDir)" 
+          SkipUnchangedFiles="true"
+          Condition="'@(LogETWAppBinaries)' != ''" />
+    
+    <Message Text="Copied @(LogETWAppBinaries->Count()) files to $(OutDir)TestDependencies and $(OutDir)" Importance="high" />
   </Target>
 
 
