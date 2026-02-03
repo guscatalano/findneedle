@@ -90,6 +90,7 @@ public class AdaptivePerformanceTests
         var results = new Dictionary<string, WriteTestResult>();
 
         Console.WriteLine("=== COMPARATIVE WRITE PERFORMANCE TEST ===");
+        Console.WriteLine(SystemSpecificationChecker.GetSystemSpecificationSummary());
         Console.WriteLine($"Target: {PerformanceTestConfig.TotalRecords:N0} records ({PerformanceTestConfig.TotalBatches} batches of {PerformanceTestConfig.BatchSize:N0})");
         Console.WriteLine($"Timeout: {PerformanceTestConfig.TimeoutSeconds}s per storage type");
         Console.WriteLine($"Hybrid: No record cap (memory threshold only)");
@@ -284,7 +285,8 @@ public class AdaptivePerformanceTests
         {
             if (result.TimedOut)
             {
-                Assert.Fail($"{result.StorageKind} exceeded timeout: {result.TotalTimeSeconds:F2}s > {PerformanceTestConfig.TimeoutSeconds}s (completed {result.TotalRecords:N0}/{PerformanceTestConfig.TotalRecords:N0} records)");
+                var systemSpecs = SystemSpecificationChecker.GetSystemSpecificationSummary();
+                Assert.Fail($"{result.StorageKind} exceeded timeout: {result.TotalTimeSeconds:F2}s > {PerformanceTestConfig.TimeoutSeconds}s (completed {result.TotalRecords:N0}/{PerformanceTestConfig.TotalRecords:N0} records)\n{systemSpecs}");
             }
             else
             {
