@@ -60,6 +60,7 @@
       <LogETWAppBinaries Include="..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.*" />
     </ItemGroup>
     <Copy SourceFiles="@(LogETWAppBinaries)" DestinationFolder="$(OutDir)TestDependencies" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(LogETWAppBinaries)" DestinationFolder="$(MSBuildProjectDirectory)\bin\Debug\$(TargetFramework)\TestDependencies" SkipUnchangedFiles="true" Condition="'$(PlatformName)' == 'x64'" />
   </Target>
 
 

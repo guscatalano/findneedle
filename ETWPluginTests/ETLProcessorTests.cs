@@ -7,6 +7,7 @@ using findneedle;
 using findneedle.Implementations.FileExtensions;
 using findneedle.WDK;
 using FindNeedlePluginLib;
+using TestUtilities.Helpers;
 
 
 namespace ETWPluginTests;
@@ -60,6 +61,7 @@ public sealed class ETWProcessorTests
     }
 
     [TestMethod]
+    [RequiresMinimumSpecs(Reason = "Performance test requires minimum system specs: 2+ CPU cores and 4GB+ RAM")]
     public void CanProcessVeryLargeLogFile()
     {
         // Arrange
