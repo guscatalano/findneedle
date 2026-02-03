@@ -102,13 +102,30 @@ jobs:
           $tagsToDelete = $tags | Select-Object -Skip $maxTags
           foreach ($tag in $tagsToDelete) {
             Write-Host "Deleting old tag: $tag"
-            git tag -d $tag
-            git push --delete origin $tag
+            
+            # Delete release first (don't fail if it doesn't exist)
             try {
               gh release delete $tag --yes
               Write-Host "Deleted release for tag: $tag"
             } catch {
-              Write-Host "No release found for tag: $tag or failed to delete."
+              Write-Host "No release found for tag: $tag (this is OK, may be deleted by concurrent run)"
+            }
+            
+            # Delete local tag (don't fail if it doesn't exist)
+            if (git rev-parse $tag 2>$null) {
+              git tag -d $tag
+              Write-Host "Deleted local tag: $tag"
+            } else {
+              Write-Host "Local tag $tag already deleted (this is OK, may be deleted by concurrent run)"
+            }
+            
+            # Delete remote tag (don't fail if it doesn't exist)
+            git push origin :$tag 2>&1 | ForEach-Object {
+              if ($_ -match "error|refused") {
+                Write-Host "Could not delete remote tag $tag (this is OK, may be deleted by concurrent run): $_"
+              } else {
+                Write-Host $_
+              }
             }
           }
         } else {
