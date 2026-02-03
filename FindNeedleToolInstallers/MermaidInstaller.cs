@@ -72,11 +72,11 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
             try
             {
                 Directory.CreateDirectory(_installDirectory);
-
+                /*
                 // Prefer system npm/node if available
                 var systemNpm = FindExecutableInPath("npm") ?? FindExecutableInPath("npm.cmd");
                 var systemNode = FindExecutableInPath("node") ?? FindExecutableInPath("node.exe");
-                if (!string.IsNullOrEmpty(systemNpm) && !string.IsNullOrEmpty(systemNode))
+                if (!string.IsNullOrEmpty(systemNpm) && !string.IsNullOrEmpty(systemNode) && false)
                 {
                     Log($"Using system npm: {systemNpm}");
                     progress?.Report(new InstallProgress { Status = "Using system npm to install mermaid-cli...", PercentComplete = 10, IsIndeterminate = true });
@@ -85,7 +85,9 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
                     ProcessStartInfo psi;
                     if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                     {
-                        psi = new ProcessStartInfo { FileName = "cmd.exe", Arguments = $"/c \"{systemNpm}\" install --prefix \"{_installDirectory}\" @mermaid-js/mermaid-cli", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+                        // Use /s /c to properly handle quoted paths with spaces
+                        var escapedNpm = systemNpm.Replace("\"", "\"\"");
+                        psi = new ProcessStartInfo { FileName = "cmd.exe", Arguments = $"/s /c \"\"{escapedNpm}\" install --prefix \"{_installDirectory}\" @mermaid-js/mermaid-cli\"", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
                     }
                     else
                     {
@@ -121,7 +123,7 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
 
                     progress?.Report(new InstallProgress { Status = "mermaid-cli installed (system)", PercentComplete = 100, IsIndeterminate = false });
                     return InstallResult.Succeeded(mmdc);
-                }
+                }*/
 
                 // If not Windows, require system npm/node (bundled installer currently supports Windows only)
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
