@@ -26,19 +26,40 @@
 
 
 <ItemGroup>
+   <!-- Try platform-specific path first -->
    <Content Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.exe" 
             Link="TestDependencies\LogETWApp.exe"
             Condition="Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
    </Content>
+   <!-- Fallback to x64 if platform-specific doesn't exist -->
+   <Content Include="..\LogETWApp\bin\x64\$(Configuration)\$(TargetFramework)\LogETWApp.exe" 
+            Link="TestDependencies\LogETWApp.exe"
+            Condition="!Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.exe') AND Exists('..\LogETWApp\bin\x64\$(Configuration)\$(TargetFramework)\LogETWApp.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+   </Content>
+   
+   <!-- DLL files -->
    <Content Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.dll" 
             Link="TestDependencies\LogETWApp.dll"
             Condition="Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
    </Content>
+   <Content Include="..\LogETWApp\bin\x64\$(Configuration)\$(TargetFramework)\LogETWApp.dll" 
+            Link="TestDependencies\LogETWApp.dll"
+            Condition="!Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.dll') AND Exists('..\LogETWApp\bin\x64\$(Configuration)\$(TargetFramework)\LogETWApp.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+   </Content>
+   
+   <!-- Runtime config -->
    <Content Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json" 
             Link="TestDependencies\LogETWApp.runtimeconfig.json"
             Condition="Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+   </Content>
+   <Content Include="..\LogETWApp\bin\x64\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json" 
+            Link="TestDependencies\LogETWApp.runtimeconfig.json"
+            Condition="!Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json') AND Exists('..\LogETWApp\bin\x64\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
    </Content>
 </ItemGroup>
@@ -58,11 +79,25 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
-  <Target Name="CopyLogETWAppBinaries" AfterTargets="Build">
+  <Target Name="CopyLogETWAppBinaries" BeforeTargets="Build">
+    <Message Text="Attempting to copy LogETWApp binaries to test dependencies..." Importance="high" />
+    
+    <!-- Try platform-specific paths first -->
     <ItemGroup>
       <LogETWAppBinaries Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.*" />
     </ItemGroup>
-    <Copy SourceFiles="@(LogETWAppBinaries)" DestinationFolder="$(OutDir)TestDependencies" SkipUnchangedFiles="true" />
+    
+    <!-- If nothing found, try x64 as fallback -->
+    <ItemGroup Condition="'@(LogETWAppBinaries)' == ''">
+      <LogETWAppBinaries Include="..\LogETWApp\bin\x64\$(Configuration)\$(TargetFramework)\LogETWApp.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(LogETWAppBinaries)" 
+          DestinationFolder="$(OutDir)TestDependencies" 
+          SkipUnchangedFiles="true"
+          Condition="'@(LogETWAppBinaries)' != ''" />
+    
+    <Message Text="Copied @(LogETWAppBinaries->Count()) files to $(OutDir)TestDependencies" Importance="high" />
   </Target>
 
 
