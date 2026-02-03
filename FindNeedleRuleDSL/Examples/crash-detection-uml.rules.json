@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "Crash Detection with UML Sequence",
+  "sections": [
+    {
+      "name": "DotNetCrashesUML",
+      "description": "UML sequence diagrams for .NET application crash scenarios showing the flow between Application, Runtime, and OS layers.",
+      "providers": ["EventLog", "ETW"],
+      "participants": [
+        { "id": "App", "displayName": "Application", "type": "participant" },
+        { "id": "Runtime", "displayName": ".NET Runtime", "type": "participant" },
+        { "id": "OS", "displayName": "Operating System", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "name": "DotNetApplicationCrash",
+          "match": "A .NET application failed",
+          "enabled": true,
+          "action": {
+            "type": "message",
+            "from": "App",
+            "to": "Runtime",
+            "text": "Exception thrown"
+          }
+        },
+        {
+          "name": "NativeCodeCrash",
+          "match": "faulting application",
+          "enabled": true,
+          "action": {
+            "type": "message",
+            "from": "Runtime",
+            "to": "OS",
+            "text": "Native fault detected"
+          }
+        },
+        {
+          "name": "AccessViolation",
+          "match": "access violation",
+          "unmatch": "allowed",
+          "enabled": true,
+          "action": {
+            "type": "message",
+            "from": "Runtime",
+            "to": "OS",
+            "text": "Access violation at {afterMatch:untilSpace}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DotNetCrashesTags",
+      "description": "Tag-based classification for .NET application events including hangs and resource exhaustion scenarios.",
+      "providers": ["EventLog", "ETW"],
+      "rules": [
+        {
+          "name": "ApplicationHang",
+          "match": "Application Hang",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "ApplicationHang"
+          }
+        },
+        {
+          "name": "OutOfMemory",
+          "match": "OutOfMemoryException",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "OutOfMemory"
+          }
+        },
+        {
+          "name": "StackOverflow",
+          "match": "StackOverflowException",
+          "enabled": true,
+          "action": {
+            "type": "tag",
+            "tag": "StackOverflow"
+          }
+        }
+      ]
+    }
+  ]
+}

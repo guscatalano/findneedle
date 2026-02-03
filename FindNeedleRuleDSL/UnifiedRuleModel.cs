@@ -5,6 +5,12 @@ namespace FindNeedleRuleDSL;
 
 public class UnifiedRuleSet
 {
+    [JsonPropertyName("schemaVersion")]
+    public string? SchemaVersion { get; set; }
+
+    [JsonPropertyName("version")]
+    public string? Version { get; set; }
+
     [JsonPropertyName("title")]
     public string? Title { get; set; }
 
@@ -17,11 +23,29 @@ public class UnifiedRuleSection
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
     [JsonPropertyName("providers")]
     public List<string> Providers { get; set; } = new();
 
+    [JsonPropertyName("participants")]
+    public List<UnifiedParticipant>? Participants { get; set; }
+
     [JsonPropertyName("rules")]
     public List<UnifiedRule> Rules { get; set; } = new();
+}
+
+public class UnifiedParticipant
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("displayName")]
+    public string DisplayName { get; set; } = string.Empty;
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "participant"; // "participant" or "actor"
 }
 
 public class UnifiedRule

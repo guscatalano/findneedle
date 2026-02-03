@@ -26,19 +26,19 @@
 
 
 <ItemGroup>
-   <Content Include="..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.exe" 
+   <Content Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.exe" 
             Link="TestDependencies\LogETWApp.exe"
-            Condition="Exists('..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.exe')">
+            Condition="Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
    </Content>
-   <Content Include="..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.dll" 
+   <Content Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.dll" 
             Link="TestDependencies\LogETWApp.dll"
-            Condition="Exists('..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.dll')">
+            Condition="Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
    </Content>
-   <Content Include="..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json" 
+   <Content Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json" 
             Link="TestDependencies\LogETWApp.runtimeconfig.json"
-            Condition="Exists('..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json')">
+            Condition="Exists('..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.runtimeconfig.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
    </Content>
 </ItemGroup>
@@ -46,7 +46,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
-    <ProjectReference Include="..\LogETWApp\LogETWApp.csproj" />
+    <ProjectReference Include="..\LogETWApp\LogETWApp.csproj" >
+      <Private>false</Private>
+      <ExcludeAssets>all</ExcludeAssets>
+    </ProjectReference>
     <ProjectReference Include="..\TestUtilities\TestUtilities.csproj" />
   </ItemGroup>
 
@@ -57,10 +60,9 @@
 
   <Target Name="CopyLogETWAppBinaries" AfterTargets="Build">
     <ItemGroup>
-      <LogETWAppBinaries Include="..\LogETWApp\bin\$(PlatformName)\$(Configuration)\$(TargetFramework)\LogETWApp.*" />
+      <LogETWAppBinaries Include="..\LogETWApp\bin\$(Platform)\$(Configuration)\$(TargetFramework)\LogETWApp.*" />
     </ItemGroup>
     <Copy SourceFiles="@(LogETWAppBinaries)" DestinationFolder="$(OutDir)TestDependencies" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(LogETWAppBinaries)" DestinationFolder="$(MSBuildProjectDirectory)\bin\Debug\$(TargetFramework)\TestDependencies" SkipUnchangedFiles="true" Condition="'$(PlatformName)' == 'x64'" />
   </Target>
 
 
