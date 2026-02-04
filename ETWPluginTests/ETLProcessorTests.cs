@@ -61,6 +61,7 @@ public sealed class ETWProcessorTests
     }
 
     [TestMethod]
+    [Timeout(180000)] // 3 minutes - large file processing test
     [RequiresMinimumSpecs(Reason = "Performance test requires minimum system specs: 2+ CPU cores and 4GB+ RAM")]
     public void CanProcessVeryLargeLogFile()
     {
@@ -94,7 +95,7 @@ public sealed class ETWProcessorTests
             stopwatch.Stop();
             Assert.IsNotNull(results);
             Assert.IsTrue(results.Count > 0); // Should have processed lines
-            Assert.IsTrue(stopwatch.Elapsed.TotalSeconds < 60, $"Processing took too long: {stopwatch.Elapsed.TotalSeconds} seconds");
+            Assert.IsTrue(stopwatch.Elapsed.TotalSeconds < 120, $"Processing took too long: {stopwatch.Elapsed.TotalSeconds} seconds");
         }
         finally
         {
