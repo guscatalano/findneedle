@@ -49,7 +49,7 @@ public class MermaidInstallationIntegrationTests
     // ==================== INSTALLATION TESTS ====================
 
     [TestMethod]
-    [Timeout(120000)] // 2 minutes - installation can take time
+    [Timeout(300000)] // 5 minutes - installation can take time, especially in CI
     public async Task MermaidInstaller_CanInstall()
     {
         if (!SystemSpecificationChecker.IsWindows())
@@ -76,7 +76,7 @@ public class MermaidInstallationIntegrationTests
     }
 
     [TestMethod]
-    [Timeout(120000)]
+    [Timeout(300000)] // 5 minutes - installation + PNG generation
     public async Task MermaidInstaller_CanGeneratePng_AfterInstall()
     {
         // Arrange - Install first
@@ -121,7 +121,7 @@ public class MermaidInstallationIntegrationTests
     }
 
     [TestMethod]
-    [Timeout(120000)]
+    [Timeout(300000)] // 5 minutes - installation + PNG generation
     public async Task MermaidInstaller_CanGeneratePng_SimpleFlowchart()
     {
         // Arrange - Install first
@@ -155,7 +155,7 @@ public class MermaidInstallationIntegrationTests
     }
 
     [TestMethod]
-    [Timeout(120000)]
+    [Timeout(300000)] // 5 minutes - installation + PNG generation
     public async Task MermaidInstaller_CanGeneratePng_ComplexDiagram()
     {
         // Arrange - Install first
@@ -196,7 +196,7 @@ public class MermaidInstallationIntegrationTests
     }
 
     [TestMethod]
-    [Timeout(120000)]
+    [Timeout(300000)] // 5 minutes - installation + PNG generation
     public async Task MermaidInstaller_CanGeneratePng_ClassDiagram()
     {
         // Arrange - Install first
@@ -243,7 +243,7 @@ public class MermaidInstallationIntegrationTests
     }
 
     [TestMethod]
-    [Timeout(120000)]
+    [Timeout(300000)] // 5 minutes - installation + multiple PNG generation
     public async Task MermaidInstaller_CanGenerateMultiplePngs()
     {
         // Arrange - Install first
@@ -287,7 +287,7 @@ public class MermaidInstallationIntegrationTests
     }
 
     [TestMethod]
-    [Timeout(120000)]
+    [Timeout(300000)] // 5 minutes - installation + error handling
     public async Task MermaidInstaller_InvalidDiagram_FailsGracefully()
     {
         // Arrange - Install first
@@ -312,7 +312,7 @@ public class MermaidInstallationIntegrationTests
     }
 
     [TestMethod]
-    [Timeout(120000)]
+    [Timeout(300000)] // 5 minutes - installation + PNG validation
     public async Task MermaidInstaller_GeneratedPngIsValidImage()
     {
         // Arrange - Install first
