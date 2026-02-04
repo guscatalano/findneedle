@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "UML-Only Rules Example",
+  "description": "UML sequence diagrams showing system flows. Only uses 'uml' purpose.",
+  "sections": [
+    {
+      "name": "DatabaseQueryFlow",
+      "description": "Shows the flow of a database query from application through driver to database server",
+      "purpose": "uml",
+      "participants": [
+        { "id": "App", "displayName": "Application", "type": "participant" },
+        { "id": "Driver", "displayName": "Database Driver", "type": "participant" },
+        { "id": "DbServer", "displayName": "Database Server", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "id": "query-execution-flow",
+          "match": "query executed|query timeout|query failed",
+          "actions": [
+            { "type": "message", "from": "App", "to": "Driver", "text": "Execute query" },
+            { "type": "message", "from": "Driver", "to": "DbServer", "text": "Send SQL" },
+            { "type": "message", "from": "DbServer", "to": "Driver", "text": "Return results" },
+            { "type": "message", "from": "Driver", "to": "App", "text": "Result set" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "HTTPRequestFlow",
+      "description": "Shows HTTP request/response flow between client and server",
+      "purpose": "uml",
+      "participants": [
+        { "id": "Client", "displayName": "HTTP Client", "type": "actor" },
+        { "id": "LoadBalancer", "displayName": "Load Balancer", "type": "participant" },
+        { "id": "Server", "displayName": "Web Server", "type": "participant" },
+        { "id": "Handler", "displayName": "Request Handler", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "id": "http-success-flow",
+          "match": "http request received|status 200|request processed",
+          "actions": [
+            { "type": "message", "from": "Client", "to": "LoadBalancer", "text": "HTTP request" },
+            { "type": "message", "from": "LoadBalancer", "to": "Server", "text": "Route request" },
+            { "type": "message", "from": "Server", "to": "Handler", "text": "Process request" },
+            { "type": "message", "from": "Handler", "to": "Server", "text": "Response ready" },
+            { "type": "message", "from": "Server", "to": "Client", "text": "HTTP 200 OK" }
+          ]
+        },
+        {
+          "id": "http-error-flow",
+          "match": "status 500|internal server error|request failed",
+          "actions": [
+            { "type": "message", "from": "Client", "to": "LoadBalancer", "text": "HTTP request" },
+            { "type": "message", "from": "LoadBalancer", "to": "Server", "text": "Route request" },
+            { "type": "message", "from": "Server", "to": "Handler", "text": "Process request" },
+            { "type": "message", "from": "Handler", "to": "Server", "text": "Error occurred" },
+            { "type": "message", "from": "Server", "to": "Client", "text": "HTTP 500 Error" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AuthenticationFlow",
+      "description": "Shows authentication and authorization flow",
+      "purpose": "uml",
+      "participants": [
+        { "id": "User", "displayName": "User", "type": "actor" },
+        { "id": "AuthService", "displayName": "Auth Service", "type": "participant" },
+        { "id": "TokenServer", "displayName": "Token Server", "type": "participant" },
+        { "id": "ResourceServer", "displayName": "Resource Server", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "id": "auth-success-flow",
+          "match": "authentication successful|token issued|access granted",
+          "actions": [
+            { "type": "message", "from": "User", "to": "AuthService", "text": "Login credentials" },
+            { "type": "message", "from": "AuthService", "to": "TokenServer", "text": "Validate credentials" },
+            { "type": "message", "from": "TokenServer", "to": "AuthService", "text": "Issue token" },
+            { "type": "message", "from": "AuthService", "to": "User", "text": "Token returned" },
+            { "type": "message", "from": "User", "to": "ResourceServer", "text": "Access with token" }
+          ]
+        },
+        {
+          "id": "auth-failure-flow",
+          "match": "authentication failed|invalid credentials|access denied",
+          "actions": [
+            { "type": "message", "from": "User", "to": "AuthService", "text": "Login attempt" },
+            { "type": "message", "from": "AuthService", "to": "TokenServer", "text": "Validate" },
+            { "type": "message", "from": "TokenServer", "to": "AuthService", "text": "Invalid" },
+            { "type": "message", "from": "AuthService", "to": "User", "text": "Access denied" }
+          ]
+        }
+      ]
+    }
+  ]
+}

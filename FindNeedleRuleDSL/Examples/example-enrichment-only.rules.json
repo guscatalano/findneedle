@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "Enrichment-Only Rules Example",
+  "description": "Tagging and classification rules. Only uses 'enrichment' purpose.",
+  "sections": [
+    {
+      "name": "SeverityClassification",
+      "description": "Classify events by severity level",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-critical-severity",
+          "match": "critical|fatal|emergency",
+          "actions": [
+            { "type": "tag", "value": "Critical" },
+            { "type": "tag", "value": "HighSeverity" }
+          ]
+        },
+        {
+          "id": "tag-error-severity",
+          "match": "error",
+          "unmatch": "critical|fatal",
+          "actions": [
+            { "type": "tag", "value": "Error" }
+          ]
+        },
+        {
+          "id": "tag-warning-severity",
+          "match": "warning|warn",
+          "actions": [
+            { "type": "tag", "value": "Warning" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ComponentClassification",
+      "description": "Classify events by component/module",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-network-component",
+          "match": "network|socket|connection|http|tcp|udp",
+          "actions": [
+            { "type": "tag", "value": "NetworkComponent" }
+          ]
+        },
+        {
+          "id": "tag-database-component",
+          "match": "database|sql|db_|query|connection_string",
+          "actions": [
+            { "type": "tag", "value": "DatabaseComponent" }
+          ]
+        },
+        {
+          "id": "tag-authentication-component",
+          "match": "auth|login|password|credentials|identity",
+          "actions": [
+            { "type": "tag", "value": "AuthenticationComponent" }
+          ]
+        },
+        {
+          "id": "tag-filesystem-component",
+          "match": "file|disk|storage|path|directory",
+          "actions": [
+            { "type": "tag", "value": "FilesystemComponent" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ImpactClassification",
+      "description": "Classify events by business impact",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-user-impacting",
+          "match": "user|client|request|transaction",
+          "actions": [
+            { "type": "tag", "value": "UserImpacting" }
+          ]
+        },
+        {
+          "id": "tag-data-loss-risk",
+          "match": "corruption|truncated|lost|deleted|rollback",
+          "actions": [
+            { "type": "tag", "value": "DataLossRisk" },
+            { "type": "tag", "value": "HighPriority" }
+          ]
+        },
+        {
+          "id": "tag-performance-issue",
+          "match": "timeout|slow|performance|latency|hang",
+          "actions": [
+            { "type": "tag", "value": "PerformanceIssue" }
+          ]
+        }
+      ]
+    }
+  ]
+}

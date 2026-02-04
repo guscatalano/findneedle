@@ -1,0 +1,362 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "Comprehensive Pipeline Rules - Replaces Filter and Processor Plugins",
+  "sections": [
+    {
+      "name": "KeywordFiltering",
+      "description": "Simple keyword filter - matches results containing specific search terms (replaces SimpleKeywordFilter plugin)",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "keyword-error",
+          "match": "error",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "keyword-exception",
+          "match": "exception",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "keyword-failure",
+          "match": "failure",
+          "actions": [
+            { "type": "include" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NoiseReduction",
+      "description": "Reduce noise by filtering out verbose logs and debug traces (replaces plugin-style filtering)",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "exclude-debug-verbose",
+          "match": "debug|verbose|trace",
+          "unmatch": "error|critical|warning",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        },
+        {
+          "id": "exclude-info-logs",
+          "match": "^\\[INFO\\]",
+          "unmatch": "failed|error",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TimeBasedFiltering",
+      "description": "Filter results based on time criteria (replaces TimeAgoFilter plugin). Results include timestamp metadata.",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "recent-events-last-hour",
+          "match": "timestamp_within_last_hour",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "recent-events-last-day",
+          "match": "timestamp_within_last_day",
+          "actions": [
+            { "type": "include" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CrashDetectionEnrichment",
+      "description": "Classify and enrich crash-related events with severity tags (replaces WatsonCrashProcessor plugin logic)",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-dotnet-crash",
+          "match": "A .NET application failed",
+          "actions": [
+            { "type": "tag", "value": "DotNetCrash" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        },
+        {
+          "id": "tag-application-hang",
+          "match": "Application Hang",
+          "actions": [
+            { "type": "tag", "value": "ApplicationHang" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        },
+        {
+          "id": "tag-native-crash",
+          "match": "faulting application",
+          "actions": [
+            { "type": "tag", "value": "NativeCrash" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        },
+        {
+          "id": "tag-access-violation",
+          "match": "access violation",
+          "unmatch": "allowed",
+          "actions": [
+            { "type": "tag", "value": "AccessViolation" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        },
+        {
+          "id": "tag-oom",
+          "match": "OutOfMemoryException",
+          "actions": [
+            { "type": "tag", "value": "OutOfMemory" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        },
+        {
+          "id": "tag-stack-overflow",
+          "match": "StackOverflowException",
+          "actions": [
+            { "type": "tag", "value": "StackOverflow" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SecurityEventEnrichment",
+      "description": "Classify security and session management events",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-user-logon",
+          "match": "user logged on",
+          "actions": [
+            { "type": "tag", "value": "UserLogon" }
+          ]
+        },
+        {
+          "id": "tag-user-logoff",
+          "match": "user logged off",
+          "actions": [
+            { "type": "tag", "value": "UserLogoff" }
+          ]
+        },
+        {
+          "id": "tag-failed-logon",
+          "match": "logon failed",
+          "actions": [
+            { "type": "tag", "value": "FailedLogon" },
+            { "type": "tag", "value": "Security" }
+          ]
+        },
+        {
+          "id": "tag-privilege-escalation",
+          "match": "privilege escalation",
+          "actions": [
+            { "type": "tag", "value": "PrivilegeEscalation" },
+            { "type": "tag", "value": "Security" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        },
+        {
+          "id": "tag-unauthorized-access",
+          "match": "access denied|unauthorized",
+          "unmatch": "expected|allowed",
+          "actions": [
+            { "type": "tag", "value": "UnauthorizedAccess" },
+            { "type": "tag", "value": "Security" }
+          ]
+        },
+        {
+          "id": "tag-brute-force",
+          "match": "multiple failed logon attempts",
+          "actions": [
+            { "type": "tag", "value": "BruteForceAttempt" },
+            { "type": "tag", "value": "Security" },
+            { "type": "tag", "value": "Critical" }
+          ]
+        },
+        {
+          "id": "tag-unusual-location",
+          "match": "logon from unusual location",
+          "actions": [
+            { "type": "tag", "value": "UnusualLocation" },
+            { "type": "tag", "value": "Security" }
+          ]
+        },
+        {
+          "id": "tag-suspicious-activity",
+          "match": "suspicious activity detected",
+          "actions": [
+            { "type": "tag", "value": "SuspiciousActivity" },
+            { "type": "tag", "value": "Security" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CrashSequenceFlow",
+      "description": "UML sequence diagram showing .NET crash detection flow for visualization",
+      "purpose": "uml",
+      "participants": [
+        { "id": "App", "displayName": "Application", "type": "participant" },
+        { "id": "Runtime", "displayName": ".NET Runtime", "type": "participant" },
+        { "id": "OS", "displayName": "Operating System", "type": "actor" },
+        { "id": "CrashProc", "displayName": "Crash Processor", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "id": "dotnet-crash-sequence",
+          "match": "A .NET application failed",
+          "actions": [
+            { "type": "message", "from": "App", "to": "Runtime", "text": "Exception thrown" },
+            { "type": "message", "from": "Runtime", "to": "OS", "text": "Process terminating" },
+            { "type": "message", "from": "OS", "to": "CrashProc", "text": "Route crash event" }
+          ]
+        },
+        {
+          "id": "native-crash-sequence",
+          "match": "faulting application",
+          "actions": [
+            { "type": "message", "from": "App", "to": "Runtime", "text": "Native fault" },
+            { "type": "message", "from": "Runtime", "to": "OS", "text": "Native fault detected" },
+            { "type": "message", "from": "OS", "to": "CrashProc", "text": "Process dump collected" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SecurityIncidentFlow",
+      "description": "UML sequence diagram showing security incident detection flow",
+      "purpose": "uml",
+      "participants": [
+        { "id": "User", "displayName": "User", "type": "actor" },
+        { "id": "LSM", "displayName": "Local Session Manager", "type": "participant" },
+        { "id": "AuditLog", "displayName": "Audit Log", "type": "participant" },
+        { "id": "SecurityProc", "displayName": "Security Processor", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "id": "logon-attempt-sequence",
+          "match": "user logged on",
+          "actions": [
+            { "type": "message", "from": "User", "to": "LSM", "text": "Logon request" },
+            { "type": "message", "from": "LSM", "to": "AuditLog", "text": "Session created" },
+            { "type": "message", "from": "AuditLog", "to": "SecurityProc", "text": "Log event for audit" }
+          ]
+        },
+        {
+          "id": "failed-logon-sequence",
+          "match": "logon failed|access denied",
+          "actions": [
+            { "type": "message", "from": "User", "to": "LSM", "text": "Logon attempt" },
+            { "type": "message", "from": "LSM", "to": "AuditLog", "text": "Failed authentication" },
+            { "type": "message", "from": "AuditLog", "to": "SecurityProc", "text": "Alert on repeated failures" }
+          ]
+        },
+        {
+          "id": "privilege-escalation-sequence",
+          "match": "privilege escalation",
+          "actions": [
+            { "type": "message", "from": "User", "to": "LSM", "text": "Escalation request" },
+            { "type": "message", "from": "LSM", "to": "AuditLog", "text": "Privilege change" },
+            { "type": "message", "from": "AuditLog", "to": "SecurityProc", "text": "Critical security alert" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ETWEventClassification",
+      "description": "Classify ETW provider events with appropriate tags",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-etw-process-create",
+          "match": "Process created|image loaded",
+          "actions": [
+            { "type": "tag", "value": "ProcessStart" }
+          ]
+        },
+        {
+          "id": "tag-etw-process-terminate",
+          "match": "Process terminated|image unloaded",
+          "actions": [
+            { "type": "tag", "value": "ProcessEnd" }
+          ]
+        },
+        {
+          "id": "tag-etw-network-connect",
+          "match": "Network connection|connect to|established",
+          "actions": [
+            { "type": "tag", "value": "NetworkActivity" }
+          ]
+        },
+        {
+          "id": "tag-etw-file-operation",
+          "match": "file created|file deleted|file modified",
+          "actions": [
+            { "type": "tag", "value": "FileSystemActivity" }
+          ]
+        },
+        {
+          "id": "tag-etw-registry-operation",
+          "match": "registry set|registry delete|registry created",
+          "actions": [
+            { "type": "tag", "value": "RegistryActivity" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "EventLogSourceClassification",
+      "description": "Classify events by Windows Event Log source and level",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-system-source",
+          "match": "Source.*System",
+          "actions": [
+            { "type": "tag", "value": "SystemEvent" }
+          ]
+        },
+        {
+          "id": "tag-application-source",
+          "match": "Source.*Application",
+          "actions": [
+            { "type": "tag", "value": "ApplicationEvent" }
+          ]
+        },
+        {
+          "id": "tag-security-source",
+          "match": "Source.*Security",
+          "actions": [
+            { "type": "tag", "value": "SecurityEvent" }
+          ]
+        },
+        {
+          "id": "tag-error-level",
+          "match": "Level.*Error|Level.*Critical",
+          "actions": [
+            { "type": "tag", "value": "ErrorLevel" }
+          ]
+        },
+        {
+          "id": "tag-warning-level",
+          "match": "Level.*Warning",
+          "actions": [
+            { "type": "tag", "value": "WarningLevel" }
+          ]
+        }
+      ]
+    }
+  ]
+}

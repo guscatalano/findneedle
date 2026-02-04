@@ -1,0 +1,135 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "Combined Pipeline Rules Example",
+  "description": "Complete pipeline with filtering, enrichment, and UML visualization working together",
+  "sections": [
+    {
+      "name": "Step1_NoiseReduction",
+      "description": "First step: Filter out noise to reduce data volume",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "exclude-verbose-debug",
+          "match": "\\[DEBUG\\]|\\[VERBOSE\\]|TRACE",
+          "unmatch": "error|exception|critical",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        },
+        {
+          "id": "exclude-heartbeat-pings",
+          "match": "heartbeat|ping|alive check",
+          "unmatch": "failed",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Step2_SeverityTagging",
+      "description": "Second step: Enrich remaining results with severity tags",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "critical-errors",
+          "match": "fatal|crash|emergency",
+          "actions": [
+            { "type": "tag", "value": "Critical" },
+            { "type": "tag", "value": "Severity:1" }
+          ]
+        },
+        {
+          "id": "high-errors",
+          "match": "error|exception",
+          "unmatch": "fatal|crash",
+          "actions": [
+            { "type": "tag", "value": "Error" },
+            { "type": "tag", "value": "Severity:2" }
+          ]
+        },
+        {
+          "id": "warnings",
+          "match": "warning|warn",
+          "actions": [
+            { "type": "tag", "value": "Warning" },
+            { "type": "tag", "value": "Severity:3" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Step3_ComponentClassification",
+      "description": "Third step: Classify by affected component",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "id": "tag-database-issues",
+          "match": "database|query|sql|connection timeout",
+          "actions": [
+            { "type": "tag", "value": "Component:Database" }
+          ]
+        },
+        {
+          "id": "tag-network-issues",
+          "match": "network|socket|http|connection refused",
+          "actions": [
+            { "type": "tag", "value": "Component:Network" }
+          ]
+        },
+        {
+          "id": "tag-authentication-issues",
+          "match": "authentication|authorization|login|credentials",
+          "actions": [
+            { "type": "tag", "value": "Component:Auth" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Step4_CrashDetectionSequence",
+      "description": "Fourth step: Visualize critical crashes with UML",
+      "purpose": "uml",
+      "participants": [
+        { "id": "App", "displayName": "Application", "type": "participant" },
+        { "id": "Runtime", "displayName": ".NET Runtime", "type": "participant" },
+        { "id": "OS", "displayName": "Operating System", "type": "participant" },
+        { "id": "Watson", "displayName": "Watson Telemetry", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "id": "crash-sequence",
+          "match": "Critical|crash|fatal",
+          "actions": [
+            { "type": "message", "from": "App", "to": "Runtime", "text": "Unhandled exception" },
+            { "type": "message", "from": "Runtime", "to": "OS", "text": "Process terminating" },
+            { "type": "message", "from": "OS", "to": "Watson", "text": "Report crash" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Step5_SecurityIncidentSequence",
+      "description": "Fifth step: Visualize security incidents",
+      "purpose": "uml",
+      "participants": [
+        { "id": "User", "displayName": "User", "type": "actor" },
+        { "id": "AuthSvc", "displayName": "Auth Service", "type": "participant" },
+        { "id": "AuditLog", "displayName": "Audit Log", "type": "participant" },
+        { "id": "SecurityTeam", "displayName": "Security Team", "type": "actor" }
+      ],
+      "rules": [
+        {
+          "id": "security-incident-sequence",
+          "match": "Component:Auth|Critical",
+          "actions": [
+            { "type": "message", "from": "User", "to": "AuthSvc", "text": "Access attempt" },
+            { "type": "message", "from": "AuthSvc", "to": "AuditLog", "text": "Log incident" },
+            { "type": "message", "from": "AuditLog", "to": "SecurityTeam", "text": "Alert" }
+          ]
+        }
+      ]
+    }
+  ]
+}

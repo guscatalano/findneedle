@@ -69,7 +69,7 @@ public class UnifiedRule
 public class UnifiedRuleAction
 {
     [JsonPropertyName("type")]
-    public string Type { get; set; } = string.Empty; // "message", "tag", etc.
+    public string Type { get; set; } = string.Empty; // "message", "tag", "exclude", "include", "route", etc.
 
     [JsonPropertyName("from")]
     public string? From { get; set; }
@@ -82,4 +82,10 @@ public class UnifiedRuleAction
 
     [JsonPropertyName("tag")]
     public string? Tag { get; set; }
+
+    [JsonPropertyName("value")]
+    public string? Value { get; set; } // For "tag" action: the tag value
+
+    [JsonPropertyName("processor")]
+    public string? Processor { get; set; } // For "route" action: target processor name
 }

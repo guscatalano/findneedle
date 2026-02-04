@@ -61,6 +61,9 @@ public class FakeSearchQuery : ISearchQuery
         set => _stats = value;
     }
 
+    public List<string> RulesConfigPaths { get; set; } = new();
+    public object? LoadedRules { get; set; }
+
     public string Name => throw new NotImplementedException();
 
     public void AddFilter(ISearchFilter filter) { }

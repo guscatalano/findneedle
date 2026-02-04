@@ -1,9 +1,12 @@
 {
-  "title": "Security and Session Management Events",
-  "sections": [
-    {
-      "name": "UserSessions",
-      "providers": ["EventLog", "ETW"],
+"schemaVersion": "1.0",
+"version": "1.0",
+"title": "Security and Session Management Events",
+"sections": [
+  {
+    "name": "UserSessions",
+    "description": "User session events including logon, logoff, and session creation scenarios.",
+    "providers": ["EventLog", "ETW"],
       "rules": [
         {
           "name": "UserLogon",

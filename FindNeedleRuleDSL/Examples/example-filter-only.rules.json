@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "Filter-Only Rules Example",
+  "description": "Simple filtering rules to reduce noise. Only uses 'filter' purpose.",
+  "sections": [
+    {
+      "name": "VerboseLogsFilter",
+      "description": "Remove verbose and debug logs to reduce noise",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "exclude-debug-logs",
+          "match": "\\[DEBUG\\]|\\[TRACE\\]|verbose",
+          "unmatch": "error|exception|failed",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        },
+        {
+          "id": "exclude-info-only",
+          "match": "^\\[INFO\\]",
+          "unmatch": "warning|error",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "KeywordIncludeFilter",
+      "description": "Only keep results matching specific keywords",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "keep-errors",
+          "match": "error",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "keep-exceptions",
+          "match": "exception",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "keep-failures",
+          "match": "failure|failed",
+          "actions": [
+            { "type": "include" }
+          ]
+        }
+      ]
+    }
+  ]
+}

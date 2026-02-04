@@ -1,8 +1,11 @@
 {
+  "schemaVersion": "1.0",
+  "version": "1.0",
   "title": "Crash Detection Rules",
   "sections": [
     {
       "name": "DotNetCrashes",
+      "description": "Tag-based classification for .NET application crash events including hangs, memory, and stack overflow scenarios.",
       "providers": ["EventLog", "ETW"],
       "rules": [
         {

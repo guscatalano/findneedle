@@ -1,0 +1,310 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "Advanced Filter Rules - Field-Specific and DateTime Filtering",
+  "description": "Demonstrates field-specific matching and datetime range filtering for granular result filtering",
+  "sections": [
+    {
+      "name": "EventLevelFiltering",
+      "description": "Filter events based on their level/severity field (Error, Warning, Info, etc.)",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "include-errors-only",
+          "description": "Keep only Error level events",
+          "field": "level",
+          "match": "Error",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "exclude-info-verbose",
+          "description": "Remove Info and Verbose level events",
+          "field": "level",
+          "match": "Info|Verbose",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        },
+        {
+          "id": "include-critical-warning",
+          "description": "Keep Critical and Warning level events",
+          "field": "level",
+          "match": "Critical|Warning",
+          "actions": [
+            { "type": "include" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "EventSourceFiltering",
+      "description": "Filter events based on their source field (e.g., Application, System, Security)",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "keep-security-events",
+          "description": "Only keep Security event log source",
+          "field": "source",
+          "match": "Security",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "keep-application-or-system",
+          "description": "Keep Application or System event log sources",
+          "field": "source",
+          "match": "Application|System",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "exclude-system-source",
+          "description": "Remove System event log events",
+          "field": "source",
+          "match": "System",
+          "unmatch": "error|critical",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TaskNameFiltering",
+      "description": "Filter events based on task name field (which describes the event type/category)",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "keep-login-events",
+          "description": "Keep login-related events",
+          "field": "taskName",
+          "match": "Logon|Logoff|Failed Logon",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "keep-process-events",
+          "description": "Keep process creation/termination events",
+          "field": "taskName",
+          "match": "Process Create|Process Terminate|Image Loaded",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "exclude-heartbeat-tasks",
+          "description": "Exclude heartbeat and health check tasks",
+          "field": "taskName",
+          "match": "Health Check|Heartbeat|Ping",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MachineNameFiltering",
+      "description": "Filter events based on machine name field",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "production-servers-only",
+          "description": "Keep events only from production servers",
+          "field": "machineName",
+          "match": "prod-.*|production-.*",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "exclude-dev-servers",
+          "description": "Exclude development and test servers",
+          "field": "machineName",
+          "match": "dev-.*|test-.*|staging-.*",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "UsernameFiltering",
+      "description": "Filter events based on username field",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "exclude-system-accounts",
+          "description": "Exclude system service accounts",
+          "field": "username",
+          "match": "SYSTEM|LocalService|NetworkService|Iis_apppool",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        },
+        {
+          "id": "keep-admin-logons",
+          "description": "Keep administrative user logons",
+          "field": "username",
+          "match": "admin|Administrator|DOMAIN\\\\Admin",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "exclude-test-users",
+          "description": "Exclude test user activities",
+          "field": "username",
+          "match": "test|temp|guest|demo",
+          "unmatch": "admin",
+          "actions": [
+            { "type": "exclude" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RecentEventsFiltering",
+      "description": "Filter events within specific datetime ranges using relative time",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "last-hour-events",
+          "description": "Keep only events from the last hour",
+          "field": "logTime",
+          "match": ".*",
+          "dateRange": {
+            "field": "logTime",
+            "withinLast": "1h"
+          },
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "last-24-hours",
+          "description": "Keep events from last 24 hours",
+          "dateRange": {
+            "field": "logTime",
+            "withinLast": "24h"
+          },
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "last-7-days",
+          "description": "Keep events from last 7 days",
+          "dateRange": {
+            "field": "logTime",
+            "withinLast": "7d"
+          },
+          "actions": [
+            { "type": "include" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DateRangeFilteringAbsolute",
+      "description": "Filter events using absolute datetime ranges",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "incidents-jan-2024",
+          "description": "Keep events between Jan 1 and Jan 31, 2024",
+          "dateRange": {
+            "field": "logTime",
+            "after": "2024-01-01T00:00:00Z",
+            "before": "2024-01-31T23:59:59Z"
+          },
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "exclude-old-events",
+          "description": "Remove events older than 30 days",
+          "dateRange": {
+            "field": "logTime",
+            "before": "-30d"
+          },
+          "actions": [
+            { "type": "exclude" }
+          ]
+        },
+        {
+          "id": "business-hours-only",
+          "description": "Keep events during business hours today (after 8 AM, before 6 PM)",
+          "field": "logTime",
+          "match": ".*",
+          "dateRange": {
+            "field": "logTime",
+            "after": "08:00:00",
+            "before": "18:00:00"
+          },
+          "actions": [
+            { "type": "include" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CombinedFieldAndContentFiltering",
+      "description": "Combine field-specific matching with content matching",
+      "purpose": "filter",
+      "rules": [
+        {
+          "id": "security-errors-in-app-log",
+          "description": "Keep error-level events from Application source containing 'security'",
+          "field": "source",
+          "match": "Application",
+          "unmatch": "System|Security",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "failed-logins-from-prod",
+          "description": "Keep failed logon events from production servers in last 24 hours",
+          "field": "machineName",
+          "match": "prod-.*",
+          "dateRange": {
+            "field": "logTime",
+            "withinLast": "24h"
+          },
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "critical-errors-ignore-system-accounts",
+          "description": "Keep critical errors but exclude system service account activities",
+          "field": "level",
+          "match": "Critical|Error",
+          "unmatch": "SYSTEM|LocalService",
+          "actions": [
+            { "type": "include" }
+          ]
+        },
+        {
+          "id": "admin-actions-recent",
+          "description": "Keep all administrative user actions from last 7 days",
+          "field": "username",
+          "match": "admin|Administrator",
+          "dateRange": {
+            "field": "logTime",
+            "withinLast": "7d"
+          },
+          "actions": [
+            { "type": "include" }
+          ]
+        }
+      ]
+    }
+  ]
+}

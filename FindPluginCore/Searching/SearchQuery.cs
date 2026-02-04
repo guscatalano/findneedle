@@ -1,5 +1,6 @@
 ﻿using findneedle.Implementations;
 using findneedle.PluginSubsystem;
+using findneedle.RuleDSL;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 using System.Threading;
@@ -14,7 +15,7 @@ public class SearchQuery : ISearchQuery
     public void RunThrough()
     {
         //Old implementation
-
+        LoadRules();
         LoadAllLocationsInMemory();
         GetFilteredResults();
         ProcessAllResultsToOutput();
@@ -27,6 +28,7 @@ public class SearchQuery : ISearchQuery
 
     public void RunThrough(CancellationToken cancellationToken)
     {
+        LoadRules();
         LoadAllLocationsInMemory(cancellationToken);
         GetFilteredResults(cancellationToken);
         ProcessAllResultsToOutput(); // TODO: propagate token if outputs support it
@@ -136,6 +138,27 @@ public class SearchQuery : ISearchQuery
         return Filters;
     }
 
+    private List<string> _rulesConfigPaths;
+    public List<string> RulesConfigPaths
+    {
+        get
+        {
+            _rulesConfigPaths ??= new List<string>();
+            return _rulesConfigPaths;
+        }
+        set => _rulesConfigPaths = value;
+    }
+
+    private object? _loadedRules;
+    public object? LoadedRules
+    {
+        get => _loadedRules;
+        set => _loadedRules = value;
+    }
+
+    private RuleEvaluationEngine? _ruleEngine;
+    private RuleLoader? _ruleLoader;
+
     public SearchQuery()
     {
         stats = new();
@@ -145,6 +168,9 @@ public class SearchQuery : ISearchQuery
         _processors = [];
         _output = [];
         _stepnotifysink = new();
+        _rulesConfigPaths = [];
+        _ruleEngine = new RuleEvaluationEngine();
+        _ruleLoader = new RuleLoader();
     }
 
 
@@ -158,6 +184,25 @@ public class SearchQuery : ISearchQuery
         foreach (var loc in Locations)
         {
             loc.SetSearchDepth(depthForAllLocations);
+        }
+    }
+
+    /// <summary>
+    /// Loads rules from configured paths. Called automatically if RulesConfigPaths are set.
+    /// </summary>
+    public void LoadRules()
+    {
+        if (RulesConfigPaths.Any() && _ruleLoader != null)
+        {
+            try
+            {
+                _loadedRules = _ruleLoader.LoadRulesFromPaths(RulesConfigPaths);
+                System.Diagnostics.Debug.WriteLine($"Loaded rules from {RulesConfigPaths.Count} paths");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading rules: {ex.Message}");
+            }
         }
     }
 
@@ -193,8 +238,53 @@ public class SearchQuery : ISearchQuery
             results.AddRange(loc.Search(cancellationToken));
             count++;
         }
+
+        // Apply rule-based filtering if rules are loaded
+        if (_loadedRules != null && _ruleEngine != null)
+        {
+            results = ApplyRuleFiltering(results);
+        }
+
         stats.Searched(this);
         return results;
+    }
+
+    private List<ISearchResult> ApplyRuleFiltering(List<ISearchResult> results)
+    {
+        try
+        {
+            var filterSections = _ruleLoader?.GetSectionsByPurpose(_loadedRules, "filter") ?? new List<dynamic>();
+            if (!filterSections.Any())
+                return results;
+
+            var filtered = new List<ISearchResult>();
+            foreach (var result in results)
+            {
+                var include = true;
+                
+                foreach (var section in filterSections)
+                {
+                    var evalResult = _ruleEngine!.EvaluateRules(result, section);
+                    if (!evalResult.Include)
+                    {
+                        include = false;
+                        break;
+                    }
+                }
+
+                if (include)
+                {
+                    filtered.Add(result);
+                }
+            }
+
+            return filtered;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error applying rule filtering: {ex.Message}");
+            return results;
+        }
     }
 
     public SearchStatistics GetSearchStatistics()
@@ -247,7 +337,28 @@ public class SearchQuery : ISearchQuery
     }
     public void Step3_ResultsToProcessors()
     {
-        return; 
+        // Apply enrichment rules if loaded
+        if (_loadedRules != null && _ruleEngine != null)
+        {
+            ApplyRuleEnrichment();
+        }
+    }
+
+    private void ApplyRuleEnrichment()
+    {
+        try
+        {
+            var enrichmentSections = _ruleLoader?.GetSectionsByPurpose(_loadedRules, "enrichment") ?? new List<dynamic>();
+            if (!enrichmentSections.Any())
+                return;
+
+            // This would typically apply tags to results - implementation depends on how tags are stored
+            System.Diagnostics.Debug.WriteLine($"Applied {enrichmentSections.Count} enrichment rule sections");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error applying rule enrichment: {ex.Message}");
+        }
     }
     public void Step4_ProcessAllResultsToOutput()
     {

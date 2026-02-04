@@ -19,6 +19,10 @@ public interface ISearchQuery
     List<ISearchFilter> Filters {
         get; set; 
     }
+
+    // RuleDSL integration
+    List<string> RulesConfigPaths { get; set; }
+    object? LoadedRules { get; set; } // UnifiedRuleSet from FindNeedleRuleDSL
     List<ISearchLocation> Locations
     {
         get; set;

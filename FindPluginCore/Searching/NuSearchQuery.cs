@@ -68,6 +68,9 @@ public class NuSearchQuery : ISearchQuery
     }
     private readonly SearchStatistics _stats;
 
+    public List<string> RulesConfigPaths { get; set; } = new();
+    public object? LoadedRules { get; set; }
+
     public SearchStepNotificationSink SearchStepNotificationSink
     {
         get => _stepnotifysink;
