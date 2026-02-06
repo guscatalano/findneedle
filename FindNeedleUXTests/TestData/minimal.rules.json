@@ -1,0 +1,10 @@
+{
+  "sections": [
+    {
+      "name": "Compliance",
+      "description": "Compliance rules",
+      "purpose": "Compliance",
+      "rules": []
+    }
+  ]
+}

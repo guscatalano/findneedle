@@ -1,0 +1,182 @@
+<Page
+    x:Class="FindNeedleUX.Pages.SearchRulesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewobjects="using:FindNeedleUX.ViewObjects"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock 
+            Grid.Row="0"
+            Text="Search Rules Configuration"
+            Style="{ThemeResource TitleTextBlockStyle}"
+            Margin="0,0,0,12"/>
+
+        <!-- Rule Files Section -->
+        <Grid Grid.Row="1" RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="120"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock 
+                Grid.Row="0"
+                Text="Rule Files"
+                Style="{ThemeResource SubtitleTextBlockStyle}"/>
+
+            <StackPanel 
+                Grid.Row="1"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button 
+                    x:Name="BrowseButton"
+                    Content="Browse..."
+                    Click="BrowseButton_Click"/>
+                <Button 
+                    x:Name="RemoveButton"
+                    Content="Remove Selected"
+                    Click="RemoveButton_Click"
+                    IsEnabled="False"/>
+            </StackPanel>
+
+            <ListBox 
+                Grid.Row="2"
+                x:Name="RuleFilesListBox"
+                ItemsSource="{x:Bind RuleFiles, Mode=OneWay}"
+                SelectionChanged="RuleFilesListBox_SelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="viewobjects:RuleFileItem">
+                        <Grid ColumnSpacing="8" Padding="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox 
+                                Grid.Column="0"
+                                IsChecked="{x:Bind Enabled, Mode=TwoWay}"
+                                VerticalAlignment="Center"/>
+
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="{x:Bind FileName}" FontWeight="SemiBold"/>
+                                <TextBlock 
+                                    Text="{x:Bind FilePath}" 
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextSecondaryForeground}"/>
+                            </StackPanel>
+
+                            <SymbolIcon 
+                                Grid.Column="2"
+                                Symbol="Accept"
+                                Foreground="Green"
+                                Visibility="{x:Bind IsValid}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+
+        <!-- Rule Sections -->
+        <Grid Grid.Row="2" RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock 
+                Grid.Row="0"
+                Text="Available Rule Sections"
+                Style="{ThemeResource SubtitleTextBlockStyle}"/>
+
+            <ComboBox 
+                Grid.Row="1"
+                x:Name="PurposeFilterCombo"
+                SelectionChanged="PurposeFilterCombo_SelectionChanged"
+                Width="200"
+                HorizontalAlignment="Left">
+                <ComboBoxItem IsSelected="True">All Purposes</ComboBoxItem>
+                <ComboBoxItem>Filter</ComboBoxItem>
+                <ComboBoxItem>Enrichment</ComboBoxItem>
+                <ComboBoxItem>UML Diagram</ComboBoxItem>
+            </ComboBox>
+
+            <ListView 
+                Grid.Row="2"
+                x:Name="RuleSectionsListView"
+                ItemsSource="{x:Bind RuleSections, Mode=OneWay}"
+                SelectionMode="Single">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="viewobjects:RuleSectionItem">
+                        <Grid ColumnSpacing="12" Padding="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="150"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox 
+                                Grid.Column="0"
+                                IsChecked="{x:Bind Enabled, Mode=TwoWay}"
+                                VerticalAlignment="Center"/>
+
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold"/>
+                                <TextBlock 
+                                    Text="{x:Bind Description}" 
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextSecondaryForeground}"/>
+                            </StackPanel>
+
+                            <TextBlock 
+                                Grid.Column="2"
+                                Text="{x:Bind PurposeDisplay}"
+                                VerticalAlignment="Center"/>
+
+                            <TextBlock 
+                                Grid.Column="3"
+                                Text="{x:Bind RuleCount}"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center"/>
+
+                            <TextBlock 
+                                Grid.Column="4"
+                                Text="{x:Bind SourceFileName}"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextSecondaryForeground}"
+                                VerticalAlignment="Center"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <!-- Buttons -->
+        <StackPanel 
+            Grid.Row="3"
+            Orientation="Horizontal"
+            Spacing="8"
+            HorizontalAlignment="Right">
+            <Button 
+                Content="Cancel"
+                Click="CancelButton_Click"/>
+            <Button 
+                x:Name="ApplyButton"
+                Content="Apply"
+                Click="ApplyButton_Click"
+                Style="{ThemeResource AccentButtonStyle}"/>
+        </StackPanel>
+    </Grid>
+</Page>

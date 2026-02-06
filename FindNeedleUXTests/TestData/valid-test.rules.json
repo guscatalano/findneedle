@@ -1,0 +1,28 @@
+{
+  "sections": [
+    {
+      "name": "Security Checks",
+      "description": "Verifies security-related patterns",
+      "purpose": "Security",
+      "rules": [
+        {
+          "id": "SEC001",
+          "name": "SQL Injection Detection",
+          "pattern": "SELECT.*FROM.*WHERE.*="
+        }
+      ]
+    },
+    {
+      "name": "Performance Checks",
+      "description": "Detects performance issues",
+      "purpose": "Performance",
+      "rules": [
+        {
+          "id": "PERF001",
+          "name": "Loop Optimization",
+          "pattern": "for.*in.*loop"
+        }
+      ]
+    }
+  ]
+}

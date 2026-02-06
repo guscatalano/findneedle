@@ -32,6 +32,7 @@
             <MenuBarItem Title="SearchQuery">
                 <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="search_location"/>
                 <MenuFlyoutItem Text="Filters" Click="MenuFlyoutItem_Click" Name="search_filters"/>
+                <MenuFlyoutItem Text="Rules" Click="MenuFlyoutItem_Click" Name="search_rules"/>
                 <MenuFlyoutItem Text="Processors" Click="MenuFlyoutItem_Click" Name="search_processors"/>
                 <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
             </MenuBarItem>

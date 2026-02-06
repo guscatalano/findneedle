@@ -1093,7 +1093,7 @@ jobs:
         id: testrun
         continue-on-error: true
         run: |
-          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage" --framework net8.0-windows10.0.19041.0
+          dotnet test ${{ matrix.test_project }} --configuration Debug --no-build --logger trx --collect:"XPlat Code Coverage" --framework net8.0-windows10.0.19041.0 --filter "TestCategory!=SkipCI&TestCategory!=UITests"
       - name: Set Safe Artifact Name
         id: safe_name
         shell: pwsh

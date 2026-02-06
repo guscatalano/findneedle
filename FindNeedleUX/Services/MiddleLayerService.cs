@@ -223,4 +223,12 @@ public class MiddleLayerService
         }
         return test;
     }
+
+    /// <summary>
+    /// Gets the current query (NuSearchQuery) being used in the UI.
+    /// </summary>
+    public static ISearchQuery? GetCurrentQuery()
+    {
+        return SearchQueryUX?.CurrentQuery;
+    }
 }

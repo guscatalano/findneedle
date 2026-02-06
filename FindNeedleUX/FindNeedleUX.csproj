@@ -162,6 +162,9 @@
     <None Update="Pages\DiagramToolsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
+    <None Update="Pages\SearchRulesPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </None>
     <None Update="Pages\WelcomePage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
@@ -185,6 +188,9 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Update="Pages\PluginsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Update="Pages\SearchRulesPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Update="Pages\SearchStatisticsPage.xaml">
