@@ -17,20 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Reference FindNeedleUX to ensure it builds before tests run -->
     <ProjectReference Include="..\FindNeedleUX\FindNeedleUX.csproj">
-      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
-  </ItemGroup>
-
-  <!-- Delete the problematic runtimeconfig.json after build to avoid self-contained conflict -->
-  <Target Name="RemoveFindNeedleUXRuntimeConfig" AfterTargets="Build">
-    <Delete Files="$(OutputPath)FindNeedleUX.runtimeconfig.json" ContinueOnError="true" />
-  </Target>
-
-  <ItemGroup>
-    <None Update="TestData\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+<PropertyGroup>
+  <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+  <IsPackable>false</IsPackable>
+  <IsTestProject>true</IsTestProject>
+  <PlatformTarget>x64</PlatformTarget>
+  <SelfContained>false</SelfContained>
+</PropertyGroup>
+
+<ItemGroup>
+  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+  <PackageReference Include="MSTest.TestAdapter" Version="3.1.1" />
+  <PackageReference Include="MSTest.TestFramework" Version="3.1.1" />
+</ItemGroup>
+
+<ItemGroup>
+  <ProjectReference Include="..\FindNeedleUX\FindNeedleUX.csproj">
+    <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+  </ProjectReference>
+</ItemGroup>
+
+<!-- Delete the problematic runtimeconfig.json after build to avoid self-contained conflict -->
+<Target Name="RemoveFindNeedleUXRuntimeConfig" AfterTargets="Build">
+  <Delete Files="$(OutputPath)FindNeedleUX.runtimeconfig.json" ContinueOnError="true" />
+</Target>
+
+<ItemGroup>
+  <None Update="TestData\**\*">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
+
+</Project>

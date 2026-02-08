@@ -46,7 +46,24 @@
                     Content="Remove Selected"
                     Click="RemoveButton_Click"
                     IsEnabled="False"/>
+                <!-- Test hook for UI automation - TextBox + Load button for reliable automation -->
+                <TextBox 
+                    x:Name="TestFilePathInput"
+                    Width="200"
+                    Height="32"
+                    PlaceholderText="Test: Enter file path"
+                    IsTabStop="False"
+                    AutomationProperties.Name="TestFilePathInput"
+                    KeyDown="TestFilePathInput_KeyDown"/>
+                <Button 
+                    x:Name="TestLoadButton"
+                    Content="Load"
+                    Height="32"
+                    Click="TestLoadButton_Click"
+                    AutomationProperties.Name="TestLoadButton"/>
             </StackPanel>
+
+
 
             <ListBox 
                 Grid.Row="2"
@@ -72,7 +89,7 @@
                                 <TextBlock 
                                     Text="{x:Bind FilePath}" 
                                     FontSize="12"
-                                    Foreground="{ThemeResource TextSecondaryForeground}"/>
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
 
                             <SymbolIcon 
@@ -137,7 +154,7 @@
                                 <TextBlock 
                                     Text="{x:Bind Description}" 
                                     FontSize="12"
-                                    Foreground="{ThemeResource TextSecondaryForeground}"/>
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
 
                             <TextBlock 
@@ -155,7 +172,7 @@
                                 Grid.Column="4"
                                 Text="{x:Bind SourceFileName}"
                                 FontSize="12"
-                                Foreground="{ThemeResource TextSecondaryForeground}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 VerticalAlignment="Center"/>
                         </Grid>
                     </DataTemplate>

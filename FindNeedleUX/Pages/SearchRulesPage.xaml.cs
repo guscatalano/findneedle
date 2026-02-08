@@ -30,6 +30,15 @@ public sealed partial class SearchRulesPage : Page
         LoadRulesFromQuery();
     }
 
+    /// <summary>
+    /// Public method to add a rule file by path. Used by UI automation tests.
+    /// </summary>
+    /// <param name="filePath">Full path to the rules JSON file</param>
+    public void AddRuleFileByPath(string filePath)
+    {
+        LoadRuleFile(filePath);
+    }
+
     private void LoadRulesFromQuery()
     {
         RuleFiles.Clear();
@@ -143,63 +152,104 @@ public sealed partial class SearchRulesPage : Page
 
     private async void BrowseButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        picker.FileTypeFilter.Add(".json");
-        picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+        // Retrieve the window handle (HWND) of the current WinUI 3 window
+        var window = WindowUtil.GetWindowForElement(this);
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
 
-        // Initialize file picker with window handle to prevent "invalid window" error in WinUI 3
-        bool pickerInitialized = false;
+        var picker = new FileOpenPicker()
+        {
+            ViewMode = PickerViewMode.List,
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            FileTypeFilter = { ".json" }
+        };
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+        var file = await picker.PickSingleFileAsync();
+        if (file != null)
+        {
+            System.Diagnostics.Debug.WriteLine($"File selected: {file.Name} at {file.Path}");
+            LoadRuleFile(file.Path);
+            System.Diagnostics.Debug.WriteLine($"File loaded successfully. Total files: {RuleFiles.Count}");
+        }
+    }
+
+    /// <summary>
+    /// Loads a rule file from content string (used by Browse button with StorageFile)
+    /// </summary>
+    private void LoadRuleFileFromContent(string filePath, string fileName, string jsonContent)
+    {
         try
         {
-            var app = Application.Current as App;
-            if (app != null)
+            System.Diagnostics.Debug.WriteLine($"LoadRuleFileFromContent called for: {fileName}");
+            
+            using var doc = JsonDocument.Parse(jsonContent);
+            var root = doc.RootElement;
+
+            var ruleFile = new RuleFileItem
             {
-                // Use reflection to access the private m_window field
-                var windowField = typeof(App).GetField("m_window", 
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                if (windowField?.GetValue(app) is Microsoft.UI.Xaml.Window window && window != null)
+                FilePath = filePath,
+                FileName = fileName,
+                Enabled = true,
+                IsValid = true
+            };
+
+            // Parse sections
+            if (root.TryGetProperty("sections", out var sectionsArray))
+            {
+                var sectionCount = 0;
+                foreach (var section in sectionsArray.EnumerateArray())
                 {
-                    nint hWnd = WindowNative.GetWindowHandle(window);
-                    InitializeWithWindow.Initialize(picker, hWnd);
-                    pickerInitialized = true;
+                    var sectionItem = ParseRuleSection(section, fileName);
+                    if (sectionItem != null)
+                    {
+                        ruleFile.Sections.Add(sectionItem);
+                        RuleSections.Add(sectionItem);
+                        sectionCount++;
+                    }
                 }
+                System.Diagnostics.Debug.WriteLine($"Parsed {sectionCount} sections from {fileName}");
             }
+
+            RuleFiles.Add(ruleFile);
+            System.Diagnostics.Debug.WriteLine($"Added rule file: {fileName}. Total in collection: {RuleFiles.Count}");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to initialize picker with window handle: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error loading rule file {filePath}: {ex.Message}");
+            AddRuleFileItem(filePath, false, ex.Message);
         }
+    }
 
-        if (!pickerInitialized)
+    /// <summary>
+    /// Test hook event handler - allows UI automation tests to add files by typing path and pressing Enter
+    /// </summary>
+    private void TestFilePathInput_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == global::Windows.System.VirtualKey.Enter)
         {
-            System.Diagnostics.Debug.WriteLine("Warning: FileOpenPicker not initialized with window handle. This may cause UI issues.");
+            LoadFileFromTestHook();
         }
+    }
 
-        try
+    /// <summary>
+    /// Test hook button click - more reliable for UI automation than keyboard events
+    /// </summary>
+    private void TestLoadButton_Click(object sender, RoutedEventArgs e)
+    {
+        LoadFileFromTestHook();
+    }
+
+    /// <summary>
+    /// Common method for test hook file loading
+    /// </summary>
+    private void LoadFileFromTestHook()
+    {
+        if (!string.IsNullOrWhiteSpace(TestFilePathInput.Text))
         {
-            var file = await picker.PickSingleFileAsync();
-            if (file != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"File selected: {file.Name} at {file.Path}");
-                
-                if (file.Name.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase))
-                {
-                    LoadRuleFile(file.Path);
-                    System.Diagnostics.Debug.WriteLine($"File loaded successfully. Total files: {RuleFiles.Count}");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"Selected file does not end with .rules.json: {file.Name}");
-                }
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine("No file was selected.");
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error during file selection: {ex.Message}");
+            var filePath = TestFilePathInput.Text.Trim();
+            System.Diagnostics.Debug.WriteLine($"Test hook: Loading file from path: {filePath}");
+            LoadRuleFile(filePath);
+            TestFilePathInput.Text = string.Empty; // Clear for next use
         }
     }
 
