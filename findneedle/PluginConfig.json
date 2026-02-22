@@ -1,33 +1,38 @@
 ﻿{
-  "entries": [
-    {
-      "name": "BasicFilters",
-      "path": "BasicFiltersPlugin.dll",
-      "enabled": true
-    },
-    {
-      "name": "BasicOutputs",
-      "path": "BasicOutputsPlugin.dll"
-    },
-    {
-      "name": "EventLogPlugin",
-      "path": "EventLogPlugin.dll"
-    },
-    {
-      "name": "ETWPlugin",
-      "path": "ETWPlugin.dll",
-      "enabled": true
-    },
-    {
-      "name": "SessionManagementProcessor",
-      "path": "SessionManagementProcessor.dll",
-      "enabled": true
-    },
-    {
-      "name": "KustoPlugin",
-      "path": "KustoPlugin.dll",
-      "enabled": true
-    }
+"entries": [
+  {
+    "name": "BasicFilters",
+    "path": "BasicFiltersPlugin.dll",
+    "enabled": true
+  },
+  {
+    "name": "BasicText",
+    "path": "BasicTextPlugin.dll",
+    "enabled": true
+  },
+  {
+    "name": "BasicOutputs",
+    "path": "BasicOutputsPlugin.dll"
+  },
+  {
+    "name": "EventLogPlugin",
+    "path": "EventLogPlugin.dll"
+  },
+  {
+    "name": "ETWPlugin",
+    "path": "ETWPlugin.dll",
+    "enabled": true
+  },
+  {
+    "name": "SessionManagementProcessor",
+    "path": "SessionManagementProcessor.dll",
+    "enabled": true
+  },
+  {
+    "name": "KustoPlugin",
+    "path": "KustoPlugin.dll",
+    "enabled": true
+  }
   ],
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
   "SearchQueryClass": "NuSearchQuery",

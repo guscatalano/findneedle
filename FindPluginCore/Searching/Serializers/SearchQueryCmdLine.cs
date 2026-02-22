@@ -87,6 +87,70 @@ public class SearchQueryCmdLine
 
         foreach (var argument in arguments)
         {
+            // Allow a plain positional path (file or folder) to be treated as a location
+            // Skip the exe path (first arg) which may be present in Environment.GetCommandLineArgs()
+            try
+            {
+                var potentialPath = argument.key;
+                var entryAsmPath = System.Reflection.Assembly.GetEntryAssembly()?.Location;
+                if (!string.IsNullOrEmpty(potentialPath) && !string.IsNullOrEmpty(entryAsmPath) && string.Equals(potentialPath, entryAsmPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    // it's the exe path - ignore
+                }
+                else if (string.IsNullOrEmpty(argument.value))
+                {
+                    // If it looks like an existing file or directory, or contains a path separator, treat as location
+                    if (System.IO.File.Exists(potentialPath) || System.IO.Directory.Exists(potentialPath) || potentialPath.Contains(System.IO.Path.DirectorySeparatorChar) || potentialPath.Contains("\\"))
+                    {
+                        var loc = new FolderLocation();
+                        loc.path = potentialPath;
+                        // Setup extension processors so files are actually parsed
+                        try
+                        {
+                            var extensions = pluginManager.GetAllPluginsInstancesOfAType<FindNeedlePluginLib.IFileExtensionProcessor>();
+                            loc.SetExtensionProcessorList(extensions.Cast<FindNeedlePluginLib.IFileExtensionProcessor>().ToList());
+                        }
+                        catch
+                        {
+                            // ignore if plugins not available
+                        }
+                        q.Locations.Add(loc);
+                        // Skip further parser processing for this argument
+                        continue;
+                    }
+                }
+            }
+            catch
+            {
+                // ignore path-detection errors and fall through to normal parsing
+            }
+            // Support --rules or rules=path/to/file.json
+            if (argument.key.Equals("--rules", StringComparison.OrdinalIgnoreCase) || argument.key.Equals("rules", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(argument.value))
+                {
+                    var raw = argument.value.Trim();
+                    // Remove surrounding quotes if present
+                    if (raw.StartsWith("\"") && raw.EndsWith("\""))
+                        raw = raw.Substring(1, raw.Length - 2);
+
+                    // Try to resolve to full path
+                    try
+                    {
+                        raw = FileIO.FindFullPathToFile(raw);
+                    }
+                    catch
+                    {
+                        // leave raw as-is if resolution fails
+                    }
+
+                    if (q.RulesConfigPaths == null)
+                        q.RulesConfigPaths = new List<string>();
+                    q.RulesConfigPaths.Add(raw);
+                }
+                continue;
+            }
+
             //This is a test hook
             //Make a new instance per argument, otherwise you can't have multiple
             parsers ??= GetCommandLineParsers(pluginManager);

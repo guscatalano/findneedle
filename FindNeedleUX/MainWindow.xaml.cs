@@ -143,6 +143,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Opened log folder picker");
                 QuickFolderOpen();
                 break;
+            case "openlogwithrules":
+                Logger.Instance.Log("Navigated: QuickLogWithRulesPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+                break;
             case "inspect_etl":
                 await InspectEtlFile();
                 break;

@@ -23,11 +23,33 @@ public sealed partial class SearchRulesPage : Page
     public ObservableCollection<RuleSectionItem> RuleSections { get; } = new();
 
     private string _currentPurposeFilter = "All";
+    private bool _isLoadingFromQuery = false;
 
     public SearchRulesPage()
     {
         this.InitializeComponent();
         LoadRulesFromQuery();
+    }
+
+    /// <summary>
+    /// Syncs the current rule files back to the search query so they persist across navigation.
+    /// </summary>
+    private void SyncRulesToQuery()
+    {
+        // Don't sync while loading from query to avoid modifying collection during enumeration
+        if (_isLoadingFromQuery)
+            return;
+
+        var query = MiddleLayerService.GetCurrentQuery();
+        if (query != null)
+        {
+            query.RulesConfigPaths.Clear();
+            foreach (var file in RuleFiles.Where(f => f.IsValid))
+            {
+                query.RulesConfigPaths.Add(file.FilePath);
+            }
+            System.Diagnostics.Debug.WriteLine($"Synced {query.RulesConfigPaths.Count} rule paths to query");
+        }
     }
 
     /// <summary>
@@ -41,16 +63,26 @@ public sealed partial class SearchRulesPage : Page
 
     private void LoadRulesFromQuery()
     {
-        RuleFiles.Clear();
-        RuleSections.Clear();
-
-        var query = MiddleLayerService.GetCurrentQuery();
-        if (query?.RulesConfigPaths != null)
+        _isLoadingFromQuery = true;
+        try
         {
-            foreach (var path in query.RulesConfigPaths)
+            RuleFiles.Clear();
+            RuleSections.Clear();
+
+            var query = MiddleLayerService.GetCurrentQuery();
+            if (query?.RulesConfigPaths != null)
             {
-                LoadRuleFile(path);
+                // Make a copy of the paths to avoid collection modification during enumeration
+                var paths = query.RulesConfigPaths.ToList();
+                foreach (var path in paths)
+                {
+                    LoadRuleFile(path);
+                }
             }
+        }
+        finally
+        {
+            _isLoadingFromQuery = false;
         }
     }
 
@@ -98,6 +130,7 @@ public sealed partial class SearchRulesPage : Page
             }
 
             RuleFiles.Add(ruleFile);
+            SyncRulesToQuery();
             System.Diagnostics.Debug.WriteLine($"Added rule file: {fileName}. Total in collection: {RuleFiles.Count}");
         }
         catch (Exception ex)
@@ -211,6 +244,7 @@ public sealed partial class SearchRulesPage : Page
             }
 
             RuleFiles.Add(ruleFile);
+            SyncRulesToQuery();
             System.Diagnostics.Debug.WriteLine($"Added rule file: {fileName}. Total in collection: {RuleFiles.Count}");
         }
         catch (Exception ex)
@@ -255,17 +289,36 @@ public sealed partial class SearchRulesPage : Page
 
     private void RemoveButton_Click(object sender, RoutedEventArgs e)
     {
-        // Placeholder - will be implemented when XAML compiles
+        if (RuleFilesListBox.SelectedItem is RuleFileItem selectedFile)
+        {
+            // Remove associated sections from the sections collection
+            foreach (var section in selectedFile.Sections.ToList())
+            {
+                RuleSections.Remove(section);
+            }
+
+            // Remove the file from the collection
+            RuleFiles.Remove(selectedFile);
+            SyncRulesToQuery();
+
+            // Disable button since nothing is selected now
+            RemoveButton.IsEnabled = false;
+        }
     }
 
     private void RuleFilesListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Placeholder - will be implemented when XAML compiles
+        // Enable Remove button when an item is selected
+        RemoveButton.IsEnabled = RuleFilesListBox.SelectedItem != null;
     }
 
     private void PurposeFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Placeholder - will be implemented when XAML compiles
+        if (PurposeFilterCombo.SelectedItem is ComboBoxItem selectedItem)
+        {
+            _currentPurposeFilter = selectedItem.Tag?.ToString() ?? "All";
+            FilterRuleSections();
+        }
     }
 
     private void FilterRuleSections()
@@ -281,33 +334,6 @@ public sealed partial class SearchRulesPage : Page
                     RuleSections.Add(section);
                 }
             }
-        }
-    }
-
-    private void ApplyButton_Click(object sender, RoutedEventArgs e)
-    {
-        var query = MiddleLayerService.GetCurrentQuery();
-        if (query != null)
-        {
-            query.RulesConfigPaths.Clear();
-            foreach (var file in RuleFiles.Where(f => f.Enabled && f.IsValid))
-            {
-                query.RulesConfigPaths.Add(file.FilePath);
-            }
-        }
-
-        // Navigate back or close
-        if (this.Frame?.CanGoBack == true)
-        {
-            this.Frame.GoBack();
-        }
-    }
-
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (this.Frame?.CanGoBack == true)
-        {
-            this.Frame.GoBack();
         }
     }
 }

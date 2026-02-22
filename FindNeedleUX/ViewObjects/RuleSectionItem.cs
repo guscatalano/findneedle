@@ -15,9 +15,10 @@ public class RuleSectionItem
 
     public string PurposeDisplay => Purpose switch
     {
-        "filter" => "?? Filter",
-        "enrichment" => "??? Enrichment",
-        "uml" => "?? UML Diagram",
+        "filter" => "Filter",
+        "enrichment" => "Enrichment",
+        "uml" => "UML Diagram",
+        "output" => "Output/Export",
         _ => Purpose
     };
 }

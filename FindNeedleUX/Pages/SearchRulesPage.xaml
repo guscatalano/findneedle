@@ -10,7 +10,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Title -->
@@ -69,22 +68,18 @@
                 Grid.Row="2"
                 x:Name="RuleFilesListBox"
                 ItemsSource="{x:Bind RuleFiles, Mode=OneWay}"
+                ScrollViewer.VerticalScrollBarVisibility="Auto"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                 SelectionChanged="RuleFilesListBox_SelectionChanged">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="viewobjects:RuleFileItem">
                         <Grid ColumnSpacing="8" Padding="8">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="24"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <CheckBox 
-                                Grid.Column="0"
-                                IsChecked="{x:Bind Enabled, Mode=TwoWay}"
-                                VerticalAlignment="Center"/>
-
-                            <StackPanel Grid.Column="1" Spacing="4">
+                            <StackPanel Grid.Column="0" Spacing="4">
                                 <TextBlock Text="{x:Bind FileName}" FontWeight="SemiBold"/>
                                 <TextBlock 
                                     Text="{x:Bind FilePath}" 
@@ -93,7 +88,7 @@
                             </StackPanel>
 
                             <SymbolIcon 
-                                Grid.Column="2"
+                                Grid.Column="1"
                                 Symbol="Accept"
                                 Foreground="Green"
                                 Visibility="{x:Bind IsValid}"/>
@@ -122,10 +117,10 @@
                 SelectionChanged="PurposeFilterCombo_SelectionChanged"
                 Width="200"
                 HorizontalAlignment="Left">
-                <ComboBoxItem IsSelected="True">All Purposes</ComboBoxItem>
-                <ComboBoxItem>Filter</ComboBoxItem>
-                <ComboBoxItem>Enrichment</ComboBoxItem>
-                <ComboBoxItem>UML Diagram</ComboBoxItem>
+                <ComboBoxItem IsSelected="True" Tag="All">All Purposes</ComboBoxItem>
+                <ComboBoxItem Tag="filter">Filter</ComboBoxItem>
+                <ComboBoxItem Tag="enrichment">Enrichment</ComboBoxItem>
+                <ComboBoxItem Tag="uml">UML Diagram</ComboBoxItem>
             </ComboBox>
 
             <ListView 
@@ -133,23 +128,31 @@
                 x:Name="RuleSectionsListView"
                 ItemsSource="{x:Bind RuleSections, Mode=OneWay}"
                 SelectionMode="Single">
+                <ListView.Header>
+                    <Grid ColumnSpacing="12" Padding="12,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="150"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Name / Description" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="Type" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="Rules" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="3" Text="Source File" FontWeight="SemiBold"/>
+                    </Grid>
+                </ListView.Header>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="viewobjects:RuleSectionItem">
                         <Grid ColumnSpacing="12" Padding="12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="40"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="150"/>
                             </Grid.ColumnDefinitions>
 
-                            <CheckBox 
-                                Grid.Column="0"
-                                IsChecked="{x:Bind Enabled, Mode=TwoWay}"
-                                VerticalAlignment="Center"/>
-
-                            <StackPanel Grid.Column="1" Spacing="4">
+                            <StackPanel Grid.Column="0" Spacing="4">
                                 <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold"/>
                                 <TextBlock 
                                     Text="{x:Bind Description}" 
@@ -157,19 +160,20 @@
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
 
+
                             <TextBlock 
-                                Grid.Column="2"
+                                Grid.Column="1"
                                 Text="{x:Bind PurposeDisplay}"
                                 VerticalAlignment="Center"/>
 
                             <TextBlock 
-                                Grid.Column="3"
+                                Grid.Column="2"
                                 Text="{x:Bind RuleCount}"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Center"/>
 
                             <TextBlock 
-                                Grid.Column="4"
+                                Grid.Column="3"
                                 Text="{x:Bind SourceFileName}"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -180,20 +184,5 @@
             </ListView>
         </Grid>
 
-        <!-- Buttons -->
-        <StackPanel 
-            Grid.Row="3"
-            Orientation="Horizontal"
-            Spacing="8"
-            HorizontalAlignment="Right">
-            <Button 
-                Content="Cancel"
-                Click="CancelButton_Click"/>
-            <Button 
-                x:Name="ApplyButton"
-                Content="Apply"
-                Click="ApplyButton_Click"
-                Style="{ThemeResource AccentButtonStyle}"/>
-        </StackPanel>
     </Grid>
 </Page>

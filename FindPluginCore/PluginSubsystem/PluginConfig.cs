@@ -33,4 +33,6 @@ public class PluginConfigEntry
     public string name = "";
     public string path = "";
     public bool enabled = true;
+    // If plugin has been automatically disabled by the loader, this explains why
+    public string disabledReason = "";
 }

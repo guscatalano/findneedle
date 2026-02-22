@@ -84,6 +84,8 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
                 return;
             }
 
+            // No tag store available in this plugin instance; tagging handled in RuleEvaluationEngine
+
             var processor = new UnifiedRuleProcessor(_ruleSet, _provider);
             var matches = processor.Process(
                 results.Cast<object>().ToList(),
@@ -94,17 +96,17 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
             {
                 _matchedResults.Add(result as ISearchResult ?? throw new InvalidCastException());
 
-                if (action.Type == "tag" && !string.IsNullOrEmpty(action.Tag))
-                {
-                    if (_tagCounts.ContainsKey(action.Tag))
+                    if (action.Type == "tag" && !string.IsNullOrEmpty(action.Tag))
                     {
-                        _tagCounts[action.Tag]++;
+                        if (_tagCounts.ContainsKey(action.Tag))
+                        {
+                            _tagCounts[action.Tag]++;
+                        }
+                        else
+                        {
+                            _tagCounts[action.Tag] = 1;
+                        }
                     }
-                    else
-                    {
-                        _tagCounts[action.Tag] = 1;
-                    }
-                }
             }
         }
         catch (Exception ex)

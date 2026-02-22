@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using FindNeedlePluginLib;
 
 namespace findneedle.RuleDSL;
@@ -20,20 +21,245 @@ public class RuleEvaluationEngine
         public List<string> RouteTo { get; set; } = new();
     }
 
+    // Convert JsonElement into CLR types (Dictionary/List/primitive) without using JsonDocument after conversion
+    private object? ConvertJsonElementToClr(JsonElement el)
+    {
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var dict = new Dictionary<string, object?>();
+                foreach (var prop in el.EnumerateObject())
+                {
+                    dict[prop.Name] = ConvertJsonElementToClr(prop.Value);
+                }
+                return dict;
+            case JsonValueKind.Array:
+                var list = new List<object?>();
+                foreach (var it in el.EnumerateArray()) list.Add(ConvertJsonElementToClr(it));
+                return list;
+            case JsonValueKind.String:
+                return el.GetString();
+            case JsonValueKind.Number:
+                if (el.TryGetInt64(out var l)) return l;
+                if (el.TryGetDouble(out var d)) return d;
+                return el.GetRawText();
+            case JsonValueKind.True:
+                return true;
+            case JsonValueKind.False:
+                return false;
+            case JsonValueKind.Null:
+            case JsonValueKind.Undefined:
+                return null;
+            default:
+                return el.GetRawText();
+        }
+    }
+
+    // Helper: get string property from dynamic or JsonElement
+    private string? GetStringProp(dynamic obj, string name)
+    {
+        try
+        {
+            if (obj is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.Object)
+                {
+                    if (je.TryGetProperty(name, out var prop))
+                    {
+                        if (prop.ValueKind == JsonValueKind.String) return prop.GetString();
+                        // For non-string, return raw text
+                        return prop.GetRawText();
+                    }
+                    // try lowercase
+                    if (je.TryGetProperty(name.ToLowerInvariant(), out var prop2))
+                    {
+                        if (prop2.ValueKind == JsonValueKind.String) return prop2.GetString();
+                        return prop2.GetRawText();
+                    }
+                }
+                return null;
+            }
+            else if (obj is IDictionary<string, object?> dict)
+            {
+                if (dict.TryGetValue(name, out var v) || dict.TryGetValue(name.ToLowerInvariant(), out v))
+                {
+                    return v?.ToString();
+                }
+                return null;
+            }
+            else
+            {
+                // dynamic object
+                try
+                {
+                    var val = ((object)obj).GetType().GetProperty(name)?.GetValue((object)obj);
+                    if (val == null)
+                    {
+                        val = ((object)obj).GetType().GetProperty(char.ToUpperInvariant(name[0]) + name.Substring(1))?.GetValue((object)obj);
+                    }
+                    return val?.ToString();
+                }
+                catch
+                {
+                    try { return (string?)obj.GetType().GetProperty(name)?.GetValue(obj); } catch { return null; }
+                }
+            }
+        }
+        catch { return null; }
+    }
+
+    private bool? GetBoolProp(object obj, string name)
+    {
+        try
+        {
+            if (obj is IDictionary<string, object?> dict)
+            {
+                if (dict.TryGetValue(name, out var v) || dict.TryGetValue(name.ToLowerInvariant(), out v))
+                {
+                    if (v is bool b) return b;
+                    if (v is string s && bool.TryParse(s, out var pb)) return pb;
+                }
+                return null;
+            }
+            if (obj is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.True) return true;
+                if (je.ValueKind == JsonValueKind.False) return false;
+                if (je.TryGetProperty(name, out var p))
+                {
+                    if (p.ValueKind == JsonValueKind.True) return true;
+                    if (p.ValueKind == JsonValueKind.False) return false;
+                    if (p.ValueKind == JsonValueKind.String && bool.TryParse(p.GetString(), out var pb)) return pb;
+                }
+                return null;
+            }
+            // dynamic reflection
+            try
+            {
+                var val = ((object)obj).GetType().GetProperty(name)?.GetValue((object)obj);
+                if (val is bool bb) return bb;
+                if (val is string ss && bool.TryParse(ss, out var pb2)) return pb2;
+            }
+            catch { }
+            return null;
+        }
+        catch { return null; }
+    }
+
+    private bool HasProp(dynamic obj, string name)
+    {
+        try
+        {
+            if (obj is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.Object)
+                {
+                    if (je.TryGetProperty(name, out var _)) return true;
+                    if (je.TryGetProperty(name.ToLowerInvariant(), out var _)) return true;
+                }
+                return false;
+            }
+            else if (obj is IDictionary<string, object?> dict)
+            {
+                return dict.ContainsKey(name) || dict.ContainsKey(name.ToLowerInvariant());
+            }
+            else
+            {
+                return ((object)obj).GetType().GetProperty(name) != null || ((object)obj).GetType().GetProperty(char.ToUpperInvariant(name[0]) + name.Substring(1)) != null;
+            }
+        }
+        catch { return false; }
+    }
+
+    private dynamic? GetObjectProp(dynamic obj, string name)
+    {
+        try
+        {
+            if (obj is JsonElement je)
+            {
+                if (je.ValueKind == JsonValueKind.Object)
+                {
+                    if (je.TryGetProperty(name, out var prop)) return prop;
+                    if (je.TryGetProperty(name.ToLowerInvariant(), out var prop2)) return prop2;
+                }
+                return null;
+            }
+            else if (obj is IDictionary<string, object?> dict)
+            {
+                if (dict.TryGetValue(name, out var v) || dict.TryGetValue(name.ToLowerInvariant(), out v)) return v;
+                return null;
+            }
+            else
+            {
+                try { return ((object)obj).GetType().GetProperty(name)?.GetValue((object)obj); } catch { }
+                try { return ((object)obj).GetType().GetProperty(char.ToUpperInvariant(name[0]) + name.Substring(1))?.GetValue((object)obj); } catch { }
+                return null;
+            }
+        }
+        catch { return null; }
+    }
+
     /// <summary>
     /// Evaluates all rules in a section against a result.
     /// </summary>
-    public EvaluationResult EvaluateRules(ISearchResult result, dynamic ruleSection)
+    public EvaluationResult EvaluateRules(ISearchResult result, object ruleSection)
     {
         var evalResult = new EvaluationResult();
 
         try
         {
-            var rules = ruleSection.Rules as List<dynamic> ?? new List<dynamic>();
-            
-            foreach (var rule in rules)
+            IEnumerable<object> rulesEnumerable = Enumerable.Empty<object>();
+
+            // If ruleSection is a JsonElement, convert it first; otherwise try to obtain a rules collection
+            object? rulesObj = null;
+            if (ruleSection is JsonElement rsJe)
             {
-                if (rule.Enabled == false)
+                var conv = ConvertJsonElementToClr(rsJe);
+                if (conv is IDictionary<string, object?> convDict)
+                {
+                    if (convDict.TryGetValue("rules", out var ro) || convDict.TryGetValue("Rules", out ro))
+                        rulesObj = ro;
+                }
+            }
+            else
+            {
+                // Try helper to fetch Rules property from dictionary or dynamic
+                rulesObj = GetObjectProp(ruleSection, "Rules");
+                if (rulesObj == null && ruleSection is IDictionary<string, object?> dictSection)
+                {
+                    if (dictSection.TryGetValue("rules", out var ro) || dictSection.TryGetValue("Rules", out ro))
+                        rulesObj = ro;
+                }
+            }
+
+            if (rulesObj is IEnumerable<object> rulesList)
+            {
+                rulesEnumerable = rulesList;
+            }
+            else
+            {
+                rulesEnumerable = Enumerable.Empty<object>();
+            }
+
+            foreach (var rule in rulesEnumerable)
+            {
+                // Determine enabled flag for JsonElement or dynamic
+                bool enabled = true;
+                if (rule is JsonElement ruleJe)
+                {
+                    if (ruleJe.ValueKind == JsonValueKind.Object && (ruleJe.TryGetProperty("enabled", out var enProp) || ruleJe.TryGetProperty("Enabled", out enProp)))
+                    {
+                        if (enProp.ValueKind == JsonValueKind.False)
+                            enabled = false;
+                    }
+                }
+                else
+                {
+                    var en = GetBoolProp(rule, "Enabled");
+                    if (en.HasValue && en.Value == false) enabled = false;
+                }
+
+                if (!enabled)
                     continue;
 
                 if (EvaluateRule(result, rule))
@@ -44,8 +270,11 @@ public class RuleEvaluationEngine
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error evaluating rules: {ex.Message}");
+            try { FindNeedlePluginLib.Logger.Instance.Log($"Error evaluating rules: {ex}"); } catch { }
         }
+
+        // Tags are stored only in the EvaluationResult; outputs may query evalResult.Tags when processing per-result
+        // (No global TagStore is available in this build.)
 
         return evalResult;
     }
@@ -53,29 +282,33 @@ public class RuleEvaluationEngine
     /// <summary>
     /// Evaluates a single rule against a result.
     /// </summary>
-    private bool EvaluateRule(ISearchResult result, dynamic rule)
+    private bool EvaluateRule(ISearchResult result, object rule)
     {
         // Check datetime range first if specified
-        if (rule.DateRange != null)
+        var dateRangeObj = GetObjectProp(rule, "DateRange");
+        if (dateRangeObj != null)
         {
-            if (!EvaluateDateRange(result, rule.DateRange))
+            if (!EvaluateDateRange(result, dateRangeObj))
                 return false;
         }
 
         // Check field-specific match
-        string fieldValue = ExtractFieldValue(result, rule.Field);
+        var fieldName = GetStringProp(rule, "Field");
+        string fieldValue = ExtractFieldValue(result, fieldName);
 
         // Evaluate match pattern
-        if (!string.IsNullOrEmpty(rule.Match))
+        var matchPattern = GetStringProp(rule, "Match");
+        if (!string.IsNullOrEmpty(matchPattern))
         {
-            if (!MatchesPattern(fieldValue, rule.Match))
+            if (!MatchesPattern(fieldValue, matchPattern))
                 return false;
         }
 
         // Evaluate unmatch pattern (negative match)
-        if (!string.IsNullOrEmpty(rule.Unmatch))
+        var unmatchPattern = GetStringProp(rule, "Unmatch");
+        if (!string.IsNullOrEmpty(unmatchPattern))
         {
-            if (MatchesPattern(fieldValue, rule.Unmatch))
+            if (MatchesPattern(fieldValue, unmatchPattern))
                 return false;
         }
 
@@ -132,27 +365,30 @@ public class RuleEvaluationEngine
         try
         {
             var logTime = result.GetLogTime();
-            var fieldName = (string?)dateRange.Field ?? "logTime";
+            var fieldName = GetStringProp(dateRange, "Field") ?? GetStringProp(dateRange, "field") ?? "logTime";
 
             // Handle relative time (withinLast)
-            if (!string.IsNullOrEmpty(dateRange.WithinLast))
+            var withinLast = GetStringProp(dateRange, "WithinLast") ?? GetStringProp(dateRange, "withinLast");
+            if (!string.IsNullOrEmpty(withinLast))
             {
-                var span = ParseTimeSpan((string)dateRange.WithinLast);
+                var span = ParseTimeSpan(withinLast);
                 var threshold = DateTime.Now.Subtract(span);
                 return logTime >= threshold;
             }
 
             // Handle absolute times
-            if (!string.IsNullOrEmpty(dateRange.After))
+            var afterStr = GetStringProp(dateRange, "After") ?? GetStringProp(dateRange, "after");
+            if (!string.IsNullOrEmpty(afterStr))
             {
-                var after = ParseDateTime((string)dateRange.After);
+                var after = ParseDateTime(afterStr);
                 if (after.HasValue && logTime < after.Value)
                     return false;
             }
 
-            if (!string.IsNullOrEmpty(dateRange.Before))
+            var beforeStr = GetStringProp(dateRange, "Before") ?? GetStringProp(dateRange, "before");
+            if (!string.IsNullOrEmpty(beforeStr))
             {
-                var before = ParseDateTime((string)dateRange.Before);
+                var before = ParseDateTime(beforeStr);
                 if (before.HasValue && logTime > before.Value)
                     return false;
             }
@@ -223,39 +459,59 @@ public class RuleEvaluationEngine
     /// <summary>
     /// Executes rule actions and populates evaluation result.
     /// </summary>
-    private void ExecuteActions(dynamic rule, EvaluationResult evalResult)
+    private void ExecuteActions(object rule, EvaluationResult evalResult)
     {
         try
         {
-            // Handle both single action and actions array
-            var actions = new List<dynamic>();
-            
-            if (rule.Actions != null)
+            // Handle both single action and actions array, supporting JsonElement and dynamic
+            var actionsList = new List<dynamic>();
+            var actionsObj = GetObjectProp(rule, "Actions");
+            if (actionsObj != null)
             {
-                actions.AddRange(rule.Actions as IEnumerable<dynamic> ?? new List<dynamic>());
+                if (actionsObj is JsonElement actionsJe && actionsJe.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var a in actionsJe.EnumerateArray())
+                        actionsList.Add(a);
+                }
+                else
+                {
+                    try
+                    {
+                        if (actionsObj is IEnumerable<object> objEnum) actionsList.AddRange(objEnum.Cast<dynamic>());
+                        else actionsList.Add(actionsObj);
+                    }
+                    catch
+                    {
+                        actionsList.Add(actionsObj);
+                    }
+                }
             }
-            else if (rule.Action != null)
+            else
             {
-                actions.Add(rule.Action);
+                var actionObj = GetObjectProp(rule, "Action");
+                if (actionObj != null)
+                {
+                    actionsList.Add(actionObj);
+                }
             }
 
-            foreach (var action in actions)
+            foreach (var action in actionsList)
             {
                 ExecuteAction(action, evalResult);
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error executing actions: {ex.Message}");
+            try { FindNeedlePluginLib.Logger.Instance.Log($"Error executing actions: {ex}"); } catch { }
         }
     }
 
     /// <summary>
     /// Executes a single action.
     /// </summary>
-    private void ExecuteAction(dynamic action, EvaluationResult evalResult)
+    private void ExecuteAction(object action, EvaluationResult evalResult)
     {
-        var actionType = (string?)action.Type ?? string.Empty;
+        var actionType = GetStringProp(action, "Type") ?? GetStringProp(action, "type") ?? string.Empty;
 
         switch (actionType.ToLower())
         {
@@ -268,7 +524,7 @@ public class RuleEvaluationEngine
                 break;
 
             case "tag":
-                var tagValue = (string?)action.Value ?? (string?)action.Tag;
+                var tagValue = GetStringProp(action, "Value") ?? GetStringProp(action, "Tag");
                 if (!string.IsNullOrEmpty(tagValue))
                 {
                     evalResult.Tags.Add(tagValue);
@@ -276,7 +532,7 @@ public class RuleEvaluationEngine
                 break;
 
             case "route":
-                var processor = (string?)action.Processor;
+                var processor = GetStringProp(action, "Processor") ?? GetStringProp(action, "processor");
                 if (!string.IsNullOrEmpty(processor))
                 {
                     evalResult.RouteTo.Add(processor);

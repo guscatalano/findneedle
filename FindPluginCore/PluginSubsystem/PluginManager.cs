@@ -59,42 +59,65 @@ public class PluginManager
                 WorkingDirectory = Path.GetDirectoryName(entryAssembly.Location) ?? throw new Exception("Failed to get directory of entry assembly"),
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden,
-                RedirectStandardError = GlobalSettings.Debug,
-                RedirectStandardOutput = GlobalSettings.Debug
+                // Always redirect so we can capture child process output and decide where to route it
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
             };
-            var eOut = "Output is disabled";
+            var outputBuffer = new StringBuilder();
             Process p = new Process();
             p.StartInfo = ps;
-            if (GlobalSettings.Debug)
+
+            // Always capture output and error from the child process
+            p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) =>
             {
-                eOut = "";
-                p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) =>
-                {
-                    if (e.Data != null)
-                        eOut += e.Data + "\n";
-                });
-                p.OutputDataReceived += new DataReceivedEventHandler((sender, e) =>
-                {
-                    if (e.Data != null)
-                        eOut += e.Data + "\n";
-                });
-                p.EnableRaisingEvents = true;
-            }
+                if (e.Data == null) return;
+                outputBuffer.AppendLine(e.Data);
+                // Route into main logger only; avoid noisy console output
+                FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin STDERR: {e.Data}");
+            });
+
+            p.OutputDataReceived += new DataReceivedEventHandler((sender, e) =>
+            {
+                if (e.Data == null) return;
+                outputBuffer.AppendLine(e.Data);
+                // Route into main logger only; avoid noisy console output
+                FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin STDOUT: {e.Data}");
+            });
+
+            p.EnableRaisingEvents = true;
+
             FindNeedlePluginLib.Logger.Instance.Log($"Starting FakeLoadPlugin process for plugin: {plugin}");
             p.Start();
-            if (GlobalSettings.Debug)
-            {
-                p.BeginOutputReadLine();
-                p.BeginErrorReadLine();
-            }
+            // Begin asynchronous read so handlers receive data
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
 
             p.WaitForExit();
             FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin process exited for plugin: {plugin} with code {p.ExitCode}");
-            if (GlobalSettings.Debug)
+            // If not in debug, we still saved outputBuffer into the logger line-by-line above
+
+            // Also try to read the FakeLoadPlugin output file (written to AppData) and append to our logger
+            try
             {
-                FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin output: {eOut}");
+                var appDataFolder = FileIO.GetAppDataFindNeedlePluginFolder();
+                var fakeOutputPath = Path.Combine(appDataFolder, "fakeloadplugin_output.txt");
+                if (File.Exists(fakeOutputPath))
+                {
+                    var lines = File.ReadAllLines(fakeOutputPath);
+                    foreach (var l in lines)
+                    {
+                        if (!string.IsNullOrWhiteSpace(l))
+                        {
+                            FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin: {l}");
+                        }
+                    }
+                }
             }
-            return eOut;
+            catch (Exception ex)
+            {
+                FindNeedlePluginLib.Logger.Instance.Log($"Failed to read FakeLoadPlugin output file: {ex.Message}");
+            }
+            return outputBuffer.ToString();
         }
         catch (Exception ex)
         {
@@ -259,11 +282,48 @@ public class PluginManager
                     try
                     {
                         FindNeedlePluginLib.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
+                        var originalPath = pluginModuleDescriptor.path;
                         pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
                         if (!File.Exists(pluginModuleDescriptor.path))
                         {
-                            FindNeedlePluginLib.Logger.Instance.Log($"WARNING: Can't find plugin module for {pluginModuleDescriptor.path}, skipping...");
-                            continue;
+                            // Try to locate the plugin under the application's base directory (including subfolders)
+                            try
+                            {
+                                var fileName = Path.GetFileName(originalPath);
+                                if (!string.IsNullOrEmpty(fileName))
+                                {
+                                    var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                                    var candidate = Directory.EnumerateFiles(baseDir, fileName, SearchOption.AllDirectories).FirstOrDefault();
+                                    if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                                    {
+                                        pluginModuleDescriptor.path = candidate;
+                                        FindNeedlePluginLib.Logger.Instance.Log($"Resolved plugin {fileName} to {candidate}");
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                FindNeedlePluginLib.Logger.Instance.Log($"Error searching for plugin {originalPath}: {ex.Message}");
+                            }
+
+                            if (!File.Exists(pluginModuleDescriptor.path))
+                            {
+                                // Automatically mark as disabled and record reason in the config entry (if supported)
+                                pluginModuleDescriptor.enabled = false;
+                                try
+                                {
+                                    // If the config entry has a disabledReason field, set it (handles both dynamic and typed cases)
+                                    var prop = pluginModuleDescriptor.GetType().GetProperty("disabledReason");
+                                    if (prop != null)
+                                    {
+                                        prop.SetValue(pluginModuleDescriptor, "File not found: " + originalPath);
+                                    }
+                                }
+                                catch { }
+
+                                FindNeedlePluginLib.Logger.Instance.Log($"Auto-disabling missing plugin module: {originalPath}");
+                                continue;
+                            }
                         }
 
                         InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);

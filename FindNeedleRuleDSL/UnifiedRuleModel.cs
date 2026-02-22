@@ -69,7 +69,7 @@ public class UnifiedRule
 public class UnifiedRuleAction
 {
     [JsonPropertyName("type")]
-    public string Type { get; set; } = string.Empty; // "message", "tag", "exclude", "include", "route", etc.
+    public string Type { get; set; } = string.Empty; // "message", "tag", "exclude", "include", "route", "output", etc.
 
     [JsonPropertyName("from")]
     public string? From { get; set; }
@@ -88,4 +88,23 @@ public class UnifiedRuleAction
 
     [JsonPropertyName("processor")]
     public string? Processor { get; set; } // For "route" action: target processor name
+
+    // Output action properties
+    [JsonPropertyName("format")]
+    public string? Format { get; set; } // "csv", "json", "xml", "txt"
+
+    [JsonPropertyName("path")]
+    public string? Path { get; set; } // Output file path (supports {date}, {time} placeholders)
+
+    [JsonPropertyName("fields")]
+    public List<string>? Fields { get; set; } // Fields to include in output
+
+    [JsonPropertyName("includeHeaders")]
+    public bool IncludeHeaders { get; set; } = true; // For CSV: include header row
+
+    [JsonPropertyName("delimiter")]
+    public string? Delimiter { get; set; } // For CSV: custom delimiter (default: comma)
+
+    [JsonPropertyName("pretty")]
+    public bool Pretty { get; set; } = true; // For JSON/XML: pretty print
 }

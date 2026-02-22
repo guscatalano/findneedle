@@ -30,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BasicFiltersPlugin\BasicFiltersPlugin.csproj" />
     <ProjectReference Include="..\BasicOutputsPlugin\BasicOutputsPlugin.csproj" />
+    <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
     <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
     <ProjectReference Include="..\EventLogPlugin\EventLogPlugin.csproj" />
     <ProjectReference Include="..\FakeLoadPlugin\FakeLoadPlugin.csproj" />

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace FindNeedleRuleDSL;
 
@@ -24,13 +25,42 @@ public class UnifiedRuleProcessor
             {
                 foreach (var result in results)
                 {
-                    var data = getData(result);
-                    if (data.Contains(rule.Match, StringComparison.OrdinalIgnoreCase))
+                    var data = getData(result) ?? string.Empty;
+
+                    bool isMatch = false;
+                    // Try regex match first (allow rules like "ERROR|CRITICAL"). Fall back to substring if regex invalid.
+                    if (!string.IsNullOrEmpty(rule.Match))
                     {
-                        if (!string.IsNullOrEmpty(rule.Unmatch) && data.Contains(rule.Unmatch, StringComparison.OrdinalIgnoreCase))
-                            continue;
-                        yield return (rule, result, rule.Action);
+                        try
+                        {
+                            isMatch = Regex.IsMatch(data, rule.Match, RegexOptions.IgnoreCase);
+                        }
+                        catch (Exception)
+                        {
+                            isMatch = data.IndexOf(rule.Match, StringComparison.OrdinalIgnoreCase) >= 0;
+                        }
                     }
+
+                    if (!isMatch)
+                        continue;
+
+                    if (!string.IsNullOrEmpty(rule.Unmatch))
+                    {
+                        bool isUnmatch = false;
+                        try
+                        {
+                            isUnmatch = Regex.IsMatch(data, rule.Unmatch, RegexOptions.IgnoreCase);
+                        }
+                        catch (Exception)
+                        {
+                            isUnmatch = data.IndexOf(rule.Unmatch, StringComparison.OrdinalIgnoreCase) >= 0;
+                        }
+
+                        if (isUnmatch)
+                            continue;
+                    }
+
+                    yield return (rule, result, rule.Action);
                 }
             }
         }

@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "1.0",
+  "version": "1.0",
+  "title": "Sample Rules - Easy Demo",
+  "description": "Simple rules to demonstrate filtering, tagging, and output on sample.log",
+  "sections": [
+    {
+      "name": "ErrorFilter",
+      "description": "Find all error and critical messages",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "find-errors",
+          "match": "ERROR|CRITICAL",
+          "enabled": true,
+          "action": { "type": "include" }
+        }
+      ]
+    },
+    {
+      "name": "SecurityEnrichment",
+      "description": "Tag security-related events",
+      "purpose": "enrichment",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "tag-logon",
+          "match": "logged on|logged off",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "UserSession" }
+        },
+        {
+          "name": "tag-failed-auth",
+          "match": "logon failed|access denied",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "FailedAuth" }
+        },
+        {
+          "name": "tag-security-alert",
+          "match": "logon failed|access denied",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "SecurityAlert" }
+        }
+      ]
+    },
+    {
+      "name": "CrashDetection",
+      "description": "Identify crash events",
+      "purpose": "enrichment",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "tag-memory-crash",
+          "match": "OutOfMemoryException|StackOverflowException",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "Crash" }
+        },
+        {
+          "name": "tag-native-crash",
+          "match": "native_crash|segmentation fault|DiskReadException",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "NativeCrash" }
+        },
+        {
+          "name": "tag-memory-critical",
+          "match": "OutOfMemoryException|StackOverflowException",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "Critical" }
+        },
+        {
+          "name": "tag-dotnet-crash",
+          "match": "A .NET application failed",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "DotNetCrash" }
+        },
+        {
+          "name": "tag-dotnet-critical",
+          "match": "A .NET application failed",
+          "enabled": true,
+          "action": { "type": "tag", "tag": "Critical" }
+        }
+      ]
+    },
+    {
+      "name": "ExportResults",
+      "description": "Export filtered results to various formats",
+      "purpose": "output",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "export-to-csv",
+          "enabled": true,
+          "action": {
+            "type": "output",
+            "format": "csv",
+            "path": "{temp}/findneedle_errors_{date}.csv",
+            "fields": ["timestamp", "level", "message"],
+            "includeHeaders": true
+          }
+        },
+        {
+          "name": "export-crashes-to-json",
+          "match": "Exception",
+          "enabled": true,
+          "action": {
+            "type": "output",
+            "format": "json",
+            "path": "{temp}/findneedle_crashes_{datetime}.json",
+            "fields": ["timestamp", "level", "source", "message"],
+            "pretty": true
+          }
+        }
+
+        ,
+        {
+          "name": "export-crashes-to-csv",
+          "match": "crash|native_crash|DiskReadException",
+          "enabled": true,
+          "action": {
+            "type": "output",
+            "format": "csv",
+            "path": "{temp}/findneedle_crashes_{datetime}.csv",
+            "fields": ["timestamp", "level", "source", "message"],
+            "includeHeaders": true
+          }
+        }
+      ]
+    }
+  ]
+}

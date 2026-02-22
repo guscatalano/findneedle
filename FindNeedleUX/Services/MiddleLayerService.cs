@@ -99,6 +99,20 @@ public class MiddleLayerService
         var query = SearchQueryUX.CurrentQuery;
         if (query != null)
         {
+            // Add RuleDSL processors for each rules config file
+            if (query.RulesConfigPaths != null && query.RulesConfigPaths.Count > 0)
+            {
+                foreach (var rulesPath in query.RulesConfigPaths)
+                {
+                    if (System.IO.File.Exists(rulesPath))
+                    {
+                        var ruleDslProcessor = new FindNeedleRuleDSL.FindNeedleRuleDSLPlugin("*", rulesPath);
+                        enabledProcessors.Add(ruleDslProcessor);
+                        System.Diagnostics.Debug.WriteLine($"Added RuleDSL processor for: {rulesPath}");
+                    }
+                }
+            }
+
             query.Processors = enabledProcessors;
 
             SearchQueryUX.UpdateSearchQuery();

@@ -19,6 +19,7 @@
             <MenuBarItem Title="Quick">
                 <MenuFlyoutItem Text="Open Log File" Click="MenuFlyoutItem_Click" Name="openlogfile" />
                 <MenuFlyoutItem Text="Open Folder with logs" Click="MenuFlyoutItem_Click" Name="openlogfolder"/>
+                <MenuFlyoutItem Text="Open Log with Rules..." Click="MenuFlyoutItem_Click" Name="openlogwithrules"/>
             </MenuBarItem>
             <MenuBarItem Title="Inspect">
                 <MenuFlyoutItem Text="Inspect ETL" Click="MenuFlyoutItem_Click" Name="inspect_etl"/>

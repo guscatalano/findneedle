@@ -152,6 +152,7 @@
     <ProjectReference Include="..\FindNeedlePluginUtils\FindNeedlePluginUtils.csproj" />
     <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
     <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
+    <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Update="Assets\appicon.ico">
@@ -160,6 +161,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Update="Pages\DiagramToolsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </None>
+    <None Update="Pages\QuickLogWithRulesPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
     <None Update="Pages\SearchRulesPage.xaml">
