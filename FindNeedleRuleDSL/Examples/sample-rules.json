@@ -29,6 +29,12 @@
           "match": "User clicked login|Auth request sent|Calling AuthService|Querying user by id|Render dashboard|Send login notification|DB lookup|DB lookup: Querying user by id",
           "enabled": true,
           "action": { "type": "include" }
+        },
+        {
+          "name": "include-crash-events",
+          "match": "A .NET application failed|faulting application|OutOfMemoryException|StackOverflowException|access violation|access violation at",
+          "enabled": true,
+          "action": { "type": "include" }
         }
       ]
     },
@@ -148,14 +154,14 @@
             "type": "uml",
             "syntax": "mermaid",
             "path": "{output}/findneedle_sequence_{datetime}.mmd",
-            "rulesFile": "FindNeedleUmlDsl/Examples/sample-uml.rules.json",
+            "rulesFile": "FindNeedleUmlDsl/Examples/crash-detection-uml.rules.json",
             "generateImage": true
           }
         }
         ,
         {
           "name": "export-uml-login",
-          "match": "User clicked login|Auth request sent|Calling AuthService|Querying user by id|Render dashboard|Send login notification|DB lookup",
+          "match": "User clicked login|Auth request sent|Calling AuthService|Render dashboard|Send login notification|Notify user",
           "enabled": true,
           "action": {
             "type": "uml",
