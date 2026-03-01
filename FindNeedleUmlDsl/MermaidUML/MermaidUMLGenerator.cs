@@ -98,7 +98,63 @@ public class MermaidUMLGenerator : IUMLGenerator
         Logger.Instance.Log($"[MermaidUMLGenerator] Using mmdc at: {mmdcPath}");
         Logger.Instance.Log($"[MermaidUMLGenerator] Node directory: {nodeDir}");
 
-        var arguments = $"-i \"{inputPath}\" -o \"{outputPath}\"";
+        // Use the original input file for mmdc by default (no truncation).
+        var inputPathForMmdc = inputPath;
+
+        // Sanitize .mmd input to remove accidental numbered dumps or embedded log lines that start with
+        // a timestamp or numbered prefix which break the mermaid parser (it expects diagram tokens).
+        try
+        {
+            var lines = File.ReadAllLines(inputPathForMmdc);
+            var cleaned = new List<string>(lines.Length);
+            foreach (var ln in lines)
+            {
+                var t = ln.TrimStart();
+                // Skip numbered dump lines like "001: ..." or "12: ..."
+                if (System.Text.RegularExpressions.Regex.IsMatch(t, "^\\d{1,3}:\\s"))
+                    continue;
+                // Skip common timestamp/log prefixes like "[2026-..."
+                if (System.Text.RegularExpressions.Regex.IsMatch(t, "^\\[\\d{4}-\\d{2}-\\d{2}"))
+                    continue;
+                cleaned.Add(ln);
+            }
+
+            if (cleaned.Count != lines.Length)
+            {
+                var cleanPath = Path.Combine(Path.GetDirectoryName(inputPathForMmdc) ?? Path.GetTempPath(), Path.GetFileNameWithoutExtension(inputPathForMmdc) + ".clean.mmd");
+                File.WriteAllLines(cleanPath, cleaned);
+                inputPathForMmdc = cleanPath;
+                Logger.Instance.Log($"[MermaidUMLGenerator] Cleaned mermaid input written: {cleanPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"[MermaidUMLGenerator] Failed to sanitize mermaid input: {ex.Message}");
+            inputPathForMmdc = inputPath;
+        }
+
+        var arguments = $"-i \"{inputPathForMmdc}\" -o \"{outputPath}\"";
+        // Optionally dump a line-numbered copy of the .mmd passed to mmdc for easier debugging.
+        try
+        {
+            var dumpLines = Environment.GetEnvironmentVariable("FINDNEEDLE_MERMAID_DUMP_NUMBERED");
+            if (!string.IsNullOrEmpty(dumpLines) && (dumpLines == "1" || dumpLines.Equals("true", StringComparison.OrdinalIgnoreCase)))
+            {
+                try
+                {
+                    var lines = File.ReadAllLines(inputPathForMmdc);
+                    var numbered = lines.Select((ln, idx) => $"{idx + 1:000}: {ln}");
+                    var dumpPath = Path.ChangeExtension(inputPathForMmdc, ".numbered.mmd.txt");
+                    File.WriteAllLines(dumpPath, numbered);
+                    Logger.Instance.Log($"[MermaidUMLGenerator] Wrote numbered mermaid file: {dumpPath}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Instance.Log($"[MermaidUMLGenerator] Failed to write numbered mermaid dump: {ex.Message}");
+                }
+            }
+        }
+        catch { }
 
         if (PackagedAppCommandRunner.IsPackagedApp)
         {
@@ -264,16 +320,54 @@ public class MermaidUMLGenerator : IUMLGenerator
             Logger.Instance.Log($"[MermaidUMLGenerator] Using cached mmdc path: {_cachedMermaidCliPath}");
             return _cachedMermaidCliPath;
         }
-
-        var installerPath = _installer?.GetMmdcPath();
-        if (installerPath != null)
+        // Ask installer first (if injected)
+        try
         {
-            Logger.Instance.Log($"[MermaidUMLGenerator] Found mmdc via installer: {installerPath}");
-            _cachedMermaidCliPath = installerPath;
-            return _cachedMermaidCliPath;
+            var installerPath = _installer?.GetMmdcPath();
+            if (!string.IsNullOrEmpty(installerPath))
+            {
+                Logger.Instance.Log($"[MermaidUMLGenerator] Found mmdc via installer: {installerPath}");
+                _cachedMermaidCliPath = installerPath;
+                return _cachedMermaidCliPath;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"[MermaidUMLGenerator] Installer GetMmdcPath threw: {ex.Message}");
         }
 
-        Logger.Instance.Log($"[MermaidUMLGenerator] No portable Mermaid CLI installation found. Please install via Diagram Tools page.");
+        // Try cached environment scan
+        try
+        {
+            var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            foreach (var p in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                try
+                {
+                    var candidate = Path.Combine(p, "mmdc.cmd");
+                    if (File.Exists(candidate))
+                    {
+                        _cachedMermaidCliPath = candidate;
+                        Logger.Instance.Log($"[MermaidUMLGenerator] Found mmdc on PATH at: {candidate}");
+                        return _cachedMermaidCliPath;
+                    }
+                    candidate = Path.Combine(p, "mmdc");
+                    if (File.Exists(candidate))
+                    {
+                        _cachedMermaidCliPath = candidate;
+                        Logger.Instance.Log($"[MermaidUMLGenerator] Found mmdc on PATH at: {candidate}");
+                        return _cachedMermaidCliPath;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"[MermaidUMLGenerator] PATH scan failed: {ex.Message}");
+        }
+
+        Logger.Instance.Log($"[MermaidUMLGenerator] No portable Mermaid CLI installation found. Please install via Diagram Tools page or include installer.");
         return null;
     }
 
@@ -342,9 +436,31 @@ public class MermaidUMLGenerator : IUMLGenerator
     {
         if (_mermaidCliAvailable.HasValue)
             return _mermaidCliAvailable.Value;
+        try
+        {
+            var installed = false;
+            try
+            {
+                installed = _installer?.IsInstalled() ?? false;
+            }
+            catch (Exception ex)
+            {
+                Logger.Instance.Log($"[MermaidUMLGenerator] Installer IsInstalled threw: {ex.Message}");
+            }
 
-        _mermaidCliAvailable = _installer?.IsInstalled() ?? false;
-        Logger.Instance.Log($"[MermaidUMLGenerator] IsMermaidCliAvailable: {_mermaidCliAvailable.Value}");
-        return _mermaidCliAvailable.Value;
+            // Also check cached path and PATH
+            if (!installed && !string.IsNullOrEmpty(_cachedMermaidCliPath) && File.Exists(_cachedMermaidCliPath))
+                installed = true;
+
+            _mermaidCliAvailable = installed;
+            Logger.Instance.Log($"[MermaidUMLGenerator] IsMermaidCliAvailable: {_mermaidCliAvailable.Value} (installer={_installer != null}, cachedPath={_cachedMermaidCliPath})");
+            return _mermaidCliAvailable.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"[MermaidUMLGenerator] IsMermaidCliAvailable check failed: {ex.Message}");
+            _mermaidCliAvailable = false;
+            return false;
+        }
     }
 }

@@ -1,0 +1,106 @@
+{
+  "title": "Sample UML: Web Login and Processing Sequence",
+  "description": "A concrete example showing a user login flow with activations, notes and a short processing delay.",
+  "participants": [
+    { "id": "User", "displayName": "User", "type": "participant" },
+    { "id": "WebApp", "displayName": "Web Application", "type": "participant" },
+    { "id": "Auth", "displayName": "AuthService", "type": "participant" },
+    { "id": "DB", "displayName": "Database", "type": "participant" },
+    { "id": "Notify", "displayName": "NotificationService", "type": "participant" },
+    { "id": "Runtime", "displayName": ".NET Runtime", "type": "participant" }
+  ],
+  "rules": [
+    {
+      "name": "user-click-login",
+      "match": "User clicked login",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "User", "to": "WebApp", "text": "clicks login" }
+    },
+    {
+      "name": "session-note",
+      "match": "User clicked login",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "note", "from": "WebApp", "text": "User session", "notePosition": "left" }
+    },
+    {
+      "name": "webapp-auth-call",
+      "match": "Auth request sent|Calling AuthService",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "WebApp", "to": "Auth", "text": "Authenticate(credentials)" }
+    },
+    {
+      "name": "activate-auth",
+      "match": "Auth request sent|Calling AuthService",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "activate", "from": "Auth", "text": "" }
+    },
+    {
+      "name": "auth-db-lookup",
+      "match": "Querying user by id|DB lookup",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "Auth", "to": "DB", "text": "SELECT user WHERE id={extract:(\\d+)}" }
+    },
+    {
+      "name": "processing-delay",
+      "match": "Processing delay",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "delay", "from": "WebApp", "text": "waiting for DB" }
+    },
+    {
+      "name": "db-response",
+      "match": "User record found|User not found",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "DB", "to": "Auth", "text": "row/results" }
+    },
+    {
+      "name": "db-note",
+      "match": "User record found",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "note", "from": "DB", "text": "record contains user profile" }
+    },
+    {
+      "name": "auth-success",
+      "match": "Auth succeeded|Token issued",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "Auth", "to": "WebApp", "text": "return token" }
+    },
+    {
+      "name": "deactivate-auth",
+      "match": "Auth succeeded|Token issued",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "deactivate", "from": "Auth", "text": "" }
+    },
+    {
+      "name": "webapp-responds-user",
+      "match": "Render dashboard|Show home",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "WebApp", "to": "User", "text": "renders dashboard" }
+    },
+    {
+      "name": "notify-on-login",
+      "match": "Send login notification|Notify user",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "WebApp", "to": "Notify", "text": "NotifyLogin(userId)" }
+    },
+
+    {
+      "name": "runtime-error",
+      "match": "Unhandled exception|System.Exception",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "WebApp", "to": "Runtime", "text": "throws {afterMatch:untilSpace}" }
+    }
+  ]
+}

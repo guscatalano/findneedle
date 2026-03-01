@@ -36,13 +36,57 @@ public class UmlRuleProcessor
         sb.Append(_translator.GenerateParticipants(_definition.Participants));
         sb.AppendLine();
 
+        // Track activation state for participants to avoid emitting invalid deactivate calls
+        var activeParticipants = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var message in messages)
         {
             foreach (var rule in _definition.Rules)
             {
-                if (MatchesRule(message, rule))
+                if (!MatchesRule(message, rule))
+                    continue;
+
+                var element = ResolveElement(message, rule);
+                var type = (element.Type ?? string.Empty).Trim().ToLowerInvariant();
+
+                // Normalize participant id used for activation checks
+                var participant = (element.From ?? string.Empty).Trim();
+
+                if (type == "activate")
                 {
-                    var element = ResolveElement(message, rule);
+                    // Only emit activate if participant specified
+                    if (!string.IsNullOrEmpty(participant))
+                    {
+                        // If already active, still emit (mermaid tolerates re-activate) and record state
+                        activeParticipants.Add(participant);
+                        sb.AppendLine(_translator.GenerateElement(element));
+                    }
+                    else
+                    {
+                        // skip malformed activate with no participant
+                    }
+                }
+                else if (type == "deactivate")
+                {
+                    // Only emit deactivate if participant is currently active
+                    if (!string.IsNullOrEmpty(participant) && activeParticipants.Contains(participant))
+                    {
+                        activeParticipants.Remove(participant);
+                        sb.AppendLine(_translator.GenerateElement(element));
+                    }
+                    else
+                    {
+                        // Skip deactivating an inactive or unspecified participant to avoid mermaid parser errors
+                    }
+                }
+                else if (type == "groupend")
+                {
+                    // groupend is emitted as 'end' in translator; always emit to avoid leaving blocks open
+                    sb.AppendLine(_translator.GenerateElement(element));
+                }
+                else
+                {
+                    // Regular elements (message, note, delay, divider, etc.)
                     sb.AppendLine(_translator.GenerateElement(element));
                 }
             }
@@ -55,9 +99,49 @@ public class UmlRuleProcessor
 
     private bool MatchesRule(LogMessage message, UmlRule rule)
     {
-        var content = message.Content;
-        if (!content.Contains(rule.Match)) return false;
-        if (!string.IsNullOrEmpty(rule.Unmatch) && content.Contains(rule.Unmatch)) return false;
+        var content = message.Content ?? string.Empty;
+        // Prefer regex matching so rules can use alternation and captures (e.g. "foo|bar").
+        // If rule explicitly requests regex, use it and fail on invalid regex
+        if (rule.UseRegex == true)
+        {
+            if (!Regex.IsMatch(content, rule.Match, RegexOptions.IgnoreCase))
+                return false;
+        }
+        else if (rule.UseRegex == false)
+        {
+            // explicit substring match
+            if (!content.Contains(rule.Match, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        else
+        {
+            // Default: try regex first, fall back to substring
+            try
+            {
+                if (!Regex.IsMatch(content, rule.Match, RegexOptions.IgnoreCase))
+                    return false;
+            }
+            catch
+            {
+                if (!content.Contains(rule.Match, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(rule.Unmatch))
+        {
+            try
+            {
+                if (Regex.IsMatch(content, rule.Unmatch, RegexOptions.IgnoreCase))
+                    return false;
+            }
+            catch
+            {
+                if (content.Contains(rule.Unmatch, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+        }
+
         return true;
     }
 

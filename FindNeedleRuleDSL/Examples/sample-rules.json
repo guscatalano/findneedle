@@ -19,6 +19,20 @@
       ]
     },
     {
+      "name": "UmlInclusion",
+      "description": "Include messages relevant to UML samples (login/auth flows)",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "include-login-events",
+          "match": "User clicked login|Auth request sent|Calling AuthService|Querying user by id|Render dashboard|Send login notification|DB lookup|DB lookup: Querying user by id",
+          "enabled": true,
+          "action": { "type": "include" }
+        }
+      ]
+    },
+    {
       "name": "SecurityEnrichment",
       "description": "Tag security-related events",
       "purpose": "enrichment",
@@ -123,6 +137,32 @@
             "path": "{temp}/findneedle_crashes_{datetime}.csv",
             "fields": ["timestamp", "level", "source", "message"],
             "includeHeaders": true
+          }
+        }
+        ,
+        {
+          "name": "export-uml-sequence",
+          "match": "Exception|crash|OutOfMemoryException|StackOverflowException|native_crash|DiskReadException",
+          "enabled": true,
+          "action": {
+            "type": "uml",
+            "syntax": "mermaid",
+            "path": "{output}/findneedle_sequence_{datetime}.mmd",
+            "rulesFile": "FindNeedleUmlDsl/Examples/sample-uml.rules.json",
+            "generateImage": true
+          }
+        }
+        ,
+        {
+          "name": "export-uml-login",
+          "match": "User clicked login|Auth request sent|Calling AuthService|Querying user by id|Render dashboard|Send login notification|DB lookup",
+          "enabled": true,
+          "action": {
+            "type": "uml",
+            "syntax": "mermaid",
+            "path": "{output}/findneedle_sequence_login_{datetime}.mmd",
+            "rulesFile": "FindNeedleUmlDsl/Examples/sample-uml.rules.json",
+            "generateImage": true
           }
         }
       ]

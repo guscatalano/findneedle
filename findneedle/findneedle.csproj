@@ -35,6 +35,9 @@
     <ProjectReference Include="..\EventLogPlugin\EventLogPlugin.csproj" />
     <ProjectReference Include="..\FakeLoadPlugin\FakeLoadPlugin.csproj" />
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+    <ProjectReference Include="..\FindNeedleRuleDSL\FindNeedleRuleDSL.csproj" />
+    <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
+    <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
     <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
     <ProjectReference Include="..\Plugins\Kusto\KustoPlugin\KustoPlugin.csproj" />
     <ProjectReference Include="..\ZipFilePlugin\ZipFilePlugin.csproj" />

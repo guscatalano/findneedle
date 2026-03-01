@@ -23,7 +23,23 @@ public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
         {
             var displayName = p.DisplayName ?? p.Id;
             var keyword = p.Type.ToLower() switch { "actor" => "actor", _ => "participant" };
-            if (displayName != p.Id) sb.AppendLine($"    {keyword} {p.Id} as {displayName}"); else sb.AppendLine($"    {keyword} {p.Id}");
+            // If display name contains whitespace or special chars, quote it for mermaid
+            var needsQuote = displayName != p.Id && (displayName.IndexOf(' ') >= 0 || displayName.IndexOf('.') >= 0 || displayName.IndexOf('-') >= 0);
+            if (displayName != p.Id)
+            {
+                if (needsQuote)
+                {
+                    sb.AppendLine($"    {keyword} {p.Id} as \"{EscapeText(displayName)}\"");
+                }
+                else
+                {
+                    sb.AppendLine($"    {keyword} {p.Id} as {displayName}");
+                }
+            }
+            else
+            {
+                sb.AppendLine($"    {keyword} {p.Id}");
+            }
         }
         return sb.ToString();
     }
@@ -33,15 +49,18 @@ public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
         var indent = "    ";
         return element.Type.ToLower() switch
         {
-            "message" => indent + GenerateMessage(element),
-            "note" => indent + GenerateNote(element),
-            "activate" => $"{indent}activate {element.From}",
-            "deactivate" => $"{indent}deactivate {element.From}",
-            "divider" => $"{indent}Note over {element.From}: {element.Text}",
-            "delay" => $"{indent}Note right of {element.From}: ...{element.Text}...",
-            "group" => $"{indent}rect rgb(200, 200, 200)\n{indent}Note left of {element.From}: {element.Text}",
-            "groupend" => $"{indent}end",
-            _ => $"{indent}%% Unknown element type: {element.Type}"
+            "message" => indent + GenerateMessage(element) + "\n",
+            // Emit single-line notes (lowercase 'note') to match mermaid parser expectations
+            "note" => indent + GenerateNote(element) + "\n",
+            "activate" => $"{indent}activate {element.From}\n",
+            "deactivate" => $"{indent}deactivate {element.From}\n",
+            // Use single-quoted notes consistently for divider/delay/group to avoid parser issues
+            "divider" => $"{indent}note over {element.From}: '{EscapeText(element.Text)}'\n",
+            // For delays, emit a single-line note on the right
+            "delay" => $"{indent}note right of {element.From}: '{EscapeText(element.Text)}'\n",
+            "group" => $"{indent}rect rgb(200, 200, 200)\n{indent}note left of {element.From}: '{EscapeText(element.Text)}'\n",
+            "groupend" => $"{indent}end\n",
+            _ => $"{indent}%% Unknown element type: {element.Type}\n"
         };
     }
 
@@ -57,22 +76,43 @@ public class MermaidSyntaxTranslator : IUmlSyntaxTranslator
         };
 
         var text = EscapeText(element.Text);
-        return $"{element.From}{arrow}{element.To}: {text}";
+        // Wrap message text in single-quotes to avoid parser ambiguities; EscapeText will escape single quotes
+        return $"{element.From}{arrow}{element.To}: '{text}'";
     }
 
     private string GenerateNote(ResolvedUmlElement element)
     {
         var position = element.NotePosition?.ToLower() switch
         {
-            "left" => $"Note left of {element.From}",
-            "right" => $"Note right of {element.From}",
-            "over" => $"Note over {element.From}",
-            _ => $"Note over {element.From}"
+            "left" => $"note left of {element.From}",
+            "right" => $"note right of {element.From}",
+            "over" => $"note over {element.From}",
+            _ => $"note over {element.From}"
         };
-        return $"{position}: {EscapeText(element.Text)}";
+        // Quote note text to avoid parser tokenization issues (use lowercase 'note' and single quotes)
+        return $"{position}: '{EscapeText(element.Text)}'";
     }
 
-    private static string EscapeText(string text) => text.Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+    private static string EscapeText(string text)
+    {
+        if (text == null) return string.Empty;
+        // Normalize whitespace and remove problematic newlines which break mermaid sequence lines
+        var s = text.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Trim();
+
+        // Remove common numbered-list markers at start (e.g. "1. ", "1) ") which can confuse the parser
+        s = System.Text.RegularExpressions.Regex.Replace(s, "^\\s*\\d+[\\.\\)]\\s+", string.Empty);
+
+        // Escape backslashes and quotes for safe quoting in mermaid
+        s = s.Replace("\\", "\\\\");
+        s = s.Replace("\"", "\\\"");
+        // Escape single quotes since we emit single-quoted strings
+        s = s.Replace("'", "\\'");
+
+        // Escape angle brackets to avoid HTML interpretation
+        s = s.Replace("<", "&lt;").Replace(">", "&gt;");
+
+        return s;
+    }
 
     public string GenerateFooter() => string.Empty;
 }

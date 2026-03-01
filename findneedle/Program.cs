@@ -12,6 +12,8 @@ using FindPluginCore.Searching;
 using FindNeedlePluginLib;
 using System.IO;
 using System.Diagnostics;
+using System.Text.Json;
+using System.Reflection;
 
 [ExcludeFromCodeCoverage]
 internal class Program
@@ -125,6 +127,194 @@ internal class Program
         catch { }
         PluginManager.GetSingleton().PrintToConsole();
 
+        // Verify bundled DLLs are present so installer prompt and UML generation can run
+        try
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string? installersPath = null;
+            string? umlDslPath = null;
+            try { installersPath = Directory.EnumerateFiles(baseDir, "FindNeedleToolInstallers.dll", SearchOption.AllDirectories).FirstOrDefault(); } catch { }
+            try { umlDslPath = Directory.EnumerateFiles(baseDir, "FindNeedleUmlDsl.dll", SearchOption.AllDirectories).FirstOrDefault(); } catch { }
+
+            if (string.IsNullOrEmpty(installersPath))
+            {
+                Console.WriteLine("Warning: bundled installers (FindNeedleToolInstallers.dll) not found in application output. Installer prompt will not be available.");
+                Logger.Instance.Log("Bundled installers not found: FindNeedleToolInstallers.dll not present in app base or subfolders. Build or copy the project output to enable automatic installs.");
+            }
+            else
+            {
+                Logger.Instance.Log($"Found FindNeedleToolInstallers: {installersPath}");
+            }
+
+            if (string.IsNullOrEmpty(umlDslPath))
+            {
+                Console.WriteLine("Warning: UML generator assembly (FindNeedleUmlDsl.dll) not found in application output. UML generation may be unavailable.");
+                Logger.Instance.Log("UML assembly not found: FindNeedleUmlDsl.dll not present in app base or subfolders. Build or copy the project output to enable UML generation.");
+            }
+            else
+            {
+                Logger.Instance.Log($"Found FindNeedleUmlDsl: {umlDslPath}");
+            }
+        }
+        catch { }
+
+        // If any rules request UML image generation, offer to install missing UML tool dependencies
+        try
+        {
+            bool requiresUmlImage = false;
+            try
+            {
+                dynamic dx = x;
+                var rp = dx.RulesConfigPaths as List<string>;
+                if (rp != null)
+                {
+                    foreach (var rf in rp)
+                    {
+                        try
+                        {
+                            if (!File.Exists(rf)) continue;
+                            using var doc = JsonDocument.Parse(File.ReadAllText(rf));
+                            if (!doc.RootElement.TryGetProperty("sections", out var sections)) continue;
+                            foreach (var sec in sections.EnumerateArray())
+                            {
+                                if (sec.ValueKind != JsonValueKind.Object) continue;
+                                if (sec.TryGetProperty("purpose", out var pv) && pv.GetString() == "output")
+                                {
+                                    if (sec.TryGetProperty("rules", out var rulesEl) && rulesEl.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var rEl in rulesEl.EnumerateArray())
+                                        {
+                                            if (rEl.ValueKind != JsonValueKind.Object) continue;
+                                            if (rEl.TryGetProperty("action", out var act) && act.ValueKind == JsonValueKind.Object)
+                                            {
+                                                if (act.TryGetProperty("type", out var t) && t.GetString()?.Equals("uml", StringComparison.OrdinalIgnoreCase) == true)
+                                                {
+                                                    if (act.TryGetProperty("generateImage", out var gen) && gen.ValueKind == JsonValueKind.True)
+                                                    {
+                                                        requiresUmlImage = true;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if (requiresUmlImage) break;
+                            }
+                        }
+                        catch { }
+                        if (requiresUmlImage) break;
+                    }
+                }
+            }
+            catch { }
+
+            if (requiresUmlImage)
+            {
+                try
+                {
+                    static bool IsExeOnPath(string exeName)
+                    {
+                        try
+                        {
+                            var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                            var paths = pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+                            var candidates = new[] { exeName, exeName + ".cmd", exeName + ".exe" };
+                            foreach (var p in paths)
+                            {
+                                foreach (var c in candidates)
+                                {
+                                    var f = Path.Combine(p, c);
+                                    if (File.Exists(f)) return true;
+                                }
+                            }
+                        }
+                        catch { }
+                        return false;
+                    }
+
+                    // quick check for Mermaid CLI (mmdc) on PATH
+                    var mermaidAvailable = IsExeOnPath("mmdc");
+
+                    if (!mermaidAvailable)
+                    {
+                        // Try to use installers if available
+                        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                        var installerAsmPath = Directory.EnumerateFiles(baseDir, "FindNeedleToolInstallers.dll", SearchOption.AllDirectories).FirstOrDefault();
+                        if (!string.IsNullOrEmpty(installerAsmPath) && File.Exists(installerAsmPath))
+                        {
+                            var instAsm = Assembly.LoadFrom(installerAsmPath);
+                            var managerType = instAsm.GetType("FindNeedleToolInstallers.UmlDependencyManager");
+                        if (managerType != null)
+                        {
+                            object? manager = null;
+                            try
+                            {
+                                manager = Activator.CreateInstance(managerType);
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    var ctors = managerType.GetConstructors().OrderBy(c => c.GetParameters().Length).ToList();
+                                    foreach (var c in ctors)
+                                    {
+                                        var ps = c.GetParameters();
+                                        var ctorArgs = ps.Select(p => (object?)null).ToArray();
+                                        try
+                                        {
+                                            manager = c.Invoke(ctorArgs);
+                                            if (manager != null) break;
+                                        }
+                                        catch { }
+                                    }
+                                }
+                                catch { }
+                            }
+                            var areInstalledMethod = managerType.GetMethod("AreAllImageDependenciesInstalled");
+                            var installed = areInstalledMethod != null && manager != null && (bool)areInstalledMethod.Invoke(manager, null)!;
+                                if (!installed)
+                                {
+                                    Console.Write("Mermaid/PlantUML tooling is not available. Install now via bundled installers? (y/N): ");
+                                    var resp = Console.ReadLine();
+                                // Automatically install missing UML dependencies when detected
+                                try
+                                {
+                                    Console.WriteLine("Mermaid/PlantUML tooling is not available. Installing missing tools via bundled installers...");
+                                    var installMethod = managerType.GetMethod("InstallAllMissingAsync");
+                                    if (installMethod != null)
+                                    {
+                                        var task = (System.Threading.Tasks.Task)installMethod.Invoke(manager, new object[] { null, System.Threading.CancellationToken.None })!;
+                                        task.Wait();
+                                        Console.WriteLine("Installation complete. Proceeding with search...");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("Installer API not available; UML image generation will be skipped.");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Installer failed: {ex.Message}. Proceeding without UML images.");
+                                    Logger.Instance.Log($"Installer invocation failed: {ex.Message}");
+                                }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Mermaid CLI (mmdc) not found on PATH and installers not available. UML images will be skipped. To enable image generation, install mmdc or use the UX Diagram Tools page.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Instance.Log($"Error checking/installing UML dependencies: {ex.Message}");
+                }
+            }
+        }
+        catch { }
+
         // Show the concrete files that will be searched (short summary, not verbose).
         try
         {
@@ -179,10 +369,67 @@ internal class Program
         var outputBase = AppDomain.CurrentDomain.BaseDirectory;
         var outputFolder = Path.Combine(outputBase, "output");
 
-        Console.WriteLine("If correct, please enter to search, otherwise ctrl-c to exit");
-        var input = Console.ReadLine();
-        if (!cancel || input != null) //input will be null when its control+c
+        // Support a --force / -f flag to skip interactive confirmations (useful for scripting)
+        var cmdArgs = Environment.GetCommandLineArgs();
+        var force = cmdArgs != null && cmdArgs.Any(a => a.Equals("--force", StringComparison.OrdinalIgnoreCase) || a.Equals("-f", StringComparison.OrdinalIgnoreCase) || a.Equals("--yes", StringComparison.OrdinalIgnoreCase) || a.Equals("-y", StringComparison.OrdinalIgnoreCase));
+
+        // Support a flag to clear existing output before running: --clear-existing-output, --clear-output, --clean-output, -c
+        var clearExisting = cmdArgs != null && cmdArgs.Any(a =>
+            a.Equals("--clear-existing-output", StringComparison.OrdinalIgnoreCase)
+            || a.Equals("--clear-output", StringComparison.OrdinalIgnoreCase)
+            || a.Equals("--clean-output", StringComparison.OrdinalIgnoreCase)
+            || a.Equals("-c", StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (!force)
         {
+            Console.WriteLine("If correct, please enter to search, otherwise ctrl-c to exit");
+            var input = Console.ReadLine();
+            if (cancel || input == null) // input will be null when it's control+c
+            {
+                // user cancelled, exit early
+                Environment.Exit(0);
+            }
+        }
+        else
+        {
+            Logger.Instance.Log("Force flag present: skipping confirmation to start search");
+        }
+
+        // Proceed with search (either forced or after user confirmation)
+        // Note: keep original cancel handling in case of Ctrl-C during run
+        if (cancel) Environment.Exit(0);
+        // If requested, clear existing output files before we enumerate/create output folder
+        if (clearExisting)
+        {
+            try
+            {
+                if (Directory.Exists(outputFolder))
+                {
+                    var files = Directory.GetFiles(outputFolder);
+                    foreach (var f in files)
+                    {
+                        try
+                        {
+                            File.Delete(f);
+                            Logger.Instance.Log($"Deleted existing output file: {f}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Instance.Log($"Failed to delete output file {f}: {ex.Message}");
+                        }
+                    }
+                }
+                else
+                {
+                    try { Directory.CreateDirectory(outputFolder); } catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Instance.Log($"Error clearing existing output files: {ex.Message}");
+            }
+        }
             // Enumerate output folder before running so user can see what existed
             try
             {
@@ -267,31 +514,38 @@ internal class Program
                 Console.WriteLine("Searching...");
                 x.RunThrough();
             }
-        }
         Console.WriteLine("Done");
 
         try
         {
-            // Default is No: only open when user explicitly answers 'y' or 'Y'
-            Console.Write("Open output folder? (y/N): ");
-            var openResp = Console.ReadLine();
-            if (!string.IsNullOrWhiteSpace(openResp) && openResp.Trim().StartsWith("y", StringComparison.OrdinalIgnoreCase))
+            // If forced, skip the prompt to open output folder
+            if (force)
             {
-                if (!Directory.Exists(outputFolder))
+                Logger.Instance.Log("Force flag present: skipping prompt to open output folder");
+            }
+            else
+            {
+                // Default is No: only open when user explicitly answers 'y' or 'Y'
+                Console.Write("Open output folder? (y/N): ");
+                var openResp = Console.ReadLine();
+                if (!string.IsNullOrWhiteSpace(openResp) && openResp.Trim().StartsWith("y", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine($"Output folder does not exist: {outputFolder}");
-                }
-                else
-                {
-                    try
+                    if (!Directory.Exists(outputFolder))
                     {
-                        var psi = new ProcessStartInfo { FileName = outputFolder, UseShellExecute = true };
-                        Process.Start(psi);
+                        Console.WriteLine($"Output folder does not exist: {outputFolder}");
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Logger.Instance.Log($"Failed to open output folder: {ex.Message}");
-                        Console.WriteLine("Failed to open output folder: " + ex.Message);
+                        try
+                        {
+                            var psi = new ProcessStartInfo { FileName = outputFolder, UseShellExecute = true };
+                            Process.Start(psi);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Instance.Log($"Failed to open output folder: {ex.Message}");
+                            Console.WriteLine("Failed to open output folder: " + ex.Message);
+                        }
                     }
                 }
             }

@@ -14,6 +14,9 @@ public class UmlRule
     [JsonPropertyName("match")]
     public string Match { get; set; } = string.Empty;
 
+    [JsonPropertyName("useRegex")]
+    public bool? UseRegex { get; set; }
+
     [JsonPropertyName("unmatch")]
     public string? Unmatch { get; set; }
 
