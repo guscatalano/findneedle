@@ -135,7 +135,7 @@
         ,
         {
           "name": "export-crashes-to-csv",
-          "match": "crash|native_crash|DiskReadException",
+          "match": "crash|native_crash|DiskReadException|OutOfMemoryException|StackOverflowException|A \\.NET application failed|faulting application|access violation",
           "enabled": true,
           "action": {
             "type": "output",
