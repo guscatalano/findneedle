@@ -96,7 +96,12 @@ public class MermaidUMLGenerator : IUMLGenerator
         }
 
         Logger.Instance.Log($"[MermaidUMLGenerator] Using mmdc at: {mmdcPath}");
+        try { Console.WriteLine($"[MermaidUMLGenerator] Using mmdc at: {mmdcPath}"); } catch { }
         Logger.Instance.Log($"[MermaidUMLGenerator] Node directory: {nodeDir}");
+        try { Console.WriteLine($"[MermaidUMLGenerator] Node directory: {nodeDir}"); } catch { }
+
+        // Announce which input/output pair is being processed so console users can trace progress
+        try { Console.WriteLine($"[MermaidUMLGenerator] Processing: {inputPath} -> {outputPath}"); } catch { }
 
         // Use the original input file for mmdc by default (no truncation).
         var inputPathForMmdc = inputPath;
@@ -119,13 +124,14 @@ public class MermaidUMLGenerator : IUMLGenerator
                 cleaned.Add(ln);
             }
 
-            if (cleaned.Count != lines.Length)
-            {
-                var cleanPath = Path.Combine(Path.GetDirectoryName(inputPathForMmdc) ?? Path.GetTempPath(), Path.GetFileNameWithoutExtension(inputPathForMmdc) + ".clean.mmd");
-                File.WriteAllLines(cleanPath, cleaned);
-                inputPathForMmdc = cleanPath;
-                Logger.Instance.Log($"[MermaidUMLGenerator] Cleaned mermaid input written: {cleanPath}");
-            }
+                if (cleaned.Count != lines.Length)
+                {
+                    var cleanPath = Path.Combine(Path.GetDirectoryName(inputPathForMmdc) ?? Path.GetTempPath(), Path.GetFileNameWithoutExtension(inputPathForMmdc) + ".clean.mmd");
+                    File.WriteAllLines(cleanPath, cleaned);
+                    inputPathForMmdc = cleanPath;
+                    Logger.Instance.Log($"[MermaidUMLGenerator] Cleaned mermaid input written: {cleanPath}");
+                    try { Console.WriteLine($"[MermaidUMLGenerator] Cleaned mermaid input written: {cleanPath}"); } catch { }
+                }
         }
         catch (Exception ex)
         {
@@ -134,36 +140,18 @@ public class MermaidUMLGenerator : IUMLGenerator
         }
 
         var arguments = $"-i \"{inputPathForMmdc}\" -o \"{outputPath}\"";
-        // Optionally dump a line-numbered copy of the .mmd passed to mmdc for easier debugging.
-        try
-        {
-            var dumpLines = Environment.GetEnvironmentVariable("FINDNEEDLE_MERMAID_DUMP_NUMBERED");
-            if (!string.IsNullOrEmpty(dumpLines) && (dumpLines == "1" || dumpLines.Equals("true", StringComparison.OrdinalIgnoreCase)))
-            {
-                try
-                {
-                    var lines = File.ReadAllLines(inputPathForMmdc);
-                    var numbered = lines.Select((ln, idx) => $"{idx + 1:000}: {ln}");
-                    var dumpPath = Path.ChangeExtension(inputPathForMmdc, ".numbered.mmd.txt");
-                    File.WriteAllLines(dumpPath, numbered);
-                    Logger.Instance.Log($"[MermaidUMLGenerator] Wrote numbered mermaid file: {dumpPath}");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Instance.Log($"[MermaidUMLGenerator] Failed to write numbered mermaid dump: {ex.Message}");
-                }
-            }
-        }
-        catch { }
+        // numbered dump feature removed; no environment-controlled numbered dump is produced
 
-        if (PackagedAppCommandRunner.IsPackagedApp)
+                if (PackagedAppCommandRunner.IsPackagedApp)
         {
             Logger.Instance.Log($"[MermaidUMLGenerator] Running via PackagedAppCommandRunner (packaged app)");
+                    try { Console.WriteLine($"[MermaidUMLGenerator] Running via PackagedAppCommandRunner: {mmdcPath} {arguments}"); } catch { }
             try
             {
                 var pathAdditions = nodeDir != null ? new[] { nodeDir } : null;
                 var exitCode = PackagedAppCommandRunner.RunCommand(mmdcPath, arguments, nodeDir ?? Path.GetDirectoryName(mmdcPath)!, 60000, pathAdditions);
                 Logger.Instance.Log($"[MermaidUMLGenerator] Process exit code: {exitCode}");
+                        try { Console.WriteLine($"[MermaidUMLGenerator] Packaged runner exit code: {exitCode}"); } catch { }
 
                 if (File.Exists(outputPath))
                 {
@@ -178,9 +166,10 @@ public class MermaidUMLGenerator : IUMLGenerator
                 throw new Exception("Mermaid CLI timed out after 60 seconds");
             }
         }
-        else
+            else
         {
             Logger.Instance.Log($"[MermaidUMLGenerator] Starting process directly (unpackaged app)...");
+                try { Console.WriteLine($"[MermaidUMLGenerator] Starting process directly: {mmdcPath} {arguments}"); } catch { }
 
             var processStartInfo = new ProcessStartInfo
             {
@@ -217,10 +206,17 @@ public class MermaidUMLGenerator : IUMLGenerator
             process.WaitForExit();
 
             Logger.Instance.Log($"[MermaidUMLGenerator] Process exit code: {process.ExitCode}");
+            try { Console.WriteLine($"[MermaidUMLGenerator] Process exit code: {process.ExitCode}"); } catch { }
             if (!string.IsNullOrWhiteSpace(stdout))
+            {
                 Logger.Instance.Log($"[MermaidUMLGenerator] stdout: {stdout}");
+                try { Console.WriteLine($"[MermaidUMLGenerator] stdout: {stdout}"); } catch { }
+            }
             if (!string.IsNullOrWhiteSpace(stderr))
+            {
                 Logger.Instance.Log($"[MermaidUMLGenerator] stderr: {stderr}");
+                try { Console.WriteLine($"[MermaidUMLGenerator] stderr: {stderr}"); } catch { }
+            }
 
             if (File.Exists(outputPath))
             {

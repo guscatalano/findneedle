@@ -72,8 +72,11 @@ public class PlantUMLGenerator : IUMLGenerator
             throw new InvalidOperationException("Could not determine Java bin directory.");
 
         Logger.Instance.Log($"[PlantUMLGenerator] Using Java at: {javaPath}");
+        try { Console.WriteLine($"[PlantUMLGenerator] Using Java at: {javaPath}"); } catch { }
         Logger.Instance.Log($"[PlantUMLGenerator] PlantUML JAR: {jarPath}");
+        try { Console.WriteLine($"[PlantUMLGenerator] PlantUML JAR: {jarPath}"); } catch { }
         Logger.Instance.Log($"[PlantUMLGenerator] Input file: {inputPath}");
+        try { Console.WriteLine($"[PlantUMLGenerator] Input file: {inputPath}"); } catch { }
 
         var expectedOutput = Path.ChangeExtension(inputPath, ".png");
         

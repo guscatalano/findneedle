@@ -43,7 +43,6 @@ internal class Program
             if (line.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 line.IndexOf("failed", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 line.IndexOf("search complete", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                line.IndexOf("output written", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 line.IndexOf("cancel", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 line.IndexOf("warning", StringComparison.OrdinalIgnoreCase) >= 0)
             {
@@ -474,24 +473,42 @@ internal class Program
                             Logger.Instance.Log($"New output files ({added.Count}):");
                             Console.WriteLine("Output files written:");
                             foreach (var f in added)
-                            {
-                                Logger.Instance.Log($"Output written: {f}");
-                                Console.WriteLine(f);
-                            }
+                                {
+                                    // Print concise relative path to the console. Do not log the same "Output written"
+                                    // message here to avoid duplicating full paths on the console (they remain in
+                                    // other component logs). Keep the console output short and user-friendly.
+                                    try
+                                    {
+                                        var rel = Path.GetRelativePath(outputFolder, f);
+                                        Console.WriteLine(rel);
+                                    }
+                                    catch
+                                    {
+                                        Console.WriteLine(Path.GetFileName(f));
+                                    }
+                                }
                         }
                         else
                         {
                             Logger.Instance.Log("No new output files were created.");
                             Console.WriteLine("No new output files were created.");
                             // Also print all current files to help user locate outputs
-                            if (afterFiles.Count > 0)
-                            {
-                                Console.WriteLine("Current output files:");
-                                foreach (var f in afterFiles)
+                                if (afterFiles.Count > 0)
                                 {
-                                    Console.WriteLine(f);
+                                    Console.WriteLine("Current output files:");
+                                    foreach (var f in afterFiles)
+                                    {
+                                        try
+                                        {
+                                            var rel = Path.GetRelativePath(outputFolder, f);
+                                            Console.WriteLine(rel);
+                                        }
+                                        catch
+                                        {
+                                            Console.WriteLine(Path.GetFileName(f));
+                                        }
+                                    }
                                 }
-                            }
                             else
                             {
                                 Console.WriteLine("Output folder is empty.");
