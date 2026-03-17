@@ -7,6 +7,7 @@ using FindNeedlePluginLib;
 
 namespace findneedle.Implementations.Outputs;
 
+[Obsolete("NullOutput is deprecated. Simply don't add any output section to your RuleDSL file if you don't want output.")]
 public class NullOutput : ISearchOutput
 {
 

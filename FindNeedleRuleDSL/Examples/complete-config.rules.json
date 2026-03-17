@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Complete Configuration Example - Single Source of Truth",
+  "description": "Demonstrates RuleDSL as the single configuration file, including plugin/system settings",
+  
+  "systemConfig": {
+    "useGlobalPluginConfig": false,
+    
+    "plugins": {
+      "searchQueryClass": "NuSearchQuery",
+      "fakeLoadPluginPath": "FakeLoadPlugin.exe",
+      "userRegistryPluginKey": "Software\\FindNeedle\\Plugins",
+      "userRegistryPluginKeyEnabled": false,
+      "entries": [
+        {
+          "name": "BasicText",
+          "path": "BasicTextPlugin.dll",
+          "enabled": true
+        },
+        {
+          "name": "ETW",
+          "path": "ETWPlugin.dll",
+          "enabled": true
+        },
+        {
+          "name": "EventLog",
+          "path": "EventLogPlugin.dll",
+          "enabled": true
+        }
+      ]
+    },
+    
+    "search": {
+      "name": "Production Error Analysis",
+      "storageType": "Auto",
+      "useSynchronousSearch": false,
+      "defaultDepth": "Intermediate"
+    },
+    
+    "tools": {
+      "plantUmlPath": "",
+      "mermaidCliPath": ""
+    }
+  },
+  
+  "sections": [
+    {
+      "name": "NoiseFilter",
+      "description": "Filter out debug and verbose logs",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "exclude-debug",
+          "match": "DEBUG|TRACE|VERBOSE",
+          "unmatch": "ERROR|CRITICAL",
+          "enabled": true,
+          "action": { "type": "exclude" }
+        },
+        {
+          "name": "include-errors",
+          "match": "ERROR|CRITICAL|FATAL",
+          "enabled": true,
+          "action": { "type": "include" }
+        }
+      ]
+    },
+    {
+      "name": "ErrorClassification",
+      "description": "Tag and classify errors by type",
+      "purpose": "enrichment",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "tag-database-errors",
+          "match": "SQL|database|query timeout",
+          "enabled": true,
+          "action": { "type": "tag", "value": "DatabaseError" }
+        },
+        {
+          "name": "tag-network-errors",
+          "match": "connection refused|timeout|network",
+          "enabled": true,
+          "action": { "type": "tag", "value": "NetworkError" }
+        },
+        {
+          "name": "tag-crash",
+          "match": "crash|exception|fault|access violation",
+          "enabled": true,
+          "action": { "type": "tag", "value": "Crash" }
+        }
+      ]
+    },
+    {
+      "name": "OutputResults",
+      "description": "Export filtered and enriched results",
+      "purpose": "output",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "csv-output",
+          "enabled": true,
+          "action": {
+            "type": "output",
+            "format": "csv",
+            "path": "errors_{date}.csv",
+            "fields": ["timestamp", "level", "message", "tags"],
+            "includeHeaders": true
+          }
+        },
+        {
+          "name": "json-output",
+          "enabled": true,
+          "action": {
+            "type": "output",
+            "format": "json",
+            "path": "errors_{date}.json",
+            "pretty": true
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace findneedle.Implementations;
 
+[Obsolete("OutputToPlainFile is deprecated. Use RuleDSL output sections instead. Migration: { \"sections\": [{ \"name\": \"Export\", \"purpose\": \"output\", \"rules\": [{ \"action\": { \"type\": \"output\", \"format\": \"txt\", \"path\": \"results.txt\" } }] }] }")]
 public class OutputToPlainFile : ISearchOutput
 {
     private string filename = "";

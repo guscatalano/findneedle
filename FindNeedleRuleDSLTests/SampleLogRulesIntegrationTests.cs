@@ -81,8 +81,8 @@ public class SampleLogRulesIntegrationTests
     [TestMethod]
     public void SampleLog_HasExpectedLineCount()
     {
-        // sample.log should have 25 log entries
-        Assert.AreEqual(25, _logResults.Count, "Expected 25 log lines in sample.log");
+        // sample.log should have 23 log entries
+        Assert.AreEqual(23, _logResults.Count, "Expected 23 log lines in sample.log");
     }
 
     [TestMethod]
@@ -101,9 +101,9 @@ public class SampleLogRulesIntegrationTests
     {
         var json = File.ReadAllText(_sampleRulesPath);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
-        
+
         var sections = doc.RootElement.GetProperty("sections");
-        Assert.AreEqual(3, sections.GetArrayLength(), "Expected 3 sections: ErrorFilter, SecurityEnrichment, CrashDetection");
+        Assert.AreEqual(5, sections.GetArrayLength(), "Expected 5 sections: ErrorFilter, UmlInclusion, SecurityEnrichment, CrashDetection, ExportResults");
         
         // Verify each section has providers (required for the plugin)
         foreach (var section in sections.EnumerateArray())
@@ -132,8 +132,8 @@ public class SampleLogRulesIntegrationTests
         var errorLines = _logResults.Count(r => 
             r.GetSearchableData().Contains("ERROR") || 
             r.GetSearchableData().Contains("CRITICAL"));
-        
-        Assert.AreEqual(6, errorLines, "Expected 6 lines with ERROR or CRITICAL");
+
+        Assert.AreEqual(11, errorLines, "Expected 11 lines with ERROR or CRITICAL");
     }
 
     [TestMethod]
@@ -156,7 +156,7 @@ public class SampleLogRulesIntegrationTests
 
         // Should find "A .NET application failed"
         var dotNetCrashCount = processor.GetTagCount("DotNetCrash");
-        Assert.AreEqual(1, dotNetCrashCount, "Expected 1 DotNetCrash tag");
+        Assert.AreEqual(2, dotNetCrashCount, "Expected 2 DotNetCrash tags");
     }
 
     [TestMethod]

@@ -3,6 +3,126 @@ using System.Text.Json.Serialization;
 
 namespace FindNeedleRuleDSL;
 
+// System Configuration (replaces/extends PluginConfig)
+public class SystemConfig
+{
+    /// <summary>
+    /// If true, use global PluginConfig.json. If false, only use settings defined in this rules file.
+    /// Default: true (backward compatible - always use global config unless explicitly disabled)
+    /// </summary>
+    [JsonPropertyName("useGlobalPluginConfig")]
+    public bool UseGlobalPluginConfig { get; set; } = true;
+
+    /// <summary>
+    /// Plugin configuration - overrides global config when useGlobalPluginConfig=false
+    /// or merges with global config when useGlobalPluginConfig=true
+    /// </summary>
+    [JsonPropertyName("plugins")]
+    public PluginConfiguration? Plugins { get; set; }
+
+    /// <summary>
+    /// System-wide search settings
+    /// </summary>
+    [JsonPropertyName("search")]
+    public SearchConfiguration? Search { get; set; }
+
+    /// <summary>
+    /// External tool paths (PlantUML, etc.)
+    /// </summary>
+    [JsonPropertyName("tools")]
+    public ToolConfiguration? Tools { get; set; }
+}
+
+public class PluginConfiguration
+{
+    /// <summary>
+    /// List of plugins to load (name + path + enabled flag)
+    /// </summary>
+    [JsonPropertyName("entries")]
+    public List<PluginEntry>? Entries { get; set; }
+
+    /// <summary>
+    /// Path to fake load plugin executable
+    /// </summary>
+    [JsonPropertyName("fakeLoadPluginPath")]
+    public string? FakeLoadPluginPath { get; set; }
+
+    /// <summary>
+    /// Which ISearchQuery implementation to use (e.g., "NuSearchQuery", "SearchQuery")
+    /// </summary>
+    [JsonPropertyName("searchQueryClass")]
+    public string? SearchQueryClass { get; set; }
+
+    /// <summary>
+    /// Registry key for user-installed plugins (e.g., "Software\\FindNeedle\\Plugins")
+    /// </summary>
+    [JsonPropertyName("userRegistryPluginKey")]
+    public string? UserRegistryPluginKey { get; set; }
+
+    /// <summary>
+    /// Enable/disable loading plugins from registry
+    /// </summary>
+    [JsonPropertyName("userRegistryPluginKeyEnabled")]
+    public bool UserRegistryPluginKeyEnabled { get; set; } = false;
+}
+
+public class PluginEntry
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = string.Empty;
+
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; set; } = true;
+
+    [JsonPropertyName("disabledReason")]
+    public string? DisabledReason { get; set; }
+}
+
+public class SearchConfiguration
+{
+    /// <summary>
+    /// Storage type: "InMemory", "SqlLite", or "Auto"
+    /// </summary>
+    [JsonPropertyName("storageType")]
+    public string? StorageType { get; set; }
+
+    /// <summary>
+    /// Use synchronous search (blocking) vs asynchronous (background)
+    /// </summary>
+    [JsonPropertyName("useSynchronousSearch")]
+    public bool UseSynchronousSearch { get; set; } = false;
+
+    /// <summary>
+    /// Default search depth for all locations: "Shallow", "Intermediate", "Deep"
+    /// </summary>
+    [JsonPropertyName("defaultDepth")]
+    public string? DefaultDepth { get; set; }
+
+    /// <summary>
+    /// Search query name/description
+    /// </summary>
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+}
+
+public class ToolConfiguration
+{
+    /// <summary>
+    /// Path to PlantUML JAR file
+    /// </summary>
+    [JsonPropertyName("plantUmlPath")]
+    public string? PlantUmlPath { get; set; }
+
+    /// <summary>
+    /// Path to Mermaid CLI (mmdc) executable
+    /// </summary>
+    [JsonPropertyName("mermaidCliPath")]
+    public string? MermaidCliPath { get; set; }
+}
+
 public class UnifiedRuleSet
 {
     [JsonPropertyName("schemaVersion")]
@@ -13,6 +133,9 @@ public class UnifiedRuleSet
 
     [JsonPropertyName("title")]
     public string? Title { get; set; }
+
+    [JsonPropertyName("systemConfig")]
+    public SystemConfig? SystemConfig { get; set; }
 
     [JsonPropertyName("sections")]
     public List<UnifiedRuleSection> Sections { get; set; } = new();

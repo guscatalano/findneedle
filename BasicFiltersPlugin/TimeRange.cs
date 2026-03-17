@@ -8,6 +8,7 @@ using FindNeedlePluginLib;
 
 namespace findneedle.Implementations;
 
+[Obsolete("TimeRangeFilter is deprecated. Use RuleDSL filter sections with timestamp matching. See DEPRECATED_PLUGINS_MIGRATION.md for examples.")]
 public class TimeRangeFilter : ISearchFilter, IPluginDescription, ICommandLineParser
 {
     public DateTime start;

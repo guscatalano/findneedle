@@ -11,6 +11,7 @@ namespace findneedle.Implementations;
 
 
 
+[Obsolete("TimeAgoFilter is deprecated. Use RuleDSL filter sections with timestamp matching. See DEPRECATED_PLUGINS_MIGRATION.md for examples.")]
 public class TimeAgoFilter : ISearchFilter, ICommandLineParser, IPluginDescription
 {
     public void Clone(ICommandLineParser parser)

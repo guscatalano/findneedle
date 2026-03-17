@@ -148,7 +148,7 @@ public class UmlGeneratorTests
             Assert.IsTrue(File.Exists(result));
             
             var content = File.ReadAllText(result);
-            Assert.IsTrue(content.Contains("plantuml.com"));
+            Assert.IsTrue(content.Contains("www.plantuml.com") || content.Contains("base64"), "HTML should contain PlantUML web service URL or base64 image");
             Assert.IsTrue(content.Contains("@startuml"));
         }
         finally

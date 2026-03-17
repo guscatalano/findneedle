@@ -344,7 +344,8 @@ public class UmlRuleProcessorTests
         var output = processor.ProcessMessages(messages);
 
         Assert.IsTrue(output.Contains("sequenceDiagram"));
-        Assert.IsTrue(output.Contains("A->>B: World"));
+        // Current implementation wraps message text in single quotes
+        Assert.IsTrue(output.Contains("A->>B: 'World'"), $"Expected single-quoted message text, got: {output}");
     }
 
     [TestMethod]

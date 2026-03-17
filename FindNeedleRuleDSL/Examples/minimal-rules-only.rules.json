@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Minimal Rules-Only Configuration",
+  "description": "No system config - uses global PluginConfig.json entirely (backward compatible)",
+  
+  "sections": [
+    {
+      "name": "ErrorFilter",
+      "purpose": "filter",
+      "rules": [
+        {
+          "name": "include-errors",
+          "match": "ERROR|CRITICAL",
+          "action": { "type": "include" }
+        }
+      ]
+    },
+    {
+      "name": "TagErrors",
+      "purpose": "enrichment",
+      "rules": [
+        {
+          "name": "tag-critical",
+          "match": "CRITICAL|FATAL",
+          "action": { "type": "tag", "value": "Critical" }
+        }
+      ]
+    }
+  ]
+}

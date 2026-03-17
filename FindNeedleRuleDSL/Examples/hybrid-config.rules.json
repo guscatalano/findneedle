@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Hybrid Configuration Example - Merge with Global Config",
+  "description": "Uses global PluginConfig.json but overrides specific search settings",
+  
+  "systemConfig": {
+    "useGlobalPluginConfig": true,
+    
+    "search": {
+      "name": "Quick Error Scan",
+      "storageType": "InMemory",
+      "useSynchronousSearch": true,
+      "defaultDepth": "Shallow"
+    }
+  },
+  
+  "sections": [
+    {
+      "name": "QuickFilter",
+      "purpose": "filter",
+      "rules": [
+        {
+          "name": "errors-only",
+          "match": "ERROR|CRITICAL",
+          "action": { "type": "include" }
+        }
+      ]
+    },
+    {
+      "name": "QuickOutput",
+      "purpose": "output",
+      "rules": [
+        {
+          "name": "simple-csv",
+          "action": {
+            "type": "output",
+            "format": "csv",
+            "path": "quick_scan.csv"
+          }
+        }
+      ]
+    }
+  ]
+}

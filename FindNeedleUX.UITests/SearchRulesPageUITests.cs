@@ -196,8 +196,11 @@ namespace FindNeedleUX.UITests
 
         /// <summary>
         /// Test that Apply button exists and is visible
+        /// NOTE: Ignored because SearchRulesPage does not implement Apply/Cancel buttons.
+        /// The page is a view-only configuration browser without submission functionality.
         /// </summary>
         [TestMethod]
+        [Ignore("SearchRulesPage does not have Apply button - page is view-only")]
         public void ApplyButton_Exists()
         {
             // Arrange & Act
@@ -213,8 +216,11 @@ namespace FindNeedleUX.UITests
 
         /// <summary>
         /// Test that Cancel button exists and is visible
+        /// NOTE: Ignored because SearchRulesPage does not implement Apply/Cancel buttons.
+        /// The page is a view-only configuration browser without submission functionality.
         /// </summary>
         [TestMethod]
+        [Ignore("SearchRulesPage does not have Cancel button - page is view-only")]
         public void CancelButton_Exists()
         {
             // Arrange & Act - Cancel button doesn't have x:Name, find by Content text
@@ -238,16 +244,15 @@ namespace FindNeedleUX.UITests
             var browseButton = FindElementByName("BrowseButton");
             var ruleFilesListBox = FindElementByName("RuleFilesListBox");
             var ruleSectionsListView = FindElementByName("RuleSectionsListView");
-            var applyButton = FindElementByName("ApplyButton");
-            // Cancel button doesn't have x:Name, find by Content text
-            var cancelButton = _mainWindow?.FindFirstDescendant(cf => cf.ByName("Cancel"));
+            var removeButton = FindElementByName("RemoveButton");
+            var purposeFilterCombo = FindElementByName("PurposeFilterCombo");
 
-            // Assert
+            // Assert - Test only elements that actually exist in SearchRulesPage.xaml
             Assert.IsNotNull(browseButton, "BrowseButton should be initialized");
             Assert.IsNotNull(ruleFilesListBox, "RuleFilesListBox should be initialized");
             Assert.IsNotNull(ruleSectionsListView, "RuleSectionsListView should be initialized");
-            Assert.IsNotNull(applyButton, "ApplyButton should be initialized");
-            Assert.IsNotNull(cancelButton, "Cancel button should be initialized");
+            Assert.IsNotNull(removeButton, "RemoveButton should be initialized");
+            Assert.IsNotNull(purposeFilterCombo, "PurposeFilterCombo should be initialized");
         }
 
         /// <summary>

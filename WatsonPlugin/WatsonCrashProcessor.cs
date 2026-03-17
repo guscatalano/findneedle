@@ -7,6 +7,8 @@ using findneedle;
 using FindNeedlePluginLib;
 
 namespace findneedle.Implementations.ResultProcessors;
+
+[Obsolete("WatsonCrashProcessor is deprecated. Use RuleDSL enrichment sections instead. See FindNeedleRuleDSL/Examples/crash-detection.rules.json for a complete replacement with tagging for .NET crashes, OOM, access violations, etc.")]
 public class WatsonCrashProcessor : IResultProcessor
 {
     readonly List<ISearchResult> resultList = new();

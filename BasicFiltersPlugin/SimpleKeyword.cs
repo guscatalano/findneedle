@@ -4,6 +4,7 @@ using Windows.ApplicationModel.Activation;
 
 namespace findneedle.Implementations;
 
+[Obsolete("SimpleKeywordFilter is deprecated. Use RuleDSL filter sections instead. See crash-detection.rules.json for examples. Migration: { \"sections\": [{ \"name\": \"KeywordFilter\", \"purpose\": \"filter\", \"rules\": [{ \"match\": \"your-keyword\", \"action\": { \"type\": \"include\" } }] }] }")]
 public class SimpleKeywordFilter : ISearchFilter, ICommandLineParser, IPluginDescription
 {
     public void Clone(ICommandLineParser parser)

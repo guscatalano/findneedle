@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using FindNeedleRuleDSL;
 
 namespace findneedle.RuleDSL;
 
@@ -257,6 +258,144 @@ public class RuleLoader
         catch
         {
             return new List<dynamic>();
+        }
+    }
+
+    /// <summary>
+    /// Load complete rule set with system configuration from a single file.
+    /// Returns UnifiedRuleSet with typed SystemConfig.
+    /// </summary>
+    public UnifiedRuleSet? LoadUnifiedRuleSet(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"Rules file not found: {filePath}");
+        }
+
+        try
+        {
+            var json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<UnifiedRuleSet>(json, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to parse unified rule set from {filePath}: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Load and merge system configuration from multiple rule files.
+    /// Last file wins for conflicting settings.
+    /// </summary>
+    public SystemConfig? LoadMergedSystemConfig(IEnumerable<string> rulePaths)
+    {
+        if (rulePaths == null || !rulePaths.Any())
+            return null;
+
+        SystemConfig? merged = null;
+
+        foreach (var path in rulePaths)
+        {
+            try
+            {
+                var ruleSet = LoadUnifiedRuleSet(path);
+                if (ruleSet?.SystemConfig == null)
+                    continue;
+
+                if (merged == null)
+                {
+                    // First config found - use as base
+                    merged = ruleSet.SystemConfig;
+                }
+                else
+                {
+                    // Merge subsequent configs (last wins)
+                    MergeSystemConfig(merged, ruleSet.SystemConfig);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading system config from {path}: {ex.Message}");
+            }
+        }
+
+        return merged;
+    }
+
+    /// <summary>
+    /// Merge source config into target (source wins for non-null values).
+    /// </summary>
+    private void MergeSystemConfig(SystemConfig target, SystemConfig source)
+    {
+        // If source explicitly disables global config, that takes precedence
+        if (!source.UseGlobalPluginConfig)
+            target.UseGlobalPluginConfig = false;
+
+        // Merge plugin configuration
+        if (source.Plugins != null)
+        {
+            if (target.Plugins == null)
+            {
+                target.Plugins = source.Plugins;
+            }
+            else
+            {
+                if (source.Plugins.SearchQueryClass != null)
+                    target.Plugins.SearchQueryClass = source.Plugins.SearchQueryClass;
+                if (source.Plugins.FakeLoadPluginPath != null)
+                    target.Plugins.FakeLoadPluginPath = source.Plugins.FakeLoadPluginPath;
+                if (source.Plugins.UserRegistryPluginKey != null)
+                    target.Plugins.UserRegistryPluginKey = source.Plugins.UserRegistryPluginKey;
+                target.Plugins.UserRegistryPluginKeyEnabled = source.Plugins.UserRegistryPluginKeyEnabled;
+
+                // Merge plugin entries
+                if (source.Plugins.Entries != null && source.Plugins.Entries.Count > 0)
+                {
+                    target.Plugins.Entries ??= new List<PluginEntry>();
+                    foreach (var entry in source.Plugins.Entries)
+                    {
+                        // Remove existing entry with same name
+                        target.Plugins.Entries.RemoveAll(e => e.Name.Equals(entry.Name, StringComparison.OrdinalIgnoreCase));
+                        // Add new entry
+                        target.Plugins.Entries.Add(entry);
+                    }
+                }
+            }
+        }
+
+        // Merge search configuration
+        if (source.Search != null)
+        {
+            if (target.Search == null)
+            {
+                target.Search = source.Search;
+            }
+            else
+            {
+                if (source.Search.StorageType != null)
+                    target.Search.StorageType = source.Search.StorageType;
+                target.Search.UseSynchronousSearch = source.Search.UseSynchronousSearch;
+                if (source.Search.DefaultDepth != null)
+                    target.Search.DefaultDepth = source.Search.DefaultDepth;
+                if (source.Search.Name != null)
+                    target.Search.Name = source.Search.Name;
+            }
+        }
+
+        // Merge tool configuration
+        if (source.Tools != null)
+        {
+            if (target.Tools == null)
+            {
+                target.Tools = source.Tools;
+            }
+            else
+            {
+                if (source.Tools.PlantUmlPath != null)
+                    target.Tools.PlantUmlPath = source.Tools.PlantUmlPath;
+                if (source.Tools.MermaidCliPath != null)
+                    target.Tools.MermaidCliPath = source.Tools.MermaidCliPath;
+            }
         }
     }
 }
