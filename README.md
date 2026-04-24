@@ -52,7 +52,52 @@
 
 ## Architecture
 
-### Plugin System
+### RuleDSL Configuration System (Primary)
+
+findneedle uses a **RuleDSL** (Rule Domain Specific Language) for configuration, replacing the deprecated plugin-based system. RuleDSL is a JSON-based configuration system that allows you to define filters, enrichments, and outputs declaratively.
+
+**Key Benefits:**
+- 📝 Declarative configuration in JSON format
+- 🔧 No code changes or rebuilds required
+- 🔄 Easy to share and version-control rules
+- 🎯 Support for filter, enrichment, and output rules
+
+**Quick Start:**
+1. Create a rules file (e.g., `my-rules.rules.json`)
+2. Define your rules in the `sections` array
+3. Run your search with the rules file
+
+**Example:**
+```json
+{
+  "schemaVersion": "2.0",
+  "title": "Error Detection",
+  "inputs": [
+    {
+      "type": "folder",
+      "path": "C:\\Logs",
+      "depth": "Intermediate"
+    }
+  ],
+  "sections": [
+    {
+      "name": "ErrorFilter",
+      "purpose": "filter",
+      "rules": [
+        {
+          "field": "level",
+          "match": "ERROR|CRITICAL",
+          "actions": [{ "type": "include" }]
+        }
+      ]
+    }
+  ]
+}
+```
+
+See `FindNeedleRuleDSL/README.md` for complete documentation.
+
+### Plugin System (Deprecated)
 
 findneedle features a flexible plugin system that allows users to extend and customize how logs are processed and searched. Plugins can be developed independently and integrated with the application to add new functionality, such as custom log parsers, advanced filtering, or integration with external tools.
 
@@ -61,6 +106,8 @@ findneedle features a flexible plugin system that allows users to extend and cus
 
 - **Creating a Plugin:**  
   To create a plugin, implement the required interface (see the `/plugins` directory for examples) and register your plugin with the application. The system will automatically detect and initialize available plugins on startup.
+
+**Note:** The plugin system is deprecated in favor of RuleDSL. See `DEPRECATED_PLUGINS_MIGRATION.md` for migration guidance.
 
 ### Input, Output, and Processor System
 

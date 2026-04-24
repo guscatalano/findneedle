@@ -27,13 +27,15 @@ public class OutputRuleProcessor
     public void ProcessOutputRules(
         List<ISearchResult> results,
         IEnumerable<object> outputSections,
-        object? ruleSet = null)
+        object? ruleSet = null,
+        System.Threading.CancellationToken cancellationToken = default)
     {
         foreach (var section in outputSections)
         {
+            if (cancellationToken.IsCancellationRequested) break;
             try
             {
-                ProcessSection(results, section);
+                ProcessSection(results, section, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -43,7 +45,7 @@ public class OutputRuleProcessor
         }
     }
 
-    private void ProcessSection(List<ISearchResult> results, object section)
+    private void ProcessSection(List<ISearchResult> results, object section, System.Threading.CancellationToken cancellationToken = default)
     {
         try
         {

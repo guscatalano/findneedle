@@ -40,7 +40,7 @@ public interface ISearchQuery
     void Step1_LoadAllLocationsInMemory();
     List<ISearchResult> Step2_GetFilteredResults();
     public void Step3_ResultsToProcessors();
-    public void Step4_ProcessAllResultsToOutput();
+    public void Step4_ProcessAllResultsToOutput(System.Threading.CancellationToken cancellationToken = default);
     public void Step5_Done();
 
     //No matter the implementation, this function should run through every step

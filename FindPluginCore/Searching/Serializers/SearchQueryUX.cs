@@ -108,7 +108,7 @@ public class SearchQueryUX
         q.Step1_LoadAllLocationsInMemory(cancellationToken);
         var x = q.Step2_GetFilteredResults(cancellationToken);
         q.Step3_ResultsToProcessors();
-        q.Step4_ProcessAllResultsToOutput();
+        q.Step4_ProcessAllResultsToOutput(cancellationToken);
         return x;
     }
 }

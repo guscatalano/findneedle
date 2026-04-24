@@ -398,4 +398,54 @@ public class RuleLoader
             }
         }
     }
+
+    /// <summary>
+    /// Load input locations from rule files.
+    /// </summary>
+    public List<InputLocation>? LoadInputLocations(IEnumerable<string> rulePaths)
+    {
+        if (rulePaths == null || !rulePaths.Any())
+            return null;
+
+        var allInputs = new List<InputLocation>();
+
+        foreach (var path in rulePaths)
+        {
+            try
+            {
+                var ruleSet = LoadUnifiedRuleSet(path);
+                if (ruleSet?.Inputs != null && ruleSet.Inputs.Count > 0)
+                {
+                    allInputs.AddRange(ruleSet.Inputs);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading input locations from {path}: {ex.Message}");
+            }
+        }
+
+        return allInputs.Count > 0 ? allInputs : null;
+    }
+
+    /// <summary>
+    /// Load input locations from a single rule file.
+    /// </summary>
+    public List<InputLocation>? LoadInputLocationsFromFile(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"Rules file not found: {filePath}");
+        }
+
+        try
+        {
+            var ruleSet = LoadUnifiedRuleSet(filePath);
+            return ruleSet?.Inputs;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to parse input locations from {filePath}: {ex.Message}", ex);
+        }
+    }
 }

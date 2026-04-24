@@ -6,7 +6,30 @@
   <IsTestProject>true</IsTestProject>
   <PlatformTarget>x64</PlatformTarget>
   <SelfContained>false</SelfContained>
+  
+  <!-- Disable Windows App SDK to avoid MSB4062 error -->
+  <EnableMsixTooling>false</EnableMsixTooling>
+  <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
+  <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+  <AppxBundle>Never</AppxBundle>
+  <UseWinUI>false</UseWinUI>
+  <WindowsAppSDKWinUI>false</WindowsAppSDKWinUI>
+  <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
 </PropertyGroup>
+
+<ItemGroup>
+  <!-- Reference the compiled assembly instead of project reference to avoid Windows App SDK issues -->
+  <Reference Include="FindNeedleUX">
+    <HintPath>..\FindNeedleUX\bin\Debug\net8.0-windows10.0.19041.0\win-x64\FindNeedleUX.dll</HintPath>
+  </Reference>
+</ItemGroup>
+
+<!-- Disable Windows App SDK targets -->
+<Target Name="DisableWindowsAppSDK" BeforeTargets="CoreCompile">
+  <PropertyGroup>
+    <EnableMsixTooling>false</EnableMsixTooling>
+  </PropertyGroup>
+</Target>
 
 <ItemGroup>
   <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

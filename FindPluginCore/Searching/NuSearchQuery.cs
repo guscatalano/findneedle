@@ -73,6 +73,14 @@ public class NuSearchQuery : ISearchQuery
     public List<string> RulesConfigPaths { get; set; } = new();
     public object? LoadedRules { get; set; }
 
+    // SystemConfig support
+    private FindNeedleRuleDSL.SystemConfig? _systemConfig;
+    public FindNeedleRuleDSL.SystemConfig? SystemConfig
+    {
+        get => _systemConfig;
+        set => _systemConfig = value;
+    }
+
     // Rule processing components
     private readonly RuleLoader _ruleLoader = new();
     private readonly RuleEvaluationEngine _ruleEngine = new();
@@ -163,16 +171,21 @@ public class NuSearchQuery : ISearchQuery
     {
         Logger.Instance.Log("RunThrough (with cancellation) started");
         LoadRules(); // Load rules before processing
+        
+        // Apply SystemConfig settings if available
+        ApplySystemConfig();
+        
         Step1_LoadAllLocationsInMemory(cancellationToken);
         _currentResultList = Step2_GetFilteredResults(cancellationToken);
         Step3_ResultsToProcessors();
-        Step4_ProcessAllResultsToOutput();
+        Step4_ProcessAllResultsToOutput(cancellationToken);
         Step5_Done();
         Logger.Instance.Log("RunThrough (with cancellation) finished");
     }
 
     /// <summary>
     /// Load rules from configured paths.
+    /// Also loads SystemConfig from RuleDSL.
     /// </summary>
     private void LoadRules()
     {
@@ -185,6 +198,10 @@ public class NuSearchQuery : ISearchQuery
         try
         {
             LoadedRules = _ruleLoader.LoadRulesFromPaths(RulesConfigPaths);
+            
+            // Load SystemConfig from rule files
+            _systemConfig = _ruleLoader.LoadMergedSystemConfig(RulesConfigPaths);
+            
             Logger.Instance.Log($"Loaded rules from {RulesConfigPaths.Count} paths");
         }
         catch (Exception ex)
@@ -443,7 +460,7 @@ public class NuSearchQuery : ISearchQuery
         }
     }
 
-    public void Step4_ProcessAllResultsToOutput()
+    public void Step4_ProcessAllResultsToOutput(CancellationToken cancellationToken = default)
     {
         Logger.Instance.Log("Step4_ProcessAllResultsToOutput started");
         _stepnotifysink.NotifyStep(SearchStep.AtOutput);
@@ -451,12 +468,13 @@ public class NuSearchQuery : ISearchQuery
         // Apply output rules if loaded
         if (LoadedRules != null)
         {
-            ApplyRuleOutput();
+            ApplyRuleOutput(cancellationToken);
         }
         
         // Run standard outputs
         foreach (var output in _outputs)
         {
+            if (cancellationToken.IsCancellationRequested) break;
             Logger.Instance.Log($"Writing all output with: {output.GetType().Name}");
             output.WriteAllOutput(_currentResultList);
         }
@@ -466,7 +484,7 @@ public class NuSearchQuery : ISearchQuery
     /// <summary>
     /// Apply rule-based output from loaded rules with purpose="output".
     /// </summary>
-    private void ApplyRuleOutput()
+    private void ApplyRuleOutput(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -478,7 +496,7 @@ public class NuSearchQuery : ISearchQuery
             }
 
             Logger.Instance.Log($"Found {outputSections.Count()} output section(s)");
-            _outputProcessor.ProcessOutputRules(_currentResultList, outputSections);
+            _outputProcessor.ProcessOutputRules(_currentResultList, outputSections, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -490,6 +508,54 @@ public class NuSearchQuery : ISearchQuery
     {
         Logger.Instance.Log("Step5_Done called");
         _stepnotifysink.NotifyStep(SearchStep.Total);
+    }
+    
+    /// <summary>
+    /// Applies SystemConfig settings from RuleDSL to the search query.
+    /// </summary>
+    private void ApplySystemConfig()
+    {
+        if (_systemConfig == null)
+            return;
+
+        Logger.Instance.Log("Applying SystemConfig settings");
+
+        // Apply search configuration
+        if (_systemConfig.Search != null)
+        {
+            // Apply search depth if specified
+            if (!string.IsNullOrEmpty(_systemConfig.Search.DefaultDepth))
+            {
+                try
+                {
+                    var depth = (SearchLocationDepth)Enum.Parse(typeof(SearchLocationDepth), _systemConfig.Search.DefaultDepth, true);
+                    SetDepthForAllLocations(depth);
+                    Logger.Instance.Log($"Applied search depth: {depth}");
+                }
+                catch
+                {
+                    Logger.Instance.Log($"Invalid depth setting: {_systemConfig.Search.DefaultDepth}");
+                }
+            }
+
+            // Apply search name if specified
+            if (!string.IsNullOrEmpty(_systemConfig.Search.Name))
+            {
+                Name = _systemConfig.Search.Name;
+                Logger.Instance.Log($"Applied search name: {_systemConfig.Search.Name}");
+            }
+        }
+
+        // Apply plugin configuration if needed
+        if (_systemConfig.Plugins != null)
+        {
+            // Plugin loading is handled by PluginManager
+            // SystemConfig can override which ISearchQuery class to use
+            if (!string.IsNullOrEmpty(_systemConfig.Plugins.SearchQueryClass))
+            {
+                Logger.Instance.Log($"SearchQuery class: {_systemConfig.Plugins.SearchQueryClass}");
+            }
+        }
     }
     #endregion
 

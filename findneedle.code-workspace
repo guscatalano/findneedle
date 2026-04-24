@@ -3,5 +3,16 @@
 		{
 			"path": "."
 		}
-	]
+	],
+	"settings": {
+		"chat.tools.terminal.autoApprove": {
+			"dotnet build": true,
+			"dotnet test": true,
+			"dotnet clean": true,
+			"dotnet sln": true,
+			"Get-Unique": true,
+			"ForEach-Object": true,
+			"Group-Object": true
+		}
+	}
 }

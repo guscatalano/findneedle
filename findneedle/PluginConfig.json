@@ -3,7 +3,7 @@
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
   "SearchQueryClass": "NuSearchQuery",
   "UserRegistryPluginKey": "Software\\FindNeedle\\Plugins",
-  "UserRegistryPluginKeyEnabled": true,
+  "UserRegistryPluginKeyEnabled": false,
   "PlantUMLPath": "",
-  "_comment": "All plugins deprecated - use RuleDSL instead. See DEPRECATED_PLUGINS_MIGRATION.md"
+  "_comment": "RuleDSL is the primary configuration system. PluginConfig is kept for backward compatibility only."
 }

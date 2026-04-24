@@ -137,6 +137,9 @@ public class UnifiedRuleSet
     [JsonPropertyName("systemConfig")]
     public SystemConfig? SystemConfig { get; set; }
 
+    [JsonPropertyName("inputs")]
+    public List<InputLocation>? Inputs { get; set; }
+
     [JsonPropertyName("sections")]
     public List<UnifiedRuleSection> Sections { get; set; } = new();
 }
@@ -230,4 +233,38 @@ public class UnifiedRuleAction
 
     [JsonPropertyName("pretty")]
     public bool Pretty { get; set; } = true; // For JSON/XML: pretty print
+}
+
+// Input Location Configuration
+public class InputLocation
+{
+    /// <summary>
+    /// Type of input location: "folder", "file", "eventlog", "etw", "zip"
+    /// </summary>
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to the location (file path, folder path, etc.)
+    /// </summary>
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Search depth: "Shallow", "Intermediate", "Deep", "Crush"
+    /// </summary>
+    [JsonPropertyName("depth")]
+    public string? Depth { get; set; }
+
+    /// <summary>
+    /// Optional name/description for this input
+    /// </summary>
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Enable/disable this input
+    /// </summary>
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; set; } = true;
 }

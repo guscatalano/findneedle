@@ -16,6 +16,10 @@ public class SearchQuery : ISearchQuery
     {
         //Old implementation
         LoadRules();
+        
+        // Apply SystemConfig settings if available
+        ApplySystemConfig();
+        
         LoadAllLocationsInMemory();
         GetFilteredResults();
         ProcessAllResultsToOutput();
@@ -29,9 +33,13 @@ public class SearchQuery : ISearchQuery
     public void RunThrough(CancellationToken cancellationToken)
     {
         LoadRules();
+        
+        // Apply SystemConfig settings if available
+        ApplySystemConfig();
+        
         LoadAllLocationsInMemory(cancellationToken);
         GetFilteredResults(cancellationToken);
-        ProcessAllResultsToOutput(); // TODO: propagate token if outputs support it
+        ProcessAllResultsToOutput(cancellationToken);
         PrintOutputFilesToConsole();
         GetSearchStatsOutput();
     }
@@ -159,6 +167,14 @@ public class SearchQuery : ISearchQuery
     private RuleEvaluationEngine? _ruleEngine;
     private RuleLoader? _ruleLoader;
 
+    // SystemConfig support
+    private FindNeedleRuleDSL.SystemConfig? _systemConfig;
+    public FindNeedleRuleDSL.SystemConfig? SystemConfig
+    {
+        get => _systemConfig;
+        set => _systemConfig = value;
+    }
+
     public SearchQuery()
     {
         stats = new();
@@ -189,6 +205,7 @@ public class SearchQuery : ISearchQuery
 
     /// <summary>
     /// Loads rules from configured paths. Called automatically if RulesConfigPaths are set.
+    /// Also loads SystemConfig and input locations from RuleDSL.
     /// </summary>
     public void LoadRules()
     {
@@ -197,6 +214,57 @@ public class SearchQuery : ISearchQuery
             try
             {
                 _loadedRules = _ruleLoader.LoadRulesFromPaths(RulesConfigPaths);
+                
+                // Load SystemConfig from rule files
+                _systemConfig = _ruleLoader.LoadMergedSystemConfig(RulesConfigPaths);
+                
+                // Load input locations from rule files
+                var inputLocations = _ruleLoader.LoadInputLocations(RulesConfigPaths);
+                if (inputLocations != null && inputLocations.Count > 0)
+                {
+                    // Add input locations to the query
+                    foreach (var input in inputLocations)
+                    {
+                        if (input.Enabled)
+                        {
+                            // Create appropriate location based on type
+                            ISearchLocation? location = null;
+                            switch (input.Type.ToLower())
+                            {
+                                case "folder":
+                                    location = new FolderLocation() { path = input.Path };
+                                    break;
+                                case "file":
+                                    // For single file, use FolderLocation with the file path
+                                    location = new FolderLocation() { path = Path.GetDirectoryName(input.Path) ?? "" };
+                                    break;
+                                case "eventlog":
+                                    // EventLogPlugin would be loaded via PluginManager
+                                    break;
+                                case "etw":
+                                    // ETWPlugin would be loaded via PluginManager
+                                    break;
+                                case "zip":
+                                    // ZipFilePlugin would be loaded via PluginManager
+                                    break;
+                            }
+          
+                            if (location != null)
+                            {
+                                // Setup extension processors
+                                var extensions = PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IFileExtensionProcessor>();
+                                (location as FolderLocation)?.SetExtensionProcessorList(extensions);
+                                
+                                if (!string.IsNullOrEmpty(input.Depth))
+                                {
+                                    location.SetSearchDepth((SearchLocationDepth)Enum.Parse(typeof(SearchLocationDepth), input.Depth, true));
+                                }
+                                Locations.Add(location);
+                            }
+                        }
+                    }
+                }
+                
                 System.Diagnostics.Debug.WriteLine($"Loaded rules from {RulesConfigPaths.Count} paths");
             }
             catch (Exception ex)
@@ -297,12 +365,13 @@ public class SearchQuery : ISearchQuery
         stats.ReportToConsole();
     }
 
-    public void ProcessAllResultsToOutput()
+    public void ProcessAllResultsToOutput(System.Threading.CancellationToken cancellationToken = default)
     {
         //Remember to provide one that does it one y one at some point 
         foreach(var output in Outputs)
         {
-            output.WriteAllOutput(GetFilteredResults());
+            if (cancellationToken.IsCancellationRequested) break;
+            output.WriteAllOutput(GetFilteredResults(cancellationToken));
         }
     }
 
@@ -360,9 +429,61 @@ public class SearchQuery : ISearchQuery
             System.Diagnostics.Debug.WriteLine($"Error applying rule enrichment: {ex.Message}");
         }
     }
-    public void Step4_ProcessAllResultsToOutput()
+
+    /// <summary>
+    /// Applies SystemConfig settings from RuleDSL to the search query.
+    /// </summary>
+    private void ApplySystemConfig()
     {
-        ProcessAllResultsToOutput();
+        if (_systemConfig == null)
+            return;
+
+        // Apply search configuration
+        if (_systemConfig.Search != null)
+        {
+            // Apply storage type if specified
+            if (!string.IsNullOrEmpty(_systemConfig.Search.StorageType))
+            {
+                // Storage type is handled by the storage layer, not directly by SearchQuery
+                // The storage type will be used when creating storage instances
+                System.Diagnostics.Debug.WriteLine($"Storage type: {_systemConfig.Search.StorageType}");
+            }
+
+            // Apply search depth if specified
+            if (!string.IsNullOrEmpty(_systemConfig.Search.DefaultDepth))
+            {
+                try
+                {
+                    var depth = (SearchLocationDepth)Enum.Parse(typeof(SearchLocationDepth), _systemConfig.Search.DefaultDepth, true);
+                    SetDepthForAllLocations(depth);
+                }
+                catch
+                {
+                    System.Diagnostics.Debug.WriteLine($"Invalid depth setting: {_systemConfig.Search.DefaultDepth}");
+                }
+            }
+
+            // Apply search name if specified
+            if (!string.IsNullOrEmpty(_systemConfig.Search.Name))
+            {
+                Name = _systemConfig.Search.Name;
+            }
+        }
+
+        // Apply plugin configuration if needed
+        if (_systemConfig.Plugins != null)
+        {
+            // Plugin loading is handled by PluginManager
+            // SystemConfig can override which ISearchQuery class to use
+            if (!string.IsNullOrEmpty(_systemConfig.Plugins.SearchQueryClass))
+            {
+                System.Diagnostics.Debug.WriteLine($"SearchQuery class: {_systemConfig.Plugins.SearchQueryClass}");
+            }
+        }
+    }
+    public void Step4_ProcessAllResultsToOutput(System.Threading.CancellationToken cancellationToken = default)
+    {
+        ProcessAllResultsToOutput(cancellationToken);
     }
     public void Step5_Done()
     {
