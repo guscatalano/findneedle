@@ -97,6 +97,27 @@ findneedle uses a **RuleDSL** (Rule Domain Specific Language) for configuration,
 
 See `FindNeedleRuleDSL/README.md` for complete documentation.
 
+### UML DSL - Sequence Diagram Generation
+
+The UML DSL also includes a powerful sequence diagram generation system that creates visual representations of log flows.
+
+**Key Features:**
+- 📊 Generate sequence diagrams from log messages
+- 🎨 Support for PlantUML and Mermaid syntax
+- 🖼️ Optional PNG image generation
+- 📝 Declarative rule-based configuration
+
+**Quick Start:**
+1. Create a rules file (e.g., `my-rules.rules.json`) defining participants and rules
+2. Add a UML output section to your RuleDSL configuration
+3. Run your search to generate diagrams
+
+**Examples:**
+- `FindNeedleUmlDsl/Examples/sample-uml.rules.json` - Web login flow with activations and notes
+- `FindNeedleUmlDsl/Examples/session-management.rules.json` - Session management flow
+
+See `FindNeedleUmlDsl/README.md` for complete documentation.
+
 ### Plugin System (Deprecated)
 
 findneedle features a flexible plugin system that allows users to extend and customize how logs are processed and searched. Plugins can be developed independently and integrated with the application to add new functionality, such as custom log parsers, advanced filtering, or integration with external tools.
