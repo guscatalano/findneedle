@@ -10,6 +10,8 @@ public class UmlRuleProcessor
     private readonly IUmlSyntaxTranslator _translator;
     private UmlRuleDefinition _definition = new();
 
+    public UmlRuleDefinition Definition => _definition;
+
     public UmlRuleProcessor(IUmlSyntaxTranslator translator)
     {
         _translator = translator;

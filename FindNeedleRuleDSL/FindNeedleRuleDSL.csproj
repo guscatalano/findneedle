@@ -11,5 +11,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+    <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
   </ItemGroup>
 </Project>

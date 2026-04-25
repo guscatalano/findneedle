@@ -15,6 +15,5 @@
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
     <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj" />
     <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
-    <ProjectReference Include="..\FindNeedleRuleDSL\FindNeedleRuleDSL.csproj" />
   </ItemGroup>
 </Project>
