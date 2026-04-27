@@ -130,6 +130,26 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: DiagramToolsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
                 break;
+            case "rules_home":
+                Logger.Instance.Log("Navigated: RuleDSLHomePage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RuleDSLHomePage));
+                break;
+            case "rules_locations":
+                Logger.Instance.Log("Navigated: SearchLocationsPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
+                break;
+            case "rules_filters":
+                Logger.Instance.Log("Navigated: SearchFiltersPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchFiltersPage));
+                break;
+            case "rules_enrichment":
+                Logger.Instance.Log("Navigated: SearchFiltersPage (enrichment)");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchFiltersPage));
+                break;
+            case "rules_uml":
+                Logger.Instance.Log("Navigated: DiagramToolsPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
+                break;
             case "logs":
                 Logger.Instance.Log("Navigated: LogsPage");
                 var logsWindow = new FindNeedleUX.Windows.LogsWindow();

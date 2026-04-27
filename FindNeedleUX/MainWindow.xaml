@@ -30,6 +30,13 @@
                 <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
                 <MenuFlyoutItem Text="Save" Click="MenuFlyoutItem_Click" Name="SaveWorkspace"/>
             </MenuBarItem>
+            <MenuBarItem Title="RuleDSL">
+                <MenuFlyoutItem Text="Home" Click="MenuFlyoutItem_Click" Name="rules_home"/>
+                <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="rules_locations"/>
+                <MenuFlyoutItem Text="Filters" Click="MenuFlyoutItem_Click" Name="rules_filters"/>
+                <MenuFlyoutItem Text="Enrichment" Click="MenuFlyoutItem_Click" Name="rules_enrichment"/>
+                <MenuFlyoutItem Text="UML" Click="MenuFlyoutItem_Click" Name="rules_uml"/>
+            </MenuBarItem>
             <MenuBarItem Title="SearchQuery">
                 <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="search_location"/>
                 <MenuFlyoutItem Text="Filters" Click="MenuFlyoutItem_Click" Name="search_filters"/>

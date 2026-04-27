@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FindNeedleUX.Pages.RuleDSLHomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="24">
+            <!-- Header -->
+            <StackPanel>
+                <TextBlock Text="FindNeedle" FontSize="28" FontWeight="Bold"/>
+                <TextBlock Text="RuleDSL Pipeline Configuration" FontSize="16" Foreground="Gray" Margin="0,8,0,0"/>
+            </StackPanel>
+
+            <!-- Quick Actions -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="Quick Actions" FontSize="18" FontWeight="Bold"/>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button Content="📁 Add Location" Padding="16,8" Click="OnAddLocationClicked"/>
+                    <Button Content="📝 New Rule" Padding="16,8" Click="OnNewRuleClicked"/>
+                    <Button Content="🖼️ UML Diagram" Padding="16,8" Click="OnUmlDiagramClicked"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Pipeline Configuration -->
+            <Border BorderBrush="Gray" BorderThickness="1" Padding="16" CornerRadius="4">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Pipeline Configuration" FontSize="18" FontWeight="Bold"/>
+                    
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Pipeline Name" FontSize="12" FontWeight="Bold"/>
+                        <TextBox PlaceholderText="Enter pipeline name" Width="400"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Rule Files" FontSize="12" FontWeight="Bold"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox PlaceholderText="Select rule file..." Width="400" IsReadOnly="True"/>
+                            <Button Content="Browse..." Click="OnBrowseRulesClicked"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Storage Type" FontSize="12" FontWeight="Bold"/>
+                        <ComboBox Width="200">
+                            <ComboBoxItem Content="Auto (Hybrid)" IsSelected="True"/>
+                            <ComboBoxItem Content="InMemory"/>
+                            <ComboBoxItem Content="SqlLite"/>
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Rule Sections -->
+            <Border BorderBrush="Gray" BorderThickness="1" Padding="16" CornerRadius="4">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Pipeline Sections" FontSize="18" FontWeight="Bold"/>
+                    
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Filters" FontSize="14" FontWeight="Bold"/>
+                        <TextBlock Text="No filters configured" Foreground="Gray"/>
+                        <Button Content="+ Add Filter" Width="120" Click="OnAddFilterClicked"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Enrichment" FontSize="14" FontWeight="Bold"/>
+                        <TextBlock Text="No enrichment rules configured" Foreground="Gray"/>
+                        <Button Content="+ Add Enrichment" Width="120" Click="OnAddEnrichmentClicked"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="UML" FontSize="14" FontWeight="Bold"/>
+                        <TextBlock Text="No UML diagrams configured" Foreground="Gray"/>
+                        <Button Content="+ Add UML" Width="120" Click="OnAddUmlClicked"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Action Buttons -->
+            <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                <Button Content="💾 Save" Padding="16,8" Click="OnSaveClicked"/>
+                <Button Content="🧪 Test" Padding="16,8" Click="OnTestClicked"/>
+                <Button Content="🚀 Run Search" Background="LightBlue" Padding="24,8" Click="OnRunSearchClicked"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
