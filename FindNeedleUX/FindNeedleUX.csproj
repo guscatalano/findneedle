@@ -46,7 +46,6 @@
     <None Remove="Pages\LogsPage.xaml" />
     <None Remove="Pages\PluginsPage.xaml" />
     <None Remove="Pages\RunSearchPage.xaml" />
-    <None Remove="Pages\SearchFiltersPage.xaml" />
     <None Remove="Pages\SearchLocationsPage.xaml" />
     <None Remove="Pages\SearchProcessorsPage.xaml" />
     <None Remove="Pages\SearchStatisticsPage.xaml" />
@@ -192,11 +191,6 @@
   </ItemGroup>
   <ItemGroup>
     <Page Update="Pages\SearchProcessorsPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
-    <Page Update="Pages\SearchFiltersPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>

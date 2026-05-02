@@ -1,24 +1,13 @@
-using findneedle.ETWPlugin;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
-using FindPluginCore;
-using FindPluginCore.GlobalConfiguration; // Add this for settings
-using findneedle.WDK;
+using FindPluginCore.GlobalConfiguration;
 using FindNeedleCoreUtils;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
-using Windows.Win32;
-using Windows.Win32.Foundation;
-using Windows.Win32.UI.WindowsAndMessaging;
-using System.Diagnostics;
-using Windows.ApplicationModel.DataTransfer;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Text;
 using FindNeedlePluginLib;
 
 namespace FindNeedleUX;
@@ -60,9 +49,8 @@ public sealed partial class MainWindow : Window
     {
         var query = MiddleLayerService.GetCurrentQuery();
         var locations = MiddleLayerService.Locations?.Count ?? 0;
-        var filters = MiddleLayerService.Filters?.Count ?? 0;
         var rules = query?.RulesConfigPaths?.Count ?? 0;
-        StatusStrip.Text = $"Locations: {locations} · Filters: {filters} · Rules: {rules} · Last run: {_lastRunSummary}";
+        StatusStrip.Text = $"Locations: {locations} · Rules: {rules} · Last run: {_lastRunSummary}";
     }
 
     private void SetWindowIcon(string iconPath)
@@ -95,10 +83,6 @@ public sealed partial class MainWindow : Window
             case "search_location":
                 Logger.Instance.Log("Navigated: SearchLocationsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
-                break;
-            case "search_filters":
-                Logger.Instance.Log("Navigated: SearchFiltersPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchFiltersPage));
                 break;
             case "search_rules":
                 Logger.Instance.Log("Navigated: SearchRulesPage");
@@ -172,10 +156,10 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
                 break;
             case "inspect_etl":
-                await InspectEtlFile();
+                await InspectionService.InspectEtlAsync(this, (show, text) => ShowSpinner(show, text));
                 break;
             case "inspect_binary":
-                await InspectBinaryFile();
+                await InspectionService.InspectBinaryAsync(this, (show, text) => ShowSpinner(show, text));
                 break;
             default:
                 Logger.Instance.Log($"Navigation error: unknown menu item {selectedFlyoutItem.Name}");
@@ -326,229 +310,6 @@ public sealed partial class MainWindow : Window
         {
             _quickActionCts.Cancel();
             SpinnerText.Text = "Cancelling...";
-        }
-    }
-
-    private async Task InspectEtlFile()
-    {
-        ShowSpinner(true, "Inspecting ETL file...");
-        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var picker = new FileOpenPicker()
-        {
-            ViewMode = PickerViewMode.List,
-            FileTypeFilter = { ".etl" },
-        };
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-        var file = await picker.PickSingleFileAsync();
-        if (file == null)
-        {
-            ShowSpinner(false);
-            return;
-        }
-        string etlPath = file.Path;
-        List<string> providers = null!;
-        Dictionary<string, string> sysInfo = null!;
-        ETLSummary reportSummary = null!;
-        string error = null!;
-        string tempPath = null!;
-        await Task.Run(() =>
-        {
-            try
-            {
-                providers = EtlInfoExtractor.GetProviders(etlPath);
-                sysInfo = EtlInfoExtractor.GetSystemInfo(etlPath);
-                tempPath = TempStorage.GetNewTempPath("tracerpt");
-                reportSummary = TracerptRunner.RunAndParseReport(etlPath, tempPath);
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-            }
-        });
-        ShowSpinner(false);
-        var dialog = new ContentDialog
-        {
-            Title = error == null ? "ETL Inspection Results" : "ETL Inspection Error",
-            CloseButtonText = "OK",
-            XamlRoot = this.Content.XamlRoot
-        };
-        if (error != null)
-        {
-            dialog.Content = $"Error inspecting ETL: {error}";
-        }
-        else
-        {
-            var content = new StackPanel();
-            content.Children.Add(new TextBlock { Text = $"Providers (TraceEvent) ({providers.Count}):", FontWeight = FontWeights.Bold });
-            foreach (var p in providers.Take(20))
-                content.Children.Add(new TextBlock { Text = p });
-            if (providers.Count > 20)
-                content.Children.Add(new TextBlock { Text = $"...and {providers.Count - 20} more" });
-            if (reportSummary != null && reportSummary.Providers != null && reportSummary.Providers.Count > 0)
-            {
-                content.Children.Add(new TextBlock { Text = $"\nProviders (tracerpt -report) ({reportSummary.Providers.Count}):", FontWeight = FontWeights.Bold, Margin = new Microsoft.UI.Xaml.Thickness(0, 8, 0, 0) });
-                foreach (var p in reportSummary.Providers.Take(20))
-                    content.Children.Add(new TextBlock { Text = p });
-                if (reportSummary.Providers.Count > 20)
-                    content.Children.Add(new TextBlock { Text = $"...and {reportSummary.Providers.Count - 20} more" });
-            }
-            if (!string.IsNullOrWhiteSpace(reportSummary?.WindowsBuildInfo))
-            {
-                content.Children.Add(new TextBlock { Text = $"\nWindows Build: {reportSummary.WindowsBuildInfo}", FontWeight = FontWeights.Bold, Margin = new Microsoft.UI.Xaml.Thickness(0, 8, 0, 0) });
-            }
-            content.Children.Add(new TextBlock { Text = "\nSystem Info:", FontWeight = FontWeights.Bold, Margin = new Microsoft.UI.Xaml.Thickness(0, 8, 0, 0) });
-            if (sysInfo == null || sysInfo.Count == 0)
-                content.Children.Add(new TextBlock { Text = "(No system info found)" });
-            else
-                foreach (var kv in sysInfo.Take(10))
-                    content.Children.Add(new TextBlock { Text = $"{kv.Key}: {kv.Value}" });
-            if (sysInfo != null && sysInfo.Count > 10)
-                content.Children.Add(new TextBlock { Text = $"...and {sysInfo.Count - 10} more" });
-            dialog.Content = content;
-        }
-        await dialog.ShowAsync();
-        if (tempPath != null)
-        {
-            TempStorage.DeleteSomeTempPath(tempPath);
-        }
-    }
-
-    private async Task InspectBinaryFile()
-    {
-        ShowSpinner(true, "Inspecting binary file...");
-        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var dialog = new ContentDialog
-        {
-            Title = "Inspect Binary (Experimental)",
-            CloseButtonText = "Cancel",
-            PrimaryButtonText = "Select File",
-            XamlRoot = this.Content.XamlRoot
-        };
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock { Text = "?? Inspect Binary is experimental and may not find all ETW providers.", Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.OrangeRed), Margin = new Microsoft.UI.Xaml.Thickness(0, 0, 0, 8) });
-        stack.Children.Add(new TextBlock { Text = "Select a binary file to inspect for ETW providers." });
-        dialog.Content = stack;
-        var result = await dialog.ShowAsync();
-        ShowSpinner(false);
-        if (result == ContentDialogResult.Primary)
-        {
-            await InspectBinaryFile_File();
-        }
-    }
-
-    private async Task InspectBinaryFile_File()
-    {
-        ShowSpinner(true, "Inspecting binary file...");
-        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var picker = new FileOpenPicker()
-        {
-            ViewMode = PickerViewMode.List,
-            FileTypeFilter = { ".exe", ".dll" },
-        };
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-        var file = await picker.PickSingleFileAsync();
-        if (file == null)
-        {
-            ShowSpinner(false);
-            return;
-        }
-        string binaryPath = file.Path;
-        List<(Guid guid, string? name)> providers = null!;
-        string error = null!;
-        await Task.Run(() =>
-        {
-            try
-            {
-                providers = EtwNativeProviderScanner.ExtractNativeEtwProviders(binaryPath);
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-            }
-        });
-        ShowSpinner(false);
-        var dialog = new ContentDialog
-        {
-            Title = error == null ? "ETW Providers in Binary" : "ETW Provider Extraction Error",
-            CloseButtonText = "OK",
-            MinWidth = 600,
-            XamlRoot = this.Content.XamlRoot
-        };
-        var content = new StackPanel();
-        if (error != null)
-        {
-            content.Children.Add(new TextBlock { Text = $"Error extracting ETW providers: {error}" });
-        }
-        else if (providers == null || providers.Count == 0)
-        {
-            content.Children.Add(new TextBlock { Text = "No ETW providers found in the selected binary." });
-        }
-        else
-        {
-            content.Children.Add(new TextBlock { Text = $"ETW Providers found ({providers.Count}):", FontWeight = FontWeights.Bold });
-            foreach (var p in providers)
-            {
-                var line = p.name != null ? $"{p.guid}  |  {p.name}" : p.guid.ToString();
-                content.Children.Add(new TextBlock { Text = line, FontFamily = new FontFamily("Consolas") });
-            }
-            var testButton = new Button { Content = "Test Collection", Margin = new Microsoft.UI.Xaml.Thickness(0, 12, 0, 0) };
-            testButton.Click += async (s, e) =>
-            {
-                dialog.Hide();
-                await InspectBinaryFile_TestCollection(binaryPath, providers.Select(x => x.name ?? x.guid.ToString()).ToList());
-            };
-            content.Children.Add(testButton);
-        }
-        dialog.Content = content;
-        await dialog.ShowAsync();
-    }
-
-    private async Task InspectBinaryFile_TestCollection(string binaryPath, List<string> providers)
-    {
-        ShowSpinner(true, "Testing ETW collection...");
-        var foundProviders = new List<(string provider, int count)>();
-        foreach (var provider in providers)
-        {
-            try
-            {
-                var collector = new ETWPlugin.Locations.LiveCollector();
-                collector.Setup(new List<string> { provider }, TimeSpan.FromSeconds(2), 0);
-                collector.StartCollecting();
-                await Task.Delay(2200);
-                collector.StopCollecting();
-                var count = collector.GetResultsInMemory().Count;
-                foundProviders.Add((provider, count));
-            }
-            catch { foundProviders.Add((provider, 0)); }
-        }
-        ShowSpinner(false);
-        var resultDialog = new ContentDialog
-        {
-            Title = "Test Collection Results",
-            CloseButtonText = "OK",
-            PrimaryButtonText = "Copy List",
-            MinWidth = 600,
-            XamlRoot = this.Content.XamlRoot
-        };
-        var content = new StackPanel();
-        if (foundProviders.Count == 0)
-        {
-            content.Children.Add(new TextBlock { Text = "No providers were tested." });
-        }
-        else
-        {
-            content.Children.Add(new TextBlock { Text = $"Providers tested (event count may include false positives):", FontWeight = FontWeights.Bold });
-            foreach (var p in foundProviders)
-                content.Children.Add(new TextBlock { Text = $"{p.provider} ({p.count})", FontFamily = new FontFamily("Consolas") });
-        }
-        resultDialog.Content = content;
-        var result = await resultDialog.ShowAsync();
-        if (result == ContentDialogResult.Primary && foundProviders.Count > 0)
-        {
-            var text = string.Join("\n", foundProviders.Select(x => x.provider));
-            var dataPackage = new DataPackage();
-            dataPackage.SetText(text);
-            Clipboard.SetContent(dataPackage);
         }
     }
 }

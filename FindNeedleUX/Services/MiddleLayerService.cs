@@ -203,33 +203,12 @@ public class MiddleLayerService
         }
     }
 
-    public static void RemoveFilterByName(string name)
-    {
-        var f = Filters.FirstOrDefault(x => x.GetName() == name);
-        if (f != null)
-        {
-            Filters.Remove(f);
-            UpdateSearchQuery();
-            NotifyStateChanged();
-        }
-    }
-
     public static ObservableCollection<LocationListItem> GetLocationListItems()
     {
         ObservableCollection<LocationListItem> test = new ObservableCollection<LocationListItem>();
         foreach (ISearchLocation loc in Locations)
         {
             test.Add(new LocationListItem() { Name = loc.GetName(), Description = loc.GetDescription() });
-        }
-        return test;
-    }
-
-    public static ObservableCollection<FilterListItem> GetFilterListItems()
-    {
-        ObservableCollection<FilterListItem> test = new ObservableCollection<FilterListItem>();
-        foreach (ISearchFilter fil in Filters)
-        {
-            test.Add(new FilterListItem() { Name = fil.GetName(), Description = fil.GetDescription() });
         }
         return test;
     }
