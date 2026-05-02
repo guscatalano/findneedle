@@ -11,7 +11,6 @@ using findneedle.Implementations;
 using FindNeedlePluginLib;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
-using FindNeedleUX.Services.WizardDef;
 using FindNeedleUX.ViewObjects;
 using FindPluginCore.Searching.Serializers;
 using Microsoft.UI.Xaml.Controls;
@@ -23,6 +22,10 @@ public class MiddleLayerService
     public static List<ISearchFilter> Filters = new();
     public static SearchQueryUX SearchQueryUX = new();
 
+    public static event Action StateChanged;
+
+    public static void NotifyStateChanged() => StateChanged?.Invoke();
+
     public static void AddFolderLocation(string location)
     {
         var folderloc = new FolderLocation() { path = location };
@@ -31,39 +34,7 @@ public class MiddleLayerService
 
         folderloc.SetExtensionProcessorList(extensions);
         Locations.Add(folderloc);
-    }
-
-    public static void AddTimeAgoFilter(TimeAgoUnit unit, int count)
-    {
-       // Filters.Add(new TimeAgoFilter(unit, count));
-    }
-
-    public static void AddTimeRangeFilter(DateTime start, DateTime end)
-    {
-       // Filters.Add(new TimeRangeFilter(start, end));
-    }
-    public static void AddEventLog(string eventlogname, bool useQueryAPI)
-    {
-        // Locations.Add(new LocalEventLogLocation(location));
-        /*
-        if (useQueryAPI)
-        {
-            Locations.Add(new LocalEventLogQueryLocation(eventlogname));
-        }
-        else
-        {
-            Locations.Add(new LocalEventLogLocation(eventlogname));
-        }*/
-    }
-
-    public static void AddKeywordFilter(string keyword)
-    {
-        //Filters.Add(new SimpleKeywordFilter(keyword));
-    }
-
-    public static void PageChanged(IWizard wizard, Page current)
-    {
-
+        NotifyStateChanged();
     }
 
     public static List<ISearchResult> GetSearchResults()
@@ -165,6 +136,7 @@ public class MiddleLayerService
             SearchResults = SearchQueryUX.GetSearchResults();
         }
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
+        NotifyStateChanged();
         return Task.FromResult(x.GetSummaryReport());
 
 
@@ -195,6 +167,7 @@ public class MiddleLayerService
             }
         }
         UpdateSearchQuery();
+        NotifyStateChanged();
     }
 
     public static void NewWorkspace()
@@ -203,6 +176,7 @@ public class MiddleLayerService
         Locations = new List<ISearchLocation>();
 
         UpdateSearchQuery();
+        NotifyStateChanged();
     }
 
     public static void SaveWorkspace(string filename)
@@ -215,6 +189,28 @@ public class MiddleLayerService
             SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(searchQueryConcrete);
             var json = r.GetQueryJson();
             File.WriteAllText(filename, json);
+        }
+    }
+
+    public static void RemoveLocationByName(string name)
+    {
+        var loc = Locations.FirstOrDefault(l => l.GetName() == name);
+        if (loc != null)
+        {
+            Locations.Remove(loc);
+            UpdateSearchQuery();
+            NotifyStateChanged();
+        }
+    }
+
+    public static void RemoveFilterByName(string name)
+    {
+        var f = Filters.FirstOrDefault(x => x.GetName() == name);
+        if (f != null)
+        {
+            Filters.Remove(f);
+            UpdateSearchQuery();
+            NotifyStateChanged();
         }
     }
 

@@ -24,32 +24,20 @@ public sealed partial class SearchFiltersPage : Page
     }
 
 
-    private void Button_Edit(object sender, RoutedEventArgs e)
-    {
-    }
-
     private void Button_Remove(object sender, RoutedEventArgs e)
     {
+        if (sender is Button { Tag: string name })
+        {
+            MiddleLayerService.RemoveFilterByName(name);
+            RecipeList = MiddleLayerService.GetFilterListItems();
+            VariedImageSizeRepeater.ItemsSource = RecipeList;
+        }
     }
 
-    private void Button_AddFilter(object sender, RoutedEventArgs e)
-    {
-        WizardSelectionService.GetInstance().StartWizard("Filter", (UIElement)sender, Callback);
-    }
-
-    private void Button_AddEnrichment(object sender, RoutedEventArgs e)
-    {
-        WizardSelectionService.GetInstance().StartWizard("Filter", (UIElement)sender, Callback);
-    }
-
-    private void Button_AddUML(object sender, RoutedEventArgs e)
-    {
-        WizardSelectionService.GetInstance().StartWizard("Filter", (UIElement)sender, Callback);
-    }
-
-    private void Callback(string test)
+private void Callback(string test)
     {
         RecipeList = MiddleLayerService.GetFilterListItems();
         VariedImageSizeRepeater.ItemsSource = RecipeList;
+        MiddleLayerService.NotifyStateChanged();
     }
 }

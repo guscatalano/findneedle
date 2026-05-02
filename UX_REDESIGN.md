@@ -1,306 +1,103 @@
 # FindNeedle UX Redesign (WinUI 3)
 
-## Overview
+## Goal
 
-The UX needs to be rethought to focus on the **RuleDSL workflow** as the primary configuration method, replacing the deprecated plugin-based system.
+Make the RuleDSL workflow the primary path. The plugin/SearchQuery flow stays
+available but stops being the default new-user entry point.
 
-**WinUI 3 Design Considerations:**
-- WinUI 3 uses XAML with Fluent Design System
-- Limited CSS-like styling - must use XAML resources and styles
-- No HTML/CSS - must use XAML controls and layouts
-- Theme resources: `ApplicationPageBackgroundThemeBrush`, `AccentColorBrush`
-- Controls: `NavigationView`, `Pivot`, `Card`, `TextBox`, `Button`
+## Current state (codebase, not aspiration)
 
-## Current Issues
+- Shell: `MainWindow.xaml` uses a top `MenuBar` + a content `Frame`. No `NavigationView`.
+- Entry pages:
+  - `WelcomePage` — shown on startup. Three quick-action buttons + empty
+    "Recent Pipelines" placeholder.
+  - `QuickLogWithRulesPage` — fully wired pick-a-log + pick-a-rules-file + run.
+    This is the only end-to-end RuleDSL flow that actually works today.
+  - `RuleDSLHomePage` — visual mockup. All Click handlers (`OnSaveClicked`,
+    `OnTestClicked`, `OnAddFilterClicked`, `OnAddEnrichmentClicked`,
+    `OnAddUmlClicked`, `OnNewRuleClicked`) are empty bodies.
+- Configuration pipeline (works, but split across pages):
+  `SearchLocationsPage` → `SearchFiltersPage` → `SearchRulesPage`
+  → `SearchProcessorsPage` → `RunSearchPage` → results viewer.
+- Result viewers (3, switched via `GlobalSettings.DefaultResultViewer`):
+  `ResultsWebPage`, `ResultsVCommunityPage`, `SearchResultPage`.
+- UML: `DiagramToolsPage` exists.
 
-1. **Fragmented Workflow**: Users must navigate through multiple pages (Locations, Filters, Processors, Plugins) to configure a search
-2. **Plugin-Centric**: The UI emphasizes plugins over the modern RuleDSL system
-3. **Complex Navigation**: Menu bar has too many options that confuse new users
-4. **No Unified View**: No single place to see the complete pipeline configuration
+## Issues with the current UI
 
-## Proposed UX Architecture
+1. **Two menus alias the same pages.** `RuleDSL > Locations/Filters/Enrichment`
+   navigates to the exact same pages as `SearchQuery > Locations/Filters`.
+   `Enrichment` literally opens `SearchFiltersPage`. New users have no way to
+   tell the menus apart.
+2. **`WelcomePage` quick actions don't match the real fast paths.** Its three
+   buttons go to configuration pages (`RunSearchPage`, `RuleDSLHomePage`,
+   `DiagramToolsPage`). The real one-click flows live in the top-bar
+   `Quick` menu (`Open Log File`, `Open Folder`, `Open Log with Rules`).
+3. **`RuleDSLHomePage` is decorative.** Save/Test/Add-Filter/Add-Enrichment/
+   Add-UML are no-ops. Run Search navigates to results without running.
+4. **No persistent state indicator.** Users cannot see "I have N locations,
+   M rule files loaded, last run produced K results" without navigating.
+5. **"Recent Pipelines" is always empty.** Empty-state placeholder that
+   never becomes non-empty.
 
-### 1. Main Dashboard (Home Page)
+## Phase 1 (the only phase that should exist right now)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🔍 FindNeedle                    [Search Box]  [⚙️] [🚀]   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Quick Actions                                              │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐                     │
-│  │ 📁 New  │  │ 📝 Rule │  │ 🖼️ UML  │                     │
-│  │ Search  │  │ Config  │  │ Diagram │                     │
-│  └─────────┘  └─────────┘  └─────────┘                     │
-│                                                             │
-│  Recent Pipelines                                           │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Error Detection Pipeline                            │    │
-│  │ 3 rules • Last run: 2 hours ago                     │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+### 1. Collapse duplicate menus
 
-### 2. RuleDSL Configuration Page (Primary)
+Drop the `RuleDSL` MenuBarItem. Keep `SearchQuery` and add a `Rules` item
+to it (navigates to `SearchRulesPage`). One configuration menu, no aliases.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  📝 RuleDSL Configuration                                   │
-├─────────────────────────────────────────────────────────────┤
-│  [Pipeline Name: ________]  [Version: 2.0]                 │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ 📂 Input Locations                                  │    │
-│  │ • C:\Logs (folder)                                  │    │
-│  │ • C:\App\app.log (file)                             │    │
-│  │ [+ Add Location]                                    │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ ⚙️ Pipeline Sections                                │    │
-│  │                                                       │    │
-│  │ [Filters] [Enrichment] [UML] [Output]               │    │
-│  │                                                       │    │
-│  │ ┌─────────────────────────────────────────────────┐ │    │
-│  │ │ Error Filter                                    │ │    │
-│  │ │ Field: level | Match: ERROR|CRITICAL            │ │    │
-│  │ │ Actions: include                                │ │    │
-│  │ └─────────────────────────────────────────────────┘ │ │    │
-│  │                                                       │    │
-│  │ ┌─────────────────────────────────────────────────┐ │ │    │
-│  │ │ Tag Critical                                    │ │ │    │
-│  │ │ Field: level | Match: Critical                  │ │ │    │
-│  │ │ Actions: tag: Critical                          │ │ │    │
-│  │ └─────────────────────────────────────────────────┘ │    │
-│  │                                                       │    │
-│  │ [+ Add Filter]  [+ Add Enrichment]  [+ Add UML]    │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  [💾 Save]  [🧪 Test]  [🚀 Run Search]                      │
-└─────────────────────────────────────────────────────────────┘
-```
+### 2. Rewire `WelcomePage` quick actions
 
-### 3. UML Diagram Page
+Map the three buttons to the actual fast paths in `MainWindow.MenuFlyoutItem_Click`:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🖼️ UML Diagram Configuration                               │
-├─────────────────────────────────────────────────────────────┤
-│  [Syntax: ▼ Mermaid]  [Output: ________.mmd]               │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Participants                                        │    │
-│  │ • Client (participant)                              │    │
-│  │ • Server (participant)                              │    │
-│  │ • Database (participant)                            │    │
-│  │ [+ Add Participant]                                 │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Rules                                               │    │
-│  │ • match: "request" → message Client → Server        │    │
-│  │ • match: "error" → note: Error detected             │    │
-│  │ [+ Add Rule]                                        │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Preview                                             │    │
-│  │ sequenceDiagram                                     │    │
-│  │   Client->>Server: Request                          │    │
-│  │   Server->>Database: Query                          │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  [🔄 Preview]  [🖼️ Export PNG]  [💾 Save]                  │
-└─────────────────────────────────────────────────────────────┘
-```
+- "📁 Open Log File"  → `QuickFileOpen()`
+- "📂 Open Folder"    → `QuickFolderOpen()`
+- "📝 Open Log with Rules" → navigate to `QuickLogWithRulesPage`
 
-### 4. Results Page
+### 3. Fix or delete `RuleDSLHomePage`
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  📊 Search Results                                          │
-├─────────────────────────────────────────────────────────────┤
-│  75 results found (25 filtered)  [📊 Stats] [🖼️ UML]      │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Timestamp          Level  Source       Message      │    │
-│  │ 2024-01-15 10:30   ERROR  AuthService  Auth failed │    │
-│  │ 2024-01-15 10:31   CRIT  Database     Timeout      │    │
-│  │ 2024-01-15 10:32   INFO   WebServer   Success      │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  [Export: CSV] [Export: JSON] [View: Web]                  │
-└─────────────────────────────────────────────────────────────┘
-```
+Pick one:
 
-## Key Design Principles (WinUI 3)
+- **Fix**: wire `OnRunSearchClicked` to `MiddleLayerService.RunSearch` (same
+  call the working `RunSearchPage.Button_Click` makes), wire `OnSaveClicked`
+  to `SaveWorkspace`, replace the empty Add-Filter/Enrichment/UML handlers
+  with a single `TextBox` that edits the rule JSON directly. RuleDSL JSON
+  is the single source of truth — show it.
+- **Delete**: remove from `MainWindow` menu, remove from `WelcomePage` button
+  target. Keep `QuickLogWithRulesPage` as the RuleDSL entry point.
 
-### 1. RuleDSL-First
-- RuleDSL is the primary configuration method
-- All other configuration (locations, filters, enrichment) is derived from RuleDSL
-- Plugin configuration is hidden or deprecated
+### 4. Persistent state strip
 
-### 2. Unified Pipeline View
-- Single page shows the complete pipeline
-- Visual representation of data flow
-- Easy to understand and modify
+Add a one-line strip at the top of the `Frame` content area in
+`MainWindow.xaml`, bound to `MiddleLayerService`:
 
-### 3. Progressive Disclosure
-- Start simple (quick actions)
-- Show advanced options only when needed
-- Hide deprecated features
+`Locations: 2 · Filters: 0 · Rules: 1 · Last run: 75 results (2 min ago)`
 
-### 4. Real-time Preview
-- Show UML diagram preview as you edit
-- Show filter results as you configure
-- Real-time validation of rules
+Three `TextBlock`s in a `Grid.Row="0"` above `contentFrame`, refreshed on
+navigation. ~40 lines.
 
-### 5. WinUI 3 Native Design
-- Use Fluent Design System
-- Leverage XAML resources and theme brushes
-- Use WinUI 3 controls: `NavigationView`, `Pivot`, `Card`, `TextBox`, `Button`
-- Use `ApplicationPageBackgroundThemeBrush` for background
-- Use `AccentColorBrush` for primary actions
-- Use `RevealFocus` for keyboard navigation
+### 5. Remove dead UI
 
-## XAML Implementation Details (WinUI 3)
+- "Recent Pipelines" section on `WelcomePage` (always empty) — delete or wire
+  to `GlobalSettings`-backed MRU of saved workspace paths.
 
-### Page Structure
-```xml
-<Page
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-    
-    <NavigationView x:Name="MainNav" 
-                    PaneDisplayMode="Left"
-                    IsPaneOpen="True">
-        <NavigationView.MenuItems>
-            <NavigationViewItem Content="Dashboard" Icon="Home" />
-            <NavigationViewItem Content="RuleDSL" Icon="Edit" />
-            <NavigationViewItem Content="UML" Icon="Picture" />
-            <NavigationViewItem Content="Results" Icon="Document" />
-        </NavigationView.MenuItems>
-        <Frame x:Name="ContentFrame" />
-    </NavigationView>
-</Page>
-```
+## Out of scope (do not ship in Phase 1)
 
-### Card Control
-```xml
-<Border Background="{ThemeResource CardBackgroundThemeBrush}"
-        BorderBrush="{ThemeResource CardBorderThemeBrush}"
-        BorderThickness="1"
-        CornerRadius="4">
-    <StackPanel Padding="24">
-        <TextBlock Text="Pipeline Configuration"
-                   Style="{StaticResource TitleTextBlockStyle}" />
-        <!-- Content here -->
-    </StackPanel>
-</Border>
-```
+- `NavigationView` migration (no user-visible value while pages still mirror
+  the legacy flow).
+- WebView2/Mermaid in-app UML preview.
+- Drag-and-drop rule reordering.
+- Undo/redo.
+- Pipeline canvas / data-flow visualization.
+- "Auto-convert old plugin configs to RuleDSL" (no migration path designed,
+  no consumer asking for it).
 
-### Button Styles
-```xml
-<Button Content="Run Search"
-        Background="{ThemeResource AccentColorBrush}"
-        Foreground="White"
-        CornerRadius="4"
-        Padding="16,12">
-    <Button.PointerOverBackground>
-        <SolidColorBrush Color="{StaticResource AccentColor}" Opacity="0.9" />
-    </Button.PointerOverBackground>
-</Button>
-```
+## Build note
 
-### Pivot Control for Tabs
-```xml
-<Pivot>
-    <PivotItem Header="Filters">
-        <StackPanel>
-            <!-- Filter configuration -->
-        </StackPanel>
-    </PivotItem>
-    <PivotItem Header="Enrichment">
-        <StackPanel>
-            <!-- Enrichment configuration -->
-        </StackPanel>
-    </PivotItem>
-</Pivot>
-```
-
-### Theme Resources
-- `ApplicationPageBackgroundThemeBrush` - Page background
-- `CardBackgroundThemeBrush` - Card backgrounds
-- `CardBorderThemeBrush` - Card borders
-- `AccentColorBrush` - Primary actions
-- `TextPrimaryBrush` - Primary text
-- `TextSecondaryBrush` - Secondary text
-- `RevealFocus` - Keyboard focus visualization
-
-## Implementation Plan (WinUI 3)
-
-### Phase 1: Core Redesign
-1. Create new dashboard page with `NavigationView`
-2. Consolidate configuration into RuleDSL editor
-3. Add real-time preview for UML diagrams using `WebView2` or `RichEditBox`
-
-### Phase 2: Enhanced Features
-1. Add pipeline visualization using `Canvas` or `Path`
-2. Implement drag-and-drop rule reordering
-3. Add rule templates and examples
-
-### Phase 3: Polish
-1. Add keyboard shortcuts
-2. Implement undo/redo
-3. Add search and filtering in results
-
-## Benefits
-
-1. **Simpler**: Users can configure everything in one place
-2. **Modern**: Reflects the current RuleDSL-based architecture
-3. **Visual**: Real-time preview of UML diagrams
-4. **Efficient**: Less navigation, faster configuration
-5. **Maintainable**: Easier to update and extend
-
-## Migration Path
-
-1. Keep old pages but mark as deprecated
-2. Add migration guide in UI
-3. Auto-convert old plugin configs to RuleDSL
-4. Gradually phase out old configuration methods
-
-## XAML Implementation Files
-
-The following XAML files demonstrate the WinUI 3 implementation:
-
-### DashboardPage.xaml
-- Main dashboard with quick actions
-- Recent pipelines section
-- Navigation to other pages
-- Location: `FindNeedleUX/Pages/DashboardPage.xaml`
-
-### RuleDSLConfigPage.xaml
-- Primary configuration page for RuleDSL
-- Pipeline information section
-- Input locations management
-- Pipeline sections (Filters, Enrichment, UML, Output)
-- Action buttons (Save, Test, Run)
-- Location: `FindNeedleUX/Pages/RuleDSLConfigPage.xaml`
-
-### Key Features
-- **ScrollViewer** for overflow content
-- **StackPanel** for vertical layouts
-- **Border** for card-style containers
-- **TextBox** and **Button** for input and actions
-- **Simple styling** with Gray borders and LightBlue accents
-
-### Theme Resources Used
-- Default system colors (Gray, LightBlue)
-- Simple borders and padding
-- No complex theme resources needed
-
-### Code-Behind Files
-- `DashboardPage.xaml.cs` - Dashboard navigation logic
-- `RuleDSLConfigPage.xaml.cs` - RuleDSL configuration logic
+Build `FindNeedleUX.csproj` with **VS MSBuild** (`MSBuild.exe`), not
+`dotnet build`. The WinUI 3 XAML compiler task is .NET Framework 4.7.2 and
+the SDK shells to `XamlCompiler.exe` via `<Exec>` — XAML errors are
+swallowed and surface only as `exited with code 1`. VS MSBuild loads the
+task in-proc and surfaces real errors (e.g. `WMC0055: Cannot assign text
+value 'Diagram' into property 'Symbol'`).

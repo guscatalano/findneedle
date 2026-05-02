@@ -219,7 +219,6 @@ public sealed partial class QuickLogWithRulesPage : Page
             var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
             var viewerType = viewerKey switch
             {
-                "resultsvcommunitypage" => typeof(ResultsVCommunityPage),
                 "searchresultpage" => typeof(SearchResultPage),
                 _ => typeof(ResultsWebPage)
             };

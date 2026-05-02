@@ -28,24 +28,41 @@ public sealed partial class MainWindow : Window
     private static readonly Dictionary<string, Type> ResultViewerPages = new()
     {
         { "resultswebpage", typeof(FindNeedleUX.Pages.ResultsWebPage) },
-        { "resultsvcommunitypage", typeof(FindNeedleUX.Pages.ResultsVCommunityPage) },
         { "searchresultpage", typeof(FindNeedleUX.Pages.SearchResultPage) }
     };
 
     private static readonly string[] RawResultViewers = new[]
     {
-        "resultswebpage", "resultsvcommunitypage", "searchresultpage"
+        "resultswebpage", "searchresultpage"
     };
 
     private CancellationTokenSource _quickActionCts;
+    private string _lastRunSummary = "—";
 
     public MainWindow()
     {
         this.InitializeComponent();
         WindowUtil.TrackWindow(this);
         SetWindowIcon("Assets\\appicon.ico");
+        contentFrame.Navigated += (s, e) => RefreshStatusStrip();
+        MiddleLayerService.StateChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         // Show WelcomePage on startup
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
+        RefreshStatusStrip();
+    }
+
+    public void NavigateToQuickLogWithRules()
+    {
+        contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+    }
+
+    private void RefreshStatusStrip()
+    {
+        var query = MiddleLayerService.GetCurrentQuery();
+        var locations = MiddleLayerService.Locations?.Count ?? 0;
+        var filters = MiddleLayerService.Filters?.Count ?? 0;
+        var rules = query?.RulesConfigPaths?.Count ?? 0;
+        StatusStrip.Text = $"Locations: {locations} · Filters: {filters} · Rules: {rules} · Last run: {_lastRunSummary}";
     }
 
     private void SetWindowIcon(string iconPath)
@@ -117,10 +134,13 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: ProcessorOutputPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage));
                 break;
-            case "results_viewnative":
             case "results_viewweb":
-            case "results_viewcommunity":
-                // Deprecated: handled by results_viewraw
+                Logger.Instance.Log("Navigated: ResultsWebPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
+                break;
+            case "results_viewnative":
+                Logger.Instance.Log("Navigated: SearchResultPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchResultPage));
                 break;
             case "systeminfo":
                 Logger.Instance.Log("Navigated: SystemInfoPage");
@@ -129,22 +149,6 @@ public sealed partial class MainWindow : Window
             case "diagramtools":
                 Logger.Instance.Log("Navigated: DiagramToolsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
-                break;
-            case "rules_home":
-                Logger.Instance.Log("Navigated: RuleDSLHomePage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RuleDSLHomePage));
-                break;
-            case "rules_locations":
-                Logger.Instance.Log("Navigated: SearchLocationsPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
-                break;
-            case "rules_filters":
-                Logger.Instance.Log("Navigated: SearchFiltersPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchFiltersPage));
-                break;
-            case "rules_enrichment":
-                Logger.Instance.Log("Navigated: SearchFiltersPage (enrichment)");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchFiltersPage));
                 break;
             case "rules_uml":
                 Logger.Instance.Log("Navigated: DiagramToolsPage");
@@ -204,20 +208,25 @@ public sealed partial class MainWindow : Window
         try
         {
             await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, _quickActionCts.Token).Wait(), _quickActionCts.Token);
+            var stats = MiddleLayerService.GetStats();
+            var count = MiddleLayerService.GetSearchResults()?.Count ?? 0;
+            _lastRunSummary = $"{count} results";
         }
         catch (OperationCanceledException)
         {
             DispatcherQueue.TryEnqueue(() => SpinnerText.Text = "Search cancelled.");
+            _lastRunSummary = "cancelled";
         }
         finally
         {
             ShowSpinner(false);
             _quickActionCts?.Dispose();
             _quickActionCts = null;
+            DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         }
     }
 
-    private async void QuickFileOpen()
+    public async void QuickFileOpen()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var picker = new FileOpenPicker()
@@ -243,7 +252,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void QuickFolderOpen()
+    public async void QuickFolderOpen()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var picker = new global::Windows.Storage.Pickers.FolderPicker();

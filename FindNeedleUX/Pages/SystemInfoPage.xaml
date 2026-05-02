@@ -23,7 +23,6 @@
         <TextBlock Text="Change Default Result Viewer:" Margin="0,10,0,0"/>
         <ComboBox Name="ResultViewerComboBox" Width="250" SelectionChanged="ResultViewerComboBox_SelectionChanged">
             <ComboBoxItem Content="ResultsWebPage" Tag="resultswebpage"/>
-            <ComboBoxItem Content="ResultsVCommunityPage" Tag="resultsvcommunitypage"/>
             <ComboBoxItem Content="SearchResultPage" Tag="searchresultpage"/>
         </ComboBox>
         <TextBlock Margin="10,10,0,0">

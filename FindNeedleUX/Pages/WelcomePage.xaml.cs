@@ -1,5 +1,4 @@
 using Microsoft.UI.Xaml.Controls;
-using FindNeedleUX.Pages;
 
 namespace FindNeedleUX.Pages;
 public sealed partial class WelcomePage : Page
@@ -9,21 +8,18 @@ public sealed partial class WelcomePage : Page
         this.InitializeComponent();
     }
 
-    private void NewSearchButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void OpenLogFileButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        var rootFrame = Microsoft.UI.Xaml.Window.Current.Content as Frame;
-        rootFrame?.Navigate(typeof(RunSearchPage));
+        (WindowUtil.GetMainWindow() as MainWindow)?.QuickFileOpen();
     }
 
-    private void RuleDSLConfigButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void OpenFolderButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        var rootFrame = Microsoft.UI.Xaml.Window.Current.Content as Frame;
-        rootFrame?.Navigate(typeof(RuleDSLHomePage));
+        (WindowUtil.GetMainWindow() as MainWindow)?.QuickFolderOpen();
     }
 
-    private void UMLDiagramButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void OpenLogWithRulesButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        var rootFrame = Microsoft.UI.Xaml.Window.Current.Content as Frame;
-        rootFrame?.Navigate(typeof(DiagramToolsPage));
+        (WindowUtil.GetMainWindow() as MainWindow)?.NavigateToQuickLogWithRules();
     }
 }

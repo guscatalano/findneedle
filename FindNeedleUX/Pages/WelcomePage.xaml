@@ -12,65 +12,56 @@
         <StackPanel Spacing="24">
             <!-- Header -->
             <StackPanel Spacing="8">
-                <TextBlock Text="🔍 FindNeedle" FontSize="32" FontWeight="Bold" Foreground="{ThemeResource AccentColorBrush}"/>
+                <TextBlock Text="🔍 FindNeedle" FontSize="32" FontWeight="Bold" Foreground="{ThemeResource SystemAccentColorBrush}"/>
                 <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
             <!-- Quick Actions -->
             <TextBlock Text="Quick Actions" FontWeight="SemiBold" FontSize="18"/>
             <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button Content="📁 New Search" Click="NewSearchButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                <Button Content="📁 Open Log File" Click="OpenLogFileButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
                     <Button.Background>
                         <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
                     </Button.Background>
                 </Button>
-                <Button Content="📝 RuleDSL Config" Click="RuleDSLConfigButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                <Button Content="📂 Open Folder" Click="OpenFolderButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
                     <Button.Background>
                         <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
                     </Button.Background>
                 </Button>
-                <Button Content="🖼️ UML Diagram" Click="UMLDiagramButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                <Button Content="📝 Open Log with Rules" Click="OpenLogWithRulesButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
                     <Button.Background>
                         <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
                     </Button.Background>
                 </Button>
             </StackPanel>
-
-            <!-- Recent Pipelines -->
-            <TextBlock Text="Recent Pipelines" FontWeight="SemiBold" FontSize="18"/>
-            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}" Padding="16" CornerRadius="8">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="No recent pipelines found" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <TextBlock Text="Create a new pipeline in the RuleDSL Config page" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                </StackPanel>
-            </Border>
 
             <!-- Features -->
             <TextBlock Text="Key Features" FontWeight="SemiBold" FontSize="18"/>
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Folder" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}"/>
                     <TextBlock Text="Plugin-based data sources (folders, files, event logs, ETW)" TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Filter" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}"/>
                     <TextBlock Text="RuleDSL for filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="List" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}"/>
                     <TextBlock Text="Multiple result viewers (Web, Community, Native)" TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}"/>
                     <TextBlock Text="PlantUML/Mermaid integration for diagram generation" TextWrapping="Wrap"/>
                 </StackPanel>
             </StackPanel>
 
-            <!-- Configuration Note -->
+            <!-- Documentation Link -->
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" Padding="16" CornerRadius="8" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="⚙️ Configuration" FontWeight="SemiBold"/>
-                    <TextBlock Text="Configuration is managed via PluginConfig.json and RuleDSL files. You can control which plugins are loaded, enable registry-based plugin loading, and configure PlantUML integration." TextWrapping="Wrap"/>
+                    <TextBlock Text="📖 Getting started" FontWeight="SemiBold"/>
+                    <TextBlock Text="Pick a quick action above, or use the Configure menu to set up locations, filters, and RuleDSL files for a custom search pipeline." TextWrapping="Wrap"/>
                     <HyperlinkButton Content="View Documentation" NavigateUri="https://github.com/guscatalano/findneedle"/>
                 </StackPanel>
             </Border>

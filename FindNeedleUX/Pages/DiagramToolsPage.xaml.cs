@@ -28,11 +28,6 @@ public sealed partial class DiagramToolsPage : Page
         RefreshStatus();
     }
 
-    private void OpenDemo_Click(object sender, RoutedEventArgs e)
-    {
-        // kept for compatibility but UI now exposes explicit external/in-app options
-    }
-
     private void OpenDemoExternal_Click(object sender, RoutedEventArgs e)
     {
         FindNeedlePluginLib.Logger.Instance.Log("[DiagramToolsPage] OpenDemoExternal_Click invoked");

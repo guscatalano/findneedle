@@ -49,6 +49,7 @@ public sealed partial class SearchRulesPage : Page
                 query.RulesConfigPaths.Add(file.FilePath);
             }
             System.Diagnostics.Debug.WriteLine($"Synced {query.RulesConfigPaths.Count} rule paths to query");
+            MiddleLayerService.NotifyStateChanged();
         }
     }
 
