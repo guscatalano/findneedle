@@ -5,18 +5,75 @@
     xmlns:local="using:FindNeedleUX.Pages"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
-    <ScrollViewer>
-        <StackPanel Margin="24">
-            <TextBlock Text="Welcome to FindNeedle" FontSize="28" FontWeight="Bold" Margin="0,0,0,16"/>
-            <TextBlock Text="FindNeedle is a powerful search and analysis tool with a plugin-based architecture. This user experience (UX) provides an intuitive interface for configuring, running, and viewing results from your searches." TextWrapping="Wrap" Margin="0,0,0,16"/>
-            <TextBlock Text="Key Features:" FontWeight="Bold" FontSize="18" Margin="0,0,0,8"/>
-            <TextBlock Text="> Plugin management and configuration" Margin="8,0,0,0"/>
-            <TextBlock Text="> Search result viewing and export" Margin="8,0,0,0"/>
-            <TextBlock Text="> System information and diagnostics" Margin="8,0,0,0"/>
-            <TextBlock Text="> PlantUML integration for diagram generation" Margin="8,0,0,16"/>
-            <TextBlock Text="Configuration is managed via PluginConfig.json. You can control which plugins are loaded, enable registry-based plugin loading, and configure PlantUML integration. See the README for more details." TextWrapping="Wrap" Margin="0,0,0,16"/>
-            <TextBlock Text="Get started by exploring the menu on the top." TextWrapping="Wrap"/>
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="24">
+            <!-- Header -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="🔍 FindNeedle" FontSize="32" FontWeight="Bold" Foreground="{ThemeResource AccentColorBrush}"/>
+                <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
+            <!-- Quick Actions -->
+            <TextBlock Text="Quick Actions" FontWeight="SemiBold" FontSize="18"/>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Content="📁 New Search" Click="NewSearchButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                    <Button.Background>
+                        <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
+                    </Button.Background>
+                </Button>
+                <Button Content="📝 RuleDSL Config" Click="RuleDSLConfigButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                    <Button.Background>
+                        <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
+                    </Button.Background>
+                </Button>
+                <Button Content="🖼️ UML Diagram" Click="UMLDiagramButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                    <Button.Background>
+                        <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
+                    </Button.Background>
+                </Button>
+            </StackPanel>
+
+            <!-- Recent Pipelines -->
+            <TextBlock Text="Recent Pipelines" FontWeight="SemiBold" FontSize="18"/>
+            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}" Padding="16" CornerRadius="8">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="No recent pipelines found" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock Text="Create a new pipeline in the RuleDSL Config page" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Features -->
+            <TextBlock Text="Key Features" FontWeight="SemiBold" FontSize="18"/>
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <SymbolIcon Symbol="Folder" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <TextBlock Text="Plugin-based data sources (folders, files, event logs, ETW)" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <SymbolIcon Symbol="Filter" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <TextBlock Text="RuleDSL for filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <SymbolIcon Symbol="List" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <TextBlock Text="Multiple result viewers (Web, Community, Native)" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource AccentColorBrush}"/>
+                    <TextBlock Text="PlantUML/Mermaid integration for diagram generation" TextWrapping="Wrap"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Configuration Note -->
+            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" Padding="16" CornerRadius="8" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="⚙️ Configuration" FontWeight="SemiBold"/>
+                    <TextBlock Text="Configuration is managed via PluginConfig.json and RuleDSL files. You can control which plugins are loaded, enable registry-based plugin loading, and configure PlantUML integration." TextWrapping="Wrap"/>
+                    <HyperlinkButton Content="View Documentation" NavigateUri="https://github.com/guscatalano/findneedle"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

@@ -10,42 +10,47 @@
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Page.Resources>
-
         <DataTemplate x:DataType="l:FilterListItem" x:Key="FilterTemplate">
-            <StackPanel BorderThickness="1" Background="AliceBlue" Margin="5">
-               
-
-                        <Grid ColumnDefinitions="100, *, *, *" RowDefinitions ="*">
-                            <TextBlock Text="{x:Bind Name.ToString()}" FontSize="12" TextAlignment="Left" Padding="12" 
-                                       Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" Grid.Column="0" Grid.Row="0"/>
-                            <TextBlock Text="{x:Bind Description.ToString()}" FontSize="14" TextAlignment="Center"
-Padding="12"  Foreground="{ThemeResource SystemControlForegroundAltHighBrush}" Grid.Column="1" Grid.Row="0"/>
-                    <Button DataContext="{x:Bind Name.ToString()}" Grid.Column="2" Grid.Row="0"  Click="Button_Click_1">Edit</Button>
-                    <Button DataContext="{x:Bind Name.ToString()}" Grid.Column="3" Grid.Row="0" Click="ButtonRemove_Click">Remove</Button>
+            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}" CornerRadius="8" Padding="16" Margin="0,8,0,0">
+                <Grid ColumnDefinitions="Auto, *, Auto, Auto" RowDefinitions="Auto, Auto" ColumnSpacing="12" RowSpacing="8">
+                    <SymbolIcon Grid.Column="0" Grid.Row="0" Grid.RowSpan="2" Symbol="Filter" Foreground="{ThemeResource AccentColorBrush}" VerticalAlignment="Top"/>
+                    
+                    <TextBlock Grid.Column="1" Grid.Row="0" Text="{x:Bind Name}" FontWeight="SemiBold" FontSize="16"/>
+                    <TextBlock Grid.Column="1" Grid.Row="1" Text="{x:Bind Description}" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    
+                    <Button Grid.Column="2" Grid.Row="0" Grid.RowSpan="2" Content="Edit" Width="80" Click="Button_Edit"/>
+                    <Button Grid.Column="3" Grid.Row="0" Grid.RowSpan="2" Content="Remove" Width="80" Background="Red" Click="Button_Remove"/>
                 </Grid>
-                   
-            </StackPanel>
+            </Border>
         </DataTemplate>
     </Page.Resources>
 
-    <StackPanel>
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="24">
+            <StackPanel Spacing="8">
+                <TextBlock Text="🔧 Filters &amp; Enrichment" FontSize="24" FontWeight="Bold"/>
+                <TextBlock Text="Configure filters and enrichment rules for your search pipeline" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
 
-        <Button Click="Button_Click" >Add Filter</Button>
-        <ItemsRepeaterScrollHost >
-            <ScrollViewer>
-                <ItemsRepeater x:Name="VariedImageSizeRepeater"
-			    ItemTemplate="{StaticResource FilterTemplate}">
+            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Add New Rule" FontWeight="SemiBold"/>
+                    <Button Content="➕ Add Filter" Click="Button_AddFilter" Width="120"/>
+                    <Button Content="➕ Add Enrichment" Click="Button_AddEnrichment" Width="120" Margin="0,8,0,0"/>
+                    <Button Content="➕ Add UML" Click="Button_AddUML" Width="120"/>
+                </StackPanel>
+            </Border>
 
-                    <!-- IMPORTANT: This ItemsRepeater uses a custom-created layout
-		called VariedImageSize Layout (referenced below).You can find
-  		the full source code for this layout in the file
-		VariedImageSizeLayout.cs in the WinUI Gallery repo. -->
-
-                  
-                </ItemsRepeater>
-            </ScrollViewer>
-        </ItemsRepeaterScrollHost>
-
-   
-    </StackPanel>
+            <StackPanel Spacing="8">
+                <TextBlock Text="Configured Rules" FontWeight="SemiBold"/>
+                <ItemsRepeaterScrollHost>
+                    <ScrollViewer>
+                        <ItemsRepeater x:Name="VariedImageSizeRepeater"
+                            ItemTemplate="{StaticResource FilterTemplate}">
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                </ItemsRepeaterScrollHost>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
 </Page>

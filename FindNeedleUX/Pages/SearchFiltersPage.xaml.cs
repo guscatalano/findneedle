@@ -24,22 +24,27 @@ public sealed partial class SearchFiltersPage : Page
     }
 
 
-    private void ButtonRemove_Click(object sender, RoutedEventArgs e)
+    private void Button_Edit(object sender, RoutedEventArgs e)
     {
-
     }
 
-    private void Button_Click_1(object sender, RoutedEventArgs e)
+    private void Button_Remove(object sender, RoutedEventArgs e)
     {
-        //((Button)sender)
     }
 
-
-    private void Button_Click(object sender, RoutedEventArgs e)
+    private void Button_AddFilter(object sender, RoutedEventArgs e)
     {
-
         WizardSelectionService.GetInstance().StartWizard("Filter", (UIElement)sender, Callback);
+    }
 
+    private void Button_AddEnrichment(object sender, RoutedEventArgs e)
+    {
+        WizardSelectionService.GetInstance().StartWizard("Filter", (UIElement)sender, Callback);
+    }
+
+    private void Button_AddUML(object sender, RoutedEventArgs e)
+    {
+        WizardSelectionService.GetInstance().StartWizard("Filter", (UIElement)sender, Callback);
     }
 
     private void Callback(string test)

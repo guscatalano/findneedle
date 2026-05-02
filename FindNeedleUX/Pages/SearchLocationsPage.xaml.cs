@@ -24,11 +24,27 @@ public sealed partial class SearchLocationsPage : Page
 
     }
 
-    private void Button_Click(object sender, RoutedEventArgs e)
+    private void Button_Edit(object sender, RoutedEventArgs e)
     {
+    }
 
+    private void Button_Remove(object sender, RoutedEventArgs e)
+    {
+    }
+
+    private void Button_AddFolder(object sender, RoutedEventArgs e)
+    {
         WizardSelectionService.GetInstance().StartWizard("Location", (UIElement)sender, Callback);
+    }
 
+    private void Button_AddFile(object sender, RoutedEventArgs e)
+    {
+        WizardSelectionService.GetInstance().StartWizard("Location", (UIElement)sender, Callback);
+    }
+
+    private void Button_AddEventLog(object sender, RoutedEventArgs e)
+    {
+        WizardSelectionService.GetInstance().StartWizard("Location", (UIElement)sender, Callback);
     }
 
     private void Callback(string test)

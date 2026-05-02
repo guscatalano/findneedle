@@ -51,7 +51,7 @@ public sealed partial class RunSearchPage : Page
         MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
         try
         {
-            var r = await Task.Run(() => MiddleLayerService.RunSearch(false, _cts.Token), _cts.Token);
+            var r = await Task.Run(() => MiddleLayerService.RunSearch(_shallowSearch, _cts.Token), _cts.Token);
             summary.Text = r;
         }
         catch (System.Threading.Tasks.TaskCanceledException)
@@ -64,26 +64,11 @@ public sealed partial class RunSearchPage : Page
         }
     }
 
-    private async void Button2_Click(object sender, RoutedEventArgs e)
-    {
-        SetControlsTo(false);
-        _cts = new CancellationTokenSource();
-        MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
-        MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
-        try
-        {
-            var r = await Task.Run(() => MiddleLayerService.RunSearch(true, _cts.Token), _cts.Token);
-            summary.Text = r;
-        }
-        catch (System.Threading.Tasks.TaskCanceledException)
-        {
-            summary.Text = "Search cancelled.";
-        }
-        finally
-        {
-            SetControlsTo(true);
-        }
-    }
+    private bool _shallowSearch;
+
+    private void ShallowSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = true;
+    private void NormalSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = false;
+    private void DeepSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = false;
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {

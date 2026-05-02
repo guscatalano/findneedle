@@ -5,184 +5,100 @@
     xmlns:viewobjects="using:FindNeedleUX.ViewObjects"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Padding="24" RowSpacing="12">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <!-- Title -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="Search Rules Configuration"
-            Style="{ThemeResource TitleTextBlockStyle}"
-            Margin="0,0,0,12"/>
-
-        <!-- Rule Files Section -->
-        <Grid Grid.Row="1" RowSpacing="8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="120"/>
-            </Grid.RowDefinitions>
-
-            <TextBlock 
-                Grid.Row="0"
-                Text="Rule Files"
-                Style="{ThemeResource SubtitleTextBlockStyle}"/>
-
-            <StackPanel 
-                Grid.Row="1"
-                Orientation="Horizontal"
-                Spacing="8">
-                <Button 
-                    x:Name="BrowseButton"
-                    Content="Browse..."
-                    Click="BrowseButton_Click"/>
-                <Button 
-                    x:Name="RemoveButton"
-                    Content="Remove Selected"
-                    Click="RemoveButton_Click"
-                    IsEnabled="False"/>
-                <!-- Test hook for UI automation - TextBox + Load button for reliable automation -->
-                <TextBox 
-                    x:Name="TestFilePathInput"
-                    Width="200"
-                    Height="32"
-                    PlaceholderText="Test: Enter file path"
-                    IsTabStop="False"
-                    AutomationProperties.Name="TestFilePathInput"
-                    KeyDown="TestFilePathInput_KeyDown"/>
-                <Button 
-                    x:Name="TestLoadButton"
-                    Content="Load"
-                    Height="32"
-                    Click="TestLoadButton_Click"
-                    AutomationProperties.Name="TestLoadButton"/>
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="24">
+            <!-- Title -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="⚙️ RuleDSL Configuration" FontSize="24" FontWeight="Bold"/>
+                <TextBlock Text="Manage rule files and pipeline sections" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
+            <!-- Rule Files Section -->
+            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="📁 Rule Files" FontWeight="SemiBold"/>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="BrowseButton" Content="📂 Browse..." Click="BrowseButton_Click" Width="100"/>
+                        <Button x:Name="RemoveButton" Content="🗑️ Remove Selected" Click="RemoveButton_Click" IsEnabled="False" Width="120"/>
+                        <TextBox x:Name="TestFilePathInput" Width="200" Height="32" PlaceholderText="Test: Enter file path" IsTabStop="False" KeyDown="TestFilePathInput_KeyDown"/>
+                        <Button x:Name="TestLoadButton" Content="🚀 Load" Click="TestLoadButton_Click" Height="32"/>
+                    </StackPanel>
 
+                    <ListView x:Name="RuleFilesListBox" ItemsSource="{x:Bind RuleFiles, Mode=OneWay}" Height="150" SelectionChanged="RuleFilesListBox_SelectionChanged">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="viewobjects:RuleFileItem">
+                                <Grid ColumnSpacing="8" Padding="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
-            <ListBox 
-                Grid.Row="2"
-                x:Name="RuleFilesListBox"
-                ItemsSource="{x:Bind RuleFiles, Mode=OneWay}"
-                ScrollViewer.VerticalScrollBarVisibility="Auto"
-                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                SelectionChanged="RuleFilesListBox_SelectionChanged">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="viewobjects:RuleFileItem">
-                        <Grid ColumnSpacing="8" Padding="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="{x:Bind FileName}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{x:Bind FilePath}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
 
-                            <StackPanel Grid.Column="0" Spacing="4">
-                                <TextBlock Text="{x:Bind FileName}" FontWeight="SemiBold"/>
-                                <TextBlock 
-                                    Text="{x:Bind FilePath}" 
-                                    FontSize="12"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
+                                    <SymbolIcon Grid.Column="1" Symbol="Accept" Foreground="Green" Visibility="{x:Bind IsValid}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
 
-                            <SymbolIcon 
-                                Grid.Column="1"
-                                Symbol="Accept"
-                                Foreground="Green"
-                                Visibility="{x:Bind IsValid}"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-        </Grid>
+            <!-- Rule Sections Section -->
+            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+                        <TextBlock Text="📋 Pipeline Sections" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="PurposeFilterCombo" SelectionChanged="PurposeFilterCombo_SelectionChanged" Width="120">
+                            <ComboBoxItem IsSelected="True" Tag="All">All Purposes</ComboBoxItem>
+                            <ComboBoxItem Tag="filter">Filter</ComboBoxItem>
+                            <ComboBoxItem Tag="enrichment">Enrichment</ComboBoxItem>
+                            <ComboBoxItem Tag="uml">UML</ComboBoxItem>
+                        </ComboBox>
+                    </StackPanel>
 
-        <!-- Rule Sections -->
-        <Grid Grid.Row="2" RowSpacing="8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+                    <ListView x:Name="RuleSectionsListView" ItemsSource="{x:Bind RuleSections, Mode=OneWay}">
+                        <ListView.Header>
+                            <Grid ColumnSpacing="12" Padding="12,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="60"/>
+                                    <ColumnDefinition Width="150"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Name / Description" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1" Text="Type" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="2" Text="Rules" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Column="3" Text="Source" FontWeight="SemiBold"/>
+                            </Grid>
+                        </ListView.Header>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="viewobjects:RuleSectionItem">
+                                <Grid ColumnSpacing="12" Padding="12" BorderBrush="{ThemeResource SystemControlBackgroundAltHighBrush}" BorderThickness="0,0,0,1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="60"/>
+                                        <ColumnDefinition Width="150"/>
+                                    </Grid.ColumnDefinitions>
 
-            <TextBlock 
-                Grid.Row="0"
-                Text="Available Rule Sections"
-                Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{x:Bind Description}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
 
-            <ComboBox 
-                Grid.Row="1"
-                x:Name="PurposeFilterCombo"
-                SelectionChanged="PurposeFilterCombo_SelectionChanged"
-                Width="200"
-                HorizontalAlignment="Left">
-                <ComboBoxItem IsSelected="True" Tag="All">All Purposes</ComboBoxItem>
-                <ComboBoxItem Tag="filter">Filter</ComboBoxItem>
-                <ComboBoxItem Tag="enrichment">Enrichment</ComboBoxItem>
-                <ComboBoxItem Tag="uml">UML Diagram</ComboBoxItem>
-            </ComboBox>
-
-            <ListView 
-                Grid.Row="2"
-                x:Name="RuleSectionsListView"
-                ItemsSource="{x:Bind RuleSections, Mode=OneWay}"
-                SelectionMode="Single">
-                <ListView.Header>
-                    <Grid ColumnSpacing="12" Padding="12,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="60"/>
-                            <ColumnDefinition Width="150"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Name / Description" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="1" Text="Type" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="2" Text="Rules" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="3" Text="Source File" FontWeight="SemiBold"/>
-                    </Grid>
-                </ListView.Header>
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="viewobjects:RuleSectionItem">
-                        <Grid ColumnSpacing="12" Padding="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="60"/>
-                                <ColumnDefinition Width="150"/>
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0" Spacing="4">
-                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold"/>
-                                <TextBlock 
-                                    Text="{x:Bind Description}" 
-                                    FontSize="12"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
-
-
-                            <TextBlock 
-                                Grid.Column="1"
-                                Text="{x:Bind PurposeDisplay}"
-                                VerticalAlignment="Center"/>
-
-                            <TextBlock 
-                                Grid.Column="2"
-                                Text="{x:Bind RuleCount}"
-                                VerticalAlignment="Center"
-                                HorizontalAlignment="Center"/>
-
-                            <TextBlock 
-                                Grid.Column="3"
-                                Text="{x:Bind SourceFileName}"
-                                FontSize="12"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                VerticalAlignment="Center"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-        </Grid>
-
-    </Grid>
+                                    <TextBlock Grid.Column="1" Text="{x:Bind PurposeDisplay}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Text="{x:Bind RuleCount}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Text="{x:Bind SourceFileName}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
 </Page>
