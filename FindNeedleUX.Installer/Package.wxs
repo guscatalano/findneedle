@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="FindNeedle"
+           Manufacturer="Gus Catalano"
+           Version="$(ProductVersion)"
+           UpgradeCode="1133E465-074D-4B2A-B7FD-B0E929B2A3E0"
+           Scope="perUserOrMachine"
+           Compressed="yes"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="FindNeedle log search and analysis tool" />
+
+    <!-- Major-upgrade: replace older versions in place. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Scope="perUserOrMachine" auto-defines ALLUSERS, MSIINSTALLPERUSER, ARPNOMODIFY. -->
+    <Property Id="ARPPRODUCTICON" Value="appicon.ico" />
+
+    <!-- Pick install location based on scope. Two SetProperty actions with unique Action names. -->
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" />
+    <SetProperty Id="INSTALLFOLDER"
+                 Action="SetInstallFolderPerMachine"
+                 Value="[ProgramFiles64Folder]FindNeedle"
+                 Before="CostFinalize"
+                 Sequence="both"
+                 Condition="ALLUSERS = 1" />
+    <SetProperty Id="INSTALLFOLDER"
+                 Action="SetInstallFolderPerUser"
+                 Value="[LocalAppDataFolder]Programs\FindNeedle"
+                 Before="CostFinalize"
+                 Sequence="both"
+                 Condition="NOT (ALLUSERS = 1)" />
+
+    <!-- Directories. INSTALLFOLDER's value is set by SetDirectory above; the structure is still required. -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="FindNeedle" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="FindNeedle" />
+    </StandardDirectory>
+
+    <Icon Id="appicon.ico" SourceFile="$(var.SourceDir)FindNeedleUX\Square44x44Logo.scale-200.ico" />
+
+    <Feature Id="Main" Title="FindNeedle" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="PublishedFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="FileAssociations" />
+    </Feature>
+
+    <Feature Id="DesktopShortcut" Title="Desktop shortcut" Level="1" AllowAbsent="yes">
+      <ComponentRef Id="DesktopShortcutComponent" />
+    </Feature>
+
+    <!-- Harvest the publish output into INSTALLFOLDER. WiX 5 <Files> auto-creates per-file components. -->
+    <ComponentGroup Id="PublishedFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)**" />
+    </ComponentGroup>
+
+    <!-- Start Menu shortcut. HKMU = HKCU for per-user, HKLM for per-machine. -->
+    <Component Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Bitness="always64">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="FindNeedle"
+                Description="Search and analyze log files"
+                Target="[INSTALLFOLDER]FindNeedleUX.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="appicon.ico" />
+      <RemoveFolder Id="CleanupApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Optional desktop shortcut (Feature can be deselected at install time). -->
+    <StandardDirectory Id="DesktopFolder" />
+    <Component Id="DesktopShortcutComponent" Directory="DesktopFolder" Bitness="always64">
+      <Shortcut Id="DesktopShortcut"
+                Name="FindNeedle"
+                Description="Search and analyze log files"
+                Target="[INSTALLFOLDER]FindNeedleUX.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="appicon.ico" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- File associations: register a "FindNeedle.LogFile" ProgID and add it to OpenWithProgIDs
+         for the relevant extensions. Doesn't override the default app — shows up in "Open with...". -->
+    <Component Id="FileAssociations" Directory="INSTALLFOLDER" Bitness="always64">
+      <RegistryValue Root="HKMU" Key="Software\Classes\FindNeedle.LogFile" Type="string" Value="FindNeedle Log File" />
+      <RegistryValue Root="HKMU" Key="Software\Classes\FindNeedle.LogFile\DefaultIcon" Type="string" Value="[INSTALLFOLDER]FindNeedleUX.exe,0" />
+      <RegistryValue Root="HKMU" Key="Software\Classes\FindNeedle.LogFile\shell\open\command" Type="string" Value="&quot;[INSTALLFOLDER]FindNeedleUX.exe&quot; &quot;%1&quot;" />
+      <RegistryValue Root="HKMU" Key="Software\Classes\FindNeedle.LogFile\shell\open\FriendlyAppName" Type="string" Value="FindNeedle" />
+
+      <RegistryValue Root="HKMU" Key="Software\Classes\.log\OpenWithProgids"  Name="FindNeedle.LogFile" Type="string" Value="" />
+      <RegistryValue Root="HKMU" Key="Software\Classes\.txt\OpenWithProgids"  Name="FindNeedle.LogFile" Type="string" Value="" />
+      <RegistryValue Root="HKMU" Key="Software\Classes\.etl\OpenWithProgids"  Name="FindNeedle.LogFile" Type="string" Value="" />
+      <RegistryValue Root="HKMU" Key="Software\Classes\.evtx\OpenWithProgids" Name="FindNeedle.LogFile" Type="string" Value="" />
+      <RegistryValue Root="HKMU" Key="Software\Classes\.zip\OpenWithProgids"  Name="FindNeedle.LogFile" Type="string" Value="" />
+
+      <!-- Application registration so it appears under "Apps and features" / Default Apps -->
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle\Capabilities" Name="ApplicationName" Type="string" Value="FindNeedle" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle\Capabilities" Name="ApplicationDescription" Type="string" Value="Log search and analysis" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle\Capabilities\FileAssociations" Name=".log"  Type="string" Value="FindNeedle.LogFile" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle\Capabilities\FileAssociations" Name=".txt"  Type="string" Value="FindNeedle.LogFile" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle\Capabilities\FileAssociations" Name=".etl"  Type="string" Value="FindNeedle.LogFile" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle\Capabilities\FileAssociations" Name=".evtx" Type="string" Value="FindNeedle.LogFile" />
+      <RegistryValue Root="HKMU" Key="Software\FindNeedle\Capabilities\FileAssociations" Name=".zip"  Type="string" Value="FindNeedle.LogFile" />
+      <RegistryValue Root="HKMU" Key="Software\RegisteredApplications" Name="FindNeedle" Type="string" Value="Software\FindNeedle\Capabilities" KeyPath="yes" />
+
+      <!-- Tell Explorer the icon cache is stale. -->
+      <util:RemoveFolderEx Property="INSTALLFOLDER_REMOVE" On="uninstall" />
+    </Component>
+
+    <!-- UI: minimal default WixUI. -->
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+  </Package>
+
+</Wix>

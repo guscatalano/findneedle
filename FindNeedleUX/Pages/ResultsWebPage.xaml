@@ -20,7 +20,6 @@
         <controls:WebView2 x:Name="MyWebView"
                        Grid.Row="0"
                        Grid.Column="0"
-                       Source="https://www.microsoft.com"
                        HorizontalAlignment="Stretch"
                        DefaultBackgroundColor="Transparent"
                        VerticalAlignment="Stretch"/>

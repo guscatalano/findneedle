@@ -49,10 +49,8 @@ public sealed partial class ResultsWebPage : Page
             if (MyWebView != null)
             {
                 MyWebView.CoreWebView2?.Stop();
-                MyWebView.Source = null;
-                // No Dispose method, so set Source to null and remove event handlers
-                MyWebView.NavigationCompleted -= null; // Remove all handlers if possible
-                MyWebView.CoreWebView2.WebMessageReceived -= MessageReceived;
+                if (MyWebView.CoreWebView2 != null)
+                    MyWebView.CoreWebView2.WebMessageReceived -= MessageReceived;
             }
         }
         catch { }
@@ -151,35 +149,29 @@ public sealed partial class ResultsWebPage : Page
         return JsonSerializer.Serialize(dict);
     }
 
+    private const int BatchSize = 1000;
+
     private void LoadResults()
     {
-        List<LogLine> LogLineList = MiddleLayerService.GetLogLines();
-        foreach (LogLine logLine in LogLineList)
+        var lines = MiddleLayerService.GetLogLines();
+        var total = lines.Count;
+
+        MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { verb = "total", data = new { total } }));
+
+        var batch = new List<Dictionary<string, object>>(BatchSize);
+        foreach (var line in lines)
         {
-            var encodedLogLine = SerializeAndEncodeLogLine(logLine);
-
-            // Deserialize back to an object so it can be embedded as a JSON object, not a string
-            var logLineObj = JsonSerializer.Deserialize<Dictionary<string, object>>(encodedLogLine);
-
-            var message = new
+            batch.Add(JsonSerializer.Deserialize<Dictionary<string, object>>(SerializeAndEncodeLogLine(line)));
+            if (batch.Count >= BatchSize)
             {
-                verb = "newresult",
-                data = logLineObj
-            };
-
-            var messageJson = JsonSerializer.Serialize(message);
-            MyWebView.CoreWebView2.PostWebMessageAsJson(messageJson);
-        }
-
-        var doneMessage = new
-        {
-            verb = "done",
-            data = new
-            {
-                id = 0
+                MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { verb = "newresults", data = batch }));
+                batch = new List<Dictionary<string, object>>(BatchSize);
             }
-        };
-        MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(doneMessage));
+        }
+        if (batch.Count > 0)
+            MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { verb = "newresults", data = batch }));
+
+        MyWebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { verb = "done", data = new { id = 0 } }));
         SendThemeToWebView();
     }
 }

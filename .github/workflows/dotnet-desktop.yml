@@ -542,9 +542,79 @@ jobs:
           **/AppPackages/**/*.msixbundle
 
 
+  make_msi:
+    needs: [build-release, set-msix-version]
+    runs-on: windows-latest
+    outputs:
+      version: ${{ needs.set-msix-version.outputs.version }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.ref }}
+    - name: Pull latest changes (ensure updated manifest)
+      run: git pull origin ${{ github.ref_name }}
+      shell: pwsh
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: ${{ runner.os }}-nuget-
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@v2
+    - name: Publish FindNeedleUX (self-contained, win-x64)
+      shell: pwsh
+      run: |
+        dotnet publish ${{ env.FindNeedleUX_Project }} `
+          --configuration Release `
+          --runtime win-x64 `
+          --self-contained true `
+          --output "${{ github.workspace }}/publish" `
+          /p:Platform=x64 `
+          /p:GenerateAppxPackageOnBuild=false
+    - name: Build MSI
+      shell: pwsh
+      run: |
+        $version = "${{ needs.set-msix-version.outputs.version }}"
+        if (-not $version) { $version = "1.0.0.0" }
+        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
+        # WiX `<Files Include="$(var.PublishDir)**">` needs a trailing separator.
+        $publishDir = "${{ github.workspace }}\publish\"
+        dotnet build FindNeedleUX.Installer/FindNeedleUX.Installer.wixproj `
+          --configuration Release `
+          -p:PublishDir="$publishDir" `
+          -p:ProductVersion="$version"
+    - name: Rename MSI with version
+      shell: pwsh
+      run: |
+        $version = "${{ needs.set-msix-version.outputs.version }}"
+        if (-not $version) { $version = "1.0.0.0" }
+        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
+        $src = "FindNeedleUX.Installer/bin/Release/FindNeedle.msi"
+        $dst = "FindNeedleUX.Installer/bin/Release/FindNeedle-$version.msi"
+        if (Test-Path $src) {
+          Move-Item $src $dst -Force
+          Write-Host "Renamed MSI to $dst"
+        } else {
+          Write-Host "::error::MSI not produced at $src"
+          exit 1
+        }
+    - name: Upload MSI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: FindNeedleUX-MSI
+        path: FindNeedleUX.Installer/bin/Release/FindNeedle-*.msi
+        retention-days: 5
+
   actually_release:
-    needs: [make_msix_signed, make_msix_unsigned, test-publish]
-    if: needs.make_msix_signed.result == 'success' && needs.make_msix_unsigned.result == 'success'
+    needs: [make_msix_signed, make_msix_unsigned, make_msi, test-publish]
+    if: needs.make_msix_signed.result == 'success' && needs.make_msix_unsigned.result == 'success' && needs.make_msi.result == 'success'
     strategy:
       matrix:
         configuration: [Release]
@@ -575,6 +645,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: FindNeedleUX-MSIX-unsigned
+
+    - name: Download MSI artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: FindNeedleUX-MSI
+        path: msi-artifact
 
     # Copy all .msix/.msixbundle files from AppPackages to the root of FindNeedleUX-MSIX-unsigned
     - name: Copy unsigned MSIX files to artifact root
@@ -734,6 +810,25 @@ jobs:
         asset_path: '**/AppPackages/**/*.msix'
         asset_name: FindNeedleUX-signed-${{ steps.normver.outputs.version }}.msix
         asset_content_type: application/vnd.ms-appx
+
+    - name: Fail if no MSI file found
+      shell: pwsh
+      run: |
+        $files = Get-ChildItem -Path msi-artifact -Filter *.msi -ErrorAction SilentlyContinue
+        Write-Host "Found $($files.Count) .msi files."
+        if ($files.Count -eq 0) {
+          Write-Host "::error::No MSI file found in msi-artifact!"
+          exit 1
+        }
+    - name: Upload MSI to release
+      uses: sekwah41/upload-release-assets@v1.1.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: 'msi-artifact/*.msi'
+        asset_name: FindNeedle-${{ steps.normver.outputs.version }}.msi
+        asset_content_type: application/x-msi
 
 
   test-publish:

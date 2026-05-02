@@ -26,7 +26,7 @@ public class LogLine
         Index = index;
         Provider = searchResult.GetSource();
         TaskName = searchResult.GetTaskName();
-        Time = searchResult.GetLogTime().ToString();
+        Time = searchResult.GetLogTime().ToString("o");
         Message = searchResult.GetMessage();
         Source = searchResult.GetResultSource();
         Level = searchResult.GetLevel().ToString();

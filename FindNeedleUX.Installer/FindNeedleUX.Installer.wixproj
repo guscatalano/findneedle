@@ -1,0 +1,37 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputName>FindNeedle</OutputName>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(ProductVersion)' == '' ">
+    <ProductVersion>1.0.0.0</ProductVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Where the published FindNeedleUX self-contained output lives.
+         Default: ..\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish
+         Override with: dotnet build -p:PublishDir=...\path\to\publish -->
+    <PublishDir Condition=" '$(PublishDir)' == '' ">$(MSBuildThisFileDirectory)..\FindNeedleUX\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\</PublishDir>
+
+    <DefineConstants>PublishDir=$(PublishDir);ProductVersion=$(ProductVersion);SourceDir=$(MSBuildThisFileDirectory)..\</DefineConstants>
+
+    <!-- ICE03: false-positive Language warnings on harvested native DLLs.
+         ICE57: false-positive in Single Package Authoring (perUserOrMachine scope) where HKMU
+         registry keys are intentionally scope-bridged. -->
+    <SuppressIces>ICE03;ICE57</SuppressIces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+  <Target Name="VerifyPublishDirExists" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(PublishDir)FindNeedleUX.exe')"
+           Text="Publish output not found at $(PublishDir). Run 'dotnet publish FindNeedleUX -c Release -r win-x64 --self-contained true' first, or pass -p:PublishDir=&lt;path&gt;." />
+  </Target>
+
+</Project>

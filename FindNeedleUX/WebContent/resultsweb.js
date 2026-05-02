@@ -1,223 +1,239 @@
+// State
 var count = 0;
+var totalExpected = 0;
 var startTime = null;
-var scrollYEnabled = false;
-var defaultScrollY = null;
 var levelColorMap = {};
 var knownLevels = new Set();
 var levelCounts = {};
-var helpVisible = false;
 var allLogLines = [];
+var pendingRows = [];
+var drawScheduled = false;
+
+// Default level colors (used when a level first appears with no user override)
+var defaultLevelColors = {
+    'Catastrophic': '#ffb3b3',
+    'Critical':     '#ffcccc',
+    'Error':        '#ffe1e1',
+    'Warning':      '#fff4cc',
+    'Info':         '',
+    'Verbose':      '#f1f1f1',
+    'Debug':        '#eef3ff'
+};
+
+var COLUMN_NAMES = ["Index","Time","Provider","TaskName","Message","Source","Level","More"];
+
+function defaultColorFor(level) {
+    if (defaultLevelColors.hasOwnProperty(level)) return defaultLevelColors[level];
+    return '';
+}
 
 function updateResultsDisplay() {
     var resultsSpan = document.getElementById("results");
+    var totalSpan = document.getElementById("totalResults");
     var rpmSpan = document.getElementById("resultsPerMinute");
-    resultsSpan.textContent = count;
+    if (resultsSpan) resultsSpan.textContent = count;
+    if (totalSpan) totalSpan.textContent = totalExpected || count;
     if (startTime) {
-        var elapsedSeconds = (Date.now() - startTime) / 1000;
-        var rpm = elapsedSeconds > 0 ? (count / elapsedSeconds) * 60 : 0;
-        rpmSpan.textContent = `(${rpm.toFixed(1)}/min)`;
+        var elapsed = (Date.now() - startTime) / 1000;
+        var rpm = elapsed > 0 ? (count / elapsed) * 60 : 0;
+        rpmSpan.textContent = `(${rpm.toFixed(0)}/min)`;
     } else {
         rpmSpan.textContent = "";
     }
 }
 
+// More modal — full LogLine details
 function showMoreModal(rowIdx) {
     var logLine = allLogLines[rowIdx];
+    if (!logLine) return;
     var modal = document.getElementById('moreModal');
-    var modalContent = document.getElementById('moreModalContent');
-    modalContent.innerHTML = '<button onclick="hideMoreModal()">Close</button><h2>LogLine Details</h2>';
+    var contentDiv = document.getElementById('moreModalContent');
+    contentDiv.innerHTML = '';
+    var btn = document.createElement('button');
+    btn.className = 'close toolbar-btn';
+    btn.textContent = 'Close';
+    btn.onclick = hideMoreModal;
+    contentDiv.appendChild(btn);
+    var h = document.createElement('h2'); h.textContent = 'LogLine details'; contentDiv.appendChild(h);
+    var copy = document.createElement('button');
+    copy.className = 'toolbar-btn'; copy.textContent = 'Copy as JSON';
+    copy.onclick = function() { navigator.clipboard.writeText(JSON.stringify(logLine, null, 2)); };
+    contentDiv.appendChild(copy);
     var table = document.createElement('table');
-    table.style.width = '100%';
-    table.style.borderCollapse = 'collapse';
     Object.keys(logLine).forEach(function(key) {
         var tr = document.createElement('tr');
-        var tdKey = document.createElement('td');
-        tdKey.textContent = key;
-        tdKey.style.fontWeight = 'bold';
-        tdKey.style.border = '1px solid #ddd';
-        tdKey.style.padding = '4px 8px';
-        var tdVal = document.createElement('td');
-        tdVal.textContent = logLine[key];
-        tdVal.style.border = '1px solid #ddd';
-        tdVal.style.padding = '4px 8px';
-        tr.appendChild(tdKey);
-        tr.appendChild(tdVal);
-        table.appendChild(tr);
+        var k = document.createElement('td'); k.className = 'k'; k.textContent = key;
+        var v = document.createElement('td'); v.textContent = logLine[key];
+        tr.appendChild(k); tr.appendChild(v); table.appendChild(tr);
     });
-    modalContent.appendChild(table);
+    contentDiv.appendChild(table);
     modal.style.display = 'block';
 }
-function hideMoreModal() {
-    document.getElementById('moreModal').style.display = 'none';
-}
+function hideMoreModal() { document.getElementById('moreModal').style.display = 'none'; }
 
+// Level color picker controls
 function addLevelColorControl(level) {
     if (document.getElementById('colorpicker-' + level)) return;
+    if (!levelColorMap.hasOwnProperty(level)) levelColorMap[level] = defaultColorFor(level);
     var controlsDiv = document.getElementById('levelColorControls');
     var wrapper = document.createElement('span');
     wrapper.className = 'level-control-wrapper';
-    var label = document.createElement('label');
-    label.textContent = ` ${level} `;
     var input = document.createElement('input');
     input.type = 'color';
     input.id = 'colorpicker-' + level;
     input.value = levelColorMap[level] || '#ffffff';
+    input.title = 'Background color for ' + level;
     input.addEventListener('input', function() {
         levelColorMap[level] = input.value;
         recolorRowsForLevel(level);
     });
-    label.appendChild(input);
-    wrapper.appendChild(label);
-    // Add count display
+    var label = document.createElement('span'); label.textContent = level;
     var countSpan = document.createElement('span');
     countSpan.className = 'level-count';
     countSpan.id = 'level-count-' + level;
-    countSpan.textContent = `(${levelCounts[level] || 0})`;
-    countSpan.title = 'Click to expand';
-    countSpan.style.cursor = 'pointer';
-    countSpan.addEventListener('click', function() {
-        toggleLevelDetails(level);
-    });
-    wrapper.appendChild(countSpan);
-    // Add expandable details
-    var detailsDiv = document.createElement('div');
-    detailsDiv.className = 'level-details';
-    detailsDiv.id = 'level-details-' + level;
-    detailsDiv.style.display = 'none';
-    detailsDiv.innerHTML = `<small>Log messages with level <b>${level}</b>: <span id='level-details-count-${level}'>${levelCounts[level] || 0}</span></small>`;
-    wrapper.appendChild(detailsDiv);
+    countSpan.textContent = '(' + (levelCounts[level] || 0) + ')';
+    wrapper.appendChild(input); wrapper.appendChild(label); wrapper.appendChild(countSpan);
     controlsDiv.appendChild(wrapper);
-}
-
-function toggleLevelDetails(level) {
-    var detailsDiv = document.getElementById('level-details-' + level);
-    if (detailsDiv) {
-        if (detailsDiv.style.display === 'none') {
-            detailsDiv.style.display = 'block';
-        } else {
-            detailsDiv.style.display = 'none';
-        }
+    // Also append to the Level filter dropdown
+    var sel = document.querySelector('select[data-col="6"]');
+    if (sel && !Array.from(sel.options).some(function(o) { return o.value === level; })) {
+        var opt = document.createElement('option');
+        opt.value = level; opt.textContent = level;
+        sel.appendChild(opt);
     }
 }
 
 function updateLevelCounts() {
     if (!window.table) return;
     var newCounts = {};
-    // Use DataTables API to get all visible (filtered) rows' data efficiently
     var dataArr = window.table.rows({search:'applied'}).data();
     for (var i = 0; i < dataArr.length; i++) {
-        var level = dataArr[i].Level;
-        if (!newCounts[level]) newCounts[level] = 0;
-        newCounts[level]++;
+        var lvl = dataArr[i].Level;
+        newCounts[lvl] = (newCounts[lvl] || 0) + 1;
     }
-    // Only update DOM if value changed
     Object.keys(newCounts).forEach(function(level) {
         if (levelCounts[level] !== newCounts[level]) {
-            var countSpan = document.getElementById('level-count-' + level);
-            if (countSpan) countSpan.textContent = `(${newCounts[level]})`;
-            var detailsCount = document.getElementById('level-details-count-' + level);
-            if (detailsCount) detailsCount.textContent = newCounts[level];
+            var c = document.getElementById('level-count-' + level);
+            if (c) c.textContent = '(' + newCounts[level] + ')';
         }
     });
     levelCounts = newCounts;
 }
 
 function recolorRowsForLevel(level) {
-    // Instead of iterating and setting color, just redraw the table
-    if (window.table) {
-        window.table.rows().invalidate().draw(false);
-    }
+    if (window.table) window.table.rows().invalidate().draw(false);
 }
 
+// Time-range filter
+$.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+    if (settings.nTable.id !== 'myTable') return true;
+    var fromEl = document.getElementById('timeFrom');
+    var toEl = document.getElementById('timeTo');
+    var from = fromEl && fromEl.value ? new Date(fromEl.value) : null;
+    var to   = toEl && toEl.value   ? new Date(toEl.value)   : null;
+    if (!from && !to) return true;
+    var rowTime = window.table && window.table.row(dataIndex) ? window.table.row(dataIndex).data().Time : null;
+    if (!rowTime) return true;
+    var t = new Date(rowTime);
+    if (isNaN(t.getTime())) return true;
+    if (from && t < from) return false;
+    if (to && t > to) return false;
+    return true;
+});
+
+// Web message handler
 window.chrome.webview.addEventListener('message', function (event) {
-    let table = window.table;
-    const payload = event.data;
+    var payload = event.data;
+    var verb = payload.verb;
 
-    if (payload.verb === 'setTheme') {
-        document.body.style.backgroundColor = payload.data.background;
-        document.body.style.color = payload.data.foreground;
-        var htmlNode = document.getElementById('htmlRoot');
-        if (payload.data.background && payload.data.background.toLowerCase() !== '#ffffff' && payload.data.background.toLowerCase() !== '#fff') {
-            htmlNode.setAttribute('data-bs-theme', 'dark');
-        } else {
-            htmlNode.setAttribute('data-bs-theme', 'light');
-        }
-        // Set help modal content colors
-        var helpModalContent = document.getElementById('helpModalContent');
-        if (helpModalContent) {
-            helpModalContent.style.backgroundColor = payload.data.background;
-            helpModalContent.style.color = payload.data.foreground;
-        }
-        // Set loader colors
-        var loader = document.getElementById('loader');
-        if (loader) {
-            loader.style.backgroundColor = payload.data.background;
-            loader.style.color = payload.data.foreground;
-        }
-        // Set DataTables dropdown and UI colors
-        setTimeout(function() {
-            var dtLength = document.querySelector('.dataTables_length');
-            if (dtLength) {
-                dtLength.style.backgroundColor = payload.data.background;
-                dtLength.style.color = payload.data.foreground;
-                var selects = dtLength.getElementsByTagName('select');
-                for (var i = 0; i < selects.length; i++) {
-                    selects[i].style.backgroundColor = payload.data.background;
-                    selects[i].style.color = payload.data.foreground;
-                }
-            }
-        }, 0);
+    if (verb === 'setTheme') {
+        applyTheme(payload.data);
+        return;
     }
-
-    if (payload.verb === 'setLevelColors') {
-        levelColorMap = payload.data || {};
+    if (verb === 'setLevelColors') {
+        levelColorMap = Object.assign({}, levelColorMap, payload.data || {});
         Object.keys(levelColorMap).forEach(function(level) {
             knownLevels.add(level);
             addLevelColorControl(level);
         });
-        if (window.table) {
-            window.table.rows().every(function() {
-                var data = this.data();
-                var level = data.Level;
-                var color = levelColorMap[level] || '';
-                $(this.node()).css('background-color', color);
-            });
-        }
+        if (window.table) window.table.rows().invalidate().draw(false);
+        return;
     }
-
-    if (payload.verb === 'newresult') {
-        if (count == 0) {
-            startTime = Date.now();
-        }
-        count++;
+    if (verb === 'total') {
+        totalExpected = payload.data.total || 0;
         updateResultsDisplay();
-        var rowIdx = table.row.add(payload.data).index();
-        allLogLines[rowIdx] = payload.data;
-        var level = payload.data.Level;
-        if (!knownLevels.has(level)) {
-            knownLevels.add(level);
-            addLevelColorControl(level);
-        }
-        var color = levelColorMap[level] || '';
-        setTimeout(function() {
-            var rowNode = table.row(rowIdx).node();
-            if (rowNode) {
-                rowNode.style.backgroundColor = color;
-            }
-        }, 0);
+        var loader = document.getElementById('loader');
+        if (loader) loader.textContent = 'Loading 0 / ' + totalExpected + ' rows…';
+        return;
     }
-    if (payload.verb === 'done') {
-        document.getElementById("tablediv").style.visibility = "visible";
-        document.getElementById("tablediv").style.display = "block";
-        document.getElementById("loader").style.display = "none";
-        table.draw(false);
+    if (verb === 'newresult') {
+        // Backwards-compat single-row path
+        ingestRow(payload.data);
+        scheduleDraw();
+        return;
+    }
+    if (verb === 'newresults') {
+        // Batched path
+        var batch = payload.data || [];
+        for (var i = 0; i < batch.length; i++) ingestRow(batch[i]);
+        scheduleDraw();
+        return;
+    }
+    if (verb === 'done') {
+        flushPending();
+        document.getElementById('tablediv').style.display = 'block';
+        document.getElementById('loader').style.display = 'none';
+        window.table.draw(false);
         updateLevelCounts();
+        return;
     }
 });
 
+function ingestRow(row) {
+    if (count === 0) startTime = Date.now();
+    count++;
+    var idx = allLogLines.length;
+    allLogLines.push(row);
+    pendingRows.push(row);
+    var lvl = row.Level;
+    if (lvl && !knownLevels.has(lvl)) {
+        knownLevels.add(lvl);
+        addLevelColorControl(lvl);
+    }
+}
+
+function scheduleDraw() {
+    if (drawScheduled) return;
+    drawScheduled = true;
+    setTimeout(function() {
+        flushPending();
+        drawScheduled = false;
+    }, 50);
+}
+
+function flushPending() {
+    if (!pendingRows.length || !window.table) return;
+    window.table.rows.add(pendingRows);
+    pendingRows = [];
+    updateResultsDisplay();
+    var loader = document.getElementById('loader');
+    if (loader && totalExpected > 0) loader.textContent = 'Loading ' + count + ' / ' + totalExpected + ' rows…';
+}
+
+function applyTheme(data) {
+    document.body.style.backgroundColor = data.background;
+    document.body.style.color = data.foreground;
+    document.documentElement.style.setProperty('--bg', data.background);
+    document.documentElement.style.setProperty('--fg', data.foreground);
+    var htmlNode = document.getElementById('htmlRoot');
+    var bgLower = (data.background || '').toLowerCase();
+    var isLight = bgLower === '#ffffff' || bgLower === '#fff';
+    htmlNode.setAttribute('data-bs-theme', isLight ? 'light' : 'dark');
+}
+
+// DataTables init
 function codeAddress() {
     document.getElementById("tablediv").style.display = "none";
-    var scrollY = null;
     window.table = new DataTable('#myTable', {
         columns: [
             { title: "Index", data: "Index" },
@@ -225,55 +241,196 @@ function codeAddress() {
             { title: "Provider", data: "Provider" },
             { title: "TaskName", data: "TaskName" },
             { title: "Message", data: "Message" },
-            { title: "Source", data: "Source" },
+            { title: "Source", data: "Source", render: function(data, type, row) {
+                if (type === 'display' && data) return '<span title="' + data + '">' + escapeHtml(getBasename(data)) + '</span>';
+                return data;
+            }},
             { title: "Level", data: "Level" },
-            { title: "More", data: null, orderable: false, render: function(data, type, row, meta) {
-                return `<button onclick='showMoreModal(${meta.row})'>[...]</button>`;
+            { title: "More", data: null, orderable: false, searchable: false, render: function(data, type, row, meta) {
+                return "<button class='toolbar-btn' onclick='showMoreModal(" + meta.row + ")'>[…]</button>";
             }}
         ],
         colReorder: true,
         columnDefs: [
             { targets: 0, className: 'min-width-message-id' },
-            { targets: 1, className: 'min-width-message-time' },
+            { targets: 1, className: 'min-width-message-time' }
         ],
-        lengthChange: true,
-        pageLength: 500,
-        scrollY: scrollY,
-        scrollCollapse: true,
-        layout: {
-            topStart: {
-                pageLength: {
-                    menu: [5, 10, 25, 50,100,500,1000,2000,5000,10000]
-                }
+        deferRender: true,
+        stateSave: true,
+        stateDuration: -1, // sessionStorage
+        pageLength: 100,
+        initComplete: function() {
+            // Relocate the filter row from <tfoot> into <thead>. We keep it in <tfoot>
+            // in markup so DataTables doesn't auto-inject column-title spans into our
+            // <th> cells (which it does for every row inside <thead>).
+            var filterRow = document.querySelector('#myTable tfoot .filter-row');
+            var thead = document.querySelector('#myTable thead');
+            if (filterRow && thead) {
+                thead.appendChild(filterRow);
+                // Block clicks inside filter inputs from bubbling up and triggering
+                // DataTables' sort handler on the parent <th>.
+                filterRow.querySelectorAll('input, select').forEach(function(el) {
+                    el.addEventListener('click', function(e) { e.stopPropagation(); });
+                });
             }
         },
+        layout: {
+            topStart: { pageLength: { menu: [25, 50, 100, 500, 1000, 5000, { value: -1, label: 'All' }] } }
+        },
         rowCallback: function(row, data) {
-            var color = levelColorMap[data.Level] || '';
-            row.style.backgroundColor = color;
+            var color = (levelColorMap[data.Level] !== undefined) ? levelColorMap[data.Level] : defaultColorFor(data.Level);
+            row.style.backgroundColor = color || '';
         }
     });
     window.chrome.webview.postMessage('getData');
-    document.querySelectorAll('a.toggle-vis').forEach((el) => {
-        el.addEventListener('click', function (e) {
-            e.preventDefault();
-            let columnIdx = e.target.getAttribute('data-column');
-            let column = window.table.column(columnIdx);
-            column.visible(!column.visible());
+
+    // Build Columns ▾ panel
+    buildColumnTogglePanel();
+
+    // Top searchbox
+    var searchBox = document.getElementById('searchbox');
+    searchBox.addEventListener('input', function() {
+        window.table.search(this.value).draw();
+        updateLevelCounts();
+    });
+
+    // Per-column filters
+    document.querySelectorAll('#myTable .filter-row input').forEach(function(input) {
+        input.addEventListener('input', function() {
+            var col = parseInt(this.getAttribute('data-col'), 10);
+            window.table.column(col).search(this.value).draw();
+            updateLevelCounts();
         });
     });
-    // Searchbox filter
-    var searchBox = document.getElementById('searchbox');
-    if (searchBox) {
-        searchBox.addEventListener('input', function() {
-            window.table.search(this.value).draw();
+    document.querySelectorAll('#myTable .filter-row select').forEach(function(sel) {
+        sel.addEventListener('change', function() {
+            var col = parseInt(this.getAttribute('data-col'), 10);
+            var v = this.value;
+            // Use exact match for dropdown filter
+            window.table.column(col).search(v ? '^' + escapeRegex(v) + '$' : '', true, false).draw();
+            updateLevelCounts();
         });
-    }
+    });
+
+    // Time range — redraw on change to apply ext.search filter
+    ['timeFrom','timeTo'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', function() { window.table.draw(); updateLevelCounts(); });
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            searchBox.focus();
+            searchBox.select();
+        }
+        if (e.key === 'Escape') {
+            hideMoreModal();
+            hideHelp();
+            document.getElementById('columnTogglePanel').style.display = 'none';
+            if (document.activeElement) document.activeElement.blur();
+        }
+    });
+
+    // Click outside Columns panel closes it
+    document.addEventListener('click', function(e) {
+        var panel = document.getElementById('columnTogglePanel');
+        if (panel.style.display === 'block' && !panel.contains(e.target) && !e.target.matches('button.toolbar-btn')) {
+            panel.style.display = 'none';
+        }
+    });
 }
 
-// Help modal logic
-function showHelp() {
-    document.getElementById('helpModal').style.display = 'block';
+function buildColumnTogglePanel() {
+    var panel = document.getElementById('columnTogglePanel');
+    panel.innerHTML = '';
+    COLUMN_NAMES.forEach(function(name, idx) {
+        var label = document.createElement('label');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = window.table.column(idx).visible();
+        cb.addEventListener('change', function() {
+            window.table.column(idx).visible(cb.checked);
+        });
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' ' + name));
+        panel.appendChild(label);
+    });
 }
-function hideHelp() {
-    document.getElementById('helpModal').style.display = 'none';
+
+function toggleColumnPanel() {
+    var panel = document.getElementById('columnTogglePanel');
+    if (panel.style.display === 'block') {
+        panel.style.display = 'none';
+        return;
+    }
+    // Re-sync checkboxes with current state (in case state was restored)
+    var labels = panel.querySelectorAll('label input');
+    labels.forEach(function(cb, idx) {
+        cb.checked = window.table.column(idx).visible();
+    });
+    panel.style.display = 'block';
 }
+
+function clearAllFilters() {
+    document.getElementById('searchbox').value = '';
+    document.querySelectorAll('#myTable .filter-row input').forEach(function(i) { i.value = ''; });
+    document.querySelectorAll('#myTable .filter-row select').forEach(function(s) { s.value = ''; });
+    var tf = document.getElementById('timeFrom'); if (tf) tf.value = '';
+    var tt = document.getElementById('timeTo');   if (tt) tt.value = '';
+    if (window.table) {
+        window.table.search('');
+        window.table.columns().every(function() { this.search(''); });
+        window.table.draw();
+    }
+    updateLevelCounts();
+}
+
+function exportCsv() {
+    if (!window.table) return;
+    var visibleColumns = [];
+    window.table.columns().every(function(idx) {
+        if (this.visible() && COLUMN_NAMES[idx] && COLUMN_NAMES[idx] !== 'More') visibleColumns.push(idx);
+    });
+    var headers = visibleColumns.map(function(i) { return COLUMN_NAMES[i]; });
+    var rows = [headers.map(csvEscape).join(',')];
+    var data = window.table.rows({search: 'applied'}).data();
+    for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        rows.push(visibleColumns.map(function(idx) {
+            return csvEscape(row[COLUMN_NAMES[idx]]);
+        }).join(','));
+    }
+    var blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'results-' + new Date().toISOString().replace(/[:.]/g,'-') + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function csvEscape(v) {
+    if (v === null || v === undefined) return '';
+    var s = String(v);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+}
+
+function escapeRegex(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function getBasename(p) {
+    if (!p) return '';
+    var s = String(p);
+    var i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'));
+    return i >= 0 ? s.substring(i + 1) : s;
+}
+
+// Help modal
+function showHelp() { document.getElementById('helpModal').style.display = 'block'; }
+function hideHelp() { document.getElementById('helpModal').style.display = 'none'; }

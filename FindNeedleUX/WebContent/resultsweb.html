@@ -1,146 +1,112 @@
-﻿<html id="htmlRoot">
+<!DOCTYPE html>
+<html id="htmlRoot">
 <head>
+    <meta charset="utf-8">
+    <link href="datatables.min.css" rel="stylesheet">
+    <script src="datatables.min.js"></script>
     <script src="resultsweb.js"></script>
     <style>
-        .min-width-message-id {
-            min-width: 100px;
+        body { font-family: Segoe UI, system-ui, sans-serif; }
+        #toolbar {
+            display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+            padding: 8px 0; border-bottom: 1px solid #ccc; margin-bottom: 8px;
         }
-        .min-width-message-time {
-            min-width: 160px;
+        #toolbar > * { flex-shrink: 0; }
+        #searchbox {
+            flex: 1 1 240px; min-width: 200px; box-sizing: border-box;
+            font-size: 1.05em; padding: 6px 10px;
         }
-        #myTable {
-            table-layout: auto;
-            width: 100%;
+        .toolbar-btn {
+            padding: 5px 12px; font-size: 0.95em; cursor: pointer;
+            border: 1px solid #888; border-radius: 4px; background: transparent; color: inherit;
         }
+        .toolbar-btn:hover { background: rgba(127,127,127,0.15); }
+        #columnTogglePanel {
+            position: absolute; z-index: 500; background: var(--bg, #fff); color: var(--fg, #000);
+            border: 1px solid #888; border-radius: 4px; padding: 8px 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: none;
+            max-height: 70vh; overflow: auto;
+        }
+        #columnTogglePanel label { display: block; padding: 3px 0; cursor: pointer; }
+        #columnTogglePanel input { margin-right: 6px; }
+        #timeRangeRow { display: flex; gap: 6px; align-items: center; font-size: 0.9em; }
+        #timeRangeRow input { padding: 4px; }
+        #stats { font-size: 0.95em; }
+        #stats #results { font-weight: bold; }
+        #resultsPerMinute { color: #888; }
+        #loader {
+            padding: 16px; text-align: center; color: #666;
+            border: 1px dashed #ccc; border-radius: 6px; margin: 16px 0;
+        }
+        #myTable { table-layout: auto; width: 100%; }
         #myTable th, #myTable td {
             white-space: normal !important;
-            word-break: break-word;
-            overflow-wrap: break-word;
+            word-break: break-word; overflow-wrap: break-word;
             max-width: 400px;
         }
-        .dataTables_scrollBody {
-            width: 100% !important;
+        #myTable .filter-row input,
+        #myTable .filter-row select {
+            width: 100%; box-sizing: border-box; padding: 2px 4px;
+            font-size: 0.85em; font-weight: normal;
         }
-        #levelColorControls label {
-            margin-right: 8px;
+        /* The filter row lives in <tfoot> in markup (so DataTables doesn't overwrite its cells)
+           but is moved to <thead> by initComplete; tfoot is empty afterwards. */
+        #myTable tfoot, .dt-scroll-foot { display: none; }
+        #myTable .filter-row th { padding: 4px; }
+        .min-width-message-id { min-width: 60px; }
+        .min-width-message-time { min-width: 160px; }
+        #levelColorControls { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0; font-size: 0.9em; }
+        .level-control-wrapper { display: inline-flex; align-items: center; gap: 4px; }
+        .level-count { font-size: 0.85em; color: #888; }
+        div.dataTables_filter { display: none !important; }
+        /* Modal */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100vw; height: 100vh; overflow: auto;
+            background-color: rgba(0,0,0,0.4);
         }
-        .level-control-wrapper {
-            display: inline-block;
-            margin-right: 16px;
-            font-size: 0.95em;
+        .modal-content {
+            background: var(--bg, #fff); color: var(--fg, #000);
+            margin: 8vh auto; padding: 20px 28px; border-radius: 8px;
+            width: 90%; max-width: 600px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.3);
         }
-        .level-count {
-            font-size: 0.8em;
-            color: #666;
-            margin-left: 2px;
+        .modal-content h2 { margin-top: 0; }
+        .modal-content table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .modal-content td {
+            border: 1px solid #ddd; padding: 4px 8px;
+            font-family: Consolas, monospace; font-size: 0.85em;
+            word-break: break-all;
         }
-        .level-details {
-            font-size: 0.8em;
-            color: #444;
-            background: #f8f8f8;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-top: 2px;
-            padding: 2px 6px;
-            max-width: 220px;
-        }
-        #searchbox {
-            width: 100%;
-            box-sizing: border-box;
-            font-size: 1.1em;
-            padding: 6px 10px;
-            margin-bottom: 8px;
-        }
-        #helpBtn {
-            float: right;
-            margin-left: 8px;
-            font-size: 1em;
-            padding: 4px 10px;
-        }
-        /* Modal styles */
-        #helpModal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100vw;
-            height: 100vh;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.3);
-        }
-        #helpModalContent {
-            background: #fff;
-            margin: 8vh auto;
-            padding: 24px 32px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 2px 16px rgba(0,0,0,0.2);
-        }
-        #helpModalContent h2 {
-            margin-top: 0;
-        }
-        #helpModalContent ul {
-            margin: 0 0 0 18px;
-        }
-        #helpModalContent button {
-            float: right;
-        }
-        /* More Modal styles */
-        #moreModal {
-            display: none;
-            position: fixed;
-            z-index: 2000;
-            left: 0;
-            top: 0;
-            width: 100vw;
-            height: 100vh;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.3);
-        }
-        #moreModalContent {
-            background: #fff;
-            margin: 8vh auto;
-            padding: 24px 32px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 600px;
-            box-shadow: 0 2px 16px rgba(0,0,0,0.2);
-        }
-        #moreModalContent h2 {
-            margin-top: 0;
-        }
-        #moreModalContent table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 12px;
-        }
-        #moreModalContent td {
-            border: 1px solid #ddd;
-            padding: 4px 8px;
-        }
-        #moreModalContent button {
-            float: right;
-        }
-        /* Hide DataTables default searchbox */
-        div.dataTables_filter {
-            display: none !important;
-        }
+        .modal-content td.k { font-weight: bold; width: 30%; font-family: inherit; }
+        .modal-content button.close { float: right; }
     </style>
 </head>
 <body onload="codeAddress()">
-    <div style="margin-bottom:8px;">
-        <span id="results" style="font-weight:bold;">0</span> results <span id="resultsPerMinute" style="font-size:0.95em;color:#888;"></span>
+    <div id="toolbar">
+        <input id="searchbox" type="text" placeholder="Search all columns... (Ctrl+F)" />
+        <button class="toolbar-btn" onclick="toggleColumnPanel()">Columns ▾</button>
+        <div id="timeRangeRow">
+            <span>Time:</span>
+            <input id="timeFrom" type="datetime-local" title="From"/>
+            <span>→</span>
+            <input id="timeTo" type="datetime-local" title="To"/>
+        </div>
+        <button class="toolbar-btn" onclick="clearAllFilters()" title="Clear search, per-column, and time-range filters">Clear filters</button>
+        <button class="toolbar-btn" onclick="exportCsv()" title="Download visible rows as CSV">Export CSV</button>
+        <button class="toolbar-btn" onclick="showHelp()">Help</button>
+        <span id="stats">
+            <span id="results">0</span> / <span id="totalResults">0</span> results
+            <span id="resultsPerMinute"></span>
+        </span>
     </div>
+    <div id="columnTogglePanel"></div>
+
+    <div id="levelColorControls"></div>
+
     <div id="loader">Loading...</div>
-    <link href="datatables.min.css" rel="stylesheet">
-    <input id="searchbox" type="text" placeholder="Search/filter results..." />
-    <button id="helpBtn" onclick="showHelp()">Help</button>
-    <div id="levelColorControls" style="margin: 10px 0;"></div>
-    Toggle column: <a class="toggle-vis" data-column="0">Index</a> - <a class="toggle-vis" data-column="1">Time</a> - <a class="toggle-vis" data-column="2">Provider</a> - <a class="toggle-vis" data-column="3">TaskName</a> - <a class="toggle-vis" data-column="4">Message</a> - <a class="toggle-vis" data-column="5">Source</a>
+
     <div id="tablediv" style="display:none;">
-        <script src="datatables.min.js"></script>
         <table id="myTable" class="display">
             <thead>
                 <tr>
@@ -154,27 +120,42 @@
                     <th>More</th>
                 </tr>
             </thead>
-            <tbody>
-            </tbody>
+            <tbody></tbody>
+            <tfoot>
+                <tr class="filter-row">
+                    <th><input data-col="0" placeholder="Filter…" type="text"/></th>
+                    <th></th>
+                    <th><input data-col="2" placeholder="Filter…" type="text"/></th>
+                    <th><input data-col="3" placeholder="Filter…" type="text"/></th>
+                    <th><input data-col="4" placeholder="Filter…" type="text"/></th>
+                    <th><input data-col="5" placeholder="Filter…" type="text"/></th>
+                    <th><select data-col="6"><option value="">(all)</option></select></th>
+                    <th></th>
+                </tr>
+            </tfoot>
         </table>
     </div>
-    <!-- More Modal -->
-    <div id="moreModal">
-        <div id="moreModalContent"></div>
+
+    <div class="modal" id="moreModal">
+        <div class="modal-content" id="moreModalContent"></div>
     </div>
-    <!-- Help Modal -->
-    <div id="helpModal">
-        <div id="helpModalContent">
-            <button onclick="hideHelp()">Close</button>
-            <h2>How to Filter Results</h2>
+    <div class="modal" id="helpModal">
+        <div class="modal-content">
+            <button class="close toolbar-btn" onclick="hideHelp()">Close</button>
+            <h2>Filtering &amp; navigation</h2>
             <ul>
-                <li>Type any text to filter all columns (case-insensitive).</li>
-                <li>To filter by level, type the level name (e.g., <b>Error</b>, <b>Warning</b>).</li>
-                <li>Combine terms: <code>Error disk</code> (shows rows with both "Error" and "disk").</li>
-                <li>Use column toggles to hide/show columns.</li>
-                <li>Use the color pickers to highlight log levels.</li>
+                <li><b>Top searchbox</b> — case-insensitive, all columns. Multiple words = AND match.</li>
+                <li><b>Per-column filters</b> — type in the row under each column header. Level is a dropdown.</li>
+                <li><b>Time range</b> — pick From/To to restrict by Time column.</li>
+                <li><b>Columns ▾</b> — toggle which columns are visible.</li>
+                <li><b>Drag column headers</b> to reorder.</li>
+                <li><b>Click column headers</b> to sort.</li>
+                <li><b>Export CSV</b> — saves the currently-visible (filtered) rows.</li>
+                <li><b>Level colors</b> — click the swatch next to a level to recolor those rows.</li>
+                <li><b>Ctrl+F</b> — focus searchbox. <b>Esc</b> — close modal / clear focus.</li>
             </ul>
-            <p>Advanced: Use <b>regex</b> or <b>column-specific</b> filtering in the DataTables search box if supported.</p>
+            <p>Column visibility, order, and page size are saved across sessions.</p>
         </div>
     </div>
+</body>
 </html>
