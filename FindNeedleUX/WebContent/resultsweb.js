@@ -259,6 +259,7 @@ function codeAddress() {
         stateSave: true,
         stateDuration: -1, // sessionStorage
         pageLength: 100,
+        autoWidth: false, // we manage column widths manually for drag-resize
         initComplete: function() {
             // Relocate the filter row from <tfoot> into <thead>. We keep it in <tfoot>
             // in markup so DataTables doesn't auto-inject column-title spans into our
@@ -273,6 +274,8 @@ function codeAddress() {
                     el.addEventListener('click', function(e) { e.stopPropagation(); });
                 });
             }
+            enableColumnResize();
+            restoreColumnWidths();
         },
         layout: {
             topStart: { pageLength: { menu: [25, 50, 100, 500, 1000, 5000, { value: -1, label: 'All' }] } }
@@ -434,3 +437,89 @@ function getBasename(p) {
 // Help modal
 function showHelp() { document.getElementById('helpModal').style.display = 'block'; }
 function hideHelp() { document.getElementById('helpModal').style.display = 'none'; }
+
+// --- Column resize ---
+var COLUMN_WIDTHS_KEY = 'findneedle.colWidths';
+
+// Per-column minimum widths in pixels. Index aligns with COLUMN_NAMES.
+// Numeric/Level columns can be small; Time and Message need room.
+var COLUMN_MIN_WIDTHS = {
+    0: 50,   // Index
+    1: 150,  // Time (ISO datetime "2026-03-01T09:20:06.0000000")
+    2: 80,   // Provider
+    3: 90,   // TaskName
+    4: 200,  // Message
+    5: 80,   // Source (filename)
+    6: 80,   // Level
+    7: 50    // More (button)
+};
+
+function minWidthFor(idx) {
+    return COLUMN_MIN_WIDTHS[idx] != null ? COLUMN_MIN_WIDTHS[idx] : 40;
+}
+
+function loadStoredWidths() {
+    try {
+        var raw = sessionStorage.getItem(COLUMN_WIDTHS_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+}
+function saveStoredWidths(map) {
+    try { sessionStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(map)); } catch (e) {}
+}
+
+function setColumnWidth(idx, px) {
+    px = Math.max(minWidthFor(idx), Math.round(px));
+    var th = document.querySelector('#myTable thead tr:first-child th[data-dt-column="' + idx + '"]');
+    if (th) th.style.width = px + 'px';
+    var col = document.querySelector('#myTable colgroup col[data-dt-column="' + idx + '"]');
+    if (col) col.style.width = px + 'px';
+    return px;
+}
+
+function restoreColumnWidths() {
+    var stored = loadStoredWidths();
+    Object.keys(stored).forEach(function(k) { setColumnWidth(parseInt(k, 10), stored[k]); });
+}
+
+function enableColumnResize() {
+    var ths = document.querySelectorAll('#myTable thead tr:first-child th');
+    ths.forEach(function(th) {
+        if (th.querySelector('.col-resize-grip')) return; // idempotent
+        var idxAttr = th.getAttribute('data-dt-column');
+        if (idxAttr === null) return;
+        var idx = parseInt(idxAttr, 10);
+        var grip = document.createElement('div');
+        grip.className = 'col-resize-grip';
+        grip.title = 'Drag to resize';
+        th.appendChild(grip);
+
+        grip.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var startX = e.pageX;
+            var startW = th.getBoundingClientRect().width;
+            document.body.classList.add('col-resizing');
+
+            function onMove(ev) {
+                var newW = setColumnWidth(idx, startW + (ev.pageX - startX));
+                window.__resizeNewW = newW;
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                document.body.classList.remove('col-resizing');
+                if (typeof window.__resizeNewW === 'number') {
+                    var stored = loadStoredWidths();
+                    stored[idx] = window.__resizeNewW;
+                    saveStoredWidths(stored);
+                    delete window.__resizeNewW;
+                }
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+        // Prevent the grip from triggering header sort.
+        grip.addEventListener('click', function(e) { e.stopPropagation(); });
+    });
+}

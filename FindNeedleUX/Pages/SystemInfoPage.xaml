@@ -22,8 +22,9 @@
         
         <TextBlock Text="Change Default Result Viewer:" Margin="0,10,0,0"/>
         <ComboBox Name="ResultViewerComboBox" Width="250" SelectionChanged="ResultViewerComboBox_SelectionChanged">
-            <ComboBoxItem Content="ResultsWebPage" Tag="resultswebpage"/>
-            <ComboBoxItem Content="SearchResultPage" Tag="searchresultpage"/>
+            <ComboBoxItem Content="Native Viewer (WinUI 3)" Tag="nativereviewer"/>
+            <ComboBoxItem Content="Web Viewer (WebView2)" Tag="resultswebpage"/>
+            <ComboBoxItem Content="Search Result Page" Tag="searchresultpage"/>
         </ComboBox>
         <TextBlock Margin="10,10,0,0">
             <Run Text="Store Page: "/>

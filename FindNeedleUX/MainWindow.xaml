@@ -64,11 +64,13 @@
         <Grid Grid.Row="2">
             <Frame x:Name="contentFrame" />
             <!-- Full-window overlay spinner for ETL inspection and quick actions -->
-            <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="#80000000" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" >
+            <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SystemControlPageBackgroundMediumAltMediumBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                  AutomationProperties.Name="Operation in progress" AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
-                    <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False"/>
-                    <TextBlock x:Name="SpinnerText" Text="Inspecting file..." Margin="0,16,0,0" FontSize="18" Foreground="White" HorizontalAlignment="Center"/>
-                    <Button x:Name="CancelQuickActionButton" Content="Cancel" Width="100" Margin="0,24,0,0" Click="CancelQuickActionButton_Click" Visibility="Collapsed"/>
+                    <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False" AutomationProperties.Name="Working"/>
+                    <TextBlock x:Name="SpinnerText" Text="Inspecting file..." Margin="0,16,0,0" FontSize="18" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
+                    <Button x:Name="CancelQuickActionButton" Content="Cancel" Width="100" Margin="0,24,0,0" Click="CancelQuickActionButton_Click" Visibility="Collapsed"
+                            AutomationProperties.Name="Cancel current operation"/>
                 </StackPanel>
             </Grid>
         </Grid>

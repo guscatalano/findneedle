@@ -22,7 +22,9 @@
                        Grid.Column="0"
                        HorizontalAlignment="Stretch"
                        DefaultBackgroundColor="Transparent"
-                       VerticalAlignment="Stretch"/>
+                       VerticalAlignment="Stretch"
+                       AutomationProperties.Name="Search results viewer"
+                       AutomationProperties.HelpText="Interactive results table rendered as HTML"/>
     </Grid>
 </Page>
 

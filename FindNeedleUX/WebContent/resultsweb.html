@@ -53,6 +53,17 @@
            but is moved to <thead> by initComplete; tfoot is empty afterwards. */
         #myTable tfoot, .dt-scroll-foot { display: none; }
         #myTable .filter-row th { padding: 4px; }
+        /* Column resize grip: a wider (8px) draggable strip on the right edge of each header cell.
+           Higher z-index so it sits above DataTables' sort-indicator span and captures hover. */
+        #myTable thead tr:first-child th { position: relative; }
+        .col-resize-grip {
+            position: absolute; top: 0; right: -1px; width: 8px; height: 100%;
+            cursor: col-resize !important; user-select: none; z-index: 5;
+            background: transparent;
+        }
+        .col-resize-grip:hover { background: rgba(127,127,127,0.5); }
+        .col-resize-grip:active { background: rgba(127,127,127,0.8); }
+        body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
         .min-width-message-id { min-width: 60px; }
         .min-width-message-time { min-width: 160px; }
         #levelColorControls { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0; font-size: 0.9em; }
@@ -149,6 +160,7 @@
                 <li><b>Time range</b> — pick From/To to restrict by Time column.</li>
                 <li><b>Columns ▾</b> — toggle which columns are visible.</li>
                 <li><b>Drag column headers</b> to reorder.</li>
+                <li><b>Drag the right edge</b> of a column header to resize it.</li>
                 <li><b>Click column headers</b> to sort.</li>
                 <li><b>Export CSV</b> — saves the currently-visible (filtered) rows.</li>
                 <li><b>Level colors</b> — click the swatch next to a level to recolor those rows.</li>

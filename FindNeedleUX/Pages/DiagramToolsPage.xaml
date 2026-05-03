@@ -22,8 +22,11 @@
                     CornerRadius="8" Padding="15" Margin="0,0,0,15">
                 <StackPanel>
                     <TextBlock x:Name="InstallProgressText" Text="Installing..." Margin="0,0,0,10"
-                               IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
-                    <ProgressBar x:Name="InstallProgressBar" IsIndeterminate="True"/>
+                               IsTextSelectionEnabled="True" TextWrapping="Wrap"
+                               AutomationProperties.LiveSetting="Polite"/>
+                    <ProgressBar x:Name="InstallProgressBar" IsIndeterminate="True"
+                                 AutomationProperties.Name="Installation progress"
+                                 AutomationProperties.LiveSetting="Polite"/>
                 </StackPanel>
             </Border>
 
@@ -39,12 +42,12 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="▤" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center"/>
+                        <TextBlock Text="▤" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
                         <TextBlock Text="Timeline demo viewer" FontSize="14" VerticalAlignment="Center"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Button Content="Open (In-App)" Click="OpenDemoInApp_Click" Width="110"/>
-                        <Button Content="Open (External)" Click="OpenDemoExternal_Click" Width="130"/>
+                        <Button Content="Open (In-App)" Click="OpenDemoInApp_Click"/>
+                        <Button Content="Open (External)" Click="OpenDemoExternal_Click"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -68,8 +71,8 @@
                     </Grid.RowDefinitions>
                     
                     <StackPanel Grid.Column="0" Grid.Row="0" Orientation="Horizontal">
-                        <TextBlock x:Name="PlantUmlStatusIcon" Text="?" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="PlantUmlStatusText" Text="Checking..." FontSize="14" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="PlantUmlStatusIcon" Text="?" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
+                        <TextBlock x:Name="PlantUmlStatusText" Text="Checking..." FontSize="14" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
                     </StackPanel>
                     
                     <TextBlock x:Name="PlantUmlPathDisplay" Grid.Row="1" Grid.Column="0" 
@@ -79,8 +82,10 @@
                                Text="" Opacity="0.5" FontSize="11" Margin="26,2,0,0"/>
                     
                     <StackPanel Grid.Column="1" Grid.RowSpan="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Button x:Name="TestPlantUmlButton" Content="Test" Click="TestPlantUml_Click" Width="60" Margin="0,0,5,0"/>
-                        <Button x:Name="InstallPlantUmlButton" Content="Install" Click="InstallPlantUml_Click" Width="80"/>
+                        <Button x:Name="TestPlantUmlButton" Content="Test" Click="TestPlantUml_Click" Width="60" Margin="0,0,5,0"
+                                AutomationProperties.Name="Test PlantUML installation"/>
+                        <Button x:Name="InstallPlantUmlButton" Content="Install" Click="InstallPlantUml_Click" Width="80"
+                                AutomationProperties.Name="Install PlantUML"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -104,8 +109,8 @@
                     </Grid.RowDefinitions>
                     
                     <StackPanel Grid.Column="0" Grid.Row="0" Orientation="Horizontal">
-                        <TextBlock x:Name="MermaidStatusIcon" Text="?" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="MermaidStatusText" Text="Checking..." FontSize="14" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="MermaidStatusIcon" Text="?" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
+                        <TextBlock x:Name="MermaidStatusText" Text="Checking..." FontSize="14" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
                     </StackPanel>
                     
                     <TextBlock x:Name="MermaidPathDisplay" Grid.Row="1" Grid.Column="0" 
@@ -115,8 +120,10 @@
                                Text="" Opacity="0.5" FontSize="11" Margin="26,2,0,0"/>
                     
                     <StackPanel Grid.Column="1" Grid.RowSpan="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Button x:Name="TestMermaidButton" Content="Test" Click="TestMermaid_Click" Width="60" Margin="0,0,5,0"/>
-                        <Button x:Name="InstallMermaidButton" Content="Install" Click="InstallMermaid_Click" Width="80"/>
+                        <Button x:Name="TestMermaidButton" Content="Test" Click="TestMermaid_Click" Width="60" Margin="0,0,5,0"
+                                AutomationProperties.Name="Test Mermaid CLI installation"/>
+                        <Button x:Name="InstallMermaidButton" Content="Install" Click="InstallMermaid_Click" Width="80"
+                                AutomationProperties.Name="Install Mermaid CLI"/>
                     </StackPanel>
                 </Grid>
             </Border>

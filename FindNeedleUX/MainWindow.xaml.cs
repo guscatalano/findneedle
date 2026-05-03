@@ -17,12 +17,12 @@ public sealed partial class MainWindow : Window
     private static readonly Dictionary<string, Type> ResultViewerPages = new()
     {
         { "resultswebpage", typeof(FindNeedleUX.Pages.ResultsWebPage) },
-        { "searchresultpage", typeof(FindNeedleUX.Pages.SearchResultPage) }
+        { "nativereviewer", typeof(FindNeedleUX.Pages.NativeResultsPage) }
     };
 
     private static readonly string[] RawResultViewers = new[]
     {
-        "resultswebpage", "searchresultpage"
+        "resultswebpage", "nativereviewer"
     };
 
     private CancellationTokenSource _quickActionCts;

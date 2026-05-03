@@ -19,13 +19,18 @@
                     <TextBlock Text="📁 Rule Files" FontWeight="SemiBold"/>
                     
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button x:Name="BrowseButton" Content="📂 Browse..." Click="BrowseButton_Click" Width="100"/>
-                        <Button x:Name="RemoveButton" Content="🗑️ Remove Selected" Click="RemoveButton_Click" IsEnabled="False" Width="120"/>
-                        <TextBox x:Name="TestFilePathInput" Width="200" Height="32" PlaceholderText="Test: Enter file path" IsTabStop="False" KeyDown="TestFilePathInput_KeyDown"/>
-                        <Button x:Name="TestLoadButton" Content="🚀 Load" Click="TestLoadButton_Click" Height="32"/>
+                        <Button x:Name="BrowseButton" Content="📂 Browse..." Click="BrowseButton_Click"
+                                AutomationProperties.Name="Browse for rule file"/>
+                        <Button x:Name="RemoveButton" Content="🗑️ Remove Selected" Click="RemoveButton_Click" IsEnabled="False"
+                                AutomationProperties.Name="Remove selected rule file"/>
+                        <TextBox x:Name="TestFilePathInput" Width="200" Height="32" Header="Test file path" PlaceholderText="Enter file path" KeyDown="TestFilePathInput_KeyDown"
+                                 AutomationProperties.Name="Test file path"/>
+                        <Button x:Name="TestLoadButton" Content="🚀 Load" Click="TestLoadButton_Click" Height="32"
+                                AutomationProperties.Name="Load test file"/>
                     </StackPanel>
 
-                    <ListView x:Name="RuleFilesListBox" ItemsSource="{x:Bind RuleFiles, Mode=OneWay}" Height="150" SelectionChanged="RuleFilesListBox_SelectionChanged">
+                    <ListView x:Name="RuleFilesListBox" ItemsSource="{x:Bind RuleFiles, Mode=OneWay}" Height="150" SelectionChanged="RuleFilesListBox_SelectionChanged"
+                              AutomationProperties.Name="Loaded rule files">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="viewobjects:RuleFileItem">
                                 <Grid ColumnSpacing="8" Padding="8">
@@ -39,7 +44,8 @@
                                         <TextBlock Text="{x:Bind FilePath}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     </StackPanel>
 
-                                    <SymbolIcon Grid.Column="1" Symbol="Accept" Foreground="Green" Visibility="{x:Bind IsValid}"/>
+                                    <SymbolIcon Grid.Column="1" Symbol="Accept" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind IsValid}"
+                                                AutomationProperties.Name="Valid"/>
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
@@ -52,7 +58,8 @@
                 <StackPanel Spacing="12">
                     <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
                         <TextBlock Text="📋 Pipeline Sections" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <ComboBox x:Name="PurposeFilterCombo" SelectionChanged="PurposeFilterCombo_SelectionChanged" Width="120">
+                        <ComboBox x:Name="PurposeFilterCombo" SelectionChanged="PurposeFilterCombo_SelectionChanged" Width="120"
+                                  Header="Filter by purpose" AutomationProperties.Name="Filter sections by purpose">
                             <ComboBoxItem IsSelected="True" Tag="All">All Purposes</ComboBoxItem>
                             <ComboBoxItem Tag="filter">Filter</ComboBoxItem>
                             <ComboBoxItem Tag="enrichment">Enrichment</ComboBoxItem>

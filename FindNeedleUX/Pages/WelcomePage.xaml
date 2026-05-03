@@ -19,17 +19,20 @@
             <!-- Quick Actions -->
             <TextBlock Text="Quick Actions" FontWeight="SemiBold" FontSize="18"/>
             <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button Content="📁 Open Log File" Click="OpenLogFileButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                <Button Content="📁 Open Log File" Click="OpenLogFileButton_Click" Height="80" HorizontalAlignment="Left"
+                        AutomationProperties.Name="Open log file">
                     <Button.Background>
                         <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
                     </Button.Background>
                 </Button>
-                <Button Content="📂 Open Folder" Click="OpenFolderButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                <Button Content="📂 Open Folder" Click="OpenFolderButton_Click" Height="80" HorizontalAlignment="Left"
+                        AutomationProperties.Name="Open folder of logs">
                     <Button.Background>
                         <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
                     </Button.Background>
                 </Button>
-                <Button Content="📝 Open Log with Rules" Click="OpenLogWithRulesButton_Click" Width="160" Height="80" HorizontalAlignment="Left">
+                <Button Content="📝 Open Log with Rules" Click="OpenLogWithRulesButton_Click" Height="80" HorizontalAlignment="Left"
+                        AutomationProperties.Name="Open log with rules">
                     <Button.Background>
                         <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
                     </Button.Background>
@@ -40,19 +43,19 @@
             <TextBlock Text="Key Features" FontWeight="SemiBold" FontSize="18"/>
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}"/>
+                    <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
                     <TextBlock Text="Plugin-based data sources (folders, files, event logs, ETW)" TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}"/>
+                    <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
                     <TextBlock Text="RuleDSL for filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}"/>
+                    <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
                     <TextBlock Text="Multiple result viewers (Web, Community, Native)" TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}"/>
+                    <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
                     <TextBlock Text="PlantUML/Mermaid integration for diagram generation" TextWrapping="Wrap"/>
                 </StackPanel>
             </StackPanel>

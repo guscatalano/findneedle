@@ -110,6 +110,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Labs.WinUI.Controls.DataTable" Version="0.1.241129-build.1830" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="CommunityToolkit.WinUI.Behaviors" Version="8.2.241112-preview1" />
     <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.2" />
     <PackageReference Include="ILRepack" Version="2.0.41">
@@ -139,6 +140,7 @@
     <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
     <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
     <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
+    <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Update="Assets\appicon.ico">

@@ -103,7 +103,8 @@
                     </AppBarButton.Flyout>
                 </AppBarButton>
                 <AppBarButton Label="Group"
-                          Width="80">
+                          Width="80"
+                          AutomationProperties.Name="Group results">
                     <AppBarButton.Icon>
                         <FontIcon Glyph="&#xF168;" />
                     </AppBarButton.Icon>
@@ -123,7 +124,10 @@
                         Width="240"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
-                        Margin="8 0 0 0" />
+                        Margin="8 0 0 0"
+                        PlaceholderText="Search results"
+                        AutomationProperties.Name="Search results"
+                        AutomationProperties.HelpText="Type a query and press Enter to filter results" />
             <CommandBar DefaultLabelPosition="Right"
                     Background="Transparent"
                     VerticalAlignment="Center"
@@ -140,6 +144,7 @@
                       LoadingRowGroup="DataGrid_LoadingRowGroup"
                       RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
                       RowDetailsVisibilityMode="VisibleWhenSelected"
+                      AutomationProperties.Name="Search results table"
                       Grid.Row="1">
             <ctWinUI:DataGrid.Resources>
                 <SolidColorBrush x:Key="DataGridColumnHeaderBackgroundBrush"

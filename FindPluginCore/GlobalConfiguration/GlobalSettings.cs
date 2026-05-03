@@ -18,12 +18,15 @@ public class GlobalSettings
         set => _debug = value;
     }
 
-    // Default result viewer setting
-    private static string _defaultResultViewer = "resultswebpage";
+    // Result viewer configuration
+    public const string NativeResultViewerKey = "nativereviewer";
+    public const string WebViewResultViewerKey = "resultswebpage";
+
+    private static string _defaultResultViewer = WebViewResultViewerKey;
     public static string DefaultResultViewer
     {
         get => _defaultResultViewer;
-        set => _defaultResultViewer = value?.ToLower() ?? "resultswebpage";
+        set => _defaultResultViewer = value?.ToLower() ?? WebViewResultViewerKey;
     }
 
     // Toggle the debug flag
