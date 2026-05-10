@@ -214,25 +214,12 @@ public class PlainTextSearchResult : ISearchResult
         return DateTime.MinValue;
     }
 
-    public string GetMachineName()
-    {
-        return ISearchResult.NOT_SUPPORTED;
-    }
-
-    public string GetUsername()
-    {
-        return ISearchResult.NOT_SUPPORTED;
-    }
-
-    public string GetTaskName()
-    {
-        return ISearchResult.NOT_SUPPORTED;
-    }
-
-    public string GetOpCode()
-    {
-        return ISearchResult.NOT_SUPPORTED;
-    }
+    // Plain-text logs don't carry these fields. Return empty so consumers (auto-hide column
+    // logic, display layer) treat them as missing rather than as a literal sentinel string.
+    public string GetMachineName() => string.Empty;
+    public string GetUsername()    => string.Empty;
+    public string GetTaskName()    => string.Empty;
+    public string GetOpCode()      => string.Empty;
 
     public string GetSource()
     {

@@ -1,0 +1,14 @@
+{
+  "name": "findneedle-blog",
+  "version": "1.0.0",
+  "description": "A modern blog for FindNeedle project",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev docs",
+    "build": "vitepress build docs",
+    "preview": "vitepress preview docs"
+  },
+  "dependencies": {
+    "vitepress": "^1.0.0"
+  }
+}

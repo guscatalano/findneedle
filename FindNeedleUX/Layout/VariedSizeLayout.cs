@@ -24,17 +24,77 @@ public class LogLine
     public LogLine(ISearchResult searchResult, int index)
     {
         Index = index;
-        Provider = searchResult.GetSource();
-        TaskName = searchResult.GetTaskName();
-        Time = searchResult.GetLogTime().ToString("o");
-        Message = searchResult.GetMessage();
-        Source = searchResult.GetResultSource();
-        Level = searchResult.GetLevel().ToString();
-        MachineName = searchResult.GetMachineName();
-        Username = searchResult.GetUsername();
-        OpCode = searchResult.GetOpCode();
-        SearchableData = searchResult.GetSearchableData();
+        Provider = NormalizeMissing(searchResult.GetSource());
+        TaskName = NormalizeMissing(searchResult.GetTaskName());
         LogTime = searchResult.GetLogTime();
+        Time = LogTime.ToString("o");
+        Source = NormalizeMissing(searchResult.GetResultSource());
+        Level = searchResult.GetLevel().ToString();
+        MachineName = NormalizeMissing(searchResult.GetMachineName());
+        Username = NormalizeMissing(searchResult.GetUsername());
+        OpCode = NormalizeMissing(searchResult.GetOpCode());
+        SearchableData = searchResult.GetSearchableData(); // unmodified original; used for filtering fallback
+        Message = CleanMessage(searchResult.GetMessage(), LogTime, Level);
+    }
+
+    /// <summary>
+    /// Plugins used to return <c>ISearchResult.NOT_SUPPORTED</c> ("!NOT_SUPPORTED!") for fields
+    /// they couldn't fill. The plugins now return empty, but normalize defensively so any older
+    /// plugin still emitting the sentinel doesn't leak into the UI.
+    /// </summary>
+    private static string NormalizeMissing(string value)
+        => value == ISearchResult.NOT_SUPPORTED ? string.Empty : value;
+
+    /// <summary>
+    /// Strip a leading <c>[timestamp]</c> and a leading <c>LEVEL:</c> from a log message when they
+    /// duplicate what we already show in the Time / Level columns. The original full text is kept
+    /// in <see cref="SearchableData"/> so search continues to match the un-cleaned form.
+    /// </summary>
+    internal static string CleanMessage(string message, DateTime time, string level)
+    {
+        if (string.IsNullOrEmpty(message)) return message;
+        var working = message.TrimStart();
+
+        // [2026-03-01 09:00:00]  -or-  [2026-03-01T09:00:00]
+        if (time != DateTime.MinValue && working.StartsWith("["))
+        {
+            int end = working.IndexOf(']');
+            if (end > 0 && end <= 40)
+            {
+                var inside = working.Substring(1, end - 1);
+                if (DateTime.TryParse(inside, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeLocal, out var parsed)
+                    && Math.Abs((parsed - time).TotalSeconds) < 1.0)
+                {
+                    working = working.Substring(end + 1).TrimStart(' ', '\t', ':', '-');
+                }
+            }
+        }
+
+        // LEVEL:  (handle the level we parsed plus a couple of common synonyms)
+        if (!string.IsNullOrEmpty(level))
+        {
+            var prefixes = level switch
+            {
+                "Warning"      => new[] { "WARNING:", "WARN:" },
+                "Catastrophic" => new[] { "CRITICAL:", "FATAL:", "CATASTROPHIC:" },
+                "Error"        => new[] { "ERROR:" },
+                "Verbose"      => new[] { "VERBOSE:", "TRACE:" },
+                "Debug"        => new[] { "DEBUG:" },
+                "Info"         => new[] { "INFO:", "INFORMATION:" },
+                _              => new[] { level + ":" }
+            };
+            foreach (var p in prefixes)
+            {
+                if (working.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+                {
+                    working = working.Substring(p.Length).TrimStart();
+                    break;
+                }
+            }
+        }
+
+        return working;
     }
 
     

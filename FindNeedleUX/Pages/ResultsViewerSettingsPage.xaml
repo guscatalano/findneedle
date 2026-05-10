@@ -1,0 +1,126 @@
+<Page
+    x:Class="FindNeedleUX.Pages.ResultsViewerSettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:nrv="using:FindNeedleUX.Pages.NativeResultViewer"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <nrv:HexToBrushConverter x:Key="HexToBrush"/>
+    </Page.Resources>
+
+    <ScrollViewer Padding="24">
+        <StackPanel MaxWidth="640" Spacing="16">
+
+            <TextBlock Text="Result viewer settings" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock Text="These preferences are saved per-user and apply to the native results viewer."
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+
+            <!-- Time format -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Time format" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="TimeFormatCombo" Width="320"
+                              SelectionChanged="TimeFormatCombo_SelectionChanged"
+                              AutomationProperties.Name="Time format">
+                        <ComboBoxItem Tag="yyyy-MM-dd HH:mm:ss"     Content="2026-03-01 09:20:01      (yyyy-MM-dd HH:mm:ss)"/>
+                        <ComboBoxItem Tag="yyyy-MM-dd HH:mm:ss.fff" Content="With ms                  (HH:mm:ss.fff)"/>
+                        <ComboBoxItem Tag="yyyy-MM-dd HH:mm:ss zzz" Content="With timezone           (HH:mm:ss zzz)"/>
+                        <ComboBoxItem Tag="MMM d HH:mm:ss"          Content="Friendly                (MMM d HH:mm:ss)"/>
+                        <ComboBoxItem Tag="HH:mm:ss"                Content="Time only               (HH:mm:ss)"/>
+                        <ComboBoxItem Tag="HH:mm:ss.fff"            Content="Time + ms               (HH:mm:ss.fff)"/>
+                        <ComboBoxItem Tag="g"                       Content="Locale short            (g)"/>
+                        <ComboBoxItem Tag="G"                       Content="Locale long             (G)"/>
+                        <ComboBoxItem Tag="o"                       Content="ISO 8601 round-trip     (o)"/>
+                    </ComboBox>
+                    <TextBlock x:Name="TimeFormatPreview"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               FontFamily="Consolas" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Color theme -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Color theme" FontWeight="SemiBold"/>
+                    <TextBlock Text="A preset that fills in level row backgrounds. Picking a theme overwrites individual color overrides below."
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                    <ComboBox x:Name="ThemeCombo" Width="220"
+                              SelectionChanged="ThemeCombo_SelectionChanged"
+                              AutomationProperties.Name="Color theme">
+                        <ComboBoxItem Content="Subtle (default)" Tag="Subtle"/>
+                        <ComboBoxItem Content="Vivid"            Tag="Vivid"/>
+                        <ComboBoxItem Content="None"             Tag="None"/>
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Per-level colors -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <Grid>
+                        <TextBlock Text="Level colors" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <Button Content="Reset all to theme defaults" Click="ResetAllColors_Click"
+                                HorizontalAlignment="Right" FontSize="12"/>
+                    </Grid>
+                    <TextBlock Text="Click a swatch to pick a custom color. Reset reverts that level to the current theme."
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                    <ItemsControl x:Name="LevelEditor">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="nrv:LevelEntry">
+                                <Grid Padding="0,6,0,6" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{x:Bind Level}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                    <Button Grid.Column="1" Click="PickColor_Click" Tag="{x:Bind Level}"
+                                            Padding="2" MinHeight="0" MinWidth="0"
+                                            ToolTipService.ToolTip="Pick custom color">
+                                        <Border Width="32" Height="20" CornerRadius="3" BorderThickness="1"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                Background="{x:Bind HexColor, Mode=OneWay, Converter={StaticResource HexToBrush}}"/>
+                                    </Button>
+                                    <TextBlock Grid.Column="2" Text="{x:Bind HexColor, Mode=OneWay}"
+                                               VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <Button Grid.Column="4" Content="Reset" Click="ResetColor_Click" Tag="{x:Bind Level}"
+                                            FontSize="12"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Default columns -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <Grid>
+                        <TextBlock Text="Default columns" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <Button Content="Reset to defaults" Click="ResetColumnDefaults_Click"
+                                HorizontalAlignment="Right" FontSize="12"/>
+                    </Grid>
+                    <TextBlock Text="Which columns are shown when you open the result viewer. The viewer's Columns ▾ popover can still toggle any column for the current session."
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                    <StackPanel x:Name="ColumnDefaultsPanel" Orientation="Horizontal" Spacing="16"/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Settings file:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Margin="0,8,0,0"/>
+            <TextBlock x:Name="SettingsPathText" FontFamily="Consolas" FontSize="11"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

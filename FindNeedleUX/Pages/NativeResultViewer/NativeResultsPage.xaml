@@ -4,77 +4,45 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:FindNeedleUX.Pages.NativeResultViewer"
     xmlns:ctWinUI="using:CommunityToolkit.WinUI.UI.Controls"
-    xmlns:i="using:Microsoft.Xaml.Interactions.Core"
-    xmlns:interactivity="using:Microsoft.Xaml.Interactivity"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Page.Resources>
-        <!-- Level-based row colors -->
-        <SolidColorBrush x:Key="LevelCatastrophicColor" Color="#FFB3B3" />
-        <SolidColorBrush x:Key="LevelCriticalColor" Color="#FFCCCC" />
-        <SolidColorBrush x:Key="LevelErrorColor" Color="#FFE1E1" />
-        <SolidColorBrush x:Key="LevelWarningColor" Color="#FFF4CC" />
-        <SolidColorBrush x:Key="LevelInfoColor" Color="Transparent" />
-        <SolidColorBrush x:Key="LevelVerboseColor" Color="#F1F1F1" />
-        <SolidColorBrush x:Key="LevelDebugColor" Color="#EEF3FF" />
+        <local:HexToBrushConverter x:Key="HexToBrush"/>
+        <local:TimeFormatConverter x:Key="TimeFmt"/>
 
-        <!-- Row coloring is applied per-row via DataGrid.LoadingRow event in code-behind
-             (WinUI 3 DataGrid doesn't support DataTriggers; LoadingRow is the canonical
-             approach for the CommunityToolkit DataGrid). -->
-
-        <!-- Row details template -->
+        <!-- Row details panel -->
         <DataTemplate x:Key="RowDetailsTemplate">
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" 
-                    CornerRadius="4" 
-                    Padding="16">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Log Entry Details" 
-                               FontSize="16" 
-                               FontWeight="SemiBold" />
-                    
-                    <Grid ColumnSpacing="8" RowSpacing="4">
+                    BorderThickness="1" CornerRadius="4" Padding="16" Margin="4">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Log entry details" FontSize="14" FontWeight="SemiBold"/>
+                    <Grid ColumnSpacing="8" RowSpacing="2">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="100"/>
+                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
-                            <RowDefinition />
-                            <RowDefinition />
-                            <RowDefinition />
-                            <RowDefinition />
-                            <RowDefinition />
-                            <RowDefinition />
-                            <RowDefinition />
-                            <RowDefinition />
+                            <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                            <RowDefinition/><RowDefinition/><RowDefinition/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Text="Index:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1" Text="{Binding Index}" />
-
-                        <TextBlock Grid.Row="1" Text="Time:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Time}" />
-
-                        <TextBlock Grid.Row="2" Text="Provider:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Provider}" />
-
-                        <TextBlock Grid.Row="3" Text="TaskName:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TaskName}" />
-
-                        <TextBlock Grid.Row="4" Text="Message:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="5" Text="Source:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Source}" />
-
-                        <TextBlock Grid.Row="6" Text="Level:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" />
+                        <TextBlock Grid.Row="0" Text="Index"    FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Index}" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="1" Text="Time"     FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Time}" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="2" Text="Provider" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Provider}" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="3" Text="TaskName" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TaskName}" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="4" Text="Message"  FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="5" Text="Source"   FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Source}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="6" Text="Level"    FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" IsTextSelectionEnabled="True"/>
                     </Grid>
-
-                    <Button Content="Copy as JSON" 
-                            Click="CopyJson_Click" 
-                            Margin="0,8,0,0" />
+                    <Button Content="Copy as JSON" Click="CopyJson_Click" Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -82,214 +50,240 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto"/>  <!-- Toolbar -->
+            <RowDefinition Height="Auto"/>  <!-- Filter expander (collapsible) -->
+            <RowDefinition Height="*"/>     <!-- Grid + overlays -->
+            <RowDefinition Height="Auto"/>  <!-- Pagination bar -->
         </Grid.RowDefinitions>
 
         <!-- Toolbar -->
-        <Border Grid.Row="0" 
+        <Border Grid.Row="0" Padding="12,8"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="16">
-            <StackPanel Spacing="12">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBox x:Name="SearchBox"
-                             Header="Search results"
-                             PlaceholderText="Search all columns... (Ctrl+F)"
-                             Width="300"
-                             Height="32"
-                             AutomationProperties.Name="Search results"
-                             AutomationProperties.HelpText="Filters all visible columns. Press Ctrl+F to focus."
-                             TextChanged="SearchBox_TextChanged" />
-                    
-                    <Button Content="Columns" 
-                            Click="ColumnsButton_Click"
-                            Height="32" />
-                    
-                    <Button Content="Clear Filters" 
-                            Click="ClearFiltersButton_Click"
-                            Height="32" />
-                    
-                    <Button Content="Export CSV" 
-                            Click="ExportCsvButton_Click"
-                            Height="32" />
-                </StackPanel>
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBox x:Name="SearchBox" Width="280" Height="32"
+                         PlaceholderText="Search all columns... (Ctrl+F)"
+                         TextChanged="SearchBox_TextChanged"
+                         AutomationProperties.Name="Search results"/>
 
-                <!-- Time Range Filter -->
-                <StackPanel x:Name="TimeRangePanel" 
-                            Orientation="Horizontal" 
-                            Spacing="8"
-                            Visibility="Collapsed">
-                    <TextBlock Text="Time Range:" 
-                               VerticalAlignment="Center" 
-                               FontSize="14" />
-                    <CalendarDatePicker x:Name="FromDatePicker"
-                                       Width="180"
-                                       PlaceholderText="From" />
-                    <TextBlock Text="→"
-                               VerticalAlignment="Center" />
-                    <CalendarDatePicker x:Name="ToDatePicker"
-                                       Width="180"
-                                       PlaceholderText="To" />
-                    <Button Content="Apply" 
-                            Click="ApplyTimeFilterButton_Click"
-                            Height="32" />
-                </StackPanel>
+                <Button Content="Columns ▾" Click="ColumnsButton_Click" Height="32"
+                        AutomationProperties.Name="Toggle column visibility"/>
+                <Button Content="Clear filters" Click="ClearFiltersButton_Click" Height="32"/>
+                <Button Content="Export CSV" Click="ExportCsvButton_Click" Height="32"/>
+                <Button Content="Help" Click="HelpButton_Click" Height="32"/>
+                <Button Content="Settings…" Click="SettingsButton_Click" Height="32"
+                        AutomationProperties.Name="Open viewer settings"/>
 
-                <!-- Level Color Controls -->
-                <StackPanel x:Name="LevelColorPanel" 
-                            Orientation="Vertical" 
-                            Spacing="8"
-                            Margin="0,8,0,0">
-                    <TextBlock Text="Level Colors:" 
-                               VerticalAlignment="Center" 
-                               FontSize="14" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.LevelColors}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="8" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
+                <ToggleButton x:Name="FiltersToggle" Height="32"
+                              IsChecked="True"
+                              Click="FiltersToggle_Click"
+                              AutomationProperties.Name="Show or hide filters">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock x:Name="FiltersToggleGlyph" Text="▾" FontSize="11"/>
+                        <TextBlock Text="Filters"/>
+                    </StackPanel>
+                </ToggleButton>
+
+                <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                           VerticalAlignment="Center" Margin="16,0,0,0"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Collapsible filter content: time range / per-column filter row / level chips.
+             Visibility is driven by the FiltersToggle button in the toolbar above; when collapsed
+             this row disappears entirely so the toolbar fills the top edge. -->
+        <Border x:Name="FiltersPanel"
+                Grid.Row="1"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <!-- Time range -->
+                <Border Padding="12,6"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Time:" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <CalendarDatePicker x:Name="FromDatePicker" Width="160" PlaceholderText="From"
+                                            DateChanged="FromDatePicker_DateChanged"/>
+                        <TextBlock Text="→" VerticalAlignment="Center"/>
+                        <CalendarDatePicker x:Name="ToDatePicker" Width="160" PlaceholderText="To"
+                                            DateChanged="ToDatePicker_DateChanged"/>
+                        <Button Content="Clear" Click="ClearTimeRange_Click" Height="32"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Per-column filter row -->
+                <Border Padding="12,6"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Filter:" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBox x:Name="ProviderFilterBox" Width="120" Height="28" FontSize="12"
+                                 PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
+                        <TextBox x:Name="TaskNameFilterBox" Width="140" Height="28" FontSize="12"
+                                 PlaceholderText="TaskName…" TextChanged="TaskNameFilter_TextChanged"/>
+                        <TextBox x:Name="MessageFilterBox" Width="220" Height="28" FontSize="12"
+                                 PlaceholderText="Message…" TextChanged="MessageFilter_TextChanged"/>
+                        <TextBox x:Name="SourceFilterBox" Width="140" Height="28" FontSize="12"
+                                 PlaceholderText="Source…" TextChanged="SourceFilter_TextChanged"/>
+                        <ComboBox x:Name="LevelFilterCombo" Width="140" Height="28" FontSize="12"
+                                  PlaceholderText="Level (all)"
+                                  ItemsSource="{x:Bind ViewModel.KnownLevelNames, Mode=OneWay}"
+                                  SelectionChanged="LevelFilterCombo_SelectionChanged"/>
+                        <Button Content="Reset row" Click="ResetColumnFilters_Click" Height="28" FontSize="12"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Level color chips: per-level swatch + count + click-to-edit-color -->
+                <Border Padding="12,6">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Levels:" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Levels}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="6"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:LevelEntry">
+                                    <Button Click="LevelChip_Click" Tag="{x:Bind Level}"
+                                            Padding="8,3" MinHeight="0" FontSize="12"
+                                            AutomationProperties.Name="Edit color for level">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <Border Width="12" Height="12" CornerRadius="2" BorderThickness="1"
+                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    Background="{x:Bind HexColor, Mode=OneWay, Converter={StaticResource HexToBrush}}"/>
+                                            <TextBlock Text="{x:Bind Level}" FontSize="12"/>
+                                            <TextBlock Text="{x:Bind Count, Mode=OneWay}" FontSize="11"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- DataGrid + overlays -->
+        <Grid Grid.Row="2">
+            <!-- RowHeight + explicit column widths matter a lot for scroll perf:
+                 with both unset, DataGrid measures every visible cell on every scroll frame
+                 (because Message text length varies). Fixing the row height makes the row
+                 virtualizer assume uniform geometry; fixing column widths skips per-cell
+                 measure on scroll. RowHeight=28 truncates long Message text in the cell, but
+                 the full text is still visible in the row-details panel and the More dialog. -->
+            <!--
+                Scroll perf: every column is fixed-width (no Star sizing) and explicit
+                EnableRow/ColumnVirtualization so the DataGrid never recomputes column
+                geometry while inertia-scrolling. The Message column is a fixed 800px instead
+                of "*" because Star sizing forces a layout pass each time the scrollbar's
+                visibility flips. RowHeight=26 keeps geometry uniform.
+                Long Message text is clipped at the cell edge — the row-details panel and
+                the "More" dialog still show it in full.
+            -->
+            <ctWinUI:DataGrid x:Name="ResultsGrid"
+                              AutoGenerateColumns="False"
+                              CanUserReorderColumns="True"
+                              CanUserResizeColumns="True"
+                              CanUserSortColumns="True"
+                              IsReadOnly="True"
+                              RowHeight="26"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}"
+                              LoadingRow="ResultsGrid_LoadingRow"
+                              Sorting="ResultsGrid_Sorting"
+                              RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
+                              RowDetailsVisibilityMode="VisibleWhenSelected"
+                              SelectionMode="Single"
+                              AutomationProperties.Name="Search results">
+                <ctWinUI:DataGrid.Columns>
+                    <ctWinUI:DataGridTextColumn Header="Index"    Binding="{Binding Index}"    Width="70"/>
+                    <ctWinUI:DataGridTextColumn Header="Time"     Binding="{Binding LogTime, Converter={StaticResource TimeFmt}}" Width="160"/>
+                    <ctWinUI:DataGridTextColumn Header="Provider" Binding="{Binding Provider}" Width="120"/>
+                    <ctWinUI:DataGridTextColumn Header="TaskName" Binding="{Binding TaskName}" Width="140"/>
+                    <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800"/>
+                    <ctWinUI:DataGridTextColumn Header="Source"   Binding="{Binding Source}"   Width="140"/>
+                    <ctWinUI:DataGridTextColumn Header="Level"    Binding="{Binding Level}"    Width="90"/>
+                </ctWinUI:DataGrid.Columns>
+            </ctWinUI:DataGrid>
+
+            <!-- Loading overlay -->
+            <Border x:Name="LoadingOverlay" Visibility="Collapsed"
+                    Background="#80000000"
+                    AutomationProperties.LiveSetting="Polite">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                    <ProgressRing Width="48" Height="48" IsActive="True"/>
+                    <TextBlock Text="Loading results..." Foreground="White" FontSize="14"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Column visibility popover. SolidBackgroundFillColorBaseBrush is a fully-opaque
+                 theme brush (CardBackgroundFillColorDefaultBrush is semi-transparent and shows
+                 the grid bleed-through, making this popover hard to read.) -->
+            <Border x:Name="ColumnPanel" Visibility="Collapsed"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="12"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,8,12,0">
+                <StackPanel Spacing="6" MinWidth="180">
+                    <TextBlock Text="Columns" FontWeight="SemiBold" FontSize="13"/>
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Columns}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock Text="{Binding Key}" 
-                                               VerticalAlignment="Center" 
-                                               FontSize="12" />
-                                    <Border Width="20" Height="20" 
-                                            Background="{Binding Value}"
-                                            CornerRadius="3"
-                                            BorderBrush="Gray" 
-                                            BorderThickness="1" />
-                                    <Button Content="..."
-                                            Width="32"
-                                            Height="24"
-                                            Click="LevelColorButton_Click"
-                                            CommandParameter="{Binding Key}"
-                                            AutomationProperties.Name="{Binding Key}"
-                                            AutomationProperties.HelpText="Edit row color for this level" />
-                                </StackPanel>
+                            <DataTemplate x:DataType="local:ColumnEntry">
+                                <CheckBox Content="{x:Bind Name}"
+                                          IsChecked="{x:Bind IsVisible, Mode=TwoWay}"
+                                          Margin="0,2,0,2"/>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <Button Content="Close" Click="CloseColumnPanel_Click" HorizontalAlignment="Right"
+                            Margin="0,8,0,0"/>
                 </StackPanel>
+            </Border>
+        </Grid>
 
-                <!-- Stats -->
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock x:Name="ResultsCountText" 
-                               FontSize="14" 
-                               VerticalAlignment="Center" />
-                    <TextBlock x:Name="TotalCountText" 
-                               FontSize="14" 
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!-- Filter Row -->
-        <Border Grid.Row="1" 
+        <!-- Pagination bar -->
+        <Border Grid.Row="3" Padding="12,6"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="0,1,0,0"
-                Padding="8">
-            <StackPanel x:Name="FilterRowPanel" />
-        </Border>
-
-        <!-- Data Grid -->
-        <ctWinUI:DataGrid x:Name="ResultsGrid"
-                          Grid.Row="2"
-                          AutoGenerateColumns="False"
-                          CanUserReorderColumns="True"
-                          CanUserResizeColumns="True"
-                          CanUserSortColumns="True"
-                          IsReadOnly="True"
-                          ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}"
-                          LoadingRow="ResultsGrid_LoadingRow"
-                          RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
-                          RowDetailsVisibilityMode="VisibleWhenSelected"
-                          SelectionMode="Single"
-                          AutomationProperties.Name="Search results table">
-            <ctWinUI:DataGrid.Columns>
-                <ctWinUI:DataGridTextColumn Header="Index" 
-                                            Binding="{Binding Index}"
-                                            MinWidth="60" />
-                <ctWinUI:DataGridTextColumn Header="Time" 
-                                            Binding="{Binding Time}"
-                                            MinWidth="160" />
-                <ctWinUI:DataGridTextColumn Header="Provider" 
-                                            Binding="{Binding Provider}"
-                                            MinWidth="100" />
-                <ctWinUI:DataGridTextColumn Header="TaskName" 
-                                            Binding="{Binding TaskName}"
-                                            MinWidth="120" />
-                <ctWinUI:DataGridTextColumn Header="Message" 
-                                            Binding="{Binding Message}"
-                                            MinWidth="200" />
-                <ctWinUI:DataGridTextColumn Header="Source" 
-                                            Binding="{Binding Source}"
-                                            MinWidth="100" />
-                <ctWinUI:DataGridTextColumn Header="Level" 
-                                            Binding="{Binding Level}"
-                                            MinWidth="80" />
-            </ctWinUI:DataGrid.Columns>
-        </ctWinUI:DataGrid>
-
-        <!-- Loading Indicator -->
-        <Border x:Name="LoadingIndicator"
-                Grid.Row="2"
-                Background="{ThemeResource SystemControlPageBackgroundMediumAltMediumBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                VerticalAlignment="Center"
-                HorizontalAlignment="Center"
-                Padding="24"
-                CornerRadius="8"
-                Visibility="Collapsed"
-                AutomationProperties.Name="Loading results"
-                AutomationProperties.LiveSetting="Polite">
-            <StackPanel Spacing="12" HorizontalAlignment="Center">
-                <ProgressRing Width="48" Height="48" IsActive="True" AutomationProperties.Name="Loading"/>
-                <TextBlock Text="Loading results..."
-                           FontSize="16"
-                           HorizontalAlignment="Center" />
-            </StackPanel>
-        </Border>
-
-        <!-- Column Visibility Toggle Panel -->
-        <Border x:Name="ColumnVisibilityPanel"
-                Grid.Row="2"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Padding="16"
-                VerticalAlignment="Top"
-                HorizontalAlignment="Right"
-                Margin="0,60,20,0"
-                Visibility="Collapsed"
-                Shadow="{ThemeResource SystemDropShadowBrush}">
-            <StackPanel Spacing="8">
-                <TextBlock Text="Column Visibility" 
-                           FontSize="14" 
-                           FontWeight="SemiBold" />
-                <ItemsControl ItemsSource="{x:Bind ViewModel.ColumnVisibility}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <CheckBox Content="{Binding Key}"
-                                      IsChecked="{Binding Value, Mode=TwoWay}"
-                                      Checked="ColumnVisibilityCheckBox_Checked"
-                                      Unchecked="ColumnVisibilityCheckBox_Unchecked"
-                                      Margin="0,4,0,4" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Button Content="Close" 
-                        Click="CloseColumnPanelButton_Click"
-                        Margin="0,8,0,0" />
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Content="« First" Click="FirstPage_Click" Height="28" FontSize="12"/>
+                <Button Content="‹ Prev"  Click="PrevPage_Click"  Height="28" FontSize="12"/>
+                <TextBlock VerticalAlignment="Center" FontSize="12">
+                    <Run Text="Page "/>
+                    <Run Text="{x:Bind ViewModel.CurrentPage, Mode=OneWay}"/>
+                    <Run Text=" of "/>
+                    <Run Text="{x:Bind ViewModel.TotalPages, Mode=OneWay}"/>
+                    <Run Text="  ·  "/>
+                    <Run Text="{x:Bind ViewModel.PageRangeText, Mode=OneWay}"/>
+                    <Run Text=" of "/>
+                    <Run Text="{x:Bind ViewModel.TotalFilteredCount, Mode=OneWay}"/>
+                </TextBlock>
+                <TextBox x:Name="PageJumpBox" Width="60" Height="28" FontSize="12"
+                         PlaceholderText="#" KeyDown="PageJumpBox_KeyDown"
+                         AutomationProperties.Name="Jump to page"/>
+                <Button Content="Go" Click="PageJump_Click" Height="28" FontSize="12"/>
+                <Button Content="Next ›" Click="NextPage_Click" Height="28" FontSize="12"/>
+                <Button Content="Last »" Click="LastPage_Click" Height="28" FontSize="12"/>
+                <TextBlock Text="Page size:" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="16,0,0,0"/>
+                <ComboBox x:Name="PageSizeCombo" Width="80" Height="28" FontSize="12"
+                          SelectionChanged="PageSizeCombo_SelectionChanged"
+                          AutomationProperties.Name="Page size">
+                    <ComboBoxItem Content="50"   Tag="50"/>
+                    <ComboBoxItem Content="100"  Tag="100"/>
+                    <ComboBoxItem Content="250"  Tag="250"/>
+                    <ComboBoxItem Content="500"  Tag="500"/>
+                    <ComboBoxItem Content="1000" Tag="1000"/>
+                    <ComboBoxItem Content="5000" Tag="5000"/>
+                </ComboBox>
             </StackPanel>
         </Border>
     </Grid>

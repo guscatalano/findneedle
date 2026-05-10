@@ -45,6 +45,7 @@
             </MenuBarItem>
 
             <MenuBarItem Title="Settings">
+                <MenuFlyoutItem Text="Result Viewer..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
                 <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
                 <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>

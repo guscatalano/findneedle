@@ -9,6 +9,13 @@ var allLogLines = [];
 var pendingRows = [];
 var drawScheduled = false;
 
+// DataTables 2.x recurses internally on the full row set during draw/sort/search; that overflows
+// the JS stack at very large counts. Cap displayed rows for the web viewer; recommend the native
+// viewer (WinUI DataGrid + virtualization) when a log exceeds this.
+var ROW_DISPLAY_CAP = 100000;
+var ADD_CHUNK_SIZE = 5000;
+var capReached = false;
+
 // Default level colors (used when a level first appears with no user override)
 var defaultLevelColors = {
     'Catastrophic': '#ffb3b3',
@@ -191,14 +198,38 @@ window.chrome.webview.addEventListener('message', function (event) {
 
 function ingestRow(row) {
     if (count === 0) startTime = Date.now();
+    if (allLogLines.length >= ROW_DISPLAY_CAP) {
+        if (!capReached) {
+            capReached = true;
+            showCapBanner();
+        }
+        return;  // drop further rows; banner already informs the user
+    }
     count++;
-    var idx = allLogLines.length;
     allLogLines.push(row);
     pendingRows.push(row);
     var lvl = row.Level;
     if (lvl && !knownLevels.has(lvl)) {
         knownLevels.add(lvl);
         addLevelColorControl(lvl);
+    }
+}
+
+function showCapBanner() {
+    var existing = document.getElementById('capBanner');
+    if (existing) return;
+    var banner = document.createElement('div');
+    banner.id = 'capBanner';
+    banner.style.cssText =
+        'background:#fff4cc;border:1px solid #d8a800;color:#5a3e00;' +
+        'padding:6px 10px;margin:0 0 8px 0;border-radius:4px;font-size:13px;';
+    banner.textContent = 'Showing first ' + ROW_DISPLAY_CAP.toLocaleString() +
+        ' rows. The web viewer caps display for performance — switch to View Results → Switch Viewer → Native for the full set.';
+    var toolbar = document.getElementById('toolbar');
+    if (toolbar && toolbar.parentNode) {
+        toolbar.parentNode.insertBefore(banner, toolbar.nextSibling);
+    } else {
+        document.body.insertBefore(banner, document.body.firstChild);
     }
 }
 
@@ -213,8 +244,12 @@ function scheduleDraw() {
 
 function flushPending() {
     if (!pendingRows.length || !window.table) return;
-    window.table.rows.add(pendingRows);
-    pendingRows = [];
+    // Add in chunks; one giant rows.add() on hundreds of thousands of rows triggers DataTables
+    // internal recursion and blows the JS stack.
+    while (pendingRows.length > 0) {
+        var slice = pendingRows.splice(0, ADD_CHUNK_SIZE);
+        window.table.rows.add(slice);
+    }
     updateResultsDisplay();
     var loader = document.getElementById('loader');
     if (loader && totalExpected > 0) loader.textContent = 'Loading ' + count + ' / ' + totalExpected + ' rows…';

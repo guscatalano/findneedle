@@ -30,6 +30,10 @@ namespace FindPluginCore.Implementations.Storage
             _connection = new SqliteConnection($"Data Source={_dbPath}");
             _connection.Open();
             InitializeSchema();
+            // Cache files are keyed only by file path (no content hash / mtime), so a stale cache
+            // would silently surface old or duplicated rows on every reopen. Wipe both tables on
+            // construction — each new SqliteStorage instance starts from a clean slate.
+            ClearTables();
         }
 
         private void InitializeSchema()
@@ -64,6 +68,37 @@ namespace FindPluginCore.Implementations.Storage
                 );
             ";
             cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Truncate both tables and reclaim disk space. Public so callers can also force a wipe
+        /// mid-lifetime (e.g. for tests).
+        /// </summary>
+        public void ClearTables()
+        {
+            lock (_sync)
+            {
+                using var tx = _connection.BeginTransaction();
+                using (var cmd = _connection.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText =
+                        "DELETE FROM RawResults; " +
+                        "DELETE FROM FilteredResults; " +
+                        // Reset AUTOINCREMENT counters so Id starts at 1 again. sqlite_sequence may
+                        // not exist if AUTOINCREMENT has never been triggered — IF EXISTS guard.
+                        "DELETE FROM sqlite_sequence WHERE name IN ('RawResults','FilteredResults');";
+                    try { cmd.ExecuteNonQuery(); }
+                    catch (SqliteException) { /* sqlite_sequence absent on a fresh DB; ignore */ }
+                }
+                tx.Commit();
+
+                using (var vac = _connection.CreateCommand())
+                {
+                    vac.CommandText = "VACUUM";
+                    vac.ExecuteNonQuery();
+                }
+            }
         }
 
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)

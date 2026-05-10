@@ -6,256 +6,514 @@ using CommunityToolkit.WinUI.UI.Controls;
 using FindNeedleUX;
 using FindNeedleUX.Pages.NativeResultViewer;
 using FindNeedleUX.Services;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Storage.Pickers;
+using Microsoft.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Media;
 
-namespace FindNeedleUX.Pages;
+namespace FindNeedleUX.Pages
+{
 
 /// <summary>
-/// Native WinUI 3 result viewer page
+/// Native WinUI 3 result viewer page. Mirrors the feature set of the WebView2/DataTables viewer:
+///   global search, per-column filters, time-range filter, level filter, level chips with counts,
+///   per-level color customization, column visibility, sortable/reorderable/resizable columns
+///   (DataGrid built-ins), row coloring by Level, row details with Copy as JSON, Help dialog,
+///   Ctrl+F focus search, Esc close popover, Export CSV.
 /// </summary>
 public sealed partial class NativeResultsPage : Page
 {
     private NativeResultsPageViewModel ViewModel { get; } = new();
 
+    // Pre-built O(1) lookup from Level name -> LevelEntry, used by LoadingRow on every row that
+    // gets virtualized in. Rebuilt whenever ViewModel.Levels changes (after load, after theme
+    // change, after color edit).
+    private readonly Dictionary<string, LevelEntry> _levelLookup =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public NativeResultsPage()
     {
         this.InitializeComponent();
-        LoadDataAsync();
-        UpdateColumnVisibility();
+        Loaded += OnPageLoaded;
+        Unloaded += OnPageUnloaded;
+        KeyDown += OnPageKeyDown;
+
+        foreach (var col in ViewModel.Columns)
+            col.VisibilityChanged += OnColumnVisibilityChanged;
+
+        ResultsViewerSettings.Changed += OnSettingsChanged;
     }
 
-    private async void LoadDataAsync()
+    private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
+        LoadingOverlay.Visibility = Visibility.Visible;
+        // Apply persisted prefs BEFORE rendering so the first paint already has the user's choices.
+        ApplyPersistedSettings();
+        ApplyPersistedColumnDefaults();
+        ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
+        ApplyPersistedPageSize();
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
+        // After load, re-apply persisted level color overrides — LoadResultsAsync() repopulates
+        // ViewModel.Levels from the theme defaults, which would clobber overrides otherwise.
+        ApplyPersistedLevelOverrides();
+        LoadingOverlay.Visibility = Visibility.Collapsed;
+        ApplyAllColumnVisibility();
+        RebindGrid();
     }
 
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    /// <summary>
+    /// Pull the saved column-visibility defaults into the VM's <c>Columns</c> collection. The
+    /// per-column auto-hide pass (run inside <c>LoadResultsAsync</c>) may further hide columns
+    /// where 100% of values are empty, but won't auto-enable a column the user disabled here.
+    /// </summary>
+    private void ApplyPersistedColumnDefaults()
     {
-        ViewModel.SearchText = SearchBox.Text;
+        var prefs = ResultsViewerSettings.ColumnVisibility;
+        foreach (var col in ViewModel.Columns)
+            if (prefs.TryGetValue(col.Name, out var v)) col.IsVisible = v;
     }
 
-    private async void ExportCsvButton_Click(object sender, RoutedEventArgs e)
+    private void ApplyFiltersToggleState(bool expanded)
     {
-        await ViewModel.ExportToCsvAsync();
+        FiltersToggle.IsChecked = expanded;
+        FiltersPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        FiltersToggleGlyph.Text = expanded ? "▾" : "▸";
     }
 
-    private void ClearFiltersButton_Click(object sender, RoutedEventArgs e)
+    private void ApplyPersistedPageSize()
     {
-        ViewModel.ClearFilters();
-        SearchBox.Text = "";
-        FromDatePicker.Date = null;
-        ToDatePicker.Date = null;
-    }
-
-    private void ColumnsButton_Click(object sender, RoutedEventArgs e)
-    {
-        // Show column visibility toggle panel
-        var panel = new ColumnVisibilityPanel(ViewModel);
-        panel.ShowAsync();
-    }
-
-    private void ApplyTimeFilterButton_Click(object sender, RoutedEventArgs e)
-    {
-        ViewModel.FromDate = FromDatePicker.Date?.DateTime;
-        ViewModel.ToDate = ToDatePicker.Date?.DateTime;
-    }
-
-    private void CopyJson_Click(object sender, RoutedEventArgs e)
-    {
-        if (ResultsGrid.SelectedItem is LogLine selectedLine)
+        var size = ResultsViewerSettings.PageSize;
+        ViewModel.PageSize = size;
+        foreach (var item in PageSizeCombo.Items.OfType<ComboBoxItem>())
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(selectedLine, new System.Text.Json.JsonSerializerOptions
+            if (item.Tag is string tag && int.TryParse(tag, out var n) && n == size)
             {
-                WriteIndented = true
-            });
-            var package = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
-            package.SetText(json);
-            global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
-        }
-    }
-
-    private static readonly Dictionary<string, string> _levelBrushKeys = new()
-    {
-        { "Catastrophic", "LevelCatastrophicColor" },
-        { "Critical",     "LevelCriticalColor" },
-        { "Error",        "LevelErrorColor" },
-        { "Warning",      "LevelWarningColor" },
-        { "Info",         "LevelInfoColor" },
-        { "Verbose",      "LevelVerboseColor" },
-        { "Debug",        "LevelDebugColor" }
-    };
-
-    private void ResultsGrid_LoadingRow(object sender, DataGridRowEventArgs e)
-    {
-        if (e.Row.DataContext is not LogLine line) return;
-        if (line.Level != null && _levelBrushKeys.TryGetValue(line.Level, out var key)
-            && Resources.TryGetValue(key, out var brush) && brush is Microsoft.UI.Xaml.Media.Brush b)
-        {
-            e.Row.Background = b;
-        }
-    }
-
-    private async void LevelColorButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button && button.CommandParameter is string level)
-        {
-            var colorPicker = new ColorPicker();
-            colorPicker.IsAlphaEnabled = false;
-            
-            // Set current color
-            if (ViewModel.LevelColors.TryGetValue(level, out var currentColor))
-            {
-                colorPicker.Color = ParseColor(currentColor);
-            }
-
-            var dialog = new ContentDialog
-            {
-                Title = $"Set Color for {level}",
-                Content = colorPicker,
-                PrimaryButtonText = "OK",
-                CloseButtonText = "Cancel",
-                XamlRoot = this.XamlRoot
-            };
-
-            var result = await dialog.ShowAsync();
-
-            if (result == ContentDialogResult.Primary)
-            {
-                var color = colorPicker.Color;
-                ViewModel.LevelColors[level] = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
-                UpdateLevelColors();
+                PageSizeCombo.SelectedItem = item;
+                return;
             }
         }
     }
 
-    private global::Windows.UI.Color ParseColor(string hex)
+    private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
-        hex = hex.Replace("#", "").Replace("Transparent", "00FFFFFF");
-        if (hex.Length == 6) hex = "FF" + hex; // Add alpha if missing
-        if (hex.Length != 8) return global::Windows.UI.Color.FromArgb(255, 255, 255, 255);
-
-        return global::Windows.UI.Color.FromArgb(
-            (byte)Convert.ToInt32(hex.Substring(0, 2), 16),
-            (byte)Convert.ToInt32(hex.Substring(2, 2), 16),
-            (byte)Convert.ToInt32(hex.Substring(4, 2), 16),
-            (byte)Convert.ToInt32(hex.Substring(6, 2), 16));
+        ResultsViewerSettings.Changed -= OnSettingsChanged;
     }
 
-    private void UpdateLevelColors()
+    private void OnSettingsChanged()
     {
-        // Update the static resources with new colors
-        foreach (var kvp in ViewModel.LevelColors)
+        // Settings page edited the prefs while the viewer is open — reapply.
+        DispatcherQueue.TryEnqueue(() =>
         {
-            var key = $"Level{kvp.Key}Color";
-            if (Resources.TryGetValue(key, out var existing) && existing is Microsoft.UI.Xaml.Media.SolidColorBrush brush)
-            {
-                brush.Color = ParseColor(kvp.Value);
-            }
+            ApplyPersistedSettings();
+            ApplyPersistedLevelOverrides();
+            RebindGrid();
+        });
+    }
+
+    private void ApplyPersistedSettings()
+    {
+        TimeFormatConverter.Format = ResultsViewerSettings.TimeFormat;
+        ViewModel.ApplyTheme(ResultsViewerSettings.ThemeName);
+    }
+
+    private void ApplyPersistedLevelOverrides()
+    {
+        var overrides = ResultsViewerSettings.LevelColors;
+        if (overrides.Count == 0) { RebuildLevelLookup(); return; }
+        foreach (var entry in ViewModel.Levels)
+        {
+            if (overrides.TryGetValue(entry.Level, out var hex))
+                entry.HexColor = hex;
         }
-        // Refresh grid rows by re-binding
+        RebuildLevelLookup();
+    }
+
+    /// <summary>Rebuild the Level-name dictionary used by <see cref="ResultsGrid_LoadingRow"/>.</summary>
+    private void RebuildLevelLookup()
+    {
+        _levelLookup.Clear();
+        foreach (var entry in ViewModel.Levels)
+            _levelLookup[entry.Level] = entry;
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        => this.Frame?.Navigate(typeof(ResultsViewerSettingsPage));
+
+    private void FiltersToggle_Click(object sender, RoutedEventArgs e)
+    {
+        var expanded = FiltersToggle.IsChecked == true;
+        ApplyFiltersToggleState(expanded);
+        ResultsViewerSettings.FiltersExpanded = expanded;
+    }
+
+    // ----- Pagination -----
+    private void FirstPage_Click(object sender, RoutedEventArgs e) => ViewModel.FirstPage();
+    private void PrevPage_Click(object sender, RoutedEventArgs e)  => ViewModel.PrevPage();
+    private void NextPage_Click(object sender, RoutedEventArgs e)  => ViewModel.NextPage();
+    private void LastPage_Click(object sender, RoutedEventArgs e)  => ViewModel.LastPage();
+
+    private void PageJump_Click(object sender, RoutedEventArgs e) => JumpFromTextBox();
+    private void PageJumpBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == global::Windows.System.VirtualKey.Enter) { JumpFromTextBox(); e.Handled = true; }
+    }
+    private void JumpFromTextBox()
+    {
+        if (int.TryParse(PageJumpBox.Text, out var p))
+        {
+            ViewModel.GoToPage(p);
+            PageJumpBox.Text = "";
+        }
+    }
+
+    private void PageSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PageSizeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && int.TryParse(tag, out var size))
+        {
+            ViewModel.PageSize = size;
+            ResultsViewerSettings.PageSize = size;
+        }
+    }
+
+    // ----- Sort (handled manually so the FULL filtered set is sorted, not just the page) -----
+    private void ResultsGrid_Sorting(object sender, DataGridColumnEventArgs e)
+    {
+        var col = e.Column;
+        var name = col.Header?.ToString();
+        if (string.IsNullOrEmpty(name)) return;
+
+        // Toggle direction. CommunityToolkit DataGrid leaves the column with the previous arrow
+        // until we set it explicitly; first click = Ascending, second = Descending.
+        bool descending = col.SortDirection == DataGridSortDirection.Ascending;
+
+        // Clear arrows on all other columns; set the new one.
+        foreach (var c in ResultsGrid.Columns)
+            if (!ReferenceEquals(c, col)) c.SortDirection = null;
+        col.SortDirection = descending ? DataGridSortDirection.Descending : DataGridSortDirection.Ascending;
+
+        ViewModel.ApplySort(name, descending);
+    }
+
+    /// <summary>
+    /// Force the DataGrid to re-render rows. Used after a theme change (LoadingRow re-runs) or
+    /// a Time-format change (the Binding Converter is consulted again).
+    /// </summary>
+    private void RebindGrid()
+    {
         ResultsGrid.ItemsSource = null;
         ResultsGrid.ItemsSource = ViewModel.Results;
     }
 
-    private void ColumnVisibilityCheckBox_Checked(object sender, RoutedEventArgs e)
+    // ----- Keyboard shortcuts -----
+    private void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (sender is CheckBox cb && cb.Tag is string colName)
+        var ctrl = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(global::Windows.System.VirtualKey.Control)
+                    & global::Windows.UI.Core.CoreVirtualKeyStates.Down)
+                    == global::Windows.UI.Core.CoreVirtualKeyStates.Down;
+        if (ctrl && e.Key == global::Windows.System.VirtualKey.F)
         {
-            ViewModel.ColumnVisibility[colName] = true;
-            UpdateColumnVisibility();
+            SearchBox.Focus(FocusState.Programmatic);
+            SearchBox.SelectAll();
+            e.Handled = true;
+            return;
         }
-    }
-
-    private void ColumnVisibilityCheckBox_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (sender is CheckBox cb && cb.Tag is string colName)
+        if (e.Key == global::Windows.System.VirtualKey.Escape)
         {
-            ViewModel.ColumnVisibility[colName] = false;
-            UpdateColumnVisibility();
-        }
-    }
-
-    private void UpdateColumnVisibility()
-    {
-        foreach (var col in ResultsGrid.Columns)
-        {
-            if (ViewModel.ColumnVisibility.TryGetValue(col.Header.ToString(), out var visible))
+            if (ColumnPanel.Visibility == Visibility.Visible)
             {
-                col.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                ColumnPanel.Visibility = Visibility.Collapsed;
+                e.Handled = true;
             }
         }
     }
 
-    private void CloseColumnPanelButton_Click(object sender, RoutedEventArgs e)
+    // ----- Search + filter inputs -----
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.SearchText = SearchBox.Text;
+    private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
+    private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;
+    private void MessageFilter_TextChanged(object sender, TextChangedEventArgs e)  => ViewModel.MessageFilter  = MessageFilterBox.Text;
+    private void SourceFilter_TextChanged(object sender, TextChangedEventArgs e)   => ViewModel.SourceFilter   = SourceFilterBox.Text;
+    private void LevelFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => ViewModel.LevelFilter = (LevelFilterCombo.SelectedItem as string) ?? "";
+
+    private void FromDatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
+        => ViewModel.FromDate = sender.Date?.DateTime;
+    private void ToDatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
+        => ViewModel.ToDate = sender.Date?.DateTime;
+
+    private void ClearTimeRange_Click(object sender, RoutedEventArgs e)
     {
-        // The XAML <Border x:Name="ColumnVisibilityPanel"> shadows the type name in this scope,
-        // so resolve via FindName to avoid ambiguity with the helper class below.
-        if (this.FindName("ColumnVisibilityPanel") is FrameworkElement panel)
-            panel.Visibility = Visibility.Collapsed;
+        FromDatePicker.Date = null;
+        ToDatePicker.Date = null;
     }
+
+    private void ResetColumnFilters_Click(object sender, RoutedEventArgs e)
+    {
+        ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
+        LevelFilterCombo.SelectedItem = null;
+        ViewModel.LevelFilter = "";
+    }
+
+    private void ClearFiltersButton_Click(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Text = "";
+        ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
+        LevelFilterCombo.SelectedItem = null;
+        FromDatePicker.Date = null;
+        ToDatePicker.Date = null;
+        ViewModel.ClearFilters();
+    }
+
+    private async void ExportCsvButton_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await ViewModel.ExportCsvAsync();
+        if (path != null)
+        {
+            var dlg = new ContentDialog
+            {
+                Title = "Export complete",
+                Content = $"Saved {ViewModel.Results.Count} rows to:\n{path}",
+                CloseButtonText = "OK",
+                XamlRoot = this.XamlRoot
+            };
+            _ = dlg.ShowAsync();
+        }
+    }
+
+    // ----- Help dialog -----
+    private async void HelpButton_Click(object sender, RoutedEventArgs e)
+    {
+        var stack = new StackPanel { Spacing = 6 };
+        void Bullet(string s) => stack.Children.Add(new TextBlock { Text = "• " + s, TextWrapping = TextWrapping.Wrap });
+        Bullet("Top searchbox — case-insensitive, all columns. Ctrl+F to focus.");
+        Bullet("Per-column filters — type Provider/TaskName/Message/Source. Level is a dropdown.");
+        Bullet("Time range — pick From/To; rows outside are hidden. Clear to remove.");
+        Bullet("Columns ▾ — toggle which columns are visible.");
+        Bullet("Drag column headers to reorder; drag the right edge to resize.");
+        Bullet("Click column headers to sort.");
+        Bullet("Level chips — click to edit that level's row background color.");
+        Bullet("Click a row to expand details; use Copy as JSON to copy the full LogLine.");
+        Bullet("Export CSV — saves the currently visible (filtered) rows, only currently visible columns.");
+        Bullet("Esc closes the column visibility popover.");
+        var dialog = new ContentDialog
+        {
+            Title = "Filtering & navigation",
+            Content = stack,
+            CloseButtonText = "Close",
+            XamlRoot = this.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    // ----- Column visibility popover -----
+    private void ColumnsButton_Click(object sender, RoutedEventArgs e)
+        => ColumnPanel.Visibility = ColumnPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+
+    private void CloseColumnPanel_Click(object sender, RoutedEventArgs e)
+        => ColumnPanel.Visibility = Visibility.Collapsed;
+
+    private void OnColumnVisibilityChanged(ColumnEntry entry) => ApplyColumnVisibility(entry);
+
+    private void ApplyAllColumnVisibility()
+    {
+        foreach (var entry in ViewModel.Columns) ApplyColumnVisibility(entry);
+    }
+
+    private void ApplyColumnVisibility(ColumnEntry entry)
+    {
+        var col = ResultsGrid.Columns.FirstOrDefault(c => string.Equals(c.Header?.ToString(), entry.Name, StringComparison.OrdinalIgnoreCase));
+        if (col != null) col.Visibility = entry.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ----- Level color editor -----
+    private async void LevelChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not string level) return;
+        var entry = ViewModel.Levels.FirstOrDefault(x => string.Equals(x.Level, level, StringComparison.OrdinalIgnoreCase));
+        if (entry == null) return;
+
+        var picker = new ColorPicker { IsAlphaEnabled = false, Color = ParseHex(entry.HexColor) };
+        var dialog = new ContentDialog
+        {
+            Title = $"Color for {level}",
+            Content = picker,
+            PrimaryButtonText = "OK",
+            SecondaryButtonText = "Reset to default",
+            CloseButtonText = "Cancel",
+            XamlRoot = this.XamlRoot
+        };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            var c = picker.Color;
+            var hex = $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+            entry.HexColor = hex;
+            // Persist as a per-level override.
+            ResultsViewerSettings.SetLevelColor(level, hex);
+        }
+        else if (result == ContentDialogResult.Secondary)
+        {
+            // Reset = drop user override, fall back to active theme.
+            var theme = NativeResultsPageViewModel.ThemePresets.TryGetValue(ResultsViewerSettings.ThemeName, out var t)
+                ? t : NativeResultsPageViewModel.ThemePresets[NativeResultsPageViewModel.DefaultThemeName];
+            entry.HexColor = theme.TryGetValue(level, out var def) ? def : "Transparent";
+            ResultsViewerSettings.SetLevelColor(level, entry.HexColor);
+        }
+        RebindGrid();
+    }
+
+    // ----- Row coloring -----
+    // Hot path during scroll. Perf rules:
+    //   1. Dictionary lookup (not LINQ FirstOrDefault).
+    //   2. HexToBrushConverter.Parse caches one SolidColorBrush per hex — no per-row alloc.
+    //   3. Skip the DP write when Background is already the right brush. Recycled rows often
+    //      get the same color twice in a row during scroll; an unchanged DP set still goes
+    //      through some property-system bookkeeping, so an early-out is a win.
+    private void ResultsGrid_LoadingRow(object sender, DataGridRowEventArgs e)
+    {
+        if (e.Row.DataContext is not LogLine line || string.IsNullOrEmpty(line.Level)) return;
+        if (!_levelLookup.TryGetValue(line.Level, out var entry)) return;
+        var brush = HexToBrushConverter.Parse(entry.HexColor);
+        if (!ReferenceEquals(e.Row.Background, brush))
+            e.Row.Background = brush;
+    }
+
+    // ----- Row details -----
+    private void CopyJson_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is LogLine line)
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(line, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var pkg = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
+            pkg.SetText(json);
+            global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
+        }
+    }
+
+    private static global::Windows.UI.Color ParseHex(string hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex) || hex.Equals("Transparent", StringComparison.OrdinalIgnoreCase))
+            return global::Windows.UI.Color.FromArgb(0, 0, 0, 0);
+        var s = hex.TrimStart('#');
+        if (s.Length == 6) s = "FF" + s;
+        if (s.Length != 8) return global::Windows.UI.Color.FromArgb(255, 255, 255, 255);
+        return global::Windows.UI.Color.FromArgb(
+            (byte)Convert.ToInt32(s.Substring(0, 2), 16),
+            (byte)Convert.ToInt32(s.Substring(2, 2), 16),
+            (byte)Convert.ToInt32(s.Substring(4, 2), 16),
+            (byte)Convert.ToInt32(s.Substring(6, 2), 16));
+    }
+}
+} // FindNeedleUX.Pages
+
+namespace FindNeedleUX.Pages.NativeResultViewer
+{
+
+/// <summary>
+/// Formats <see cref="DateTime"/> for the Time column in the native viewer.
+/// The user picks a format from the toolbar; the chosen .NET format string is stored in
+/// <see cref="Format"/> and consulted by every cell render.
+/// </summary>
+public class TimeFormatConverter : IValueConverter
+{
+    /// <summary>Default format. Changed by the settings page's Time-format dropdown.</summary>
+    public static string Format
+    {
+        get => _format;
+        set
+        {
+            if (_format != value)
+            {
+                _format = value;
+                lock (_cache) _cache.Clear();
+            }
+        }
+    }
+    private static string _format = "yyyy-MM-dd HH:mm:ss";
+
+    // Cache formatted timestamp strings by DateTime.Ticks. The Time column's Convert is the most-
+    // called converter during virtualized scroll — without caching, every cell render allocates a
+    // fresh string via dt.ToString(format). Adjacent log rows often share the same second, so
+    // even a small cache catches most calls. Cleared whenever Format changes.
+    //
+    // Capped at 100k entries to bound memory; once full we just stop adding (existing entries
+    // continue to serve cache hits). For a 24-hour log at second resolution that's 86,400 unique
+    // timestamps — fits with room to spare.
+    private const int CacheCap = 100_000;
+    private static readonly System.Collections.Generic.Dictionary<long, string> _cache
+        = new(capacity: 1024);
+
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        if (value is not DateTime dt || dt == DateTime.MinValue) return "";
+        var ticks = dt.Ticks;
+        lock (_cache)
+        {
+            if (_cache.TryGetValue(ticks, out var cached)) return cached;
+        }
+        string formatted;
+        try { formatted = dt.ToString(_format, System.Globalization.CultureInfo.CurrentCulture); }
+        catch { formatted = dt.ToString("o"); }
+        lock (_cache)
+        {
+            if (_cache.Count < CacheCap) _cache[ticks] = formatted;
+        }
+        return formatted;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
 }
 
 /// <summary>
-/// Simple column visibility toggle panel
+/// Converts a hex color string ("#RRGGBB", "#AARRGGBB", "Transparent") to a SolidColorBrush.
+/// Used by the level chip swatch + by code-behind for row backgrounds.
 /// </summary>
-public class ColumnVisibilityPanel
+public class HexToBrushConverter : IValueConverter
 {
-    private readonly NativeResultsPageViewModel _viewModel;
-    private readonly Dictionary<string, bool> _columnVisibility = new();
+    public object Convert(object value, Type targetType, object parameter, string language) => Parse(value as string);
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
 
-    public ColumnVisibilityPanel(NativeResultsPageViewModel viewModel)
+    // Brushes are immutable per-color; share one instance per distinct hex string. Avoids
+    // allocating a fresh SolidColorBrush per DataGrid row (LoadingRow fires during virtualized
+    // scroll — for tens of thousands of visible rows this was the main scroll-jank source).
+    private static readonly System.Collections.Generic.Dictionary<string, SolidColorBrush> _brushCache
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    public static SolidColorBrush Parse(string hex)
     {
-        _viewModel = viewModel;
-        // Initialize with current state
-        foreach (var kvp in viewModel.ColumnVisibility)
+        var key = string.IsNullOrEmpty(hex) ? "Transparent" : hex;
+        lock (_brushCache)
         {
-            _columnVisibility[kvp.Key] = kvp.Value;
+            if (_brushCache.TryGetValue(key, out var cached)) return cached;
+            var brush = new SolidColorBrush(ParseColor(hex));
+            _brushCache[key] = brush;
+            return brush;
         }
     }
 
-    public async Task ShowAsync()
+    public static global::Windows.UI.Color ParseColor(string hex)
     {
-        var panel = new ContentDialog
+        if (string.IsNullOrWhiteSpace(hex) || hex.Equals("Transparent", StringComparison.OrdinalIgnoreCase))
+            return Colors.Transparent;
+        var s = hex.TrimStart('#');
+        if (s.Length == 6) s = "FF" + s;
+        if (s.Length != 8) return Colors.Transparent;
+        try
         {
-            Title = "Column Visibility",
-            Content = CreateColumnTogglePanel(),
-            CloseButtonText = "Close",
-            XamlRoot = WindowUtil.GetMainWindow()?.Content?.XamlRoot
-        };
-
-        await panel.ShowAsync();
-
-        // Apply changes after dialog closes
-        foreach (var kvp in _columnVisibility)
-        {
-            _viewModel.ColumnVisibility[kvp.Key] = kvp.Value;
+            return global::Windows.UI.Color.FromArgb(
+                (byte)System.Convert.ToInt32(s.Substring(0, 2), 16),
+                (byte)System.Convert.ToInt32(s.Substring(2, 2), 16),
+                (byte)System.Convert.ToInt32(s.Substring(4, 2), 16),
+                (byte)System.Convert.ToInt32(s.Substring(6, 2), 16));
         }
-        // UpdateColumnVisibility() will be called in the main class
-    }
-
-    private StackPanel CreateColumnTogglePanel()
-    {
-        var panel = new StackPanel { Spacing = 8 };
-
-        var columns = new[] { "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level" };
-        
-        foreach (var col in columns)
+        catch
         {
-            var cb = new CheckBox
-            {
-                Content = col,
-                IsChecked = _columnVisibility.GetValueOrDefault(col, true),
-                Margin = new Thickness(0, 4, 0, 0)
-            };
-            
-            cb.Checked += (s, e) => _columnVisibility[col] = true;
-            cb.Unchecked += (s, e) => _columnVisibility[col] = false;
-            
-            panel.Children.Add(cb);
+            return Colors.Transparent;
         }
-
-        return panel;
     }
 }
+} // FindNeedleUX.Pages.NativeResultViewer

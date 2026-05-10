@@ -123,12 +123,16 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
                 break;
             case "results_viewnative":
-                Logger.Instance.Log("Navigated: SearchResultPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchResultPage));
+                Logger.Instance.Log("Navigated: NativeResultsPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
                 break;
             case "systeminfo":
                 Logger.Instance.Log("Navigated: SystemInfoPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SystemInfoPage));
+                break;
+            case "settings_resultviewer":
+                Logger.Instance.Log("Navigated: ResultsViewerSettingsPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage));
                 break;
             case "diagramtools":
                 Logger.Instance.Log("Navigated: DiagramToolsPage");

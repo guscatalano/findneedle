@@ -365,3 +365,6 @@ FodyWeavers.xsd
 /ETWPluginTests/SampleFiles/dumpfile.xml
 /ETWPluginTests/SampleFiles/report.xsl
 /build_output.txt
+
+# Generated stress-test sample logs (script lives at Samples/generate_large_sample.py)
+Samples/*.log

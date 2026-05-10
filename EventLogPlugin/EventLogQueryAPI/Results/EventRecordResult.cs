@@ -141,8 +141,8 @@ public class EventRecordResult : ISearchResult
 
     public string GetOpCode()
     {
-        // Not implemented: EventRecordResult does not provide OpCode.
-        return ISearchResult.NOT_SUPPORTED;
+        // EventRecordResult doesn't carry OpCode — return empty so consumers treat it as missing.
+        return string.Empty;
     }
 
     public string GetSource()

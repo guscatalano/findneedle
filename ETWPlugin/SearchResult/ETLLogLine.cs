@@ -376,8 +376,8 @@ public class ETLLogLine : ISearchResult
     }
     public string GetOpCode()
     {
-        // Not implemented: ETL log lines do not have an OpCode.
-        return ISearchResult.NOT_SUPPORTED;
+        // ETL log lines don't carry OpCode — return empty so consumers treat it as missing.
+        return string.Empty;
     }
     public string GetSearchableData()
     {
