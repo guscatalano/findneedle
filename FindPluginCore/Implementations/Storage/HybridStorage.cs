@@ -367,6 +367,53 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        /// <summary>
+        /// Inner SQLite storage. Public so the result viewer can build a paged source over it
+        /// once <see cref="SettleToDisk"/> has flushed any in-memory rows.
+        /// </summary>
+        public SqliteStorage InnerSqliteStorage => _diskStorage;
+
+        /// <summary>
+        /// Push every in-memory row to SQLite and switch into disk-only mode. After this returns,
+        /// every read goes through the inner <see cref="SqliteStorage"/> exclusively, which is
+        /// what the result viewer needs to query SQL paging without losing rows. Idempotent.
+        /// </summary>
+        public void SettleToDisk(CancellationToken cancellationToken = default)
+        {
+            lock (_sync)
+            {
+                if (_useOnlySqlite || _memoryStorage == null) { _useOnlySqlite = true; return; }
+
+                var memStats = _memoryStorage.GetStatistics();
+                if (memStats.rawRecordCount > 0)
+                {
+                    var allRaw = new List<ISearchResult>();
+                    _memoryStorage.GetRawResultsInBatches(b => allRaw.AddRange(b), 10000, cancellationToken);
+                    if (allRaw.Count > 0)
+                    {
+                        _diskStorage.AddRawBatch(allRaw, cancellationToken);
+                        _hasSpilledRaw = true;
+                    }
+                }
+                if (memStats.filteredRecordCount > 0)
+                {
+                    var allFiltered = new List<ISearchResult>();
+                    _memoryStorage.GetFilteredResultsInBatches(b => allFiltered.AddRange(b), 10000, cancellationToken);
+                    if (allFiltered.Count > 0)
+                    {
+                        _diskStorage.AddFilteredBatch(allFiltered, cancellationToken);
+                        _hasSpilledFiltered = true;
+                    }
+                }
+
+                _memoryStorage.Dispose();
+                _memoryStorage = null;
+                _currentMemoryUsage = 0;
+                _currentRecordCount = 0;
+                _useOnlySqlite = true;
+            }
+        }
+
         // Private helper methods
 
         // NEW: Async spilling that runs in background

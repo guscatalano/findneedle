@@ -108,6 +108,13 @@ public class NuSearchQuery : ISearchQuery
 
     private ISearchStorage? _resultStorage; // Use ISearchStorage instead of InMemoryStorage
 
+    /// <summary>
+    /// The storage holding the search's raw + filtered results, available after the search has
+    /// run. Used by the native result viewer to build a paged source (in-memory list, SQLite
+    /// queries, or hybrid) without needing to re-materialize every row.
+    /// </summary>
+    public ISearchStorage? ResultStorage => _resultStorage;
+
     public NuSearchQuery()
     {
         _filters = new();
@@ -135,6 +142,8 @@ public class NuSearchQuery : ISearchQuery
                 return new SqliteStorage(filePath);
             case StorageType.InMemory:
                 return new InMemoryStorage();
+            case StorageType.Hybrid:
+                return new HybridStorage(filePath);
             case StorageType.Auto:
             default:
                 var totalRecords = 0;
@@ -154,11 +163,15 @@ public class NuSearchQuery : ISearchQuery
                         totalRecords += 100;
                     }
                 }
-                // Heuristic: Use InMemory if < 10,000 records and estimated time < 30s, else SqlLite
+                // Tiered Auto:
+                //   < 10k rows and quick      -> InMemory  (cheapest, fastest)
+                //   10k - 1M rows             -> Hybrid    (RAM hot, SQLite cold)
+                //   > 1M rows or slow search  -> SqlLite   (always disk; predictable memory)
                 if (totalRecords < 10_000 && totalTime.TotalSeconds < 30)
                     return new InMemoryStorage();
-                else
-                    return new SqliteStorage(filePath);
+                if (totalRecords < 1_000_000)
+                    return new HybridStorage(filePath);
+                return new SqliteStorage(filePath);
         }
     }
 

@@ -42,6 +42,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Levels: start from the active theme preset, then layer per-level overrides. ---
             RebuildLevelEditor();
 
+            // --- Storage backend ---
+            SelectStorageInComboBox();
+
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
 
@@ -189,5 +192,37 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         ResultsViewerSettings.ClearLevelColors();
         RebuildLevelEditor();
+    }
+
+    // ----- Storage backend -----
+    private void SelectStorageInComboBox()
+    {
+        var current = findneedle.PluginSubsystem.PluginManager.GetSingleton().config?.SearchStorageType
+                      ?? FindPluginCore.PluginSubsystem.StorageType.Auto;
+        foreach (var item in StorageCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag is string tag
+                && Enum.TryParse<FindPluginCore.PluginSubsystem.StorageType>(tag, ignoreCase: true, out var parsed)
+                && parsed == current)
+            {
+                StorageCombo.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void StorageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (StorageCombo.SelectedItem is not ComboBoxItem item) return;
+        if (item.Tag is not string tag) return;
+        if (!Enum.TryParse<FindPluginCore.PluginSubsystem.StorageType>(tag, ignoreCase: true, out var parsed)) return;
+
+        var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
+        if (manager.config != null)
+        {
+            manager.config.SearchStorageType = parsed;
+            manager.SaveToFile();
+        }
     }
 }

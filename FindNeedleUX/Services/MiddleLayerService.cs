@@ -220,4 +220,17 @@ public class MiddleLayerService
     {
         return SearchQueryUX?.CurrentQuery;
     }
+
+    /// <summary>
+    /// The storage backing the most recent completed search, if any. Used by the result viewer
+    /// to build a paged source (in-memory list, SQLite paging, or hybrid). Returns null until a
+    /// search has run.
+    /// </summary>
+    public static FindNeedlePluginLib.Interfaces.ISearchStorage? GetSearchStorage()
+    {
+        // NuSearchQuery exposes ResultStorage; older SearchQuery types don't.
+        var query = SearchQueryUX?.CurrentQuery;
+        var prop = query?.GetType().GetProperty("ResultStorage");
+        return prop?.GetValue(query) as FindNeedlePluginLib.Interfaces.ISearchStorage;
+    }
 }

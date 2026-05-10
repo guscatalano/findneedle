@@ -11,6 +11,7 @@ public enum StorageType
 {
     InMemory,
     SqlLite,
+    Hybrid,
     Auto
 }
 

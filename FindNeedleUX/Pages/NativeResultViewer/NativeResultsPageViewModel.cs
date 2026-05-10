@@ -9,29 +9,47 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using FindNeedleUX;
 using FindNeedleUX.Services;
+using FindNeedleUX.Services.PagedLogSource;
 
 namespace FindNeedleUX.Pages.NativeResultViewer;
 
 /// <summary>
 /// ViewModel for the native WinUI 3 result viewer.
-/// Mirrors the feature set of the web (DataTables) viewer:
-///   - global search, per-column filters, time-range filter, level filter
-///   - per-level row coloring (with user-overridable colors)
-///   - per-level visible counts
-///   - column visibility toggle
-///   - status text (visible/total + rate)
-///   - export CSV
-///   - load from MiddleLayerService
+///
+/// Backed by an <see cref="IPagedLogSource"/> so the underlying data set can live in memory,
+/// in SQLite, or in a hybrid store — only the current page (~PageSize rows) is ever materialized
+/// in <see cref="Results"/>. Filter / sort / level-counts all flow through the source.
 /// </summary>
 public class NativeResultsPageViewModel : INotifyPropertyChanged
 {
-    // ----- backing data -----
-    private readonly List<LogLine> _all = new();          // every loaded row, unfiltered
-    private List<LogLine> _filtered = new();              // every row matching current filters/sort
-    // RangeObservableCollection bulk-replaces via a single Reset notification. With pagination
-    // we only ever publish one page (~100 rows) so even per-item Add wouldn't be expensive — but
-    // ReplaceAll lets us swap the whole page atomically when filters or page change.
+    private IPagedLogSource _source = new InMemoryPagedSource(Array.Empty<LogLine>());
+
     public RangeObservableCollection<LogLine> Results { get; } = new();
+
+    // ----- filter state -----
+    private string _searchText = "";
+    public string SearchText { get => _searchText; set => Set(ref _searchText, value, applyFilters: true); }
+
+    private string _providerFilter = "";
+    public string ProviderFilter { get => _providerFilter; set => Set(ref _providerFilter, value, applyFilters: true); }
+
+    private string _taskNameFilter = "";
+    public string TaskNameFilter { get => _taskNameFilter; set => Set(ref _taskNameFilter, value, applyFilters: true); }
+
+    private string _messageFilter = "";
+    public string MessageFilter { get => _messageFilter; set => Set(ref _messageFilter, value, applyFilters: true); }
+
+    private string _sourceFilter = "";
+    public string SourceFilter { get => _sourceFilter; set => Set(ref _sourceFilter, value, applyFilters: true); }
+
+    private string _levelFilter = "";
+    public string LevelFilter { get => _levelFilter; set => Set(ref _levelFilter, value, applyFilters: true); }
+
+    private DateTime? _fromDate;
+    public DateTime? FromDate { get => _fromDate; set => Set(ref _fromDate, value, applyFilters: true); }
+
+    private DateTime? _toDate;
+    public DateTime? ToDate { get => _toDate; set => Set(ref _toDate, value, applyFilters: true); }
 
     // ----- pagination -----
     private int _pageSize = 100;
@@ -41,7 +59,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         set { if (_pageSize != value && value > 0) { _pageSize = value; PageOrSizeChanged(); } }
     }
 
-    private int _currentPage = 1;     // 1-indexed
+    private int _currentPage = 1;
     public int CurrentPage
     {
         get => _currentPage;
@@ -91,8 +109,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public void NextPage() => CurrentPage = _currentPage + 1;
     public void LastPage() => CurrentPage = TotalPages == 0 ? 1 : TotalPages;
 
-    // ----- sort state (applied to the full filtered set, not just the visible page) -----
-    private string _sortColumn;        // null = no sort
+    // ----- sort state -----
+    private string _sortColumn;
     private bool _sortDescending;
     public string SortColumn => _sortColumn;
     public bool SortDescending => _sortDescending;
@@ -101,58 +119,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         _sortColumn = string.IsNullOrEmpty(column) ? null : column;
         _sortDescending = descending;
-        SortFiltered();
-        CurrentPage = 1;  // sort always resets to page 1
-        PublishCurrentPage();
+        _currentPage = 1;
+        ReloadFromSource();
     }
-
-    private void SortFiltered()
-    {
-        if (_sortColumn == null) return;
-        Comparison<LogLine> cmp = _sortColumn switch
-        {
-            "Index"    => (a, b) => a.Index.CompareTo(b.Index),
-            "Time"     => (a, b) => a.LogTime.CompareTo(b.LogTime),
-            "Provider" => (a, b) => string.Compare(a.Provider, b.Provider, StringComparison.OrdinalIgnoreCase),
-            "TaskName" => (a, b) => string.Compare(a.TaskName, b.TaskName, StringComparison.OrdinalIgnoreCase),
-            "Message"  => (a, b) => string.Compare(a.Message,  b.Message,  StringComparison.OrdinalIgnoreCase),
-            "Source"   => (a, b) => string.Compare(a.Source,   b.Source,   StringComparison.OrdinalIgnoreCase),
-            "Level"    => (a, b) => string.Compare(a.Level,    b.Level,    StringComparison.OrdinalIgnoreCase),
-            _          => null
-        };
-        if (cmp == null) return;
-        if (_sortDescending) { var inner = cmp; cmp = (a, b) => -inner(a, b); }
-        _filtered.Sort(cmp);
-    }
-
-    // ----- filter state -----
-    private string _searchText = "";
-    public string SearchText { get => _searchText; set => Set(ref _searchText, value, applyFilters: true); }
-
-    private string _providerFilter = "";
-    public string ProviderFilter { get => _providerFilter; set => Set(ref _providerFilter, value, applyFilters: true); }
-
-    private string _taskNameFilter = "";
-    public string TaskNameFilter { get => _taskNameFilter; set => Set(ref _taskNameFilter, value, applyFilters: true); }
-
-    private string _messageFilter = "";
-    public string MessageFilter { get => _messageFilter; set => Set(ref _messageFilter, value, applyFilters: true); }
-
-    private string _sourceFilter = "";
-    public string SourceFilter { get => _sourceFilter; set => Set(ref _sourceFilter, value, applyFilters: true); }
-
-    private string _levelFilter = "";
-    public string LevelFilter { get => _levelFilter; set => Set(ref _levelFilter, value, applyFilters: true); }
-
-    private DateTime? _fromDate;
-    public DateTime? FromDate { get => _fromDate; set => Set(ref _fromDate, value, applyFilters: true); }
-
-    private DateTime? _toDate;
-    public DateTime? ToDate { get => _toDate; set => Set(ref _toDate, value, applyFilters: true); }
 
     // ----- status state -----
-    private DateTime? _loadStartedUtc;
-
     private int _totalCount;
     public int TotalCount { get => _totalCount; set { if (Set(ref _totalCount, value)) UpdateStatus(); } }
 
@@ -172,7 +143,6 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public NativeResultsPageViewModel()
     {
         LoadResultsCommand = new AsyncRelayCommand(LoadResultsAsync);
-
         foreach (var name in DefaultColumnNames)
             Columns.Add(new ColumnEntry { Name = name, IsVisible = true });
     }
@@ -182,76 +152,59 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level"
     };
 
-    // Theme presets. Colors are 8-digit ARGB so they alpha-blend over the
-    // grid's row background — readable in both light and dark mode.
     public static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ThemePresets =
         new Dictionary<string, IReadOnlyDictionary<string, string>>
     {
         ["Subtle"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#33D32F2F" }, // 20% red
-            { "Critical",     "#28E53935" }, // 16% red
-            { "Error",        "#1FEF5350" }, // 12% lighter red
-            { "Warning",      "#22FFA000" }, // 13% amber
+            { "Catastrophic", "#33D32F2F" }, { "Critical", "#28E53935" },
+            { "Error",        "#1FEF5350" }, { "Warning",  "#22FFA000" },
             { "Info",         "Transparent" },
-            { "Verbose",      "#12808080" }, // ~7% gray
-            { "Debug",        "#14546E7A" }  // ~8% blue-gray
+            { "Verbose",      "#12808080" }, { "Debug",    "#14546E7A" }
         },
         ["Vivid"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#FFB3B3" },
-            { "Critical",     "#FFCCCC" },
-            { "Error",        "#FFE1E1" },
-            { "Warning",      "#FFF4CC" },
+            { "Catastrophic", "#FFB3B3" }, { "Critical", "#FFCCCC" },
+            { "Error",        "#FFE1E1" }, { "Warning",  "#FFF4CC" },
             { "Info",         "Transparent" },
-            { "Verbose",      "#F1F1F1" },
-            { "Debug",        "#EEF3FF" }
+            { "Verbose",      "#F1F1F1" }, { "Debug",    "#EEF3FF" }
         },
         ["None"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "Transparent" },
-            { "Critical",     "Transparent" },
-            { "Error",        "Transparent" },
-            { "Warning",      "Transparent" },
+            { "Catastrophic", "Transparent" }, { "Critical", "Transparent" },
+            { "Error",        "Transparent" }, { "Warning",  "Transparent" },
             { "Info",         "Transparent" },
-            { "Verbose",      "Transparent" },
-            { "Debug",        "Transparent" }
+            { "Verbose",      "Transparent" }, { "Debug",    "Transparent" }
         }
     };
 
     public const string DefaultThemeName = "Subtle";
 
-    /// <summary>Default per-level row backgrounds = the Subtle theme.</summary>
     public static IReadOnlyDictionary<string, string> DefaultLevelColors => ThemePresets[DefaultThemeName];
 
-    /// <summary>Apply a named theme preset to every level. Does nothing if the name is unknown.</summary>
     public void ApplyTheme(string themeName)
     {
         if (string.IsNullOrEmpty(themeName) || !ThemePresets.TryGetValue(themeName, out var theme)) return;
         foreach (var entry in Levels)
-        {
-            if (theme.TryGetValue(entry.Level, out var hex)) entry.HexColor = hex;
-            else entry.HexColor = "Transparent";
-        }
+            entry.HexColor = theme.TryGetValue(entry.Level, out var hex) ? hex : "Transparent";
     }
 
     // ----- Loading -----
     public async Task LoadResultsAsync()
     {
         IsLoading = true;
-        _loadStartedUtc = DateTime.UtcNow;
         try
         {
-            var lines = MiddleLayerService.GetLogLines() ?? new List<LogLine>();
-            _all.Clear();
-            _all.AddRange(lines);
+            // The page source is whatever fits the active storage backend. Falls back to an
+            // in-memory list if no SQLite/Hybrid backing is available.
+            var storage = MiddleLayerService.GetSearchStorage();
+            var fallback = MiddleLayerService.GetLogLines() ?? new List<LogLine>();
+            try { _source?.Dispose(); } catch { /* ignore */ }
+            _source = PagedLogSourceFactory.Create(storage, fallback);
 
-            // Discover levels in the data set.
-            var levelSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var l in _all)
-                if (!string.IsNullOrEmpty(l.Level)) levelSet.Add(l.Level);
-
-            // Merge defaults so users always see the standard levels even if absent.
+            // Discover levels and seed Levels/KnownLevelNames.
+            var distinct = _source.GetDistinctLevels();
+            var levelSet = new HashSet<string>(distinct, StringComparer.OrdinalIgnoreCase);
             foreach (var def in DefaultLevelColors.Keys) levelSet.Add(def);
 
             Levels.Clear();
@@ -264,9 +217,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             KnownLevelNames.Clear();
             foreach (var l in Levels.Select(x => x.Level)) KnownLevelNames.Add(l);
 
-            TotalCount = _all.Count;
-            AutoHideEmptyColumns();
-            ApplyFilters();
+            TotalCount = _source.TotalCount;
+            AutoHideEmptyColumnsFromSample(fallback);
+            ReloadFromSource();
         }
         finally
         {
@@ -276,14 +229,13 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Hide any column whose values are 100% empty — typical for plain-text logs where the source
-    /// format doesn't carry TaskName/MachineName/Username/OpCode. Plugins now return empty for
-    /// fields they don't support (the LogLine constructor also normalizes the legacy
-    /// "!NOT_SUPPORTED!" sentinel just in case). User can re-enable via Columns ▾.
+    /// Auto-hide columns where every loaded row is empty for that field. We only sample the
+    /// first ~1000 rows (already in memory via the fallback list) — this is a UX nicety, not a
+    /// hard guarantee. Plain-text logs typically have empty TaskName for every single row.
     /// </summary>
-    private void AutoHideEmptyColumns()
+    private void AutoHideEmptyColumnsFromSample(IList<LogLine> sample)
     {
-        if (_all.Count == 0) return;
+        if (sample == null || sample.Count == 0) return;
 
         var getters = new Dictionary<string, Func<LogLine, string>>(StringComparer.OrdinalIgnoreCase)
         {
@@ -293,122 +245,61 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             ["Message"]  = l => l.Message,
         };
 
+        int sampleSize = Math.Min(sample.Count, 1000);
         foreach (var col in Columns)
         {
             if (!getters.TryGetValue(col.Name, out var get)) continue;
-            if (_all.All(line => string.IsNullOrWhiteSpace(get(line))))
-                col.IsVisible = false;  // Don't auto-enable a column the user explicitly toggled off.
+            bool allEmpty = true;
+            for (int i = 0; i < sampleSize; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(get(sample[i]))) { allEmpty = false; break; }
+            }
+            if (allEmpty) col.IsVisible = false;
         }
     }
 
     // ----- Filtering -----
-
-    // Optimized for large result sets:
-    //   - One foreach pass instead of a chain of LINQ Where wrappers (no per-row delegate overhead).
-    //   - All filter strings captured in locals once; no re-checking IsNullOrWhiteSpace per row.
-    //   - StringComparison.OrdinalIgnoreCase substring match (no per-row ToLowerInvariant
-    //     allocations — the previous Has() allocated a lower-cased copy of every field for every row).
-    //   - Cheap predicates run first (date range, level exact match), expensive global search runs last.
-    //   - Accumulate matches in a List<LogLine> then publish via RangeObservableCollection.ReplaceAll
-    //     so the UI sees a single Reset notification instead of one CollectionChanged per row.
-    //   - LevelCounts computed from the local list in the same pass we'd otherwise use.
     public void ApplyFilters()
     {
-        // Snapshot filter state once. Empty strings become null so the inner loop only does
-        // a null check (faster than IsNullOrWhiteSpace on every row).
-        string search   = NullIfBlank(SearchText);
-        string provider = NullIfBlank(ProviderFilter);
-        string taskName = NullIfBlank(TaskNameFilter);
-        string message  = NullIfBlank(MessageFilter);
-        string source   = NullIfBlank(SourceFilter);
-        string level    = NullIfBlank(LevelFilter);
-        DateTime? from  = FromDate;
-        DateTime? to    = ToDate;
-        bool indexCouldMatchSearch = search != null && search.Length > 0 && IsAllAsciiDigit(search);
-
-        var matches = new List<LogLine>(_all.Count);
-
-        for (int i = 0; i < _all.Count; i++)
-        {
-            var line = _all[i];
-
-            // Cheapest checks first.
-            if (from.HasValue && line.LogTime < from.Value) continue;
-            if (to.HasValue   && line.LogTime > to.Value)   continue;
-            if (level != null && !string.Equals(line.Level, level, StringComparison.OrdinalIgnoreCase)) continue;
-
-            // Per-column substring checks. Each is one OrdinalIgnoreCase Contains, no allocation.
-            if (provider != null && !ContainsIgnoreCase(line.Provider, provider)) continue;
-            if (taskName != null && !ContainsIgnoreCase(line.TaskName, taskName)) continue;
-            if (message  != null && !ContainsIgnoreCase(line.Message,  message))  continue;
-            if (source   != null && !ContainsIgnoreCase(line.Source,   source))   continue;
-
-            // Global search last — most expensive (8 fields).
-            if (search != null)
-            {
-                if (!ContainsIgnoreCase(line.Time,           search) &&
-                    !ContainsIgnoreCase(line.Provider,       search) &&
-                    !ContainsIgnoreCase(line.TaskName,       search) &&
-                    !ContainsIgnoreCase(line.Message,        search) &&
-                    !ContainsIgnoreCase(line.Source,         search) &&
-                    !ContainsIgnoreCase(line.Level,          search) &&
-                    !ContainsIgnoreCase(line.SearchableData, search) &&
-                    !(indexCouldMatchSearch &&
-                      line.Index.ToString().IndexOf(search, StringComparison.Ordinal) >= 0))
-                {
-                    continue;
-                }
-            }
-
-            matches.Add(line);
-        }
-
-        _filtered = matches;
-        SortFiltered();
-        TotalFilteredCount = _filtered.Count;
         _currentPage = 1;
-        PublishCurrentPage();
-        UpdateLevelCountsFrom(_filtered);
-        OnPropertyChanged(nameof(TotalPages));
-        OnPropertyChanged(nameof(PageRangeText));
-        OnPropertyChanged(nameof(CurrentPage));
-        UpdateStatus();
+        ReloadFromSource();
     }
 
     /// <summary>
-    /// Slice <see cref="_filtered"/> into the current page and bulk-replace <see cref="Results"/>.
-    /// The DataGrid only ever sees ~PageSize rows, so virtualization + scroll are essentially free.
+    /// Hits the source: total count, level counts (for chips), and the current page's rows.
+    /// All other state-keeping (Results, page metadata, status) flows from this.
     /// </summary>
-    private void PublishCurrentPage()
+    private void ReloadFromSource()
     {
-        int total = _filtered.Count;
-        if (total == 0) { Results.ReplaceAll(System.Array.Empty<LogLine>()); return; }
-        int start = (_currentPage - 1) * _pageSize;
-        int len = Math.Min(_pageSize, total - start);
-        if (start < 0 || start >= total || len <= 0)
-        {
-            Results.ReplaceAll(System.Array.Empty<LogLine>());
-            return;
-        }
-        // GetRange copies into a new List<LogLine> — small (PageSize), one-shot.
-        var page = _filtered.GetRange(start, len);
+        var filters = BuildFilterSpec();
+        var sort = new SortSpec(_sortColumn, _sortDescending);
+
+        TotalFilteredCount = _source.GetFilteredCount(filters);
+        UpdateLevelCountsFrom(_source.GetLevelCounts(filters));
+
+        // Clamp page to valid range after filter changed total.
+        if (_currentPage > TotalPages && TotalPages > 0) _currentPage = TotalPages;
+        if (_currentPage < 1) _currentPage = 1;
+
+        var offset = (_currentPage - 1) * _pageSize;
+        var page = _source.GetPage(filters, sort, offset, _pageSize);
         Results.ReplaceAll(page);
+
+        OnPropertyChanged(nameof(CurrentPage));
+        OnPropertyChanged(nameof(TotalPages));
+        OnPropertyChanged(nameof(PageRangeText));
+        UpdateStatus();
     }
 
-    private static string NullIfBlank(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
-
-    private static bool ContainsIgnoreCase(string s, string needle) =>
-        s != null && s.Length > 0 && s.Contains(needle, StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsAllAsciiDigit(string s)
-    {
-        for (int i = 0; i < s.Length; i++)
-        {
-            char c = s[i];
-            if (c < '0' || c > '9') return false;
-        }
-        return true;
-    }
+    private FilterSpec BuildFilterSpec() => new(
+        Search: _searchText ?? "",
+        Provider: _providerFilter ?? "",
+        TaskName: _taskNameFilter ?? "",
+        Message: _messageFilter ?? "",
+        Source: _sourceFilter ?? "",
+        Level: _levelFilter ?? "",
+        FromTime: _fromDate,
+        ToTime: _toDate);
 
     public void ClearFilters()
     {
@@ -420,27 +311,26 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     private void UpdateStatus()
     {
-        // Status reflects the FILTERED total, not the page slice — users care about how many
-        // rows their filter matched, not which page they're on.
         StatusText = $"{_totalFilteredCount:N0} / {TotalCount:N0} results";
     }
 
-    /// <summary>
-    /// Iterates the supplied list directly instead of <see cref="Results"/> — saves one extra
-    /// pass over the visible row set after a filter rebuild.
-    /// </summary>
-    private void UpdateLevelCountsFrom(IList<LogLine> visible)
+    private void UpdateLevelCountsFrom(IDictionary<string, int> counts)
     {
-        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < visible.Count; i++)
-        {
-            var lvl = visible[i].Level;
-            var k = string.IsNullOrEmpty(lvl) ? "(none)" : lvl;
-            counts.TryGetValue(k, out var c);
-            counts[k] = c + 1;
-        }
         foreach (var entry in Levels)
             entry.Count = counts.TryGetValue(entry.Level, out var n) ? n : 0;
+    }
+
+    /// <summary>
+    /// Slice <see cref="_filtered"/> into the current page and bulk-replace <see cref="Results"/>.
+    /// (Used by pagination button clicks; ReloadFromSource handles full filter rebuilds.)
+    /// </summary>
+    private void PublishCurrentPage()
+    {
+        var filters = BuildFilterSpec();
+        var sort = new SortSpec(_sortColumn, _sortDescending);
+        var offset = (_currentPage - 1) * _pageSize;
+        var page = _source.GetPage(filters, sort, offset, _pageSize);
+        Results.ReplaceAll(page);
     }
 
     // ----- CSV export -----
@@ -457,17 +347,19 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             var file = await picker.PickSaveFileAsync();
             if (file == null) return null;
 
-            // Export everything matching the current filters/sort (NOT just the current page).
             var visibleNames = Columns.Where(c => c.IsVisible).Select(c => c.Name).ToList();
-
-            var lines = new List<string>(_filtered.Count + 1)
+            // Stream rows from the source so CSV export of a SQLite-backed result set
+            // doesn't have to load everything into memory.
+            var lines = new List<string>(_totalFilteredCount + 1)
             {
                 string.Join(",", visibleNames.Select(EscapeCsv))
             };
-            foreach (var row in _filtered)
+            var filters = BuildFilterSpec();
+            var sort = new SortSpec(_sortColumn, _sortDescending);
+            _source.WalkAllFiltered(filters, sort, line =>
             {
-                lines.Add(string.Join(",", visibleNames.Select(name => EscapeCsv(GetField(row, name)))));
-            }
+                lines.Add(string.Join(",", visibleNames.Select(name => EscapeCsv(GetField(line, name)))));
+            });
 
             await global::Windows.Storage.FileIO.WriteLinesAsync(file, lines);
             return file.Path;
@@ -517,7 +409,6 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
 public class LevelEntry : INotifyPropertyChanged
 {
-    // Settable (not init-only) so the XAML compiler's generated type-info accepts it.
     public string Level { get; set; } = "";
 
     private string _hexColor = "Transparent";
@@ -562,20 +453,14 @@ public class ColumnEntry : INotifyPropertyChanged
 
 /// <summary>
 /// <see cref="ObservableCollection{T}"/> that supports a single-shot bulk replacement.
-/// <see cref="ReplaceAll"/> mutates the underlying <c>Items</c> list directly and fires exactly
-/// one <see cref="NotifyCollectionChangedAction.Reset"/> event plus the standard Count and indexer
-/// PropertyChanged notifications. Bound DataGrid receives one Reset and re-renders the whole list,
-/// far cheaper than N per-item Add notifications.
 /// </summary>
 public sealed class RangeObservableCollection<T> : ObservableCollection<T>
 {
     public void ReplaceAll(IList<T> newItems)
     {
-        // Items is the protected, non-observable inner list — bypass per-item events.
         Items.Clear();
         if (newItems != null)
         {
-            // ObservableCollection<T>.Items is a List<T>; preallocate to skip resize churn.
             if (Items is List<T> list)
             {
                 if (list.Capacity < newItems.Count) list.Capacity = newItems.Count;

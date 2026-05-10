@@ -102,6 +102,28 @@
                 </StackPanel>
             </Border>
 
+            <!-- Search storage backend -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Search storage" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Where search results are kept while you view them. Auto picks based on result size."/>
+                    <ComboBox x:Name="StorageCombo" Width="280"
+                              SelectionChanged="StorageCombo_SelectionChanged"
+                              AutomationProperties.Name="Search storage backend">
+                        <ComboBoxItem Content="Auto (recommended)"     Tag="Auto"/>
+                        <ComboBoxItem Content="In-memory (fastest, &lt; 100k rows)"  Tag="InMemory"/>
+                        <ComboBoxItem Content="Hybrid (RAM + SQLite spillover)"      Tag="Hybrid"/>
+                        <ComboBoxItem Content="SQLite only (smallest memory)"        Tag="SqlLite"/>
+                    </ComboBox>
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                               Text="Auto picks: in-memory under 10k rows, hybrid up to 1M, SQLite above. Takes effect on the next search."/>
+                </StackPanel>
+            </Border>
+
             <!-- Default columns -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
