@@ -123,21 +123,109 @@ Three storage implementations for search results:
 | Storage | Use Case | Features |
 |---------|----------|----------|
 | `InMemoryStorage` | Fast access, small datasets | Pure in-memory, fastest |
-| `SqliteStorage` | Large datasets | Persistent, disk-based |
-| `HybridStorage` | Mixed workloads | Auto-spills to disk, LRU promotion |
+| `SqliteStorage` | Large datasets | Persistent, disk-based, FTS5 trigram for global search |
+| `HybridStorage` | 10k–50k row range | RAM-hot tier + SQLite spill, settles to disk at end of Step2 |
 
-**Storage Selection**:
-- Configured via `PluginConfig.json` or RuleDSL `systemConfig.storageType`
-- Options: `"InMemory"`, `"SqlLite"`, `"Auto"` (default)
+**Storage selection (Auto)**, picked by `NuSearchQuery.CreateStorage` based on the plugin's
+`GetSearchPerformanceEstimate` row count:
+
+| Estimated rows | Backend | Reason |
+|---|---|---|
+| `< 10k` | InMemoryStorage | No disk needed; fastest |
+| `10k – 50k` | HybridStorage | RAM-hot, short settle phase |
+| `> 50k` | SqliteStorage directly | Rows stream straight to disk during scan — no settle phase to block the viewer |
+
+Configurable via `PluginConfig.json` (`SearchStorageType`), Settings → Results viewer, or RuleDSL
+`systemConfig.storageType`. Options: `"Auto"`, `"InMemory"`, `"Hybrid"`, `"SqlLite"`.
+
+**SQLite tuning** (`SqliteStorage`):
+- `journal_mode = MEMORY`, `synchronous = OFF` — cache DB is wiped on every construction, so
+  durability is worthless; trades fsync cost for ~2× insert throughput.
+- Multi-row `INSERT … VALUES (…),(…)` chunked at 500 rows / 5000 parameters — drops managed↔native
+  interop crossings from one-per-row to one-per-500-rows.
+- Prepared statement reused across the batch with cached `SqliteParameter` handles (no per-row
+  `AddWithValue` allocation).
+- Indexes on `Level`, `Source`, `LogTime` for per-column viewer filters.
+- **FTS5 trigram virtual table** on `(Source, TaskName, Message, ResultSource, SearchableData,
+  LogTime)` with triggers keeping it in sync — substring search on million-row tables runs in
+  milliseconds instead of the unindexable `LIKE '%term%'` full scan. Falls back to LIKE for
+  queries shorter than 3 chars (trigram requires ≥3 chars to generate any tokens) and on any
+  FTS5 query exception.
+- Corruption recovery: if `ClearTables()` throws `SQLITE_CORRUPT` (file left over from a
+  prior crash), the file is deleted and the constructor retries once with a fresh DB.
 
 ### 4. Search Pipeline
 ```
 1. Load Rules (RuleDSL)
-2. Get Filtered Results (ISearchLocation.Search)
-3. Apply Rule Filtering (RuleDSL filter rules)
-4. Apply Rule Enrichment (RuleDSL enrichment rules)
-5. Process All Results to Output (RuleDSL output rules)
+2. Step1 — Load locations in memory
+3. Step2 — Scan locations → AddRawBatch + filter → AddFilteredBatch (per location)
+            + (conditional) consolidate all rows into _currentResultList for Step3/4
+            + (if Hybrid) SettleToDisk on the search thread
+4. Step3 — Apply rule enrichment + run processors
+5. Step4 — Apply rule output + write standard outputs
+6. Step5 — Done
 ```
+
+**`_currentResultList` is now conditional.** If a search has no rules, no processors, and no
+outputs (the common "Quick Open just to view a log" case), Step2 *skips* the
+`GetFilteredResultsInBatches` re-materialisation — on 500k rows that saves ~30 s of pure
+allocation. Downstream consumers of `MiddleLayerService.SearchResults` fall back to the
+storage-backed path (`GetLogLines` lazy-materialises from storage when the in-memory list is
+empty; status-bar count reads `storage.GetStatistics().filteredRecordCount` via
+`MiddleLayerService.GetFilteredRowCount()`).
+
+**HybridStorage settles at end of Step2**, not at viewer-open. Before this change, the UI
+thread blocked for tens of seconds the first time the viewer asked
+`PagedLogSourceFactory.Create` for a source. Now the settle runs on the search task with a
+visible `"moving N results into the cache…"` progress message.
+
+### 5. Result Viewer Architecture (`IPagedLogSource`)
+The viewer never materialises the full result set in memory. Both viewers read through
+`IPagedLogSource` (in `FindNeedleUX/Services/PagedLogSource/`):
+
+| Source impl | Backed by | Notes |
+|---|---|---|
+| `InMemoryPagedSource` | `List<LogLine>` | Caches filter+sort result by (FilterSpec, SortSpec) tuple |
+| `SqlitePagedSource`   | `SqliteStorage`  | Translates FilterSpec/SortSpec → SQL; streams CSV export via 5k-row pages |
+
+`PagedLogSourceFactory.Create(storage, fallback)` picks the impl from the storage type;
+`CreateStreaming(storage)` wires a SQLite source that subscribes to
+`SqliteStorage.FilteredRowsAdded` so the viewer can refresh while a search is still producing.
+
+**Streaming search** (`MiddleLayerService.RunSearchStreaming`):
+- Forces SQLite storage (only safe backend for concurrent read+write).
+- Pre-constructs the storage on the UI thread, hands the viewer a paged source with
+  `IsLoading = true`.
+- Kicks off the search on the threadpool. The viewer opens after a 150 ms grace period and
+  shows partial results that grow as `RowsAvailable` fires.
+- "Stop" button cancels via the shared `CancellationTokenSource`.
+
+**Web viewer hybrid mode** (`ResultsWebPage`):
+- Below `ResultsViewerSettings.WebViewerServerSideThreshold` (default 10k): client-side
+  DataTables — entire result set streamed to the page as JSON, paginates in browser memory.
+- Above the threshold: `serverSide: true` DataTables with a custom `ajax` that posts a
+  `getPage` message to the host. C# translates the DataTables envelope to `FilterSpec` +
+  `SortSpec`, returns one page at a time via `pageResult`. No row cap.
+- `searchDelay: 300` debounces keystroke filters.
+- Row colors driven by the user's Settings → Results viewer theme + per-level overrides,
+  pushed live via `setLevelColors` message.
+
+**Native viewer perf** (`NativeResultsPage` + `NativeResultsPageViewModel`):
+- `NavigationCacheMode = Required` — page instance kept alive across navigations; first switch
+  pays the WinUI/DataGrid construction cost (~200–500 ms), subsequent switches near-instant.
+- Pre-warmed at app startup behind the welcome page (`new NativeResultsPage()` on a
+  low-priority dispatcher tick) so the first user-initiated switch is shorter.
+- `LoadResultsAsync` skips `MiddleLayerService.GetLogLines()` for SqliteStorage/HybridStorage
+  backings — only used as fallback for InMemoryStorage. AutoHide sample comes from
+  `_source.GetPage(empty, none, 0, 1000)`.
+
+### 6. Perf Diagnostics (`FindPluginCore.Diagnostics.PerfLog`)
+Append-only timing log at `%LocalAppData%\FindNeedle\perf-log.txt` (rotates at 1 MB). Records
+structured `key=value` events with elapsed_ms scopes. Phases emitted: `search.run`,
+`search.step1..4`, `location.start/end`, `consolidate.start/end` (or `consolidate.skipped`),
+`rule_filter`, `search.settle`, `viewer.native.*`, `viewer.web.load`, `viewer.web.page`. Used
+to diagnose where wall-clock time goes; never breaks the calling path (all I/O wrapped in
+try/catch).
 
 ---
 
@@ -420,7 +508,24 @@ dotnet run --project findneedle/findneedle.csproj -- --verbose
 1. Check `storageType` in PluginConfig or RuleDSL
 2. Verify SQLite DLLs are deployed (if using SqliteStorage)
 3. Check temp directory has write permissions
-4. Review `HybridStorage.README.md` for hybrid storage issues
+4. `SQLITE_CORRUPT` ("database disk image is malformed") is auto-recovered: the constructor
+   deletes the cache `.db` + `-wal` / `-shm` / `-journal` sidecars and retries once. If it
+   throws on the retry, the file at `CachedStorage.GetCacheFilePath(searchedFilePath, ".db")`
+   couldn't be created — check disk space / AV interception.
+5. Review `HybridStorage.README.md` for hybrid storage issues
+
+### Viewer Hangs / "Loading viewer…" Sluggish
+1. Check `%LocalAppData%\FindNeedle\perf-log.txt` for the most recent session. The
+   `search.run.end elapsed_ms` and `viewer.*.load.end elapsed_ms` lines tell you where the
+   wait is.
+2. A long `consolidate.end` means the search materialised the full result set — only happens
+   if rules / processors / outputs are configured. With none configured you should see
+   `consolidate.skipped`.
+3. A long `viewer.web.load.end` or `viewer.native.load.end` with HybridStorage usually
+   indicates `SettleToDisk` ran on the UI thread (it shouldn't post-fix; the settle happens
+   at end of Step2).
+4. WebView2 first-construction cost (~1–2 s) is unavoidable. `NativeResultsPage` is
+   pre-warmed at app start; `ResultsWebPage` currently isn't (could add).
 
 ---
 
@@ -433,7 +538,10 @@ dotnet run --project findneedle/findneedle.csproj -- --verbose
 - `DEPRECATED_PLUGINS_MIGRATION.md` - Plugin migration guide
 - `HybridStorage.README.md` - Hybrid storage documentation
 - `CoreTests/StorageTests.README.md` - Storage testing guide
+- `FindNeedleUX/NativeResultViewer/NATIVE_VIEWER_SPEC.md` - Native viewer design
 
 ---
 
-*Last updated: April 22, 2026*
+*Last updated: 2026-05-11 — storage tier recalibration (50k cutover), FTS5 trigram global
+search, multi-row INSERT, IPagedLogSource + streaming search, web viewer hybrid mode,
+PerfLog diagnostics.*

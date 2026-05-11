@@ -49,9 +49,41 @@ FindNeedleUX reads its configuration from `PluginConfig.json` (typically found i
 
 ## UI Features
 - Plugin management and configuration
-- Search result viewing and export
+- Search result viewing and export — two viewers (native WinUI DataGrid + web DataTables)
 - System information and diagnostics
 - PlantUML integration for diagram generation
+
+## Result Viewer
+
+Two viewers backed by a shared `IPagedLogSource` abstraction so neither ever holds the whole
+result set in memory.
+
+- **Native viewer** (`Pages/NativeResultsPage`) — WinUI 3 `DataGrid`, kept alive across
+  navigations via `NavigationCacheMode.Required`, pre-warmed at app start. Used for streaming
+  searches (rows tick in as the search produces them, "Stop" button visible while loading).
+- **Web viewer** (`Pages/ResultsWebPage`) — WebView2 + DataTables.js. **Hybrid mode**: under
+  the threshold in *Settings → Results viewer* (default 10,000 rows) it loads client-side
+  with the full result set; over the threshold it flips to `serverSide: true` DataTables and
+  asks the host for one page per ajax call.
+
+### Settings → Results viewer
+Persisted at `%LocalAppData%\FindNeedle\viewer-settings.json`. Covers:
+- Time format
+- Color theme + per-level row colors (applied to both viewers; live-updates the web viewer)
+- Default columns + default page size
+- Default viewer to open (Native / Web)
+- Storage backend (Auto / InMemory / Hybrid / SqlLite)
+- Web viewer paging cutover (client-side ↔ server-side threshold)
+
+### Search storage (Auto)
+- `< 10,000 rows` → InMemoryStorage
+- `10k – 50k rows` → HybridStorage (RAM hot, settles to SQLite at end of search)
+- `> 50,000 rows` → SqliteStorage directly (rows stream to disk during scan — no settle phase)
+
+### Diagnostics
+- Append-only timing log at `%LocalAppData%\FindNeedle\perf-log.txt`. Records every search
+  phase, viewer-open phase, and per-page web viewer query with `elapsed_ms`. Useful when a
+  viewer feels slow — read the file and check which phase took time.
 
 ---
 For more information, see the main FindNeedle documentation or visit the [GitHub repository](https://github.com/guscatalano/findneedle).
