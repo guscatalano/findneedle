@@ -74,6 +74,11 @@ public sealed class InMemoryPagedSource : IPagedLogSource
 
     public void Dispose() { /* no unmanaged resources */ }
 
+    // ----- Streaming surface (in-memory backing is always a fixed snapshot) -----
+    public bool IsLoading => false;
+    public event Action? RowsAvailable { add { } remove { } }
+    public void MarkLoadingComplete() { /* no-op: in-memory source is always already complete */ }
+
     // ----- caching -----
     private void EnsureCache(FilterSpec filters, SortSpec sort)
     {

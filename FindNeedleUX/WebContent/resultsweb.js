@@ -9,9 +9,18 @@ var allLogLines = [];
 var pendingRows = [];
 var drawScheduled = false;
 
+// Hybrid mode state. C# decides whether we're in 'client' or 'server' mode based on the result
+// set's row count and the user's threshold setting. The setMode message arrives early; we use it
+// to build DataTables with the right config and to gate behavior of features that differ across
+// modes (level-count tallies, CSV export, time-range filter wiring).
+var viewerMode = null;            // 'client' | 'server', set by setMode handler
+var serverTotalRows = 0;
+var pendingPageRequests = {};     // requestId -> DataTables ajax callback
+var nextPageRequestId = 1;
+
 // DataTables 2.x recurses internally on the full row set during draw/sort/search; that overflows
-// the JS stack at very large counts. Cap displayed rows for the web viewer; recommend the native
-// viewer (WinUI DataGrid + virtualization) when a log exceeds this.
+// the JS stack at very large counts. Cap displayed rows in CLIENT mode only; server mode renders
+// one page at a time so no cap is needed.
 var ROW_DISPLAY_CAP = 100000;
 var ADD_CHUNK_SIZE = 5000;
 var capReached = false;
@@ -166,7 +175,53 @@ window.chrome.webview.addEventListener('message', function (event) {
         if (window.table) window.table.rows().invalidate().draw(false);
         return;
     }
+    if (verb === 'setMode') {
+        // C# has decided client vs server. Construct DataTables with the matching config now,
+        // *then* wire up the event listeners that depend on window.table.
+        viewerMode = payload.data.mode || 'client';
+        if (viewerMode === 'server') {
+            serverTotalRows = payload.data.total || 0;
+            (payload.data.levels || []).forEach(function(lvl) {
+                knownLevels.add(lvl);
+                addLevelColorControl(lvl);
+            });
+            initDataTableServerMode();
+        } else {
+            initDataTableClientMode();
+        }
+        attachTableListeners();
+        return;
+    }
+    if (verb === 'pageResult') {
+        // DataTables ajax response for server-side mode.
+        var cb = pendingPageRequests[payload.id];
+        if (cb) {
+            cb(payload.data);
+            delete pendingPageRequests[payload.id];
+        }
+        // Also push any new levels we haven't seen yet, then update level counts via a side call.
+        try {
+            (payload.data && payload.data.data || []).forEach(function(r) {
+                if (r.Level && !knownLevels.has(r.Level)) {
+                    knownLevels.add(r.Level);
+                    addLevelColorControl(r.Level);
+                }
+            });
+        } catch (e) {}
+        requestServerLevelCounts();
+        return;
+    }
+    if (verb === 'levelCountsResult') {
+        var counts = (payload.data && payload.data.counts) || {};
+        Object.keys(counts).forEach(function(lvl) {
+            knownLevels.add(lvl);
+            addLevelColorControl(lvl);
+        });
+        applyServerLevelCounts(counts);
+        return;
+    }
     if (verb === 'total') {
+        // Client-mode loader text.
         totalExpected = payload.data.total || 0;
         updateResultsDisplay();
         var loader = document.getElementById('loader');
@@ -174,19 +229,20 @@ window.chrome.webview.addEventListener('message', function (event) {
         return;
     }
     if (verb === 'newresult') {
-        // Backwards-compat single-row path
+        // Backwards-compat single-row path (client mode)
         ingestRow(payload.data);
         scheduleDraw();
         return;
     }
     if (verb === 'newresults') {
-        // Batched path
+        // Batched path (client mode)
         var batch = payload.data || [];
         for (var i = 0; i < batch.length; i++) ingestRow(batch[i]);
         scheduleDraw();
         return;
     }
     if (verb === 'done') {
+        // Client-mode bootstrap complete.
         flushPending();
         document.getElementById('tablediv').style.display = 'block';
         document.getElementById('loader').style.display = 'none';
@@ -266,97 +322,18 @@ function applyTheme(data) {
     htmlNode.setAttribute('data-bs-theme', isLight ? 'light' : 'dark');
 }
 
-// DataTables init
+// DataTables init — entry point. Doesn't construct the table any more; that happens once the
+// setMode message arrives from C# (since the server-side config differs from client-side).
 function codeAddress() {
     document.getElementById("tablediv").style.display = "none";
-    window.table = new DataTable('#myTable', {
-        columns: [
-            { title: "Index", data: "Index" },
-            { title: "Time", data: "Time" },
-            { title: "Provider", data: "Provider" },
-            { title: "TaskName", data: "TaskName" },
-            { title: "Message", data: "Message" },
-            { title: "Source", data: "Source", render: function(data, type, row) {
-                if (type === 'display' && data) return '<span title="' + data + '">' + escapeHtml(getBasename(data)) + '</span>';
-                return data;
-            }},
-            { title: "Level", data: "Level" },
-            { title: "More", data: null, orderable: false, searchable: false, render: function(data, type, row, meta) {
-                return "<button class='toolbar-btn' onclick='showMoreModal(" + meta.row + ")'>[…]</button>";
-            }}
-        ],
-        colReorder: true,
-        columnDefs: [
-            { targets: 0, className: 'min-width-message-id' },
-            { targets: 1, className: 'min-width-message-time' }
-        ],
-        deferRender: true,
-        stateSave: true,
-        stateDuration: -1, // sessionStorage
-        pageLength: 100,
-        autoWidth: false, // we manage column widths manually for drag-resize
-        initComplete: function() {
-            // Relocate the filter row from <tfoot> into <thead>. We keep it in <tfoot>
-            // in markup so DataTables doesn't auto-inject column-title spans into our
-            // <th> cells (which it does for every row inside <thead>).
-            var filterRow = document.querySelector('#myTable tfoot .filter-row');
-            var thead = document.querySelector('#myTable thead');
-            if (filterRow && thead) {
-                thead.appendChild(filterRow);
-                // Block clicks inside filter inputs from bubbling up and triggering
-                // DataTables' sort handler on the parent <th>.
-                filterRow.querySelectorAll('input, select').forEach(function(el) {
-                    el.addEventListener('click', function(e) { e.stopPropagation(); });
-                });
-            }
-            enableColumnResize();
-            restoreColumnWidths();
-        },
-        layout: {
-            topStart: { pageLength: { menu: [25, 50, 100, 500, 1000, 5000, { value: -1, label: 'All' }] } }
-        },
-        rowCallback: function(row, data) {
-            var color = (levelColorMap[data.Level] !== undefined) ? levelColorMap[data.Level] : defaultColorFor(data.Level);
-            row.style.backgroundColor = color || '';
-        }
-    });
+
+    // Ask C# to pick a mode and either start streaming rows (client) or just announce the row
+    // count + levels (server). The setMode handler builds DataTables + wires listeners.
     window.chrome.webview.postMessage('getData');
 
-    // Build Columns ▾ panel
-    buildColumnTogglePanel();
-
-    // Top searchbox
+    // Keyboard shortcuts + outside-click for Columns panel can be wired right away (don't
+    // require the table to exist yet).
     var searchBox = document.getElementById('searchbox');
-    searchBox.addEventListener('input', function() {
-        window.table.search(this.value).draw();
-        updateLevelCounts();
-    });
-
-    // Per-column filters
-    document.querySelectorAll('#myTable .filter-row input').forEach(function(input) {
-        input.addEventListener('input', function() {
-            var col = parseInt(this.getAttribute('data-col'), 10);
-            window.table.column(col).search(this.value).draw();
-            updateLevelCounts();
-        });
-    });
-    document.querySelectorAll('#myTable .filter-row select').forEach(function(sel) {
-        sel.addEventListener('change', function() {
-            var col = parseInt(this.getAttribute('data-col'), 10);
-            var v = this.value;
-            // Use exact match for dropdown filter
-            window.table.column(col).search(v ? '^' + escapeRegex(v) + '$' : '', true, false).draw();
-            updateLevelCounts();
-        });
-    });
-
-    // Time range — redraw on change to apply ext.search filter
-    ['timeFrom','timeTo'].forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.addEventListener('change', function() { window.table.draw(); updateLevelCounts(); });
-    });
-
-    // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
             e.preventDefault();
@@ -370,13 +347,207 @@ function codeAddress() {
             if (document.activeElement) document.activeElement.blur();
         }
     });
-
-    // Click outside Columns panel closes it
     document.addEventListener('click', function(e) {
         var panel = document.getElementById('columnTogglePanel');
         if (panel.style.display === 'block' && !panel.contains(e.target) && !e.target.matches('button.toolbar-btn')) {
             panel.style.display = 'none';
         }
+    });
+}
+
+// Shared column definitions (identical in both modes).
+function buildColumnDefs() {
+    return [
+        { title: "Index", data: "Index" },
+        { title: "Time", data: "Time" },
+        { title: "Provider", data: "Provider" },
+        { title: "TaskName", data: "TaskName" },
+        { title: "Message", data: "Message" },
+        { title: "Source", data: "Source", render: function(data, type, row) {
+            if (type === 'display' && data) return '<span title="' + data + '">' + escapeHtml(getBasename(data)) + '</span>';
+            return data;
+        }},
+        { title: "Level", data: "Level" },
+        { title: "More", data: null, orderable: false, searchable: false, render: function(data, type, row, meta) {
+            return "<button class='toolbar-btn' onclick='showMoreModal(" + meta.row + ")'>[…]</button>";
+        }}
+    ];
+}
+
+function sharedDataTableConfig() {
+    return {
+        columns: buildColumnDefs(),
+        colReorder: true,
+        columnDefs: [
+            { targets: 0, className: 'min-width-message-id' },
+            { targets: 1, className: 'min-width-message-time' }
+        ],
+        deferRender: true,
+        stateSave: true,
+        stateDuration: -1, // sessionStorage
+        pageLength: 100,
+        autoWidth: false,
+        initComplete: function() {
+            // Move the filter row from <tfoot> (where we keep it to dodge DataTables' auto
+            // column-title injection in <thead>) into <thead> for visual placement.
+            var filterRow = document.querySelector('#myTable tfoot .filter-row');
+            var thead = document.querySelector('#myTable thead');
+            if (filterRow && thead) {
+                thead.appendChild(filterRow);
+                filterRow.querySelectorAll('input, select').forEach(function(el) {
+                    el.addEventListener('click', function(e) { e.stopPropagation(); });
+                });
+            }
+            enableColumnResize();
+            restoreColumnWidths();
+        },
+        rowCallback: function(row, data) {
+            var color = (levelColorMap[data.Level] !== undefined) ? levelColorMap[data.Level] : defaultColorFor(data.Level);
+            row.style.backgroundColor = color || '';
+        }
+    };
+}
+
+function initDataTableClientMode() {
+    var cfg = sharedDataTableConfig();
+    cfg.layout = {
+        topStart: { pageLength: { menu: [25, 50, 100, 500, 1000, 5000, { value: -1, label: 'All' }] } }
+    };
+    window.table = new DataTable('#myTable', cfg);
+}
+
+function initDataTableServerMode() {
+    var cfg = sharedDataTableConfig();
+    cfg.serverSide = true;
+    cfg.processing = true;
+    // Debounce text-search input. Without this, every keystroke fires a SQL round-trip and
+    // the UI feels like it's chasing the user. 300 ms is short enough to feel responsive,
+    // long enough that "errror" fires only once.
+    cfg.searchDelay = 300;
+    // Intentionally NOT setting `deferLoading` — we want DataTables to fire its initial ajax
+    // immediately so the user sees the first page on entry. deferLoading would suppress that.
+    cfg.layout = {
+        // 'All' makes no sense in server mode — host refuses length=-1 to avoid materializing
+        // millions of rows in a single page. Cap at 5000.
+        topStart: { pageLength: { menu: [25, 50, 100, 500, 1000, 5000] } }
+    };
+    cfg.ajax = function(data, callback, settings) {
+        // Pass DataTables' request envelope (start/length/draw/search/columns/order) plus our
+        // custom time-range fields via the postMessage bridge. C# replies with verb=pageResult
+        // and our handler invokes `callback` with the DataTables-shaped response.
+        var requestId = nextPageRequestId++;
+        pendingPageRequests[requestId] = function(resp) {
+            // resp = { draw, recordsTotal, recordsFiltered, data }
+            callback(resp);
+            updateResultsDisplay();
+        };
+        // Inject time-range so C# can apply it to FilterSpec.
+        var tf = document.getElementById('timeFrom');
+        var tt = document.getElementById('timeTo');
+        var msg = Object.assign({}, data, {
+            timeFrom: tf && tf.value ? tf.value : null,
+            timeTo:   tt && tt.value ? tt.value : null
+        });
+        window.chrome.webview.postMessage({ verb: 'getPage', id: requestId, data: msg });
+    };
+    window.table = new DataTable('#myTable', cfg);
+
+    // Show the table immediately — server mode doesn't have a 'done' message to gate it.
+    document.getElementById('tablediv').style.display = 'block';
+    var loader = document.getElementById('loader');
+    if (loader) loader.style.display = 'none';
+
+    // Populate totals + RPM display.
+    count = serverTotalRows;
+    totalExpected = serverTotalRows;
+    updateResultsDisplay();
+}
+
+// One place to wire up everything that depends on window.table existing. Called by the setMode
+// handler after the table has been constructed in the appropriate mode.
+function attachTableListeners() {
+    buildColumnTogglePanel();
+
+    var searchBox = document.getElementById('searchbox');
+    searchBox.addEventListener('input', function() {
+        window.table.search(this.value).draw();
+        // In server mode the redraw triggers a fresh ajax with the new search.value; the
+        // pageResult handler then re-runs updateLevelCounts via requestServerLevelCounts.
+        if (viewerMode === 'client') updateLevelCounts();
+    });
+
+    document.querySelectorAll('#myTable .filter-row input').forEach(function(input) {
+        input.addEventListener('input', function() {
+            var col = parseInt(this.getAttribute('data-col'), 10);
+            window.table.column(col).search(this.value).draw();
+            if (viewerMode === 'client') updateLevelCounts();
+        });
+    });
+    document.querySelectorAll('#myTable .filter-row select').forEach(function(sel) {
+        sel.addEventListener('change', function() {
+            var col = parseInt(this.getAttribute('data-col'), 10);
+            var v = this.value;
+            // Client mode: exact match via regex anchors. Server mode: send raw value (the host
+            // strips ^$ if DataTables wraps it). Either way one path.
+            window.table.column(col).search(v ? '^' + escapeRegex(v) + '$' : '', true, false).draw();
+            if (viewerMode === 'client') updateLevelCounts();
+        });
+    });
+
+    // Time range: client uses ext.search push (already registered); server uses ajax.data hook
+    // which reads timeFrom/timeTo on every request. So we just trigger a redraw on change.
+    ['timeFrom','timeTo'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', function() {
+            window.table.draw();
+            if (viewerMode === 'client') updateLevelCounts();
+        });
+    });
+}
+
+// ----- Server-side level counts -----
+// DataTables in serverSide mode doesn't know the per-level distribution (it only sees the
+// visible page), so after every ajax response we ask the host for fresh counts using the same
+// filter state.
+var levelCountsRequestPending = false;
+function requestServerLevelCounts() {
+    if (viewerMode !== 'server' || !window.table) return;
+    if (levelCountsRequestPending) return; // coalesce: one in-flight request at a time
+    levelCountsRequestPending = true;
+
+    // Mirror the current DataTables ajax envelope so the host applies the same filters.
+    var s = window.table.search();
+    var cols = [];
+    window.table.columns().every(function(idx) {
+        cols.push({ search: { value: this.search() } });
+    });
+    var tf = document.getElementById('timeFrom');
+    var tt = document.getElementById('timeTo');
+    var requestId = nextPageRequestId++;
+    pendingPageRequests[requestId] = function() { /* unused — answer comes via levelCountsResult */ };
+    window.chrome.webview.postMessage({
+        verb: 'getLevelCounts',
+        id: requestId,
+        data: {
+            search: { value: s },
+            columns: cols,
+            timeFrom: tf && tf.value ? tf.value : null,
+            timeTo:   tt && tt.value ? tt.value : null
+        }
+    });
+}
+
+function applyServerLevelCounts(counts) {
+    levelCountsRequestPending = false;
+    levelCounts = counts || {};
+    Object.keys(levelCounts).forEach(function(lvl) {
+        var el = document.getElementById('level-count-' + lvl);
+        if (el) el.textContent = '(' + levelCounts[lvl] + ')';
+    });
+    // Zero out any chips whose level has no matches under current filters.
+    document.querySelectorAll('[id^="level-count-"]').forEach(function(el) {
+        var lvl = el.id.replace('level-count-', '');
+        if (!(lvl in levelCounts)) el.textContent = '(0)';
     });
 }
 
@@ -427,6 +598,18 @@ function clearAllFilters() {
 
 function exportCsv() {
     if (!window.table) return;
+    if (viewerMode === 'server') {
+        // DataTables in serverSide mode only has the current page in memory, so iterating its
+        // rows would dump at most pageLength rows. Streaming the full set requires a separate
+        // host-side export path which we haven't wired up yet — point users at the native
+        // viewer (which already has streaming CSV export via IPagedLogSource.WalkAllFiltered).
+        alert(
+            'CSV export is not available in server-side mode (result set above the threshold).\n\n' +
+            'Switch to the native viewer (View Results → Switch Viewer → Native) to export the full set,\n' +
+            'or lower the threshold in Settings → Results viewer if you want client-side rendering.'
+        );
+        return;
+    }
     var visibleColumns = [];
     window.table.columns().every(function(idx) {
         if (this.visible() && COLUMN_NAMES[idx] && COLUMN_NAMES[idx] !== 'More') visibleColumns.push(idx);

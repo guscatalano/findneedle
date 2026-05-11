@@ -1,8 +1,10 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using StreamingSearchHandle = FindNeedleUX.Services.MiddleLayerService.StreamingSearchHandle;
 
 namespace FindNeedleUX.Pages;
 public sealed partial class RunSearchPage : Page
@@ -46,15 +48,41 @@ public sealed partial class RunSearchPage : Page
     private async void Button_Click(object sender, RoutedEventArgs e)
     {
         SetControlsTo(false);
-        _cts = new CancellationTokenSource();
         MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
         MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
+
+        // Streaming path: SQLite is forced, search runs on threadpool, viewer can open while
+        // it's still producing. We grant the search a short grace period — if it finishes in
+        // that window we skip the auto-navigation to avoid flicker on trivial searches.
+        StreamingSearchHandle handle = null;
         try
         {
-            var r = await Task.Run(() => MiddleLayerService.RunSearch(_shallowSearch, _cts.Token), _cts.Token);
-            summary.Text = r;
+            handle = MiddleLayerService.RunSearchStreaming(_shallowSearch);
+            _cts = handle.Cancellation;
+
+            const int GraceMs = 150;
+            var grace = Task.Delay(GraceMs);
+            var first = await Task.WhenAny(handle.SearchTask, grace);
+
+            if (first != handle.SearchTask)
+            {
+                // Still running past the grace window — open the viewer now so the user sees
+                // rows accumulating. The viewer subscribes to source.RowsAvailable and
+                // refreshes on its own.
+                MainWindowActions.NavigateToNativeResultsPage();
+            }
+
+            // Either way, keep showing progress here until the search finishes. Cancel button
+            // is wired to handle.Cancellation via _cts.
+            await handle.SearchTask;
+
+            summary.Text = MiddleLayerService.GetStats()?.GetSummaryReport() ?? "";
         }
         catch (System.Threading.Tasks.TaskCanceledException)
+        {
+            summary.Text = "Search cancelled.";
+        }
+        catch (OperationCanceledException)
         {
             summary.Text = "Search cancelled.";
         }

@@ -45,6 +45,27 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Row-count cutover for the web viewer. At or below this number, the viewer sends every row
+    /// to DataTables and lets it page client-side (fastest, no host round-trips). Above this,
+    /// the viewer switches to DataTables' serverSide mode and asks the host for one page at a
+    /// time — which is what makes browsing million-row searches feasible in the web viewer.
+    /// 10000 is the sweet spot in practice: DataTables handles ≤10k rows snappily in browser
+    /// memory; above that you start seeing scroll jank, slow filter response, and >100 MB
+    /// WebView2 memory use.
+    /// </summary>
+    public const int DefaultWebViewerServerSideThreshold = 10000;
+    public static int WebViewerServerSideThreshold
+    {
+        get => Data.WebViewerServerSideThreshold is int n && n > 0 ? n : DefaultWebViewerServerSideThreshold;
+        set
+        {
+            Data.WebViewerServerSideThreshold = value > 0 ? value : DefaultWebViewerServerSideThreshold;
+            Save();
+            // No Changed event — applies on next viewer open, not to a viewer that's already up.
+        }
+    }
+
+    /// <summary>
     /// Default visibility of each result-grid column. Out of the box, Source is hidden because
     /// its full-path content is long; users can re-enable any time from the settings page (saved)
     /// or via the in-viewer Columns ▾ popover (session only).
@@ -160,5 +181,6 @@ public static class ResultsViewerSettings
         public bool? FiltersExpanded { get; set; }
         public Dictionary<string, bool> ColumnVisibility { get; set; }
         public int? PageSize { get; set; }
+        public int? WebViewerServerSideThreshold { get; set; }
     }
 }

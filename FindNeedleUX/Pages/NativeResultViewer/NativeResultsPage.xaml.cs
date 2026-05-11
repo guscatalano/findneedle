@@ -35,19 +35,33 @@ public sealed partial class NativeResultsPage : Page
     public NativeResultsPage()
     {
         this.InitializeComponent();
+
+        // Keep this page instance alive across Frame navigations. First switch from another
+        // viewer still pays the construction cost (XAML + DataGrid init), but every subsequent
+        // switch reuses the cached instance and feels instant. The page's Loaded event still
+        // fires each time it's added back to the visual tree, so LoadResultsAsync re-runs and
+        // picks up any new search results.
+        this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+
         Loaded += OnPageLoaded;
         Unloaded += OnPageUnloaded;
         KeyDown += OnPageKeyDown;
 
         foreach (var col in ViewModel.Columns)
             col.VisibilityChanged += OnColumnVisibilityChanged;
-
-        ResultsViewerSettings.Changed += OnSettingsChanged;
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         LoadingOverlay.Visibility = Visibility.Visible;
+
+        // Subscribe to settings changes per Loaded cycle. With NavigationCacheMode.Required,
+        // the page survives navigation; Unloaded unsubscribes so a backgrounded viewer doesn't
+        // react to settings changes, and re-subscribe here when it comes back to the foreground.
+        // Idempotent: subtract-then-add is safe even if we accidentally double-subscribe.
+        ResultsViewerSettings.Changed -= OnSettingsChanged;
+        ResultsViewerSettings.Changed += OnSettingsChanged;
+
         // Apply persisted prefs BEFORE rendering so the first paint already has the user's choices.
         ApplyPersistedSettings();
         ApplyPersistedColumnDefaults();
@@ -60,6 +74,9 @@ public sealed partial class NativeResultsPage : Page
         LoadingOverlay.Visibility = Visibility.Collapsed;
         ApplyAllColumnVisibility();
         RebindGrid();
+
+        // Tell MainWindow to hide the pre-nav spinner now that we're fully rendered.
+        MainWindowActions.HideNavigationSpinner();
     }
 
     /// <summary>
@@ -98,6 +115,12 @@ public sealed partial class NativeResultsPage : Page
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         ResultsViewerSettings.Changed -= OnSettingsChanged;
+        ViewModel.DetachFromStreaming();
+    }
+
+    private void StopStreamingButton_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.StopStreaming();
     }
 
     private void OnSettingsChanged()

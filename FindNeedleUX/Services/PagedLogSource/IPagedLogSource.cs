@@ -73,4 +73,32 @@ public interface IPagedLogSource : IDisposable
     /// materialize the entire result in memory.
     /// </summary>
     void WalkAllFiltered(FilterSpec filters, SortSpec sort, Action<FindNeedleUX.LogLine> onItem);
+
+    // ----- Streaming surface -----
+    // These let the viewer open while a search is still producing results: it shows the rows
+    // that have landed so far, refreshes when more arrive, and hides its loading badge when
+    // the producer signals completion. Implementations over a stable data set (in-memory) leave
+    // IsLoading false forever and never raise RowsAvailable — the viewer's code paths are
+    // identical either way.
+
+    /// <summary>
+    /// True while a producer is still writing to the underlying store. The viewer uses this to
+    /// show a loading badge and a Stop button. Flips to false when
+    /// <see cref="MarkLoadingComplete"/> is called.
+    /// </summary>
+    bool IsLoading { get; }
+
+    /// <summary>
+    /// Raised (potentially from a background thread) when new rows are appended to the underlying
+    /// store. The viewer should marshal back to the UI thread, debounce, then refresh visible
+    /// state. Does not carry the new count — subscribers should re-query <c>GetFilteredCount</c>.
+    /// </summary>
+    event Action? RowsAvailable;
+
+    /// <summary>
+    /// Called by the producer (search task) when it has finished writing. Flips
+    /// <see cref="IsLoading"/> to false and raises <see cref="RowsAvailable"/> one last time so
+    /// the viewer gets a final refresh. Idempotent.
+    /// </summary>
+    void MarkLoadingComplete();
 }

@@ -27,4 +27,31 @@ public class MainWindowActions
             //navigationView = bar;
     }
 
+    /// <summary>
+    /// Switch the main window's content to the native result viewer. Marshals to the UI thread
+    /// internally — safe to call from a background task or `await Task.Delay` continuation.
+    /// </summary>
+    public static void NavigateToNativeResultsPage()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.NavigateToNativeResultsPage();
+    }
+
+    /// <summary>
+    /// Show a brief modal spinner labelled "Loading viewer…" so the user gets immediate feedback
+    /// when switching to a heavy page (e.g. the native viewer's first construction). The
+    /// destination page's <c>Loaded</c> handler calls <see cref="HideNavigationSpinner"/> to
+    /// dismiss it.
+    /// </summary>
+    public static void ShowNavigationSpinner(string text = "Loading viewer…")
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.ShowNavigationSpinner(text);
+    }
+
+    public static void HideNavigationSpinner()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.HideNavigationSpinner();
+    }
 }

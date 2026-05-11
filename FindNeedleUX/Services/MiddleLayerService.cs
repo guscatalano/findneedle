@@ -12,7 +12,11 @@ using FindNeedlePluginLib;
 using findneedle.PluginSubsystem;
 using FindNeedleCoreUtils;
 using FindNeedleUX.ViewObjects;
+using FindPluginCore.Searching;
 using FindPluginCore.Searching.Serializers;
+using FindPluginCore.Implementations.Storage;
+using FindPluginCore.PluginSubsystem;
+using FindNeedleUX.Services.PagedLogSource;
 using Microsoft.UI.Xaml.Controls;
 
 namespace FindNeedleUX.Services;
@@ -96,14 +100,57 @@ public class MiddleLayerService
 
     public static List<LogLine> GetLogLines()
     {
-        List<LogLine> lines = new List<LogLine>();
-        var index = 0;
-        foreach(ISearchResult r in GetSearchResults())
+        // Fast path: the search consolidated rows into SearchResults (legacy + small-search
+        // behaviour). Walk that list.
+        var sr = SearchResults;
+        if (sr != null && sr.Count > 0)
         {
-            lines.Add(new LogLine(r, index));
-            index++;
+            var lines = new List<LogLine>(sr.Count);
+            int idx = 0;
+            foreach (var r in sr) { lines.Add(new LogLine(r, idx++)); }
+            return lines;
         }
-        return lines;
+
+        // Slow path: SearchResults is empty because the search skipped consolidation (large
+        // result set with no rules / processors / outputs). Re-materialize from storage on
+        // demand. Only the client-side web viewer hits this — server-side and the native viewer
+        // use IPagedLogSource directly and never call GetLogLines.
+        var storage = GetSearchStorage();
+        if (storage == null) return new List<LogLine>();
+
+        var fromStorage = new List<LogLine>(Math.Max(0, TrySafeFilteredCount(storage)));
+        int sIdx = 0;
+        try
+        {
+            storage.GetFilteredResultsInBatches(batch =>
+            {
+                foreach (var r in batch) { fromStorage.Add(new LogLine(r, sIdx++)); }
+            }, 1000);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"GetLogLines lazy-materialize failed: {ex.Message}");
+        }
+        return fromStorage;
+    }
+
+    /// <summary>
+    /// Row count of the filtered result set, preferring storage when SearchResults was skipped
+    /// (large search with no Step3/Step4 consumers). Used by the status bar so the count is
+    /// correct regardless of whether the search materialized the in-memory list.
+    /// </summary>
+    public static int GetFilteredRowCount()
+    {
+        var sr = SearchResults;
+        if (sr != null && sr.Count > 0) return sr.Count;
+        return TrySafeFilteredCount(GetSearchStorage());
+    }
+
+    private static int TrySafeFilteredCount(FindNeedlePluginLib.Interfaces.ISearchStorage storage)
+    {
+        if (storage == null) return 0;
+        try { return storage.GetStatistics().filteredRecordCount; }
+        catch { return 0; }
     }
 
     public static SearchProgressSink GetProgressEventSink()
@@ -232,5 +279,76 @@ public class MiddleLayerService
         var query = SearchQueryUX?.CurrentQuery;
         var prop = query?.GetType().GetProperty("ResultStorage");
         return prop?.GetValue(query) as FindNeedlePluginLib.Interfaces.ISearchStorage;
+    }
+
+    /// <summary>
+    /// Snapshot returned by <see cref="RunSearchStreaming"/>: the running search task, the
+    /// cancel handle for the Stop button, and the live paged source the viewer reads from.
+    /// </summary>
+    public sealed class StreamingSearchHandle
+    {
+        public Task SearchTask { get; init; } = Task.CompletedTask;
+        public CancellationTokenSource Cancellation { get; init; } = new();
+        public IPagedLogSource Source { get; init; }
+        public SqliteStorage Storage { get; init; }
+
+        public void Stop() { try { Cancellation.Cancel(); } catch { /* already disposed */ } }
+    }
+
+    /// <summary>
+    /// The most recent streaming search, kept alive for the viewer to pick up.
+    /// </summary>
+    public static StreamingSearchHandle? CurrentStreamingSearch { get; private set; }
+
+    /// <summary>
+    /// Streaming variant of <see cref="RunSearch"/>. Forces SQLite storage (only backend that's
+    /// safe under concurrent read+write), constructs the storage on this thread, hands the
+    /// viewer a paged source wired to it, and kicks off the actual search on the threadpool.
+    /// The viewer can show partial results while the task runs and refreshes via the source's
+    /// RowsAvailable event.
+    /// </summary>
+    public static StreamingSearchHandle RunSearchStreaming(bool surfaceScan = false)
+    {
+        // Cancel any in-flight streaming search before starting a new one. Without this, the
+        // previous search's background task would keep producing into an orphaned SqliteStorage,
+        // wasting CPU + disk and racing with the new search for the result handle.
+        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
+
+        UpdateSearchQuery();
+        if (SearchQueryUX.CurrentQuery is not NuSearchQuery nu)
+            throw new InvalidOperationException(
+                "Streaming search requires NuSearchQuery — the current ISearchQuery factory returned a different type.");
+
+        nu.SetDepthForAllLocations(surfaceScan ? SearchLocationDepth.Shallow : SearchLocationDepth.Intermediate);
+        nu.OverrideStorageType = StorageType.SqlLite;
+
+        var cts = new CancellationTokenSource();
+        var storage = (SqliteStorage)nu.PrepareStorage(cts.Token);
+        var source = PagedLogSourceFactory.CreateStreaming(storage);
+
+        var task = Task.Run(() =>
+        {
+            try
+            {
+                SearchResults = SearchQueryUX.GetSearchResults(cts.Token);
+                NotifyStateChanged();
+            }
+            finally
+            {
+                // Always release the loading state, even on cancel/exception, so the viewer
+                // hides its spinner and stops showing the Stop button.
+                source.MarkLoadingComplete();
+            }
+        }, cts.Token);
+
+        var handle = new StreamingSearchHandle
+        {
+            SearchTask = task,
+            Cancellation = cts,
+            Source = source,
+            Storage = storage,
+        };
+        CurrentStreamingSearch = handle;
+        return handle;
     }
 }

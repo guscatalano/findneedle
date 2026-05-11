@@ -278,17 +278,26 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
-                // Just get statistics from both storages - don't trigger spilling!
-                // Spilling should only happen during write operations, not during statistics queries
-                var memStats = _memoryStorage.GetStatistics();
+                // After SettleToDisk the in-memory tier is gone (_memoryStorage = null,
+                // _useOnlySqlite = true). The rest of the class guards on these; GetStatistics
+                // missed the check and NPE'd. Treat absent in-memory tier as zero rows.
                 var diskStats = _diskStorage.GetStatistics();
+                if (_useOnlySqlite || _memoryStorage == null)
+                {
+                    return (
+                        rawRecordCount: diskStats.rawRecordCount,
+                        filteredRecordCount: diskStats.filteredRecordCount,
+                        sizeOnDisk: diskStats.sizeOnDisk,
+                        sizeInMemory: 0
+                    );
+                }
 
-                // Total record count is memory + disk
+                var memStats = _memoryStorage.GetStatistics();
                 return (
                     rawRecordCount: memStats.rawRecordCount + diskStats.rawRecordCount,
                     filteredRecordCount: memStats.filteredRecordCount + diskStats.filteredRecordCount,
                     sizeOnDisk: diskStats.sizeOnDisk,
-                    sizeInMemory: _useOnlySqlite ? 0 : memStats.sizeInMemory
+                    sizeInMemory: memStats.sizeInMemory
                 );
             }
         }

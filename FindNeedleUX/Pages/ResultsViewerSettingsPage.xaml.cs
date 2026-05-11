@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using FindNeedleUX.Pages.NativeResultViewer;
 using FindNeedleUX.Services;
+using FindPluginCore.GlobalConfiguration;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -42,8 +43,14 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Levels: start from the active theme preset, then layer per-level overrides. ---
             RebuildLevelEditor();
 
+            // --- Default viewer ---
+            SelectDefaultViewerInComboBox();
+
             // --- Storage backend ---
             SelectStorageInComboBox();
+
+            // --- Web viewer threshold ---
+            WebThresholdNumberBox.Value = ResultsViewerSettings.WebViewerServerSideThreshold;
 
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
@@ -192,6 +199,47 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         ResultsViewerSettings.ClearLevelColors();
         RebuildLevelEditor();
+    }
+
+    // ----- Default viewer -----
+    private void SelectDefaultViewerInComboBox()
+    {
+        var current = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+        foreach (var item in DefaultViewerCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            {
+                DefaultViewerCombo.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void DefaultViewerCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (DefaultViewerCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            GlobalSettings.DefaultResultViewer = tag;
+        }
+    }
+
+    // ----- Web viewer threshold -----
+    private void WebThresholdNumberBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (double.IsNaN(e.NewValue)) return;
+        int v = (int)e.NewValue;
+        if (v <= 0) return;
+        ResultsViewerSettings.WebViewerServerSideThreshold = v;
+    }
+
+    private void ResetWebThreshold_Click(object sender, RoutedEventArgs e)
+    {
+        _suppressEvents = true;
+        try { WebThresholdNumberBox.Value = ResultsViewerSettings.DefaultWebViewerServerSideThreshold; }
+        finally { _suppressEvents = false; }
+        ResultsViewerSettings.WebViewerServerSideThreshold = ResultsViewerSettings.DefaultWebViewerServerSideThreshold;
     }
 
     // ----- Storage backend -----

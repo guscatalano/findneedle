@@ -17,33 +17,6 @@ public sealed partial class SystemInfoPage : Page
         this.InitializeComponent();
         this.sysout.Text = SystemInfoMiddleware.GetPanelText();
         PlantUmlPathTextBlock.Text = SystemInfoMiddleware.GetPlantUMLPath();
-        SetComboBoxToCurrent();
-    }
-
-    private void SetComboBoxToCurrent()
-    {
-        var current = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
-        foreach (ComboBoxItem item in ResultViewerComboBox.Items)
-        {
-            if ((item.Tag as string)?.ToLower() == current)
-            {
-                ResultViewerComboBox.SelectedItem = item;
-                break;
-            }
-        }
-    }
-
-    private void ResultViewerComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (ResultViewerComboBox.SelectedItem is ComboBoxItem selected)
-        {
-            var tag = selected.Tag as string;
-            if (!string.IsNullOrEmpty(tag))
-            {
-                GlobalSettings.DefaultResultViewer = tag;
-                this.sysout.Text = SystemInfoMiddleware.GetPanelText();
-            }
-        }
     }
 
     private void StoreLink_Click(object sender, RoutedEventArgs e)

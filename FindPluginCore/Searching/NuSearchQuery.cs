@@ -7,6 +7,7 @@ using System.Threading;
 using findneedle;
 using FindNeedlePluginLib;
 using FindPluginCore; // Add for Logger
+using FindPluginCore.Diagnostics;
 using findneedle.PluginSubsystem;
 using FindPluginCore.Implementations.Storage;
 using FindNeedlePluginLib.Interfaces; // Fix missing ISearchStorage reference
@@ -115,6 +116,26 @@ public class NuSearchQuery : ISearchQuery
     /// </summary>
     public ISearchStorage? ResultStorage => _resultStorage;
 
+    /// <summary>
+    /// When set, <see cref="CreateStorage"/> uses this storage type instead of the one in
+    /// <c>PluginManager.config.SearchStorageType</c>. Streaming searches set this to
+    /// <see cref="StorageType.SqlLite"/> because the viewer reads while plugins are still
+    /// writing and only SqliteStorage is safe under concurrent read+write (lock-protected).
+    /// </summary>
+    public StorageType? OverrideStorageType { get; set; }
+
+    /// <summary>
+    /// Pre-create the result storage on the calling thread (typically the UI thread). Used by
+    /// the streaming entry point so the viewer can grab a reference to the live store before
+    /// the background search task starts populating it. Idempotent — subsequent calls return
+    /// the existing storage. Step 2 picks up whatever's already there via <c>??=</c>.
+    /// </summary>
+    public ISearchStorage PrepareStorage(CancellationToken cancellationToken = default)
+    {
+        _resultStorage ??= CreateStorage(cancellationToken);
+        return _resultStorage;
+    }
+
     public NuSearchQuery()
     {
         _filters = new();
@@ -136,7 +157,8 @@ public class NuSearchQuery : ISearchQuery
     {
         var config = PluginManager.GetSingleton().config;
         var filePath = _locations.Count > 0 ? _locations[0].GetName() : "default";
-        switch (config?.SearchStorageType)
+        var requested = OverrideStorageType ?? config?.SearchStorageType;
+        switch (requested)
         {
             case StorageType.SqlLite:
                 return new SqliteStorage(filePath);
@@ -182,18 +204,48 @@ public class NuSearchQuery : ISearchQuery
 
     public void RunThrough(CancellationToken cancellationToken)
     {
+        // RunThrough is the "do everything synchronously" entry point. The UI takes a different
+        // path (SearchQueryUX.GetSearchResults) which calls Step1..Step4 directly, so the per-
+        // step PerfLog scopes + the end-of-Step2 settle live INSIDE the Step methods themselves.
+        // That keeps both call sites equally instrumented and avoids double-firing scopes here.
         Logger.Instance.Log("RunThrough (with cancellation) started");
-        LoadRules(); // Load rules before processing
-        
-        // Apply SystemConfig settings if available
+        LoadRules();
         ApplySystemConfig();
-        
+
         Step1_LoadAllLocationsInMemory(cancellationToken);
         _currentResultList = Step2_GetFilteredResults(cancellationToken);
         Step3_ResultsToProcessors();
         Step4_ProcessAllResultsToOutput(cancellationToken);
         Step5_Done();
+
         Logger.Instance.Log("RunThrough (with cancellation) finished");
+    }
+
+    /// <summary>Friendlier storage label for status text: "in-memory" / "hybrid" / "SQLite".</summary>
+    private static string ShortStorageLabel(ISearchStorage storage)
+    {
+        if (storage is InMemoryStorage) return "in-memory";
+        if (storage is HybridStorage)   return "hybrid";
+        if (storage is SqliteStorage)   return "SQLite";
+        return storage?.GetType().Name ?? "?";
+    }
+
+    /// <summary>Last path segment so the status doesn't wrap with a multi-hundred-char filename.</summary>
+    private static string ShortName(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return "?";
+        int i = path.LastIndexOfAny(new[] { '/', '\\' });
+        return i >= 0 && i < path.Length - 1 ? path.Substring(i + 1) : path;
+    }
+
+    /// <summary>
+    /// Read the current filtered row count from storage for status display. Never throws — the
+    /// progress text is best-effort cosmetic, not load-bearing.
+    /// </summary>
+    private int SafeFilteredCount()
+    {
+        try { return _resultStorage?.GetStatistics().filteredRecordCount ?? 0; }
+        catch { return 0; }
     }
 
     /// <summary>
@@ -232,6 +284,7 @@ public class NuSearchQuery : ISearchQuery
     public void Step1_LoadAllLocationsInMemory(CancellationToken cancellationToken)
     {
         Logger.Instance.Log($"Step1_LoadAllLocationsInMemory (with cancellation): {_locations.Count} locations");
+        using var _perf = PerfLog.Scope("search.step1", ("locations", _locations.Count));
         var count = 1;
         var total = _locations.Count;
         _ = PluginManager.GetSingleton();
@@ -271,10 +324,13 @@ public class NuSearchQuery : ISearchQuery
     public List<ISearchResult> Step2_GetFilteredResults(CancellationToken cancellationToken)
     {
         Logger.Instance.Log("Step2_GetFilteredResults (with cancellation) started");
+        using var _perf = PerfLog.Scope("search.step2");
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
-        _resultStorage = CreateStorage(cancellationToken); // Now called at the start of step 2
-        var storageType = _resultStorage is InMemoryStorage ? "InMemoryStorage" : _resultStorage is SqliteStorage ? "SqliteStorage" : _resultStorage.GetType().Name;
+        // If a caller (e.g. the streaming entry point) already prepared storage on the UI thread
+        // we reuse that instance — otherwise create it lazily here, preserving the legacy flow.
+        _resultStorage ??= CreateStorage(cancellationToken);
+        var storageLabel = ShortStorageLabel(_resultStorage);
         var count = 1;
         var total = _locations.Count;
         var pluginManager = PluginManager.GetSingleton();
@@ -282,9 +338,17 @@ public class NuSearchQuery : ISearchQuery
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) break;
+            var basename = ShortName(loc.GetName());
             Logger.Instance.Log($"Filtering results for location {count}/{total}: {loc.GetName()}");
             var percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
-            _stepnotifysink.progressSink.NotifyProgress(percent, "loading results: " + loc.GetName() + $" using storage: {storageType}" );
+            // Start-of-location: no row count yet for this location, but the storage knows what
+            // we've accumulated from earlier locations in the same run.
+            _stepnotifysink.progressSink.NotifyProgress(
+                percent,
+                $"[{count}/{total}] scanning {basename} · {SafeFilteredCount():N0} rows · {storageLabel}");
+            PerfLog.Log("location.start", ("idx", count), ("of", total), ("name", basename),
+                ("rows_before", SafeFilteredCount()));
+            var locStart = Environment.TickCount64;
             loc.SetSearchDepth(_depth);
             List<ISearchResult> rawResults = new();
             if (!useSync)
@@ -335,21 +399,102 @@ public class NuSearchQuery : ISearchQuery
             }
             _resultStorage.AddFilteredBatch(filteredBatch, cancellationToken);
             Logger.Instance.Log($"Results stored for location: {loc.GetName()}");
+
+            // End-of-location update: row count now reflects this location's filtered contribution.
+            _stepnotifysink.progressSink.NotifyProgress(
+                percent,
+                $"[{count}/{total}] done {basename} · {SafeFilteredCount():N0} rows · {storageLabel}");
+            PerfLog.Log("location.end", ("idx", count), ("name", basename),
+                ("rows_total", SafeFilteredCount()),
+                ("rows_this_loc_raw", rawResults?.Count ?? 0),
+                ("rows_this_loc_filtered", filteredBatch.Count),
+                ("elapsed_ms", Environment.TickCount64 - locStart));
             count++;
         }
-        // Gather all filtered results from storage
-        var allResults = new List<ISearchResult>();
-        _resultStorage.GetFilteredResultsInBatches(batch => allResults.AddRange(batch), 1000, cancellationToken);
-        
-        // Apply rule-based filtering if rules are loaded
-        if (LoadedRules != null)
+        // ----- Decide whether to materialize the full result list in RAM -----
+        // The list is only meaningful if something downstream walks it. Step3 walks it iff
+        // processors are configured or rule-enrichment is loaded; Step4 walks it iff outputs
+        // are configured or rule-output is loaded; the post-search legacy in-memory client-side
+        // web viewer reads it via MiddleLayerService.GetLogLines (now lazy from storage). For
+        // Quick Open on a huge log — no rules, no processors, no outputs — this is 36 seconds
+        // of pure allocation. Skip it; downstream consumers fall back to the storage-backed path.
+        int known = SafeFilteredCount();
+        bool needsList =
+            LoadedRules != null
+            || (_processors != null && _processors.Count > 0)
+            || (_outputs != null && _outputs.Count > 0);
+
+        List<ISearchResult> allResults;
+
+        if (!needsList)
         {
-            Logger.Instance.Log("Applying rule-based filtering...");
-            allResults = ApplyRuleFiltering(allResults);
-            Logger.Instance.Log($"After rule filtering: {allResults.Count} results");
+            Logger.Instance.Log($"Step2: skipping consolidate ({known:N0} rows stay in storage, no downstream consumer)");
+            PerfLog.Log("consolidate.skipped", ("known_rows", known), ("reason", "no_consumers"));
+            // Return an empty list — _currentResultList becomes empty, Step3/Step4 iterate over
+            // nothing (they're no-ops anyway), and consumers read from storage instead.
+            allResults = new List<ISearchResult>();
         }
-        
+        else
+        {
+            // Pre-size the list to the known row count so internal array doubling doesn't fire
+            // ~20 times on a 500k consolidation.
+            allResults = new List<ISearchResult>(Math.Max(known, 1024));
+            int gathered = 0;
+            int lastReport = 0;
+            _stepnotifysink.progressSink.NotifyProgress(
+                100, $"consolidating {known:N0} rows from {storageLabel}…");
+
+            using (PerfLog.Scope("consolidate", ("known_rows", known), ("storage", storageLabel)))
+            {
+                _resultStorage.GetFilteredResultsInBatches(batch =>
+                {
+                    allResults.AddRange(batch);
+                    gathered += batch.Count;
+                    // Throttle status to every 10k rows; spamming the dispatcher with 500
+                    // updates does more harm than good.
+                    if (gathered - lastReport >= 10_000)
+                    {
+                        lastReport = gathered;
+                        _stepnotifysink.progressSink.NotifyProgress(
+                            100, $"consolidating · {gathered:N0} / {known:N0} rows · {storageLabel}");
+                    }
+                }, 1000, cancellationToken);
+            }
+
+            // Apply rule-based filtering if rules are loaded
+            if (LoadedRules != null)
+            {
+                _stepnotifysink.progressSink.NotifyProgress(100, $"applying rule filters to {allResults.Count:N0} rows…");
+                Logger.Instance.Log("Applying rule-based filtering...");
+                using (PerfLog.Scope("rule_filter", ("in_rows", allResults.Count)))
+                    allResults = ApplyRuleFiltering(allResults);
+                Logger.Instance.Log($"After rule filtering: {allResults.Count} results");
+            }
+        }
+
         _filteredResults = allResults;
+
+        // ----- Settle HybridStorage to disk on the search thread, not the UI thread -----
+        // The viewer (any viewer) opens immediately after Step2; if Hybrid still has rows in RAM
+        // when the viewer asks PagedLogSourceFactory for a source, the resulting SettleToDisk
+        // call blocks the UI for tens of seconds. Doing it here means the search task pays the
+        // cost (where progress is visible) instead of the UI thread paying it.
+        if (_resultStorage is HybridStorage hybrid)
+        {
+            _stepnotifysink.progressSink.NotifyProgress(100, "finalizing results to disk…");
+            try
+            {
+                using (PerfLog.Scope("search.settle", ("storage", "hybrid")))
+                    hybrid.SettleToDisk(cancellationToken);
+                Logger.Instance.Log("HybridStorage settled to disk at end of Step2");
+            }
+            catch (Exception ex)
+            {
+                PerfLog.Log("search.settle.error", ("msg", ex.GetType().Name));
+                Logger.Instance.Log($"HybridStorage settle failed (viewer will retry on open): {ex.Message}");
+            }
+        }
+
         Logger.Instance.Log($"Step2_GetFilteredResults (with cancellation) complete: {_filteredResults.Count} total filtered results");
         return _filteredResults;
     }
@@ -413,22 +558,30 @@ public class NuSearchQuery : ISearchQuery
     public void Step3_ResultsToProcessors()
     {
         Logger.Instance.Log("Step3_ResultsToProcessors started");
+        using var _perf = PerfLog.Scope("search.step3",
+            ("processors", _processors?.Count ?? 0), ("rules", LoadedRules != null));
         _stepnotifysink.NotifyStep(SearchStep.AtProcessor);
-        
+
         // Apply enrichment rules if loaded
         if (LoadedRules != null)
         {
+            _stepnotifysink.progressSink.NotifyProgress(100, "applying rule enrichments…");
             ApplyRuleEnrichment();
         }
-        
+
         // Run any configured processors
+        int procIdx = 1;
+        int procTotal = _processors.Count;
         foreach (var proc in _processors)
         {
-            Logger.Instance.Log($"Processing results with processor: {proc.GetType().Name}");
+            var name = proc.GetType().Name;
+            _stepnotifysink.progressSink.NotifyProgress(100, $"running processor [{procIdx}/{procTotal}] {name}…");
+            Logger.Instance.Log($"Processing results with processor: {name}");
             proc.ProcessResults(_currentResultList);
-            Logger.Instance.Log($"Processor {proc.GetType().Name} complete");
+            Logger.Instance.Log($"Processor {name} complete");
+            procIdx++;
         }
-        
+
         Logger.Instance.Log("Step3_ResultsToProcessors complete");
     }
 
@@ -476,20 +629,28 @@ public class NuSearchQuery : ISearchQuery
     public void Step4_ProcessAllResultsToOutput(CancellationToken cancellationToken = default)
     {
         Logger.Instance.Log("Step4_ProcessAllResultsToOutput started");
+        using var _perf = PerfLog.Scope("search.step4",
+            ("outputs", _outputs?.Count ?? 0), ("rules", LoadedRules != null));
         _stepnotifysink.NotifyStep(SearchStep.AtOutput);
-        
+
         // Apply output rules if loaded
         if (LoadedRules != null)
         {
+            _stepnotifysink.progressSink.NotifyProgress(100, "running rule outputs…");
             ApplyRuleOutput(cancellationToken);
         }
-        
+
         // Run standard outputs
+        int outIdx = 1;
+        int outTotal = _outputs.Count;
         foreach (var output in _outputs)
         {
             if (cancellationToken.IsCancellationRequested) break;
-            Logger.Instance.Log($"Writing all output with: {output.GetType().Name}");
+            var name = output.GetType().Name;
+            _stepnotifysink.progressSink.NotifyProgress(100, $"writing output [{outIdx}/{outTotal}] {name}…");
+            Logger.Instance.Log($"Writing all output with: {name}");
             output.WriteAllOutput(_currentResultList);
+            outIdx++;
         }
         Logger.Instance.Log("Step4_ProcessAllResultsToOutput complete");
     }

@@ -15,13 +15,40 @@ public sealed class SqlitePagedSource : IPagedLogSource
 {
     private readonly SqliteStorage _storage;
     private readonly bool _ownsStorage;
+    private readonly Action<int> _onStorageRows;
+    private bool _isLoading;
 
     /// <param name="storage">Underlying SQLite storage.</param>
     /// <param name="ownsStorage">If true, this source disposes the storage when it itself is disposed.</param>
-    public SqlitePagedSource(SqliteStorage storage, bool ownsStorage = false)
+    /// <param name="startInLoadingState">
+    /// If true, the source begins in <c>IsLoading=true</c> and subscribes to the storage's
+    /// <c>FilteredRowsAdded</c> event so writes from a concurrent producer surface as
+    /// <see cref="RowsAvailable"/>. Producers must call <see cref="MarkLoadingComplete"/> when done.
+    /// </param>
+    public SqlitePagedSource(SqliteStorage storage, bool ownsStorage = false, bool startInLoadingState = false)
     {
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _ownsStorage = ownsStorage;
+        _isLoading = startInLoadingState;
+
+        // Hold the delegate so we can unsubscribe cleanly in Dispose.
+        _onStorageRows = _ => RowsAvailable?.Invoke();
+        if (startInLoadingState)
+        {
+            _storage.FilteredRowsAdded += _onStorageRows;
+        }
+    }
+
+    public bool IsLoading => _isLoading;
+    public event Action? RowsAvailable;
+
+    public void MarkLoadingComplete()
+    {
+        if (!_isLoading) return;
+        _isLoading = false;
+        _storage.FilteredRowsAdded -= _onStorageRows;
+        // One final fire so the viewer does a definitive refresh on the now-stable data.
+        RowsAvailable?.Invoke();
     }
 
     public int TotalCount => _storage.GetStatistics().filteredRecordCount;
@@ -74,6 +101,9 @@ public sealed class SqlitePagedSource : IPagedLogSource
 
     public void Dispose()
     {
+        // Always unsubscribe — _isLoading may already be false (MarkLoadingComplete ran), in
+        // which case this is a no-op.
+        try { _storage.FilteredRowsAdded -= _onStorageRows; } catch { /* ignore */ }
         if (_ownsStorage) _storage.Dispose();
     }
 

@@ -38,11 +38,109 @@ public sealed partial class MainWindow : Window
         // Show WelcomePage on startup
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         RefreshStatusStrip();
+
+        // Pre-warm the heavy viewer pages on a low-priority dispatcher tick. Constructing the
+        // page without attaching it to the visual tree primes the XAML parser cache, runs
+        // every type's static .cctor, and JITs the hot constructors — about half the cost of
+        // the first user-initiated switch. The welcome page is already painted, so this happens
+        // while the user is reading it. DataGrid first-layout still happens on the real switch
+        // (it requires visual-tree attachment), but the second half of the freeze is gone.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, WarmUpViewers);
+    }
+
+    private void WarmUpViewers()
+    {
+        try
+        {
+            _ = new FindNeedleUX.Pages.NativeResultsPage();
+            Logger.Instance.Log("Viewer pre-warm complete");
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"Viewer pre-warm failed: {ex.Message}");
+        }
     }
 
     public void NavigateToQuickLogWithRules()
     {
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+    }
+
+    /// <summary>
+    /// Programmatically navigate to the native result viewer. Used by the streaming search flow
+    /// to open the viewer mid-load when a search runs past the grace window.
+    /// </summary>
+    public void NavigateToNativeResultsPage()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage)));
+    }
+
+    /// <summary>
+    /// Show / hide a non-cancellable spinner used to give immediate feedback when switching to a
+    /// page whose first construction is slow (e.g. the native viewer's DataGrid init). The
+    /// destination page is expected to call <see cref="HideNavigationSpinner"/> in its
+    /// <c>Loaded</c> handler once it's fully painted.
+    /// </summary>
+    public void ShowNavigationSpinner(string text)
+    {
+        ShowSpinner(true, text);
+    }
+
+    public void HideNavigationSpinner()
+    {
+        ShowSpinner(false);
+    }
+
+    /// <summary>
+    /// Show the loading spinner, paint one frame so the user sees it, then perform the
+    /// (synchronous, UI-thread-blocking) Frame navigation. The destination page is expected to
+    /// call <see cref="HideNavigationSpinner"/> from its Loaded handler — for pages that don't,
+    /// we drop a safety-net hide call after the navigation completes.
+    ///
+    /// While the spinner is visible we also seed its text with the current result-set size so
+    /// the user understands the order of magnitude they're waiting for (e.g. "Loading viewer ·
+    /// 423,231 rows"). For a running streaming search the count is live; for a completed search
+    /// it's the final row count.
+    /// </summary>
+    private void NavigateWithSpinner(Type pageType)
+    {
+        ShowSpinner(true, BuildLoadingViewerText());
+        // Defer the navigation to the next dispatcher tick so the spinner gets one paint pass
+        // before the UI thread is blocked by page construction (DataGrid init in particular).
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            try { contentFrame.Navigate(pageType); }
+            finally
+            {
+                // Safety net: if the destination didn't hide the spinner itself, kill it on the
+                // next tick so we never leave it visible permanently.
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                    () => ShowSpinner(false));
+            }
+        });
+    }
+
+    private static string BuildLoadingViewerText()
+    {
+        // Prefer the running streaming search's storage if there is one (in-flight load), since
+        // that count grows as rows arrive. Otherwise fall back to the last completed search's
+        // result count. Either way, surface it so the user knows what's coming.
+        try
+        {
+            var streaming = MiddleLayerService.CurrentStreamingSearch;
+            if (streaming?.Storage != null)
+            {
+                var n = streaming.Storage.GetStatistics().filteredRecordCount;
+                if (streaming.Source?.IsLoading == true)
+                    return $"Loading viewer · streaming {n:N0} rows…";
+                return $"Loading viewer · {n:N0} rows";
+            }
+            var completed = MiddleLayerService.GetFilteredRowCount();
+            if (completed > 0) return $"Loading viewer · {completed:N0} rows";
+        }
+        catch { /* never let UX feedback break the navigation */ }
+        return "Loading viewer…";
     }
 
     private void RefreshStatusStrip()
@@ -112,7 +210,7 @@ public sealed partial class MainWindow : Window
                     viewerKey = "resultswebpage";
                 if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
                     viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
-                contentFrame.Navigate(viewerType);
+                NavigateWithSpinner(viewerType);
                 break;
             case "results_processoroutput":
                 Logger.Instance.Log("Navigated: ProcessorOutputPage");
@@ -120,11 +218,11 @@ public sealed partial class MainWindow : Window
                 break;
             case "results_viewweb":
                 Logger.Instance.Log("Navigated: ResultsWebPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsWebPage));
+                NavigateWithSpinner(typeof(FindNeedleUX.Pages.ResultsWebPage));
                 break;
             case "results_viewnative":
                 Logger.Instance.Log("Navigated: NativeResultsPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
+                NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage));
                 break;
             case "systeminfo":
                 Logger.Instance.Log("Navigated: SystemInfoPage");
@@ -197,7 +295,7 @@ public sealed partial class MainWindow : Window
         {
             await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, _quickActionCts.Token).Wait(), _quickActionCts.Token);
             var stats = MiddleLayerService.GetStats();
-            var count = MiddleLayerService.GetSearchResults()?.Count ?? 0;
+            var count = MiddleLayerService.GetFilteredRowCount();
             _lastRunSummary = $"{count} results";
         }
         catch (OperationCanceledException)

@@ -7,6 +7,7 @@ using findneedle;
 using findneedle.Implementations;
 using findneedle.PluginSubsystem;
 using FindNeedlePluginLib;
+using FindPluginCore.Diagnostics;
 using System.Threading;
 
 namespace FindPluginCore.Searching.Serializers;
@@ -90,6 +91,7 @@ public class SearchQueryUX
         {
             throw new Exception("wtf");
         }
+        using var _ = PerfLog.Scope("search.run", ("entry", "ux_sync"));
         q.Step1_LoadAllLocationsInMemory();
         var x = q.Step2_GetFilteredResults();
         q.Step3_ResultsToProcessors();
@@ -105,6 +107,9 @@ public class SearchQueryUX
         {
             throw new Exception("wtf");
         }
+        // Top-level wall-clock scope so the perf log captures total search time on the UI path
+        // (which goes through here instead of NuSearchQuery.RunThrough).
+        using var _ = PerfLog.Scope("search.run", ("entry", "ux_cancellable"));
         q.Step1_LoadAllLocationsInMemory(cancellationToken);
         var x = q.Step2_GetFilteredResults(cancellationToken);
         q.Step3_ResultsToProcessors();

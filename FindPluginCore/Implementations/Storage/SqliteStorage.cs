@@ -16,8 +16,16 @@ namespace FindPluginCore.Implementations.Storage
     public class SqliteStorage : ISearchStorage, IDisposable
     {
         private readonly string _dbPath;
-        private readonly SqliteConnection _connection;
+        // Not readonly: replaced in the corruption-recovery path inside OpenAndInitialize.
+        private SqliteConnection _connection;
         private readonly object _sync = new();
+
+        /// <summary>
+        /// Fires after each <see cref="AddFilteredBatch"/> commits. The argument is the number of
+        /// rows that just landed (the batch size, not the running total). Used by the streaming
+        /// result viewer to refresh its row count and visible page without polling.
+        /// </summary>
+        public event Action<int>? FilteredRowsAdded;
 
         /// <summary>
         /// Constructs a SqliteStorage for the given file being searched, storing the DB in AppData cache.
@@ -27,14 +35,82 @@ namespace FindPluginCore.Implementations.Storage
         {
             SQLitePCL.Batteries.Init(); // Ensure SQLite provider is initialized
             _dbPath = CachedStorage.GetCacheFilePath(searchedFilePath, ".db");
+            OpenAndInitialize(allowRetryAfterCorruption: true);
+        }
+
+        /// <summary>
+        /// Open the connection, apply pragmas, create the schema, and wipe any leftover rows. If
+        /// any of that throws <c>SQLITE_CORRUPT</c> (error code 11, "database disk image is
+        /// malformed"), the file is left over from a prior process crash — our pragmas
+        /// (<c>journal_mode=MEMORY</c> + <c>synchronous=OFF</c>) trade durability for throughput,
+        /// so a crash mid-write can leave the file unreadable. We can't repair it, but since this
+        /// file is a cache that's wiped every construction anyway, we delete it and start fresh.
+        /// </summary>
+        private void OpenAndInitialize(bool allowRetryAfterCorruption)
+        {
             _connection = new SqliteConnection($"Data Source={_dbPath}");
             _connection.Open();
-            ApplyBulkInsertPragmas();
-            InitializeSchema();
-            // Cache files are keyed only by file path (no content hash / mtime), so a stale cache
-            // would silently surface old or duplicated rows on every reopen. Wipe both tables on
-            // construction — each new SqliteStorage instance starts from a clean slate.
-            ClearTables();
+            try
+            {
+                ApplyBulkInsertPragmas();
+                InitializeSchema();
+                // Cache files are keyed only by file path (no content hash / mtime), so a stale
+                // cache would silently surface old or duplicated rows on every reopen. Wipe both
+                // tables on construction — each new SqliteStorage instance starts from a clean
+                // slate.
+                ClearTables();
+            }
+            catch (SqliteException ex) when (allowRetryAfterCorruption && IsCorruption(ex))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SqliteStorage] cache DB '{_dbPath}' is corrupt; rebuilding from scratch: {ex.Message}");
+
+                // Close + drop the connection so the OS releases the file handle before we delete.
+                try { _connection.Close(); } catch { }
+                try { _connection.Dispose(); } catch { }
+                _connection = null;
+                // Flush Microsoft.Data.Sqlite's connection pool so the file lock is fully released
+                // (otherwise File.Delete fails on Windows with "file is being used by another
+                // process").
+                SqliteConnection.ClearAllPools();
+
+                DeleteCacheFiles();
+                // Single retry — if the recreated file also can't be initialised, throw the
+                // failure of the second attempt so the caller sees a real error instead of an
+                // infinite loop.
+                OpenAndInitialize(allowRetryAfterCorruption: false);
+            }
+        }
+
+        /// <summary>
+        /// True if a <see cref="SqliteException"/> indicates the file is corrupt and can't be
+        /// recovered in-place. SQLite result code 11 = <c>SQLITE_CORRUPT</c>; we also match on
+        /// the message in case the provider exposes a different code for an extended error.
+        /// </summary>
+        private static bool IsCorruption(SqliteException ex)
+        {
+            if (ex == null) return false;
+            if (ex.SqliteErrorCode == 11) return true; // SQLITE_CORRUPT
+            return ex.Message != null
+                && ex.Message.IndexOf("malformed", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>Best-effort delete of the main DB plus any SQLite sidecar files.</summary>
+        private void DeleteCacheFiles()
+        {
+            TryDelete(_dbPath);
+            TryDelete(_dbPath + "-wal");
+            TryDelete(_dbPath + "-shm");
+            TryDelete(_dbPath + "-journal");
+        }
+
+        private static void TryDelete(string path)
+        {
+            try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SqliteStorage] could not delete '{path}': {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -224,18 +300,22 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        /// <summary>
+        /// Rows per multi-row INSERT statement. 500 × 10 columns = 5000 parameters, well under
+        /// SQLite's default <c>SQLITE_MAX_VARIABLE_NUMBER</c> (32766). Trades a slightly larger
+        /// prepared statement (~30 KB SQL string, built once per batch) for a 100–500× reduction
+        /// in managed↔native interop crossings vs. single-row inserts.
+        /// </summary>
+        private const int InsertChunkRows = 500;
+        private const int InsertColumnsPerRow = 10;
+
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
             lock (_sync)
             {
                 using var transaction = _connection.BeginTransaction();
-                using var cmd = CreatePreparedInsert("RawResults", transaction, out var p);
-                foreach (var result in batch)
-                {
-                    if (cancellationToken.IsCancellationRequested) break;
-                    BindAndExecute(cmd, p, result);
-                }
+                BulkInsert("RawResults", batch, transaction, cancellationToken, out _);
                 transaction.Commit();
             }
         }
@@ -243,16 +323,59 @@ namespace FindPluginCore.Implementations.Storage
         public void AddFilteredBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
+            int inserted;
             lock (_sync)
             {
                 using var transaction = _connection.BeginTransaction();
-                using var cmd = CreatePreparedInsert("FilteredResults", transaction, out var p);
-                foreach (var result in batch)
-                {
-                    if (cancellationToken.IsCancellationRequested) break;
-                    BindAndExecute(cmd, p, result);
-                }
+                BulkInsert("FilteredResults", batch, transaction, cancellationToken, out inserted);
                 transaction.Commit();
+            }
+            // Fire outside the lock so subscribers can re-enter (e.g. read a page) without
+            // deadlocking the writer thread.
+            if (inserted > 0) FilteredRowsAdded?.Invoke(inserted);
+        }
+
+        /// <summary>
+        /// Bulk-insert path used by both AddRawBatch and AddFilteredBatch. Accumulates rows up to
+        /// <see cref="InsertChunkRows"/>, flushes via a single multi-row <c>INSERT … VALUES (…),(…)</c>
+        /// statement, then drains any tail through the single-row prepared command. Both commands
+        /// are constructed and prepared exactly once per call.
+        /// </summary>
+        private void BulkInsert(
+            string table,
+            IEnumerable<ISearchResult> batch,
+            SqliteTransaction tx,
+            CancellationToken cancellationToken,
+            out int inserted)
+        {
+            inserted = 0;
+
+            using var chunkCmd = CreatePreparedMultiInsert(table, InsertChunkRows, tx, out var chunkParams);
+            using var singleCmd = CreatePreparedInsert(table, tx, out var singleParams);
+
+            // Reusable row buffer — never allocates beyond the initial array.
+            var buffer = new ISearchResult[InsertChunkRows];
+            int bufferCount = 0;
+
+            foreach (var result in batch)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                buffer[bufferCount++] = result;
+                if (bufferCount == InsertChunkRows)
+                {
+                    BindAndExecuteChunk(chunkCmd, chunkParams, buffer, InsertChunkRows);
+                    inserted += InsertChunkRows;
+                    bufferCount = 0;
+                }
+            }
+
+            // Tail (anything fewer than InsertChunkRows left over). For a 500k-row search with
+            // chunks of 500 this is at worst ~499 single-row inserts — <0.1% of the total — so
+            // building a second prepared command sized to the exact tail isn't worth the parse cost.
+            for (int i = 0; i < bufferCount; i++)
+            {
+                BindAndExecute(singleCmd, singleParams, buffer[i]);
+                inserted++;
             }
         }
 
@@ -310,6 +433,74 @@ namespace FindPluginCore.Implementations.Storage
             p.SearchableData.Value = r.GetSearchableData() ?? "";
             p.Message.Value        = r.GetMessage() ?? "";
             p.ResultSource.Value   = r.GetResultSource() ?? "";
+            cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Build a single prepared statement of the form
+        /// <c>INSERT INTO T (…cols…) VALUES (?,?,…),(?,?,…),…</c> with <paramref name="rowCount"/>
+        /// row tuples, so one <c>ExecuteNonQuery</c> commits all of them. Returns a flat array of
+        /// the parameter handles in row-major order: index <c>row*10 + column</c>.
+        /// </summary>
+        private SqliteCommand CreatePreparedMultiInsert(string table, int rowCount, SqliteTransaction tx, out SqliteParameter[] flatParams)
+        {
+            var cmd = _connection.CreateCommand();
+            cmd.Transaction = tx;
+
+            // Build the SQL: ~60 bytes/tuple at 500 rows ≈ 30 KB. Cheap.
+            var sb = new System.Text.StringBuilder(rowCount * 64 + 200);
+            sb.Append("INSERT INTO ").Append(table).Append(
+                " (LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource) VALUES ");
+
+            flatParams = new SqliteParameter[rowCount * InsertColumnsPerRow];
+            for (int r = 0; r < rowCount; r++)
+            {
+                if (r > 0) sb.Append(',');
+                sb.Append('(');
+                int baseIdx = r * InsertColumnsPerRow;
+                for (int c = 0; c < InsertColumnsPerRow; c++)
+                {
+                    if (c > 0) sb.Append(',');
+                    string name = "@p" + (baseIdx + c).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    sb.Append(name);
+                    // Column 2 = Level (INTEGER). Everything else is TEXT.
+                    var type = c == 2 ? SqliteType.Integer : SqliteType.Text;
+                    flatParams[baseIdx + c] = cmd.Parameters.Add(name, type);
+                }
+                sb.Append(')');
+            }
+            cmd.CommandText = sb.ToString();
+            cmd.Prepare();
+            return cmd;
+        }
+
+        /// <summary>
+        /// Bind <paramref name="count"/> rows worth of parameters from <paramref name="rows"/>
+        /// into the flat parameter array and fire a single <c>ExecuteNonQuery</c>. Caller must
+        /// have built <paramref name="cmd"/>/<paramref name="flatParams"/> for the exact row
+        /// count (use <see cref="CreatePreparedMultiInsert"/>).
+        /// </summary>
+        private static void BindAndExecuteChunk(
+            SqliteCommand cmd,
+            SqliteParameter[] flatParams,
+            ISearchResult[] rows,
+            int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var r = rows[i];
+                int b = i * InsertColumnsPerRow;
+                flatParams[b + 0].Value = r.GetLogTime().ToString("o");
+                flatParams[b + 1].Value = r.GetMachineName() ?? "";
+                flatParams[b + 2].Value = (int)r.GetLevel();
+                flatParams[b + 3].Value = r.GetUsername() ?? "";
+                flatParams[b + 4].Value = r.GetTaskName() ?? "";
+                flatParams[b + 5].Value = r.GetOpCode() ?? "";
+                flatParams[b + 6].Value = r.GetSource() ?? "";
+                flatParams[b + 7].Value = r.GetSearchableData() ?? "";
+                flatParams[b + 8].Value = r.GetMessage() ?? "";
+                flatParams[b + 9].Value = r.GetResultSource() ?? "";
+            }
             cmd.ExecuteNonQuery();
         }
 

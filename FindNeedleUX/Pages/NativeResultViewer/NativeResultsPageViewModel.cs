@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using FindNeedleUX;
 using FindNeedleUX.Services;
 using FindNeedleUX.Services.PagedLogSource;
+using FindPluginCore.Diagnostics;
 
 namespace FindNeedleUX.Pages.NativeResultViewer;
 
@@ -130,6 +131,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private bool _isLoading;
     public bool IsLoading { get => _isLoading; set => Set(ref _isLoading, value); }
 
+    // True while a streaming search is still producing rows into our backing store. Bound to the
+    // Stop button's visibility — once the producer signals completion, the button disappears.
+    private bool _isStreaming;
+    public bool IsStreaming { get => _isStreaming; set => Set(ref _isStreaming, value); }
+
     private string _statusText = "0 / 0 results";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
 
@@ -193,39 +199,158 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public async Task LoadResultsAsync()
     {
         IsLoading = true;
+        bool streaming = false;
+        using var perfScope = PerfLog.Scope("viewer.native.load");
         try
         {
-            // The page source is whatever fits the active storage backend. Falls back to an
-            // in-memory list if no SQLite/Hybrid backing is available.
-            var storage = MiddleLayerService.GetSearchStorage();
-            var fallback = MiddleLayerService.GetLogLines() ?? new List<LogLine>();
-            try { _source?.Dispose(); } catch { /* ignore */ }
-            _source = PagedLogSourceFactory.Create(storage, fallback);
-
-            // Discover levels and seed Levels/KnownLevelNames.
-            var distinct = _source.GetDistinctLevels();
-            var levelSet = new HashSet<string>(distinct, StringComparer.OrdinalIgnoreCase);
-            foreach (var def in DefaultLevelColors.Keys) levelSet.Add(def);
-
-            Levels.Clear();
-            foreach (var level in levelSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+            // Prefer the live source from a streaming search if one is in flight. Otherwise build
+            // a fresh paged source over whatever storage the last search produced. The streaming
+            // source is owned by MiddleLayerService — we attach/detach but don't dispose it.
+            var sh = MiddleLayerService.CurrentStreamingSearch;
+            if (sh?.Source is { IsLoading: true } liveSource)
             {
-                var color = DefaultLevelColors.TryGetValue(level, out var c) ? c : "Transparent";
-                Levels.Add(new LevelEntry { Level = level, HexColor = color });
+                try { if (_source != liveSource) _source?.Dispose(); } catch { /* ignore */ }
+                _source = liveSource;
+                streaming = true;
+
+                // Detach any prior subscription before attaching, in case the same VM is reused.
+                liveSource.RowsAvailable -= OnStreamingRowsAvailable;
+                liveSource.RowsAvailable += OnStreamingRowsAvailable;
+                PerfLog.Log("viewer.native.source", ("kind", "streaming"));
+            }
+            else
+            {
+                var storage = MiddleLayerService.GetSearchStorage();
+                try { _source?.Dispose(); } catch { /* ignore */ }
+
+                // SqliteStorage / HybridStorage paged sources don't read the fallback list — they
+                // go straight to SQLite. Skip materializing all rows; for a 500k-row search,
+                // GetLogLines() allocates half a million LogLine objects + corresponding string
+                // copies on the UI thread (~hundreds of ms). For the InMemoryStorage / null path
+                // we still need it, but we push the work to the threadpool.
+                if (storage is FindPluginCore.Implementations.Storage.SqliteStorage
+                    || storage is FindPluginCore.Implementations.Storage.HybridStorage)
+                {
+                    using (PerfLog.Scope("viewer.native.source_build", ("storage", storage.GetType().Name)))
+                        _source = PagedLogSourceFactory.Create(storage, Array.Empty<LogLine>());
+                }
+                else
+                {
+                    using (PerfLog.Scope("viewer.native.getloglines_fallback"))
+                    {
+                        var fallback = await Task.Run(
+                            () => (IList<LogLine>)(MiddleLayerService.GetLogLines() ?? new List<LogLine>()));
+                        _source = PagedLogSourceFactory.Create(storage, fallback);
+                    }
+                }
             }
 
-            KnownLevelNames.Clear();
-            foreach (var l in Levels.Select(x => x.Level)) KnownLevelNames.Add(l);
+            // Discover levels and seed Levels/KnownLevelNames.
+            using (PerfLog.Scope("viewer.native.levels"))
+            {
+                var distinct = _source.GetDistinctLevels();
+                var levelSet = new HashSet<string>(distinct, StringComparer.OrdinalIgnoreCase);
+                foreach (var def in DefaultLevelColors.Keys) levelSet.Add(def);
 
-            TotalCount = _source.TotalCount;
-            AutoHideEmptyColumnsFromSample(fallback);
-            ReloadFromSource();
+                Levels.Clear();
+                foreach (var level in levelSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+                {
+                    var color = DefaultLevelColors.TryGetValue(level, out var c) ? c : "Transparent";
+                    Levels.Add(new LevelEntry { Level = level, HexColor = color });
+                }
+
+                KnownLevelNames.Clear();
+                foreach (var l in Levels.Select(x => x.Level)) KnownLevelNames.Add(l);
+
+                TotalCount = _source.TotalCount;
+            }
+
+            // AutoHide needs to inspect a small sample of rows. Pull just the first page from the
+            // source — for SQLite this is a single LIMIT 1000 query; for in-memory it's a cheap
+            // slice. Either way, the cost is bounded regardless of total row count.
+            if (!streaming)
+            {
+                using (PerfLog.Scope("viewer.native.autohide_sample"))
+                {
+                    var sample = _source.GetPage(FilterSpec.Empty, SortSpec.None, 0, 1000);
+                    AutoHideEmptyColumnsFromSample(sample);
+                }
+            }
+
+            using (PerfLog.Scope("viewer.native.first_page"))
+                ReloadFromSource();
+            IsStreaming = streaming;
         }
         finally
         {
-            IsLoading = false;
+            // For streaming, IsLoading stays true until the producer signals completion via
+            // RowsAvailable + IsLoading=false. For one-shot loads, flip it off now.
+            if (!streaming) IsLoading = false;
         }
-        await Task.CompletedTask;
+    }
+
+    // ----- Streaming: live row refresh -----
+
+    private Microsoft.UI.Dispatching.DispatcherQueue _dispatcher;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer _refreshTimer;
+
+    private void EnsureRefreshTimer()
+    {
+        _dispatcher ??= Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        if (_refreshTimer == null && _dispatcher != null)
+        {
+            _refreshTimer = _dispatcher.CreateTimer();
+            _refreshTimer.Interval = TimeSpan.FromMilliseconds(250);
+            _refreshTimer.IsRepeating = false;
+            _refreshTimer.Tick += (_, _) => OnLiveRefreshTick();
+        }
+    }
+
+    /// <summary>
+    /// Called from the SQLite writer thread when a batch lands. We marshal to the UI thread
+    /// and (re)start a 250 ms timer; the timer's Tick handler does the actual refresh.
+    /// Effect: a burst of rapid commits collapses into a single refresh after a quiet moment.
+    /// </summary>
+    private void OnStreamingRowsAvailable()
+    {
+        EnsureRefreshTimer();
+        _dispatcher?.TryEnqueue(() =>
+        {
+            _refreshTimer?.Stop();
+            _refreshTimer?.Start();
+        });
+    }
+
+    private void OnLiveRefreshTick()
+    {
+        if (_source == null) return;
+        var stillLoading = _source.IsLoading;
+        // Re-query count and the visible page. If the user is on page 1 with default sort,
+        // they see new rows immediately; otherwise just the count badge / level chips update.
+        TotalCount = _source.TotalCount;
+        ReloadFromSource();
+        if (!stillLoading)
+        {
+            // Producer finished — final refresh, drop the spinner + Stop button.
+            IsLoading = false;
+            IsStreaming = false;
+        }
+    }
+
+    /// <summary>
+    /// Detach from a live streaming source. Called from <c>NativeResultsPage.OnPageUnloaded</c>
+    /// so the source doesn't keep firing into a dead VM if the user navigates away mid-load.
+    /// </summary>
+    public void DetachFromStreaming()
+    {
+        if (_source != null) _source.RowsAvailable -= OnStreamingRowsAvailable;
+        try { _refreshTimer?.Stop(); } catch { /* ignore */ }
+    }
+
+    /// <summary>Cancel the in-flight streaming search, if any.</summary>
+    public void StopStreaming()
+    {
+        MiddleLayerService.CurrentStreamingSearch?.Stop();
     }
 
     /// <summary>
