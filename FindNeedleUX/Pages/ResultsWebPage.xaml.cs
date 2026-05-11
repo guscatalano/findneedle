@@ -38,8 +38,17 @@ public sealed partial class ResultsWebPage : Page
         }
         catch (Exception)
         {
-          
+
         }
+        // Live-apply theme / level-color edits made in the settings page.
+        ResultsViewerSettings.Changed += OnViewerSettingsChanged;
+    }
+
+    private void OnViewerSettingsChanged()
+    {
+        // Marshal back to the UI thread; PostWebMessageAsJson must be called on the WebView's
+        // dispatcher.
+        DispatcherQueue.TryEnqueue(() => SendLevelColorsToWebView());
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -60,6 +69,8 @@ public sealed partial class ResultsWebPage : Page
         // the storage, but our source is per-page-instance.
         try { _pagedSource?.Dispose(); } catch { }
         _pagedSource = null;
+        // Stop reacting to settings edits — the viewer is gone.
+        ResultsViewerSettings.Changed -= OnViewerSettingsChanged;
     }
 
     private async void Init()
@@ -114,6 +125,71 @@ public sealed partial class ResultsWebPage : Page
             MyWebView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(colorMessage));
         }
         catch { }
+
+        SendLevelColorsToWebView();
+    }
+
+    /// <summary>
+    /// Push the user's per-level row colors (theme preset + overrides from
+    /// <see cref="ResultsViewerSettings"/>) into the WebView2 page. Colors are converted from
+    /// WinUI's <c>#AARRGGBB</c> format (alpha-first) to CSS <c>rgba(...)</c> so the browser
+    /// renders them with the same transparency as the native viewer.
+    /// </summary>
+    private void SendLevelColorsToWebView()
+    {
+        try
+        {
+            var themeName = ResultsViewerSettings.ThemeName;
+            var presets = FindNeedleUX.Pages.NativeResultViewer.NativeResultsPageViewModel.ThemePresets;
+            var preset = presets.TryGetValue(themeName, out var p)
+                ? p
+                : presets[FindNeedleUX.Pages.NativeResultViewer.NativeResultsPageViewModel.DefaultThemeName];
+
+            var overrides = ResultsViewerSettings.LevelColors;
+
+            var resolved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // Theme preset first so every known level gets a base color.
+            foreach (var kv in preset) resolved[kv.Key] = WinUIHexToCss(kv.Value);
+            // Per-level overrides win.
+            foreach (var kv in overrides) resolved[kv.Key] = WinUIHexToCss(kv.Value);
+
+            var msg = new { verb = "setLevelColors", data = resolved };
+            MyWebView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(msg));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SendLevelColorsToWebView failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Convert a WinUI/WPF colour literal into a CSS-friendly form.
+    ///   <c>#AARRGGBB</c>     → <c>rgba(R, G, B, A/255)</c>
+    ///   <c>#RRGGBB</c>       → unchanged
+    ///   <c>"Transparent"</c> → <c>"transparent"</c>
+    /// Anything else is returned verbatim and let the browser parse / drop.
+    /// </summary>
+    private static string WinUIHexToCss(string winuiHex)
+    {
+        if (string.IsNullOrWhiteSpace(winuiHex)) return "";
+        if (string.Equals(winuiHex, "Transparent", StringComparison.OrdinalIgnoreCase)) return "transparent";
+        var s = winuiHex.TrimStart('#');
+        try
+        {
+            if (s.Length == 8)
+            {
+                int a = Convert.ToInt32(s.Substring(0, 2), 16);
+                int r = Convert.ToInt32(s.Substring(2, 2), 16);
+                int g = Convert.ToInt32(s.Substring(4, 2), 16);
+                int b = Convert.ToInt32(s.Substring(6, 2), 16);
+                double alpha = a / 255.0;
+                return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"rgba({r},{g},{b},{alpha:F3})");
+            }
+            if (s.Length == 6) return "#" + s;
+        }
+        catch { /* fall through */ }
+        return winuiHex;
     }
 
     private static string ColorToHex(SolidColorBrush brush)

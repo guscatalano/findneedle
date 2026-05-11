@@ -185,13 +185,23 @@ public class NuSearchQuery : ISearchQuery
                         totalRecords += 100;
                     }
                 }
-                // Tiered Auto:
-                //   < 10k rows and quick      -> InMemory  (cheapest, fastest)
-                //   10k - 1M rows             -> Hybrid    (RAM hot, SQLite cold)
-                //   > 1M rows or slow search  -> SqlLite   (always disk; predictable memory)
+                // Tiered Auto, recalibrated based on perf-log data:
+                //   < 10k rows and quick   -> InMemory  (no disk, fastest for tiny logs)
+                //   10k - 50k rows         -> Hybrid    (RAM-hot; settle at end is fast at this size)
+                //   > 50k rows             -> SqlLite   (write rows straight to disk during the
+                //                                        search; spreads the I/O across the scan
+                //                                        instead of forcing a multi-second
+                //                                        "moving N results into the cache" phase
+                //                                        at the end).
+                //
+                // Old upper bound was 1M, which meant 500k-row Quick Opens were taking the slow
+                // settle path. Direct-to-SQLite has comparable per-row throughput (multi-row
+                // INSERT + prepared statement + journal_mode=MEMORY / synchronous=OFF), so the
+                // total wall-clock cost is roughly the same, but the user's wait between
+                // "search done" and "viewer open" disappears.
                 if (totalRecords < 10_000 && totalTime.TotalSeconds < 30)
                     return new InMemoryStorage();
-                if (totalRecords < 1_000_000)
+                if (totalRecords < 50_000)
                     return new HybridStorage(filePath);
                 return new SqliteStorage(filePath);
         }
@@ -340,25 +350,85 @@ public class NuSearchQuery : ISearchQuery
             if (cancellationToken.IsCancellationRequested) break;
             var basename = ShortName(loc.GetName());
             Logger.Instance.Log($"Filtering results for location {count}/{total}: {loc.GetName()}");
-            var percent = total > 0 ? 50 + (int)(50.0 * count / total) : 50;
-            // Start-of-location: no row count yet for this location, but the storage knows what
-            // we've accumulated from earlier locations in the same run.
+
+            // Ask the plugin how many rows it expects. Used for "12,345 / ~500,000" status and
+            // for refining the progress bar within this location. Some plugins don't implement
+            // estimation — those just don't get the denominator.
+            int? estRows = null;
+            try
+            {
+                var perf = loc.GetSearchPerformanceEstimate(cancellationToken);
+                if (perf.recordCount.HasValue && perf.recordCount.Value > 0)
+                    estRows = perf.recordCount.Value;
+            }
+            catch (NotImplementedException) { /* unknown — that's fine */ }
+            catch (Exception ex) { Logger.Instance.Log($"perf estimate failed for {basename}: {ex.Message}"); }
+
+            // Percent at start-of-location. Was `count / total` which is wrong: count is the
+            // 1-based index of the *current* location, so for the first iteration we'd show 100%
+            // before any work was done. Use (count-1) so the base of this location is the bar
+            // position when its scan starts; in-callback intra-location progress walks it up.
+            int locBasePercent = total > 0 ? 50 + (int)(50.0 * (count - 1) / total) : 50;
+            int locSpan        = total > 0 ? (int)(50.0 / total) : 0;
+
+            string EstSuffix(int n) =>
+                estRows.HasValue
+                    ? $"{n:N0} / ~{estRows.Value:N0} rows"
+                    : $"{n:N0} rows";
+
             _stepnotifysink.progressSink.NotifyProgress(
-                percent,
-                $"[{count}/{total}] scanning {basename} · {SafeFilteredCount():N0} rows · {storageLabel}");
+                locBasePercent,
+                $"[{count}/{total}] scanning {basename} · {EstSuffix(0)} · {storageLabel}");
             PerfLog.Log("location.start", ("idx", count), ("of", total), ("name", basename),
-                ("rows_before", SafeFilteredCount()));
+                ("rows_before", SafeFilteredCount()), ("est_rows", estRows ?? -1));
             var locStart = Environment.TickCount64;
             loc.SetSearchDepth(_depth);
             List<ISearchResult> rawResults = new();
             if (!useSync)
             {
+                // Throttled per-batch status update so the user sees rows climbing during the
+                // scan instead of "0 rows" frozen for several seconds. Fire on either a row-
+                // count delta (every 5k rows) or a time delta (every 250 ms) so a fast plugin
+                // doesn't flood the sink and a slow one still ticks visibly.
+                int lastReportedRows = 0;
+                long lastReportMs = Environment.TickCount64;
+                int locIdxCapture = count, totalCapture = total;
+                string nameCapture = basename, storageCapture = storageLabel;
+                int basePctCapture = locBasePercent;
+                int spanCapture = locSpan;
+                int? estCapture = estRows;
+
                 try
                 {
                     loc.SearchWithCallback(batch => {
                         rawResults.AddRange(batch);
                         Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} raw results");
                         _resultStorage.AddRawBatch(batch, cancellationToken);
+
+                        int n = rawResults.Count;
+                        long now = Environment.TickCount64;
+                        if (n - lastReportedRows >= 5000 || now - lastReportMs >= 250)
+                        {
+                            lastReportedRows = n;
+                            lastReportMs = now;
+
+                            // Refine the bar position within this location when we have an
+                            // estimate. Capped at the next location's base so the bar can't
+                            // overshoot if the plugin under-estimated.
+                            int pct = basePctCapture;
+                            if (estCapture.HasValue && estCapture.Value > 0 && spanCapture > 0)
+                            {
+                                double frac = Math.Min(1.0, (double)n / estCapture.Value);
+                                pct = basePctCapture + (int)(spanCapture * frac);
+                            }
+
+                            var rowsText = estCapture.HasValue
+                                ? $"{n:N0} / ~{estCapture.Value:N0} rows"
+                                : $"{n:N0} rows";
+                            _stepnotifysink.progressSink.NotifyProgress(
+                                pct,
+                                $"[{locIdxCapture}/{totalCapture}] scanning {nameCapture} · {rowsText} · {storageCapture}");
+                        }
                     }, cancellationToken).Wait();
                 }
                 catch (NotImplementedException)
@@ -400,9 +470,10 @@ public class NuSearchQuery : ISearchQuery
             _resultStorage.AddFilteredBatch(filteredBatch, cancellationToken);
             Logger.Instance.Log($"Results stored for location: {loc.GetName()}");
 
-            // End-of-location update: row count now reflects this location's filtered contribution.
+            // End-of-location update: bar now sits at the top of this location's span.
+            int locEndPercent = locBasePercent + locSpan;
             _stepnotifysink.progressSink.NotifyProgress(
-                percent,
+                locEndPercent,
                 $"[{count}/{total}] done {basename} · {SafeFilteredCount():N0} rows · {storageLabel}");
             PerfLog.Log("location.end", ("idx", count), ("name", basename),
                 ("rows_total", SafeFilteredCount()),
@@ -481,10 +552,12 @@ public class NuSearchQuery : ISearchQuery
         // cost (where progress is visible) instead of the UI thread paying it.
         if (_resultStorage is HybridStorage hybrid)
         {
-            _stepnotifysink.progressSink.NotifyProgress(100, "finalizing results to disk…");
+            var rowsToMove = SafeFilteredCount();
+            _stepnotifysink.progressSink.NotifyProgress(
+                100, $"moving {rowsToMove:N0} results into the cache…");
             try
             {
-                using (PerfLog.Scope("search.settle", ("storage", "hybrid")))
+                using (PerfLog.Scope("search.settle", ("storage", "hybrid"), ("rows", rowsToMove)))
                     hybrid.SettleToDisk(cancellationToken);
                 Logger.Instance.Log("HybridStorage settled to disk at end of Step2");
             }

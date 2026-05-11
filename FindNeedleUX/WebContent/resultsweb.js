@@ -87,30 +87,31 @@ function showMoreModal(rowIdx) {
 }
 function hideMoreModal() { document.getElementById('moreModal').style.display = 'none'; }
 
-// Level color picker controls
+// Level chip (read-only). Colors come from C# (Settings → Results viewer); editing happens
+// there, not in the viewer itself. The chip is still useful as a per-level count + filter
+// dropdown bootstrap.
 function addLevelColorControl(level) {
-    if (document.getElementById('colorpicker-' + level)) return;
+    // Use a sentinel element id to dedupe — match by the per-level count span.
+    if (document.getElementById('level-count-' + level)) return;
     if (!levelColorMap.hasOwnProperty(level)) levelColorMap[level] = defaultColorFor(level);
+
     var controlsDiv = document.getElementById('levelColorControls');
     var wrapper = document.createElement('span');
     wrapper.className = 'level-control-wrapper';
-    var input = document.createElement('input');
-    input.type = 'color';
-    input.id = 'colorpicker-' + level;
-    input.value = levelColorMap[level] || '#ffffff';
-    input.title = 'Background color for ' + level;
-    input.addEventListener('input', function() {
-        levelColorMap[level] = input.value;
-        recolorRowsForLevel(level);
-    });
-    var label = document.createElement('span'); label.textContent = level;
+
+    var label = document.createElement('span');
+    label.textContent = level;
+
     var countSpan = document.createElement('span');
     countSpan.className = 'level-count';
     countSpan.id = 'level-count-' + level;
     countSpan.textContent = '(' + (levelCounts[level] || 0) + ')';
-    wrapper.appendChild(input); wrapper.appendChild(label); wrapper.appendChild(countSpan);
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(countSpan);
     controlsDiv.appendChild(wrapper);
-    // Also append to the Level filter dropdown
+
+    // Also append to the Level filter dropdown.
     var sel = document.querySelector('select[data-col="6"]');
     if (sel && !Array.from(sel.options).some(function(o) { return o.value === level; })) {
         var opt = document.createElement('option');
