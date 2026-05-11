@@ -31,7 +31,7 @@ public class SystemInfoMiddleware
         var osVersion = $"Windows Version: {GetWindowsVersion()}";
         var wdkRootPath = "WDK Root Path: ";
         var tracefmtPath = "Tracefmt: ";
-        var defaultViewer = $"Default Result Viewer: {GlobalSettings.DefaultResultViewer}";
+        var defaultViewer = $"Default Result Viewer: {FindNeedleUX.Services.ResultsViewerSettings.DefaultResultViewer}";
         var plantumlPath = $"PlantUML Path: {GetPlantUMLPath()}";
         string appVersion, versionSource;
         (appVersion, versionSource) = GetAppVersionAndSource();

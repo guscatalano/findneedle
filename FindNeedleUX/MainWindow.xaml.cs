@@ -204,10 +204,10 @@ public sealed partial class MainWindow : Window
                 break;
             case "results_viewraw":
                 Logger.Instance.Log("Navigated: ViewRawResults");
-                // Load preferred view from GlobalSettings
-                var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+                // Load preferred view from persisted Settings → Results viewer.
+                var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
                 if (!((IList<string>)RawResultViewers).Contains(viewerKey))
-                    viewerKey = "resultswebpage";
+                    viewerKey = GlobalSettings.WebViewResultViewerKey;
                 if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
                     viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
                 NavigateWithSpinner(viewerType);
@@ -329,7 +329,7 @@ public sealed partial class MainWindow : Window
             ShowSpinner(true, "Opening file...", showCancel:true);
             await RunSearchWithProgress();
             ShowSpinner(false);
-            var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+            var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
             if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
             {
                 viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
@@ -353,7 +353,7 @@ public sealed partial class MainWindow : Window
             ShowSpinner(true, "Opening folder...", showCancel:true);
             await RunSearchWithProgress();
             ShowSpinner(false);
-            var viewerKey = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+            var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
             if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
             {
                 viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);

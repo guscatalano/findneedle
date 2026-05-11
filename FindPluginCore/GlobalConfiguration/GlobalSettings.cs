@@ -23,6 +23,14 @@ public class GlobalSettings
     public const string WebViewResultViewerKey = "resultswebpage";
 
     private static string _defaultResultViewer = WebViewResultViewerKey;
+
+    /// <summary>
+    /// Legacy in-memory-only default-viewer setting. The persisted value lives on
+    /// <c>FindNeedleUX.Services.ResultsViewerSettings.DefaultResultViewer</c> (saved to
+    /// <c>viewer-settings.json</c>); this field is kept for any external integration that
+    /// may still reference it but is no longer read by FindNeedleUX itself.
+    /// </summary>
+    [Obsolete("Use FindNeedleUX.Services.ResultsViewerSettings.DefaultResultViewer instead — it persists across restarts.")]
     public static string DefaultResultViewer
     {
         get => _defaultResultViewer;

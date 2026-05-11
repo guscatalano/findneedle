@@ -45,6 +45,19 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Which viewer opens by default for "View Results → Default Viewer" and the Quick Open
+    /// flow. Now persisted (was an in-memory-only static on <c>GlobalSettings</c>, lost on
+    /// every restart). Valid values are <c>GlobalSettings.NativeResultViewerKey</c> /
+    /// <c>GlobalSettings.WebViewResultViewerKey</c>.
+    /// </summary>
+    public const string DefaultDefaultResultViewer = FindPluginCore.GlobalConfiguration.GlobalSettings.WebViewResultViewerKey;
+    public static string DefaultResultViewer
+    {
+        get => string.IsNullOrEmpty(Data.DefaultResultViewer) ? DefaultDefaultResultViewer : Data.DefaultResultViewer;
+        set { Data.DefaultResultViewer = string.IsNullOrEmpty(value) ? DefaultDefaultResultViewer : value.ToLowerInvariant(); Save(); /* no Changed: applies on next viewer open */ }
+    }
+
+    /// <summary>
     /// Row-count cutover for the web viewer. At or below this number, the viewer sends every row
     /// to DataTables and lets it page client-side (fastest, no host round-trips). Above this,
     /// the viewer switches to DataTables' serverSide mode and asks the host for one page at a
@@ -182,5 +195,6 @@ public static class ResultsViewerSettings
         public Dictionary<string, bool> ColumnVisibility { get; set; }
         public int? PageSize { get; set; }
         public int? WebViewerServerSideThreshold { get; set; }
+        public string DefaultResultViewer { get; set; }
     }
 }

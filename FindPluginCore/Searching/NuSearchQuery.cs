@@ -259,6 +259,26 @@ public class NuSearchQuery : ISearchQuery
     }
 
     /// <summary>
+    /// Format a remaining-seconds value for the status bar: "&lt;1s", "12s", "3m 14s",
+    /// "2h 7m". Bucketed coarsely on purpose — finer precision would just churn while the
+    /// estimate is still settling.
+    /// </summary>
+    private static string FormatEta(double seconds)
+    {
+        if (seconds < 1) return "<1s";
+        if (seconds < 60) return $"{(int)seconds}s";
+        if (seconds < 3600)
+        {
+            int m = (int)(seconds / 60);
+            int s = (int)(seconds - m * 60);
+            return $"{m}m {s}s";
+        }
+        int h = (int)(seconds / 3600);
+        int mm = (int)((seconds - h * 3600) / 60);
+        return $"{h}h {mm}m";
+    }
+
+    /// <summary>
     /// Load rules from configured paths.
     /// Also loads SystemConfig from RuleDSL.
     /// </summary>
@@ -397,6 +417,7 @@ public class NuSearchQuery : ISearchQuery
                 int basePctCapture = locBasePercent;
                 int spanCapture = locSpan;
                 int? estCapture = estRows;
+                long locStartCapture = locStart;
 
                 try
                 {
@@ -422,12 +443,30 @@ public class NuSearchQuery : ISearchQuery
                                 pct = basePctCapture + (int)(spanCapture * frac);
                             }
 
+                            // ETA: only if we have both an estimate and enough samples for the
+                            // rate to mean something (>=1s elapsed AND >=1000 rows). Early
+                            // samples are dominated by startup costs and produce noisy numbers
+                            // like "ETA 47m" that retreat immediately to "ETA 8s" — worse than
+                            // showing nothing.
+                            long elapsedMs = now - locStartCapture;
+                            string etaText = "";
+                            if (estCapture.HasValue && estCapture.Value > n
+                                && elapsedMs >= 1000 && n >= 1000)
+                            {
+                                double rate = n * 1000.0 / elapsedMs; // rows/sec
+                                if (rate > 0)
+                                {
+                                    double remainingSec = (estCapture.Value - n) / rate;
+                                    etaText = " · ETA " + FormatEta(remainingSec);
+                                }
+                            }
+
                             var rowsText = estCapture.HasValue
                                 ? $"{n:N0} / ~{estCapture.Value:N0} rows"
                                 : $"{n:N0} rows";
                             _stepnotifysink.progressSink.NotifyProgress(
                                 pct,
-                                $"[{locIdxCapture}/{totalCapture}] scanning {nameCapture} · {rowsText} · {storageCapture}");
+                                $"[{locIdxCapture}/{totalCapture}] scanning {nameCapture} · {rowsText}{etaText} · {storageCapture}");
                         }
                     }, cancellationToken).Wait();
                 }

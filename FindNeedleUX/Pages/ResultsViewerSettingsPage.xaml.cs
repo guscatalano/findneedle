@@ -204,7 +204,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
     // ----- Default viewer -----
     private void SelectDefaultViewerInComboBox()
     {
-        var current = GlobalSettings.DefaultResultViewer?.ToLower() ?? "resultswebpage";
+        var current = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
         foreach (var item in DefaultViewerCombo.Items.OfType<ComboBoxItem>())
         {
             if (string.Equals(item.Tag as string, current, StringComparison.OrdinalIgnoreCase))
@@ -220,7 +220,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (_suppressEvents) return;
         if (DefaultViewerCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
         {
-            GlobalSettings.DefaultResultViewer = tag;
+            ResultsViewerSettings.DefaultResultViewer = tag;
         }
     }
 
