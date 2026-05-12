@@ -800,16 +800,32 @@ public class NuSearchQuery : ISearchQuery
         // ----- Stamp the cache as valid for the next run -----
         // Only meaningful when the backing store is SqliteStorage (Hybrid's inner SQLite isn't
         // cached today) and the search was a single-file workspace (cache key is one file).
-        if (!cancellationToken.IsCancellationRequested
-            && _locations.Count == 1
-            && _resultStorage is SqliteStorage sqliteForMeta)
+        if (cancellationToken.IsCancellationRequested)
+        {
+            PerfLog.Log("cache.write.skip", ("reason", "cancelled"));
+        }
+        else if (_locations.Count != 1)
+        {
+            PerfLog.Log("cache.write.skip", ("reason", "multi_location"), ("count", _locations.Count));
+        }
+        else if (_resultStorage is not SqliteStorage sqliteForMeta)
+        {
+            PerfLog.Log("cache.write.skip", ("reason", "not_sqlite"),
+                ("type", _resultStorage?.GetType().Name ?? "(null)"));
+        }
+        else
         {
             var path = _locations[0].GetName();
-            if (System.IO.File.Exists(path))
+            if (!System.IO.File.Exists(path))
+            {
+                PerfLog.Log("cache.write.skip", ("reason", "source_missing"));
+            }
+            else
             {
                 try { sqliteForMeta.WriteCompletionMetadata(path, SqliteStorage.CacheSchemaVersion); }
                 catch (Exception ex)
                 {
+                    PerfLog.Log("cache.write.skip", ("reason", "exception"), ("msg", ex.GetType().Name));
                     Logger.Instance.Log($"WriteCompletionMetadata failed: {ex.Message}");
                 }
             }

@@ -289,6 +289,7 @@ namespace FindPluginCore.Implementations.Storage
 
             if (string.IsNullOrEmpty(sourcePath) || !System.IO.File.Exists(sourcePath))
             {
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "source_missing"));
                 ClearTables();
                 return false;
             }
@@ -303,20 +304,58 @@ namespace FindPluginCore.Implementations.Storage
                     expectedSize = info.Length;
                     expectedMtime = info.LastWriteTimeUtc;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "stat_failed"), ("msg", ex.GetType().Name));
                     ClearTables();
                     return false;
                 }
 
                 var meta = ReadMeta();
-                if (meta == null
-                    || !meta.TryGetValue("schema_version", out var sv) || sv != schemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    || !meta.TryGetValue("completed",      out var c)  || c  != "1"
-                    || !meta.TryGetValue("source_path",    out var sp) || !string.Equals(sp, sourcePath, StringComparison.OrdinalIgnoreCase)
-                    || !meta.TryGetValue("source_size",    out var ss) || ss != expectedSize.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    || !meta.TryGetValue("source_mtime",   out var sm) || sm != expectedMtime.ToString("o", System.Globalization.CultureInfo.InvariantCulture))
+                if (meta == null)
                 {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "meta_unreadable"));
+                    ClearTables();
+                    return false;
+                }
+                if (meta.Count == 0)
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "meta_empty"));
+                    ClearTables();
+                    return false;
+                }
+                if (!meta.TryGetValue("schema_version", out var sv) || sv != schemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "schema_version_differs"),
+                        ("got", sv ?? "(null)"), ("want", schemaVersion));
+                    ClearTables();
+                    return false;
+                }
+                if (!meta.TryGetValue("completed", out var c) || c != "1")
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "not_completed"), ("got", c ?? "(null)"));
+                    ClearTables();
+                    return false;
+                }
+                if (!meta.TryGetValue("source_path", out var sp) || !string.Equals(sp, sourcePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "path_differs"),
+                        ("got_len", sp?.Length ?? 0), ("want_len", sourcePath.Length));
+                    ClearTables();
+                    return false;
+                }
+                if (!meta.TryGetValue("source_size", out var ss) || ss != expectedSize.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "size_differs"),
+                        ("got", ss ?? "(null)"), ("want", expectedSize));
+                    ClearTables();
+                    return false;
+                }
+                var expectedMtimeStr = expectedMtime.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+                if (!meta.TryGetValue("source_mtime", out var sm) || sm != expectedMtimeStr)
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "mtime_differs"),
+                        ("got", sm ?? "(null)"), ("want", expectedMtimeStr));
                     ClearTables();
                     return false;
                 }
@@ -331,10 +370,12 @@ namespace FindPluginCore.Implementations.Storage
                 }
                 if (rows == 0)
                 {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "empty_table"));
                     ClearTables();
                     return false;
                 }
 
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", true), ("rows", rows));
                 ReusedExistingCache = true;
                 return true;
             }
@@ -342,6 +383,7 @@ namespace FindPluginCore.Implementations.Storage
             {
                 // Anything unexpected — fall back to a clean rebuild rather than risking a
                 // partially-valid cache.
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "exception"), ("msg", ex.GetType().Name));
                 System.Diagnostics.Debug.WriteLine($"[SqliteStorage] EvaluateCacheReuse failed: {ex.Message}");
                 try { ClearTables(); } catch { /* ignore */ }
                 return false;
@@ -355,17 +397,29 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         public void WriteCompletionMetadata(string sourcePath, int schemaVersion)
         {
-            if (string.IsNullOrEmpty(sourcePath)) return;
+            if (string.IsNullOrEmpty(sourcePath))
+            {
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", false), ("reason", "no_path"));
+                return;
+            }
             long size;
             string mtime;
             try
             {
                 var info = new System.IO.FileInfo(sourcePath);
-                if (!info.Exists) return;
+                if (!info.Exists)
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", false), ("reason", "source_missing"));
+                    return;
+                }
                 size = info.Length;
                 mtime = info.LastWriteTimeUtc.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
             }
-            catch { return; }
+            catch (Exception ex)
+            {
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", false), ("reason", "stat_failed"), ("msg", ex.GetType().Name));
+                return;
+            }
 
             lock (_sync)
             {
@@ -379,9 +433,11 @@ namespace FindPluginCore.Implementations.Storage
                     WriteMetaKey(tx, "completed",      "1");
                     WriteMetaKey(tx, "completed_at",   DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
                     tx.Commit();
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", true), ("size", size), ("path_len", sourcePath.Length));
                 }
                 catch (Exception ex)
                 {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", false), ("reason", "sql_exception"), ("msg", ex.GetType().Name));
                     System.Diagnostics.Debug.WriteLine($"[SqliteStorage] WriteCompletionMetadata failed: {ex.Message}");
                 }
             }
