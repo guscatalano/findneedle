@@ -95,11 +95,13 @@ public static class ResultsViewerSettings
             if (!string.IsNullOrEmpty(Data.CacheReuseMode)
                 && Enum.TryParse<FindPluginCore.Searching.CacheReuseMode>(Data.CacheReuseMode, ignoreCase: true, out var parsed))
                 return parsed;
-            if (Data.UseSearchCache.HasValue)
-                return Data.UseSearchCache.Value
-                    ? FindPluginCore.Searching.CacheReuseMode.Always
-                    : FindPluginCore.Searching.CacheReuseMode.Never;
-            return DefaultCacheReuseMode;
+            // Migration policy: the legacy bool only meant "do I want any caching at all?". If
+            // the user had it OFF that's a clear opt-out → preserve as Never. If it was ON (or
+            // unset), default into the new Prompt mode so they actually see the choice on the
+            // next reopen rather than getting silently locked into Always.
+            if (Data.UseSearchCache.HasValue && !Data.UseSearchCache.Value)
+                return FindPluginCore.Searching.CacheReuseMode.Never;
+            return DefaultCacheReuseMode; // Prompt
         }
         set
         {

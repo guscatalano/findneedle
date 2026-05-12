@@ -76,7 +76,10 @@ public sealed partial class RunSearchPage : Page
             // is wired to handle.Cancellation via _cts.
             await handle.SearchTask;
 
-            summary.Text = MiddleLayerService.GetStats()?.GetSummaryReport() ?? "";
+            var report = MiddleLayerService.GetStats()?.GetSummaryReport() ?? "";
+            summary.Text = MiddleLayerService.LastSearchReusedCache
+                ? "(from cache) " + report
+                : "(scanned) "    + report;
         }
         catch (System.Threading.Tasks.TaskCanceledException)
         {

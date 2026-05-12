@@ -146,6 +146,14 @@ public class NuSearchQuery : ISearchQuery
     private string _cachedSourcePath;
 
     /// <summary>
+    /// True if the most recent <c>Step1_LoadAllLocationsInMemory</c> resolved to a cache hit
+    /// (and the rest of the pipeline skipped scanning). Reset to false at the top of each
+    /// Step 1. UX layer reads this to annotate the status bar with "from cache" vs
+    /// "fresh scan".
+    /// </summary>
+    public bool LastSearchReusedCache => _skipScan;
+
+    /// <summary>
     /// Pre-create the result storage on the calling thread (typically the UI thread). Used by
     /// the streaming entry point so the viewer can grab a reference to the live store before
     /// the background search task starts populating it. Idempotent — subsequent calls return
@@ -430,6 +438,8 @@ public class NuSearchQuery : ISearchQuery
                         {
                             // User declined reuse — wipe and fall through to fresh scan.
                             sql.ClearTables();
+                            _stepnotifysink.progressSink.NotifyProgress(
+                                0, "cache declined · rescanning…");
                             PerfLog.Log("cache.declined", ("path", System.IO.Path.GetFileName(path)));
                             Logger.Instance.Log($"Cache declined for {path}; running fresh scan.");
                         }

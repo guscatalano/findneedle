@@ -296,7 +296,8 @@ public sealed partial class MainWindow : Window
             await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, _quickActionCts.Token).Wait(), _quickActionCts.Token);
             var stats = MiddleLayerService.GetStats();
             var count = MiddleLayerService.GetFilteredRowCount();
-            _lastRunSummary = $"{count} results";
+            var cacheSuffix = MiddleLayerService.LastSearchReusedCache ? " (from cache)" : " (scanned)";
+            _lastRunSummary = $"{count} results{cacheSuffix}";
         }
         catch (OperationCanceledException)
         {

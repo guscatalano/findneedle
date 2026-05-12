@@ -283,6 +283,14 @@ public class MiddleLayerService
     }
 
     /// <summary>
+    /// True if the most recently completed search reused the on-disk cache instead of running
+    /// a fresh scan. UX layer surfaces this in the status bar and the run-search summary so
+    /// the user can tell whether they're looking at cached or freshly scanned data.
+    /// </summary>
+    public static bool LastSearchReusedCache
+        => (SearchQueryUX?.CurrentQuery as NuSearchQuery)?.LastSearchReusedCache ?? false;
+
+    /// <summary>
     /// The storage backing the most recent completed search, if any. Used by the result viewer
     /// to build a paged source (in-memory list, SQLite paging, or hybrid). Returns null until a
     /// search has run.
