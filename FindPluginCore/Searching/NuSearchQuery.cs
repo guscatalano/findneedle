@@ -432,12 +432,46 @@ public class NuSearchQuery : ISearchQuery
                 int? estCapture = estRows;
                 long locStartCapture = locStart;
 
+                // Snapshot the filter list for the closure. Empty list → fast-path that skips
+                // the per-row filter check entirely.
+                var filtersCapture = _filters;
+
                 try
                 {
                     loc.SearchWithCallback(batch => {
+                        if (cancellationToken.IsCancellationRequested) return;
                         rawResults.AddRange(batch);
                         Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} raw results");
                         _resultStorage.AddRawBatch(batch, cancellationToken);
+
+                        // Filter and write this batch's filtered slice IMMEDIATELY so the heavy
+                        // SQL insert + FTS5 trigger work runs distributed across the scan instead
+                        // of as one giant post-scan dump (which previously froze the status text
+                        // at "scanning 500k/500k" for ~5–10 s while the trigger indexed every row).
+                        List<ISearchResult> filteredSlice;
+                        if (filtersCapture == null || filtersCapture.Count == 0)
+                        {
+                            // No filters configured → every raw row is a filtered row. Pass the
+                            // batch reference straight through; the storage doesn't keep it past
+                            // the call.
+                            filteredSlice = batch;
+                        }
+                        else
+                        {
+                            filteredSlice = new List<ISearchResult>(batch.Count);
+                            for (int i = 0; i < batch.Count; i++)
+                            {
+                                var r = batch[i];
+                                bool pass = true;
+                                for (int f = 0; f < filtersCapture.Count; f++)
+                                {
+                                    if (!filtersCapture[f].Filter(r)) { pass = false; break; }
+                                }
+                                if (pass) filteredSlice.Add(r);
+                            }
+                        }
+                        if (filteredSlice.Count > 0)
+                            _resultStorage.AddFilteredBatch(filteredSlice, cancellationToken);
 
                         int n = rawResults.Count;
                         long now = Environment.TickCount64;
@@ -490,36 +524,43 @@ public class NuSearchQuery : ISearchQuery
             }
             else
             {
+                // Sync (non-streaming) path: the plugin doesn't support callbacks, so we get the
+                // whole result list at once. Push it through the same filter+store pipeline.
                 try
                 {
                     rawResults = loc.Search(cancellationToken);
                     Logger.Instance.Log($"Search for {loc.GetName()} returned {rawResults.Count} raw results");
                     _resultStorage.AddRawBatch(rawResults, cancellationToken);
+
+                    List<ISearchResult> filteredBatch;
+                    if (_filters == null || _filters.Count == 0)
+                    {
+                        filteredBatch = rawResults;
+                    }
+                    else
+                    {
+                        filteredBatch = new List<ISearchResult>(rawResults.Count);
+                        for (int i = 0; i < rawResults.Count; i++)
+                        {
+                            if (cancellationToken.IsCancellationRequested) break;
+                            var r = rawResults[i];
+                            bool pass = true;
+                            for (int f = 0; f < _filters.Count; f++)
+                            {
+                                if (!_filters[f].Filter(r)) { pass = false; break; }
+                            }
+                            if (pass) filteredBatch.Add(r);
+                        }
+                    }
+                    if (filteredBatch.Count > 0)
+                        _resultStorage.AddFilteredBatch(filteredBatch, cancellationToken);
                 }
                 catch (NotImplementedException)
                 {
                     Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
                 }
             }
-            // Filter and add to filtered batch
-            var filteredBatch = new List<ISearchResult>();
-            foreach (var result in rawResults)
-            {
-                if (cancellationToken.IsCancellationRequested) break;
-                var passAllFilters = true;
-                foreach (var filter in _filters)
-                {
-                    if (!filter.Filter(result))
-                    {
-                        passAllFilters = false;
-                    }
-                }
-                if (passAllFilters)
-                {
-                    filteredBatch.Add(result);
-                }
-            }
-            _resultStorage.AddFilteredBatch(filteredBatch, cancellationToken);
+
             Logger.Instance.Log($"Results stored for location: {loc.GetName()}");
 
             // End-of-location update: bar now sits at the top of this location's span.
@@ -530,7 +571,6 @@ public class NuSearchQuery : ISearchQuery
             PerfLog.Log("location.end", ("idx", count), ("name", basename),
                 ("rows_total", SafeFilteredCount()),
                 ("rows_this_loc_raw", rawResults?.Count ?? 0),
-                ("rows_this_loc_filtered", filteredBatch.Count),
                 ("elapsed_ms", Environment.TickCount64 - locStart));
             count++;
         }
