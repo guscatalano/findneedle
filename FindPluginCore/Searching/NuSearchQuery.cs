@@ -125,6 +125,17 @@ public class NuSearchQuery : ISearchQuery
     public StorageType? OverrideStorageType { get; set; }
 
     /// <summary>
+    /// When true, the cache-reuse fast path in Step 1 is disabled — every search starts with a
+    /// freshly wiped storage. Set this from the UX layer when the user has unchecked
+    /// "Reuse cached results" in Settings → Results viewer. Defaults to false (cache enabled).
+    /// </summary>
+    public bool DisableCacheReuse { get; set; }
+
+    // Internal: set in Step 1 when the on-disk cache matched, telling Step 2 to skip scanning.
+    private bool _skipScan;
+    private string _cachedSourcePath;
+
+    /// <summary>
     /// Pre-create the result storage on the calling thread (typically the UI thread). Used by
     /// the streaming entry point so the viewer can grab a reference to the live store before
     /// the background search task starts populating it. Idempotent — subsequent calls return
@@ -328,6 +339,51 @@ public class NuSearchQuery : ISearchQuery
     {
         Logger.Instance.Log($"Step1_LoadAllLocationsInMemory (with cancellation): {_locations.Count} locations");
         using var _perf = PerfLog.Scope("search.step1", ("locations", _locations.Count));
+        _skipScan = false;
+        _cachedSourcePath = null;
+
+        // ----- Cache reuse fast path -----
+        // For single-file searches with caching enabled, see if the previous run's cache DB is
+        // still valid for this file (size + mtime + schema version match). If it is, we skip
+        // the entire file read + parse + index pipeline — the storage already has every row and
+        // the FTS5 index is already built. Saves ~5-9s on a 500k-row reopen.
+        if (!DisableCacheReuse
+            && _locations.Count == 1
+            && OverrideStorageType != StorageType.InMemory
+            && OverrideStorageType != StorageType.Hybrid)
+        {
+            var path = _locations[0].GetName();
+            if (System.IO.File.Exists(path))
+            {
+                try
+                {
+                    _resultStorage ??= CreateStorage(cancellationToken);
+                    if (_resultStorage is SqliteStorage sql
+                        && sql.EvaluateCacheReuse(path, SqliteStorage.CacheSchemaVersion))
+                    {
+                        _skipScan = true;
+                        _cachedSourcePath = path;
+                        int n = sql.GetStatistics().filteredRecordCount;
+                        _stepnotifysink.progressSink.NotifyProgress(
+                            100, $"reusing cached results · {n:N0} rows");
+                        PerfLog.Log("cache.hit", ("path", System.IO.Path.GetFileName(path)),
+                            ("rows", n));
+                        Logger.Instance.Log($"Cache hit for {path}: {n} rows. Skipping scan.");
+                        _stepnotifysink.NotifyStep(SearchStep.AtLoad);
+                        return;
+                    }
+                    else
+                    {
+                        PerfLog.Log("cache.miss", ("path", System.IO.Path.GetFileName(path)));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Instance.Log($"Cache check failed for {path}: {ex.Message} — falling back to fresh scan.");
+                }
+            }
+        }
+
         var count = 1;
         var total = _locations.Count;
         _ = PluginManager.GetSingleton();
@@ -370,6 +426,16 @@ public class NuSearchQuery : ISearchQuery
         using var _perf = PerfLog.Scope("search.step2");
         _stepnotifysink.NotifyStep(SearchStep.AtSearch);
         _filteredResults = new();
+
+        // Cache hit from Step 1: nothing to scan. Storage already holds the rows + FTS5 index.
+        // Downstream consumers (viewer) read from storage directly via IPagedLogSource — no
+        // in-memory list needs to be populated.
+        if (_skipScan)
+        {
+            Logger.Instance.Log("Step2: skipping (cache reuse).");
+            return _filteredResults;
+        }
+
         // If a caller (e.g. the streaming entry point) already prepared storage on the UI thread
         // we reuse that instance — otherwise create it lazily here, preserving the legacy flow.
         _resultStorage ??= CreateStorage(cancellationToken);
@@ -656,6 +722,24 @@ public class NuSearchQuery : ISearchQuery
             {
                 PerfLog.Log("search.settle.error", ("msg", ex.GetType().Name));
                 Logger.Instance.Log($"HybridStorage settle failed (viewer will retry on open): {ex.Message}");
+            }
+        }
+
+        // ----- Stamp the cache as valid for the next run -----
+        // Only meaningful when the backing store is SqliteStorage (Hybrid's inner SQLite isn't
+        // cached today) and the search was a single-file workspace (cache key is one file).
+        if (!cancellationToken.IsCancellationRequested
+            && _locations.Count == 1
+            && _resultStorage is SqliteStorage sqliteForMeta)
+        {
+            var path = _locations[0].GetName();
+            if (System.IO.File.Exists(path))
+            {
+                try { sqliteForMeta.WriteCompletionMetadata(path, SqliteStorage.CacheSchemaVersion); }
+                catch (Exception ex)
+                {
+                    Logger.Instance.Log($"WriteCompletionMetadata failed: {ex.Message}");
+                }
             }
         }
 

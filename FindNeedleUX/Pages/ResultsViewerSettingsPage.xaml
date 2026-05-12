@@ -142,6 +142,23 @@
                 </StackPanel>
             </Border>
 
+            <!-- Cache reuse -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Cache search results" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="When you reopen a file that hasn't changed (same size + last-modified time), reuse the previously scanned results and skip the search. Reopens go from several seconds to instant. Uncheck to force a fresh scan every time."/>
+                    <CheckBox x:Name="UseSearchCacheCheck"
+                              Content="Reuse cached results when the file hasn't changed"
+                              Checked="UseSearchCacheCheck_Toggled"
+                              Unchecked="UseSearchCacheCheck_Toggled"
+                              AutomationProperties.Name="Reuse cached search results"/>
+                </StackPanel>
+            </Border>
+
             <!-- Search storage backend -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

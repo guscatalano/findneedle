@@ -28,6 +28,20 @@ namespace FindPluginCore.Implementations.Storage
         public event Action<int>? FilteredRowsAdded;
 
         /// <summary>
+        /// Bump whenever the on-disk schema (tables, indexes, FTS5 config, triggers) changes in
+        /// a way that makes existing caches incompatible. Cache reuse checks this against the
+        /// value stored in the <c>_meta</c> table on the cached DB.
+        /// </summary>
+        public const int CacheSchemaVersion = 1;
+
+        /// <summary>
+        /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
+        /// file and the caller subsequently chose to reuse it via <see cref="EvaluateCacheReuse"/>.
+        /// Callers (NuSearchQuery) check this to decide whether to skip the file scan entirely.
+        /// </summary>
+        public bool ReusedExistingCache { get; private set; }
+
+        /// <summary>
         /// Constructs a SqliteStorage for the given file being searched, storing the DB in AppData cache.
         /// </summary>
         /// <param name="searchedFilePath">The path of the file being searched.</param>
@@ -36,6 +50,12 @@ namespace FindPluginCore.Implementations.Storage
             SQLitePCL.Batteries.Init(); // Ensure SQLite provider is initialized
             _dbPath = CachedStorage.GetCacheFilePath(searchedFilePath, ".db");
             OpenAndInitialize(allowRetryAfterCorruption: true);
+            // NOTE: this constructor no longer wipes the tables unconditionally. The caller now
+            // explicitly decides via EvaluateCacheReuse(): if the source file's size + mtime +
+            // schema match what we wrote last time, the existing data is kept (warm cache hit,
+            // search is near-instant); otherwise that method calls ClearTables and we run a
+            // fresh scan as before. For callers that don't care about caching, calling
+            // ClearTables() directly post-construction matches the old behaviour.
         }
 
         /// <summary>
@@ -135,6 +155,10 @@ namespace FindPluginCore.Implementations.Storage
         {
             var cmd = _connection.CreateCommand();
             cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS _meta (
+                    Key   TEXT PRIMARY KEY,
+                    Value TEXT
+                );
                 CREATE TABLE IF NOT EXISTS RawResults (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     LogTime TEXT,
@@ -246,6 +270,154 @@ namespace FindPluginCore.Implementations.Storage
 
         private bool _ftsAvailable;
 
+        // ----- Cache reuse (size + mtime + schema version) -----
+
+        /// <summary>
+        /// Decide whether the on-disk cache can be reused for <paramref name="sourcePath"/>.
+        /// If the stored metadata matches the file's current <c>size</c> + <c>mtime</c> + the
+        /// schema version, we keep the rows and the FTS5 index untouched — the next search
+        /// completes in milliseconds. Otherwise the tables are wiped and the caller runs a
+        /// fresh scan as before.
+        ///
+        /// Size+mtime is a deliberate trade-off: virtually free to compute (one stat call) and
+        /// catches every practical case where the log has actually changed. A full content hash
+        /// would be ironclad but cost ~0.2–1 s per open even for warm hits.
+        /// </summary>
+        public bool EvaluateCacheReuse(string sourcePath, int schemaVersion)
+        {
+            ReusedExistingCache = false;
+
+            if (string.IsNullOrEmpty(sourcePath) || !System.IO.File.Exists(sourcePath))
+            {
+                ClearTables();
+                return false;
+            }
+
+            try
+            {
+                long expectedSize;
+                DateTime expectedMtime;
+                try
+                {
+                    var info = new System.IO.FileInfo(sourcePath);
+                    expectedSize = info.Length;
+                    expectedMtime = info.LastWriteTimeUtc;
+                }
+                catch
+                {
+                    ClearTables();
+                    return false;
+                }
+
+                var meta = ReadMeta();
+                if (meta == null
+                    || !meta.TryGetValue("schema_version", out var sv) || sv != schemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    || !meta.TryGetValue("completed",      out var c)  || c  != "1"
+                    || !meta.TryGetValue("source_path",    out var sp) || !string.Equals(sp, sourcePath, StringComparison.OrdinalIgnoreCase)
+                    || !meta.TryGetValue("source_size",    out var ss) || ss != expectedSize.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    || !meta.TryGetValue("source_mtime",   out var sm) || sm != expectedMtime.ToString("o", System.Globalization.CultureInfo.InvariantCulture))
+                {
+                    ClearTables();
+                    return false;
+                }
+
+                // Quick sanity check: make sure FilteredResults actually has rows. A meta-only
+                // row with no data would be useless.
+                int rows;
+                using (var rc = _connection.CreateCommand())
+                {
+                    rc.CommandText = "SELECT COUNT(*) FROM FilteredResults";
+                    rows = Convert.ToInt32(rc.ExecuteScalar() ?? 0);
+                }
+                if (rows == 0)
+                {
+                    ClearTables();
+                    return false;
+                }
+
+                ReusedExistingCache = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Anything unexpected — fall back to a clean rebuild rather than risking a
+                // partially-valid cache.
+                System.Diagnostics.Debug.WriteLine($"[SqliteStorage] EvaluateCacheReuse failed: {ex.Message}");
+                try { ClearTables(); } catch { /* ignore */ }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Stamp the cache as complete + valid for the given source file. Caller (typically
+        /// <c>NuSearchQuery</c> after Step 2 finishes) invokes this once the data is fully
+        /// written so the next session's <see cref="EvaluateCacheReuse"/> can match against it.
+        /// </summary>
+        public void WriteCompletionMetadata(string sourcePath, int schemaVersion)
+        {
+            if (string.IsNullOrEmpty(sourcePath)) return;
+            long size;
+            string mtime;
+            try
+            {
+                var info = new System.IO.FileInfo(sourcePath);
+                if (!info.Exists) return;
+                size = info.Length;
+                mtime = info.LastWriteTimeUtc.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch { return; }
+
+            lock (_sync)
+            {
+                try
+                {
+                    using var tx = _connection.BeginTransaction();
+                    WriteMetaKey(tx, "schema_version", schemaVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    WriteMetaKey(tx, "source_path",    sourcePath);
+                    WriteMetaKey(tx, "source_size",    size.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    WriteMetaKey(tx, "source_mtime",   mtime);
+                    WriteMetaKey(tx, "completed",      "1");
+                    WriteMetaKey(tx, "completed_at",   DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
+                    tx.Commit();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SqliteStorage] WriteCompletionMetadata failed: {ex.Message}");
+                }
+            }
+        }
+
+        private Dictionary<string, string> ReadMeta()
+        {
+            try
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = "SELECT Key, Value FROM _meta";
+                var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    map[reader.GetString(0)] = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                }
+                return map;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void WriteMetaKey(SqliteTransaction tx, string key, string value)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO _meta(Key, Value) VALUES (@k, @v) " +
+                              "ON CONFLICT(Key) DO UPDATE SET Value = excluded.Value";
+            cmd.Parameters.AddWithValue("@k", key);
+            cmd.Parameters.AddWithValue("@v", value ?? "");
+            cmd.ExecuteNonQuery();
+        }
+
         /// <summary>
         /// Truncate both tables and reclaim disk space. Public so callers can also force a wipe
         /// mid-lifetime (e.g. for tests).
@@ -281,6 +453,9 @@ namespace FindPluginCore.Implementations.Storage
                     cmd.CommandText =
                         "DELETE FROM RawResults; " +
                         "DELETE FROM FilteredResults; " +
+                        // Wipe the cache-reuse metadata as well — the data it refers to is gone.
+                        // The next successful search re-populates this via WriteCompletionMetadata.
+                        "DELETE FROM _meta; " +
                         // Reset AUTOINCREMENT counters so Id starts at 1 again. sqlite_sequence may
                         // not exist if AUTOINCREMENT has never been triggered — IF EXISTS guard.
                         "DELETE FROM sqlite_sequence WHERE name IN ('RawResults','FilteredResults');";

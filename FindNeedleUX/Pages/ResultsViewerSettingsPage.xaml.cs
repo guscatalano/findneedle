@@ -52,6 +52,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Web viewer threshold ---
             WebThresholdNumberBox.Value = ResultsViewerSettings.WebViewerServerSideThreshold;
 
+            // --- Cache reuse ---
+            UseSearchCacheCheck.IsChecked = ResultsViewerSettings.UseSearchCache;
+
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
 
@@ -222,6 +225,13 @@ public sealed partial class ResultsViewerSettingsPage : Page
         {
             ResultsViewerSettings.DefaultResultViewer = tag;
         }
+    }
+
+    // ----- Cache reuse -----
+    private void UseSearchCacheCheck_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.UseSearchCache = UseSearchCacheCheck.IsChecked == true;
     }
 
     // ----- Web viewer threshold -----

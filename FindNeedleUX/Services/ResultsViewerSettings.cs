@@ -79,6 +79,19 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// When true (default), repeating a search on the same single-file log reuses the cached
+    /// SQLite DB if its <c>_meta</c> records show the source file hasn't changed (same size +
+    /// mtime + schema version). Warm reopens drop from ~5–9 s to ~100 ms. Turn off to force a
+    /// fresh scan every time — useful if you suspect the cache disagrees with the file.
+    /// </summary>
+    public const bool DefaultUseSearchCache = true;
+    public static bool UseSearchCache
+    {
+        get => Data.UseSearchCache ?? DefaultUseSearchCache;
+        set { Data.UseSearchCache = value; Save(); /* applies on next search */ }
+    }
+
+    /// <summary>
     /// Default visibility of each result-grid column. Out of the box, Source is hidden because
     /// its full-path content is long; users can re-enable any time from the settings page (saved)
     /// or via the in-viewer Columns ▾ popover (session only).
@@ -196,5 +209,6 @@ public static class ResultsViewerSettings
         public int? PageSize { get; set; }
         public int? WebViewerServerSideThreshold { get; set; }
         public string DefaultResultViewer { get; set; }
+        public bool? UseSearchCache { get; set; }
     }
 }

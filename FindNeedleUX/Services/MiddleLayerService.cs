@@ -93,8 +93,15 @@ public class MiddleLayerService
             SearchQueryUX.UpdateSearchQuery();
             // Try to get SearchStepNotificationSink if possible
             SearchStepNotificationSink? sink = query?.SearchStepNotificationSink;
-            SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters, 
+            SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters,
                 query.Processors, query.Outputs, sink, query.stats);
+
+            // Push the user's cache-reuse preference onto the freshly-created NuSearchQuery.
+            // Step 1's cache eval checks this before peeking at the on-disk cache DB.
+            if (SearchQueryUX.CurrentQuery is NuSearchQuery nu)
+            {
+                nu.DisableCacheReuse = !ResultsViewerSettings.UseSearchCache;
+            }
         }
     }
 
