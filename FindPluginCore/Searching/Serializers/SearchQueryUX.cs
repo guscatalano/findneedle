@@ -65,6 +65,18 @@ public class SearchQueryUX
         {
             throw new Exception("wtf");
         }
+
+        // Release the previous query's SQLite storage before swapping. Without this, a search
+        // that was cancelled (or even one that completed) leaves a SqliteStorage with an open
+        // connection holding the cache .db file's lock. The next search on the same log file
+        // (same CachedStorage path) then sticks in its own SqliteStorage ctor's ClearTables
+        // waiting for the lock.
+        try { (q as FindPluginCore.Searching.NuSearchQuery)?.DisposeStorage(); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SearchQueryUX: old storage dispose failed: {ex.Message}");
+        }
+
         q = SearchQueryFactory.CreateSearchQuery(pluginManager);
     }
 

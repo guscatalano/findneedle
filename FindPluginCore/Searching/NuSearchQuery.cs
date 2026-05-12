@@ -136,6 +136,19 @@ public class NuSearchQuery : ISearchQuery
         return _resultStorage;
     }
 
+    /// <summary>
+    /// Release the result storage so its SQLite connection (if any) drops the file lock on the
+    /// cache <c>.db</c>. Called when this query is being replaced by a fresh one — otherwise the
+    /// next search on the same log file path can stick waiting for the lock.
+    /// Idempotent; safe to call multiple times.
+    /// </summary>
+    public void DisposeStorage()
+    {
+        var s = _resultStorage as IDisposable;
+        _resultStorage = null;
+        try { s?.Dispose(); } catch { /* never let cleanup throw */ }
+    }
+
     public NuSearchQuery()
     {
         _filters = new();

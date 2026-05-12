@@ -161,6 +161,11 @@ public class MiddleLayerService
 
     public static Task<string> RunSearch(bool surfacescan = false, CancellationToken cancellationToken = default)
     {
+        // If a streaming search is in flight, its background task is still writing to a storage
+        // we're about to replace + dispose. Stop it first so the next UpdateSearchQuery call's
+        // storage cleanup doesn't yank the storage out from under a live writer.
+        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
+        CurrentStreamingSearch = null;
 
         UpdateSearchQuery();
         var query = SearchQueryUX.CurrentQuery;

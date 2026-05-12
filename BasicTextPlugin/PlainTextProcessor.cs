@@ -78,26 +78,31 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
 
         try
         {
-            var lines = File.ReadAllLines(_filePath);
+            // Pre-size the result list from file size: typical log lines are ~100–200 bytes;
+            // using 150 as a midpoint avoids ~20 List resizes on a 500k-row file.
+            long fileSize = 0;
+            try { fileSize = new FileInfo(_filePath).Length; } catch { /* ignore */ }
+            int estimatedLines = fileSize > 0 ? (int)(fileSize / 150) : 4096;
+            if (_results.Capacity < estimatedLines) _results.Capacity = estimatedLines;
+
+            // Stream the file instead of File.ReadAllLines — ReadAllLines materialises every
+            // line in a single string[] before we touch the first one, so a 500 MB log eats
+            // ~1 GB of strings up front before we can even start parsing.
+            using var sr = new StreamReader(_filePath, detectEncodingFromByteOrderMarks: true);
             var lineNumber = 0;
-
-            foreach (var line in lines)
+            string line;
+            while ((line = sr.ReadLine()) != null)
             {
-                if (cancellationToken.IsCancellationRequested)
-                    break;
-
+                if (cancellationToken.IsCancellationRequested) break;
                 lineNumber++;
-                
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
+                if (string.IsNullOrWhiteSpace(line)) continue;
 
-                var result = new PlainTextSearchResult
+                _results.Add(new PlainTextSearchResult
                 {
                     LineNumber = lineNumber,
                     Text = line,
                     SourceFile = _filePath
-                };
-                _results.Add(result);
+                });
             }
 
             _hasLoaded = true;
@@ -128,19 +133,38 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
         if (string.IsNullOrEmpty(_filePath) || !File.Exists(_filePath))
             return;
 
-        var batch = new List<ISearchResult>();
-        var lines = await File.ReadAllLinesAsync(_filePath, cancellationToken);
-        var lineNumber = 0;
-
-        foreach (var line in lines)
+        // Fast path: LoadInMemory already parsed every row into _results. Just yield those in
+        // batches without re-reading the file. The previous implementation re-read the file
+        // here, doubling I/O + parsing cost on every search.
+        if (_hasLoaded)
         {
-            if (cancellationToken.IsCancellationRequested)
-                break;
+            var cached = new List<ISearchResult>(batchSize);
+            for (int i = 0; i < _results.Count; i++)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                cached.Add(_results[i]);
+                if (cached.Count >= batchSize)
+                {
+                    onBatch(cached);
+                    cached = new List<ISearchResult>(batchSize);
+                }
+            }
+            if (cached.Count > 0) onBatch(cached);
+            await Task.CompletedTask;
+            return;
+        }
 
+        // Cold path: nobody called LoadInMemory first. Stream the file (one pass, no
+        // ReadAllLines), populate _results, and yield batches as we go.
+        var batch = new List<ISearchResult>(batchSize);
+        using var sr = new StreamReader(_filePath, detectEncodingFromByteOrderMarks: true);
+        var lineNumber = 0;
+        string line;
+        while ((line = sr.ReadLine()) != null)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
             lineNumber++;
-            
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
+            if (string.IsNullOrWhiteSpace(line)) continue;
 
             var result = new PlainTextSearchResult
             {
@@ -148,17 +172,18 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
                 Text = line,
                 SourceFile = _filePath
             };
+            _results.Add(result);
             batch.Add(result);
 
             if (batch.Count >= batchSize)
             {
                 onBatch(batch);
-                batch = new List<ISearchResult>();
+                batch = new List<ISearchResult>(batchSize);
             }
         }
-
-        if (batch.Count > 0)
-            onBatch(batch);
+        _hasLoaded = true;
+        if (batch.Count > 0) onBatch(batch);
+        await Task.CompletedTask;
     }
 
     public Dictionary<string, int> GetProviderCount()
@@ -168,7 +193,20 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
 
     public (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(CancellationToken cancellationToken = default)
     {
-        return (null, _results.Count > 0 ? _results.Count : null);
+        // After load: exact count. Before load (which is when Auto storage selection asks):
+        // estimate from file size, since the storage tier picker depends on this and was
+        // previously always getting 0 (forcing InMemory tier even for huge files).
+        if (_results.Count > 0) return (null, _results.Count);
+        try
+        {
+            if (!string.IsNullOrEmpty(_filePath) && File.Exists(_filePath))
+            {
+                var size = new FileInfo(_filePath).Length;
+                if (size > 0) return (null, (int)Math.Min(int.MaxValue, size / 150));
+            }
+        }
+        catch { /* swallow — estimate is best-effort */ }
+        return (null, null);
     }
 
     public void Dispose()
@@ -178,7 +216,11 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
 }
 
 /// <summary>
-/// Simple search result for plain text lines.
+/// Simple search result for plain text lines. Parsed fields (Level, LogTime, Source basename)
+/// are computed once and cached so the search pipeline can call <c>GetLevel()</c>/
+/// <c>GetLogTime()</c> from multiple stages (filter, storage insert, viewer display) without
+/// paying the regex / ToUpper / DateTime.Parse cost N times. On a 500k-row search the cache
+/// shaves ~3x of the per-row CPU work.
 /// </summary>
 public class PlainTextSearchResult : ISearchResult
 {
@@ -186,32 +228,36 @@ public class PlainTextSearchResult : ISearchResult
     public string Text { get; set; } = string.Empty;
     public string SourceFile { get; set; } = string.Empty;
 
-    public string GetSearchableData()
-    {
-        return Text;
-    }
+    // Lazy-cached parses. Default Level.Info / DateTime.MinValue would be valid values, so we
+    // need a separate "computed?" flag rather than checking for sentinels.
+    private bool _levelComputed;
+    private Level _level;
+    private bool _logTimeComputed;
+    private DateTime _logTime;
+    private string _sourceBasename;
 
-    public string GetMessage()
-    {
-        return Text;
-    }
+    public string GetSearchableData() => Text;
+    public string GetMessage() => Text;
 
     public DateTime GetLogTime()
     {
-        // Try to extract timestamp from common log formats
-        // Format: [YYYY-MM-DD HH:MM:SS] or YYYY-MM-DD HH:MM:SS
-        if (Text.Length > 20)
+        if (!_logTimeComputed)
         {
-            var start = Text.IndexOf('[');
-            var end = Text.IndexOf(']');
-            if (start >= 0 && end > start)
-            {
-                var timestamp = Text.Substring(start + 1, end - start - 1);
-                if (DateTime.TryParse(timestamp, out var dt))
-                    return dt;
-            }
+            _logTime = ParseLogTime(Text);
+            _logTimeComputed = true;
         }
-        return DateTime.MinValue;
+        return _logTime;
+    }
+
+    private static DateTime ParseLogTime(string text)
+    {
+        // Common format: [YYYY-MM-DD HH:MM:SS] at the start of the line.
+        if (text == null || text.Length <= 20) return DateTime.MinValue;
+        var start = text.IndexOf('[');
+        var end = text.IndexOf(']');
+        if (start < 0 || end <= start) return DateTime.MinValue;
+        var timestamp = text.Substring(start + 1, end - start - 1);
+        return DateTime.TryParse(timestamp, out var dt) ? dt : DateTime.MinValue;
     }
 
     // Plain-text logs don't carry these fields. Return empty so consumers (auto-hide column
@@ -223,28 +269,40 @@ public class PlainTextSearchResult : ISearchResult
 
     public string GetSource()
     {
-        return Path.GetFileName(SourceFile);
+        // Path.GetFileName allocates each call; cache the basename since SourceFile doesn't change.
+        return _sourceBasename ??= Path.GetFileName(SourceFile);
     }
 
-    public string GetResultSource()
-    {
-        return SourceFile;
-    }
+    public string GetResultSource() => SourceFile;
 
     public Level GetLevel()
     {
-        // Try to detect level from common patterns
-        var upper = Text.ToUpperInvariant();
-        if (upper.Contains("CRITICAL") || upper.Contains("FATAL"))
-            return Level.Catastrophic;
-        if (upper.Contains("ERROR"))
-            return Level.Error;
-        if (upper.Contains("WARNING") || upper.Contains("WARN"))
-            return Level.Warning;
-        if (upper.Contains("DEBUG") || upper.Contains("VERBOSE"))
-            return Level.Verbose;
-        return Level.Info; // Default
+        if (!_levelComputed)
+        {
+            _level = ParseLevel(Text);
+            _levelComputed = true;
+        }
+        return _level;
     }
+
+    /// <summary>
+    /// Detect a level keyword in the line without allocating. The previous implementation did
+    /// <c>Text.ToUpperInvariant()</c> on every call — a fresh ~150-char string allocation per
+    /// row per call site. <see cref="String.IndexOf(string, StringComparison)"/> with
+    /// <c>OrdinalIgnoreCase</c> compares in place with zero allocations.
+    /// </summary>
+    private static Level ParseLevel(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return Level.Info;
+        if (Contains(text, "CRITICAL") || Contains(text, "FATAL")) return Level.Catastrophic;
+        if (Contains(text, "ERROR")) return Level.Error;
+        if (Contains(text, "WARNING") || Contains(text, "WARN")) return Level.Warning;
+        if (Contains(text, "DEBUG") || Contains(text, "VERBOSE")) return Level.Verbose;
+        return Level.Info;
+    }
+
+    private static bool Contains(string haystack, string needle)
+        => haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
 
     public void WriteToConsole()
     {
