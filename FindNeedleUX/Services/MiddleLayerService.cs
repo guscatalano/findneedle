@@ -96,11 +96,13 @@ public class MiddleLayerService
             SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters,
                 query.Processors, query.Outputs, sink, query.stats);
 
-            // Push the user's cache-reuse preference onto the freshly-created NuSearchQuery.
-            // Step 1's cache eval checks this before peeking at the on-disk cache DB.
+            // Push the user's cache-reuse preference + prompt callback onto the freshly-created
+            // NuSearchQuery. Step 1 honors the mode (Always / Never / Prompt) and, when Prompt,
+            // invokes the callback to ask the user before reusing.
             if (SearchQueryUX.CurrentQuery is NuSearchQuery nu)
             {
-                nu.DisableCacheReuse = !ResultsViewerSettings.UseSearchCache;
+                nu.CacheReuseMode = ResultsViewerSettings.CacheReuseMode;
+                nu.CacheReusePrompt = CacheReusePromptService.Prompt;
             }
         }
     }

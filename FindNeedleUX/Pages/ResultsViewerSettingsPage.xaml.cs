@@ -53,7 +53,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             WebThresholdNumberBox.Value = ResultsViewerSettings.WebViewerServerSideThreshold;
 
             // --- Cache reuse ---
-            UseSearchCacheCheck.IsChecked = ResultsViewerSettings.UseSearchCache;
+            SelectCacheReuseMode();
 
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
@@ -228,10 +228,28 @@ public sealed partial class ResultsViewerSettingsPage : Page
     }
 
     // ----- Cache reuse -----
-    private void UseSearchCacheCheck_Toggled(object sender, RoutedEventArgs e)
+    private void SelectCacheReuseMode()
+    {
+        var current = ResultsViewerSettings.CacheReuseMode.ToString();
+        foreach (var item in CacheReuseModeCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            {
+                CacheReuseModeCombo.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void CacheReuseModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressEvents) return;
-        ResultsViewerSettings.UseSearchCache = UseSearchCacheCheck.IsChecked == true;
+        if (CacheReuseModeCombo.SelectedItem is ComboBoxItem item
+            && item.Tag is string tag
+            && Enum.TryParse<FindPluginCore.Searching.CacheReuseMode>(tag, ignoreCase: true, out var mode))
+        {
+            ResultsViewerSettings.CacheReuseMode = mode;
+        }
     }
 
     // ----- Web viewer threshold -----

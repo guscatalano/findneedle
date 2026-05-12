@@ -79,16 +79,36 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
-    /// When true (default), repeating a search on the same single-file log reuses the cached
-    /// SQLite DB if its <c>_meta</c> records show the source file hasn't changed (same size +
-    /// mtime + schema version). Warm reopens drop from ~5–9 s to ~100 ms. Turn off to force a
-    /// fresh scan every time — useful if you suspect the cache disagrees with the file.
+    /// When the on-disk cache for a single-file search is still valid (same size + mtime +
+    /// schema version), how should we decide whether to reuse it?
+    ///   Always — reuse silently (fastest)
+    ///   Never  — always rescan
+    ///   Prompt — ask the user via a dialog before reusing (default for new installs)
     /// </summary>
-    public const bool DefaultUseSearchCache = true;
-    public static bool UseSearchCache
+    public const FindPluginCore.Searching.CacheReuseMode DefaultCacheReuseMode = FindPluginCore.Searching.CacheReuseMode.Prompt;
+    public static FindPluginCore.Searching.CacheReuseMode CacheReuseMode
     {
-        get => Data.UseSearchCache ?? DefaultUseSearchCache;
-        set { Data.UseSearchCache = value; Save(); /* applies on next search */ }
+        get
+        {
+            // Prefer the new enum field; fall back to the legacy bool for installs that wrote
+            // viewer-settings.json before this setting existed.
+            if (!string.IsNullOrEmpty(Data.CacheReuseMode)
+                && Enum.TryParse<FindPluginCore.Searching.CacheReuseMode>(Data.CacheReuseMode, ignoreCase: true, out var parsed))
+                return parsed;
+            if (Data.UseSearchCache.HasValue)
+                return Data.UseSearchCache.Value
+                    ? FindPluginCore.Searching.CacheReuseMode.Always
+                    : FindPluginCore.Searching.CacheReuseMode.Never;
+            return DefaultCacheReuseMode;
+        }
+        set
+        {
+            Data.CacheReuseMode = value.ToString();
+            // Wipe the legacy bool so the enum field is the source of truth from now on.
+            Data.UseSearchCache = null;
+            Save();
+            // No Changed event: applies on next search.
+        }
     }
 
     /// <summary>
@@ -209,6 +229,7 @@ public static class ResultsViewerSettings
         public int? PageSize { get; set; }
         public int? WebViewerServerSideThreshold { get; set; }
         public string DefaultResultViewer { get; set; }
-        public bool? UseSearchCache { get; set; }
+        public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
+        public string CacheReuseMode { get; set; }
     }
 }

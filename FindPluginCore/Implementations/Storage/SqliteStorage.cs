@@ -407,6 +407,28 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        /// <summary>
+        /// Read the <c>completed_at</c> stamp from <c>_meta</c> if present. Used by the cache-
+        /// reuse prompt so the dialog can show "cache built X minutes ago". Returns null if
+        /// the table is missing or the value isn't a valid ISO 8601 timestamp.
+        /// </summary>
+        public DateTime? TryGetCacheCompletedAt()
+        {
+            try
+            {
+                var meta = ReadMeta();
+                if (meta != null
+                    && meta.TryGetValue("completed_at", out var s)
+                    && DateTime.TryParse(s, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+                {
+                    return dt;
+                }
+            }
+            catch { /* ignore */ }
+            return null;
+        }
+
         private void WriteMetaKey(SqliteTransaction tx, string key, string value)
         {
             using var cmd = _connection.CreateCommand();

@@ -125,11 +125,21 @@ public class NuSearchQuery : ISearchQuery
     public StorageType? OverrideStorageType { get; set; }
 
     /// <summary>
-    /// When true, the cache-reuse fast path in Step 1 is disabled — every search starts with a
-    /// freshly wiped storage. Set this from the UX layer when the user has unchecked
-    /// "Reuse cached results" in Settings → Results viewer. Defaults to false (cache enabled).
+    /// How the cache-reuse fast path in Step 1 should behave. Set from the UX layer based on
+    /// the user's Settings → Results viewer choice. Default is <see cref="CacheReuseMode.Always"/>
+    /// so callers that never set it (tests, plugins) get the silently-reuse behaviour.
     /// </summary>
-    public bool DisableCacheReuse { get; set; }
+    public CacheReuseMode CacheReuseMode { get; set; } = CacheReuseMode.Always;
+
+    /// <summary>
+    /// Required when <see cref="CacheReuseMode"/> is <see cref="CacheReuseMode.Prompt"/>. The
+    /// query calls this synchronously on the search thread to ask whether to reuse the cache.
+    /// The UX layer's implementation marshals to the UI thread, shows a dialog, and blocks
+    /// (via TaskCompletionSource) until the user picks. If null while in Prompt mode, we fall
+    /// back to "use cache" — same effect as Always — so a missing callback never strands the
+    /// user without results.
+    /// </summary>
+    public Func<CacheReusePromptInfo, bool> CacheReusePrompt { get; set; }
 
     // Internal: set in Step 1 when the on-disk cache matched, telling Step 2 to skip scanning.
     private bool _skipScan;
@@ -343,11 +353,17 @@ public class NuSearchQuery : ISearchQuery
         _cachedSourcePath = null;
 
         // ----- Cache reuse fast path -----
-        // For single-file searches with caching enabled, see if the previous run's cache DB is
-        // still valid for this file (size + mtime + schema version match). If it is, we skip
-        // the entire file read + parse + index pipeline — the storage already has every row and
-        // the FTS5 index is already built. Saves ~5-9s on a 500k-row reopen.
-        if (!DisableCacheReuse
+        // For single-file searches, see if the previous run's cache DB is still valid for this
+        // file (size + mtime + schema version match). If it is, we skip the entire file read +
+        // parse + index pipeline — the storage already has every row and the FTS5 index is
+        // already built. Saves ~5-9s on a 500k-row reopen.
+        //
+        // CacheReuseMode controls whether we look at the cache at all and whether we ask the
+        // user before reusing it:
+        //   Always — silently reuse if valid (fastest, no prompt)
+        //   Never  — don't even check; always rescan
+        //   Prompt — validate cache; if valid, call CacheReusePrompt; user decides
+        if (CacheReuseMode != CacheReuseMode.Never
             && _locations.Count == 1
             && OverrideStorageType != StorageType.InMemory
             && OverrideStorageType != StorageType.Hybrid)
@@ -361,16 +377,62 @@ public class NuSearchQuery : ISearchQuery
                     if (_resultStorage is SqliteStorage sql
                         && sql.EvaluateCacheReuse(path, SqliteStorage.CacheSchemaVersion))
                     {
-                        _skipScan = true;
-                        _cachedSourcePath = path;
-                        int n = sql.GetStatistics().filteredRecordCount;
-                        _stepnotifysink.progressSink.NotifyProgress(
-                            100, $"reusing cached results · {n:N0} rows");
-                        PerfLog.Log("cache.hit", ("path", System.IO.Path.GetFileName(path)),
-                            ("rows", n));
-                        Logger.Instance.Log($"Cache hit for {path}: {n} rows. Skipping scan.");
-                        _stepnotifysink.NotifyStep(SearchStep.AtLoad);
-                        return;
+                        bool reuse = true;
+                        if (CacheReuseMode == CacheReuseMode.Prompt && CacheReusePrompt != null)
+                        {
+                            // Gather info for the dialog. Pull from the metadata we just
+                            // validated; if any field is missing, the prompt simply doesn't
+                            // surface that detail — it never blocks.
+                            CacheReusePromptInfo info;
+                            try
+                            {
+                                var fi = new System.IO.FileInfo(path);
+                                info = new CacheReusePromptInfo
+                                {
+                                    SourceFilePath = path,
+                                    SourceFileSize = fi.Length,
+                                    SourceFileMtimeUtc = fi.LastWriteTimeUtc,
+                                    CachedRowCount = sql.GetStatistics().filteredRecordCount,
+                                    CacheCompletedAtUtc = sql.TryGetCacheCompletedAt(),
+                                };
+                            }
+                            catch
+                            {
+                                info = new CacheReusePromptInfo { SourceFilePath = path };
+                            }
+
+                            try
+                            {
+                                reuse = CacheReusePrompt(info);
+                                PerfLog.Log("cache.prompt", ("answer", reuse ? "use" : "rescan"));
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Instance.Log($"Cache prompt callback threw: {ex.Message} — defaulting to reuse.");
+                                reuse = true;
+                            }
+                        }
+
+                        if (reuse)
+                        {
+                            _skipScan = true;
+                            _cachedSourcePath = path;
+                            int n = sql.GetStatistics().filteredRecordCount;
+                            _stepnotifysink.progressSink.NotifyProgress(
+                                100, $"reusing cached results · {n:N0} rows");
+                            PerfLog.Log("cache.hit", ("path", System.IO.Path.GetFileName(path)),
+                                ("rows", n), ("mode", CacheReuseMode.ToString()));
+                            Logger.Instance.Log($"Cache hit for {path}: {n} rows. Skipping scan.");
+                            _stepnotifysink.NotifyStep(SearchStep.AtLoad);
+                            return;
+                        }
+                        else
+                        {
+                            // User declined reuse — wipe and fall through to fresh scan.
+                            sql.ClearTables();
+                            PerfLog.Log("cache.declined", ("path", System.IO.Path.GetFileName(path)));
+                            Logger.Instance.Log($"Cache declined for {path}; running fresh scan.");
+                        }
                     }
                     else
                     {
