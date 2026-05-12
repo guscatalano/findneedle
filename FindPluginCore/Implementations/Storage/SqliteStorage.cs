@@ -321,13 +321,26 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         public void AddFilteredBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
+            => AddFilteredBatch(batch, cancellationToken, onProgress: null);
+
+        /// <summary>
+        /// Same as the parameterless overload, plus a progress hook. <paramref name="onProgress"/>
+        /// is called with the running insert count after every <see cref="InsertChunkRows"/>
+        /// (500) rows. Lets a caller surface "indexing 12,345 / 500,000…" status text while a
+        /// single bulk insert is running — without breaking the inserts into many small
+        /// transactions, which was ~3× slower in practice.
+        /// </summary>
+        public void AddFilteredBatch(
+            IEnumerable<ISearchResult> batch,
+            CancellationToken cancellationToken,
+            Action<int> onProgress)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
             int inserted;
             lock (_sync)
             {
                 using var transaction = _connection.BeginTransaction();
-                BulkInsert("FilteredResults", batch, transaction, cancellationToken, out inserted);
+                BulkInsert("FilteredResults", batch, transaction, cancellationToken, out inserted, onProgress);
                 transaction.Commit();
             }
             // Fire outside the lock so subscribers can re-enter (e.g. read a page) without
@@ -346,7 +359,8 @@ namespace FindPluginCore.Implementations.Storage
             IEnumerable<ISearchResult> batch,
             SqliteTransaction tx,
             CancellationToken cancellationToken,
-            out int inserted)
+            out int inserted,
+            Action<int> onProgress = null)
         {
             inserted = 0;
 
@@ -366,6 +380,10 @@ namespace FindPluginCore.Implementations.Storage
                     BindAndExecuteChunk(chunkCmd, chunkParams, buffer, InsertChunkRows);
                     inserted += InsertChunkRows;
                     bufferCount = 0;
+                    // Fire progress mid-transaction so the caller can update its status text.
+                    // The lock is still held; subscribers must not call back into storage from
+                    // here (we just pass a count — that's the contract).
+                    onProgress?.Invoke(inserted);
                 }
             }
 
@@ -377,6 +395,7 @@ namespace FindPluginCore.Implementations.Storage
                 BindAndExecute(singleCmd, singleParams, buffer[i]);
                 inserted++;
             }
+            if (bufferCount > 0) onProgress?.Invoke(inserted);
         }
 
         /// <summary>
