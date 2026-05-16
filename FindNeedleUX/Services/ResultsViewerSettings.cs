@@ -48,6 +48,32 @@ public static class ResultsViewerSettings
         set { Data.DetailsPanelVisible = value; Save(); /* no Changed: per-window UI state */ }
     }
 
+    /// <summary>
+    /// User-chosen height in pixels of the native viewer's details panel. Clamped to the
+    /// [<see cref="MinDetailsPanelHeight"/>, <see cref="MaxDetailsPanelHeight"/>] range on read
+    /// so a corrupt / out-of-range JSON value can't make the panel disappear or fill the screen.
+    /// </summary>
+    public const double DefaultDetailsPanelHeight = 240;
+    public const double MinDetailsPanelHeight = 80;
+    public const double MaxDetailsPanelHeight = 800;
+    public static double DetailsPanelHeight
+    {
+        get
+        {
+            var v = Data.DetailsPanelHeight ?? DefaultDetailsPanelHeight;
+            if (v < MinDetailsPanelHeight) v = MinDetailsPanelHeight;
+            if (v > MaxDetailsPanelHeight) v = MaxDetailsPanelHeight;
+            return v;
+        }
+        set
+        {
+            if (value < MinDetailsPanelHeight) value = MinDetailsPanelHeight;
+            if (value > MaxDetailsPanelHeight) value = MaxDetailsPanelHeight;
+            Data.DetailsPanelHeight = value;
+            Save();
+        }
+    }
+
     public const int DefaultPageSize = 100;
     public static int PageSize
     {
@@ -245,5 +271,6 @@ public static class ResultsViewerSettings
         public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
         public string CacheReuseMode { get; set; }
         public bool? DetailsPanelVisible { get; set; }
+        public double? DetailsPanelHeight { get; set; }
     }
 }

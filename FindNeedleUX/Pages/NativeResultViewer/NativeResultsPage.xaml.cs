@@ -113,6 +113,9 @@ public sealed partial class NativeResultsPage : Page
         DetailsPanelToggleGlyph.Text = visible ? "▾" : "▸";
         DetailsPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 
+        // Restore the user's last-chosen panel height (clamped to [Min, Max] in the setter).
+        if (visible) DetailsPanel.Height = ResultsViewerSettings.DetailsPanelHeight;
+
         // The two modes are mutually exclusive: in details-panel mode the inline row expand is
         // off, because having both would mean clicking a row puts the same data in two places.
         ResultsGrid.RowDetailsVisibilityMode = visible
@@ -122,6 +125,77 @@ public sealed partial class NativeResultsPage : Page
         // Re-populate so opening the panel immediately shows the current selection (or the
         // placeholder if nothing's selected).
         if (visible) RefreshDetailsPanel();
+    }
+
+    // ----- Details panel resize -----
+    //
+    // Custom drag-to-resize since WinUI 3 doesn't ship a built-in GridSplitter and pulling in
+    // CommunityToolkit.Sizers for this one control isn't worth the dependency. The grip
+    // captures the pointer on press, tracks Y deltas, and rewrites DetailsPanel.Height
+    // (clamped). On release we save the height so it persists across sessions.
+    private bool _detailsResizing;
+    private double _detailsResizeStartY;
+    private double _detailsResizeStartHeight;
+
+    private void DetailsPanelResizer_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        try { ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.SizeNorthSouth); }
+        catch { /* not all hosts allow cursor changes */ }
+    }
+
+    private void DetailsPanelResizer_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (_detailsResizing) return; // keep the resize cursor while dragging
+        try { ProtectedCursor = null; } catch { }
+    }
+
+    private void DetailsPanelResizer_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is not UIElement el) return;
+        var pt = e.GetCurrentPoint(this);
+        if (!pt.Properties.IsLeftButtonPressed) return;
+        _detailsResizing = true;
+        _detailsResizeStartY = pt.Position.Y;
+        _detailsResizeStartHeight = double.IsNaN(DetailsPanel.Height)
+            ? DetailsPanel.ActualHeight
+            : DetailsPanel.Height;
+        el.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void DetailsPanelResizer_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_detailsResizing) return;
+        var currentY = e.GetCurrentPoint(this).Position.Y;
+        var deltaUp = _detailsResizeStartY - currentY; // dragging up = grow the panel
+        var newHeight = _detailsResizeStartHeight + deltaUp;
+        if (newHeight < ResultsViewerSettings.MinDetailsPanelHeight)
+            newHeight = ResultsViewerSettings.MinDetailsPanelHeight;
+        if (newHeight > ResultsViewerSettings.MaxDetailsPanelHeight)
+            newHeight = ResultsViewerSettings.MaxDetailsPanelHeight;
+        DetailsPanel.Height = newHeight;
+        e.Handled = true;
+    }
+
+    private void DetailsPanelResizer_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_detailsResizing) return;
+        _detailsResizing = false;
+        if (sender is UIElement el) el.ReleasePointerCapture(e.Pointer);
+        try { ProtectedCursor = null; } catch { }
+        // Persist whatever height the user settled on.
+        ResultsViewerSettings.DetailsPanelHeight = DetailsPanel.Height;
+        e.Handled = true;
+    }
+
+    private void DetailsPanelResizer_PointerCaptureLost(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (_detailsResizing)
+        {
+            _detailsResizing = false;
+            try { ProtectedCursor = null; } catch { }
+            ResultsViewerSettings.DetailsPanelHeight = DetailsPanel.Height;
+        }
     }
 
     private void ApplyPersistedPageSize()

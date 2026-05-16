@@ -286,16 +286,43 @@
 
         <!-- Details panel (Grid.Row=3). The DataGrid's per-row expandable details are disabled
              when this panel is shown — the two ways of viewing details are mutually exclusive.
-             Collapsed when DetailsPanelToggle is off (the default "Inrow" mode). -->
+             Collapsed when DetailsPanelToggle is off (the default "Inrow" mode).
+             The Border's Height is set in code-behind from ResultsViewerSettings and updated
+             when the user drags the resize grip at the top. The inner grid is Auto/Auto/*, so
+             the ScrollViewer takes whatever vertical space remains after the grip + header and
+             shows a scrollbar when content overflows it. -->
         <Border x:Name="DetailsPanel" Grid.Row="3" Visibility="Collapsed"
+                Height="240"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>  <!-- Resize grip -->
+                    <RowDefinition Height="Auto"/>  <!-- Header bar (title + Copy / ✕) -->
+                    <RowDefinition Height="*"/>     <!-- Content (fills remaining height) -->
                 </Grid.RowDefinitions>
-                <Grid Grid.Row="0" Padding="12,6"
+
+                <!-- Resize grip. Click & drag vertically to change the panel's height. Tracks
+                     pointer on the page (not just on the grip element) so the user can drag
+                     past the grip's bounds without losing capture. -->
+                <Border x:Name="DetailsPanelResizer" Grid.Row="0"
+                        Height="8" Background="Transparent"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="0,0,0,1"
+                        PointerEntered="DetailsPanelResizer_PointerEntered"
+                        PointerExited="DetailsPanelResizer_PointerExited"
+                        PointerPressed="DetailsPanelResizer_PointerPressed"
+                        PointerMoved="DetailsPanelResizer_PointerMoved"
+                        PointerReleased="DetailsPanelResizer_PointerReleased"
+                        PointerCaptureLost="DetailsPanelResizer_PointerCaptureLost"
+                        ToolTipService.ToolTip="Drag to resize">
+                    <Rectangle Width="48" Height="3"
+                               RadiusX="1.5" RadiusY="1.5"
+                               Fill="{ThemeResource TextFillColorTertiaryBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+
+                <Grid Grid.Row="1" Padding="12,6"
                       Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                     <TextBlock Text="Selected row details" FontWeight="SemiBold"
                                VerticalAlignment="Center"/>
@@ -312,8 +339,10 @@
                                 ToolTipService.ToolTip="Hide details panel (switch back to Inrow mode)"/>
                     </StackPanel>
                 </Grid>
-                <ScrollViewer Grid.Row="1" MaxHeight="240" Padding="12,8"
-                              VerticalScrollBarVisibility="Auto">
+
+                <ScrollViewer Grid.Row="2" Padding="12,8"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                     <Grid x:Name="DetailsPanelGrid" ColumnSpacing="12" RowSpacing="2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="110"/>
