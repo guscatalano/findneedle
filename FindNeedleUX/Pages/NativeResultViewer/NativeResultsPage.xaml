@@ -53,6 +53,7 @@
             <RowDefinition Height="Auto"/>  <!-- Toolbar -->
             <RowDefinition Height="Auto"/>  <!-- Filter expander (collapsible) -->
             <RowDefinition Height="*"/>     <!-- Grid + overlays -->
+            <RowDefinition Height="Auto"/>  <!-- Details panel (visible only in DetailsPanel mode) -->
             <RowDefinition Height="Auto"/>  <!-- Pagination bar -->
         </Grid.RowDefinitions>
 
@@ -81,6 +82,16 @@
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock x:Name="FiltersToggleGlyph" Text="▾" FontSize="11"/>
                         <TextBlock Text="Filters"/>
+                    </StackPanel>
+                </ToggleButton>
+
+                <ToggleButton x:Name="DetailsPanelToggle" Height="32"
+                              Click="DetailsPanelToggle_Click"
+                              AutomationProperties.Name="Show or hide the row details panel"
+                              ToolTipService.ToolTip="Two view modes: Inrow (click a row to expand details inline) or Details panel (persistent panel beneath the grid).">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock x:Name="DetailsPanelToggleGlyph" Text="▸" FontSize="11"/>
+                        <TextBlock Text="Details"/>
                     </StackPanel>
                 </ToggleButton>
 
@@ -211,6 +222,7 @@
                               LoadingRow="ResultsGrid_LoadingRow"
                               Sorting="ResultsGrid_Sorting"
                               RightTapped="ResultsGrid_RightTapped"
+                              SelectionChanged="ResultsGrid_SelectionChanged"
                               RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
                               RowDetailsVisibilityMode="VisibleWhenSelected"
                               SelectionMode="Single"
@@ -263,8 +275,53 @@
             </Border>
         </Grid>
 
+        <!-- Details panel (Grid.Row=3). The DataGrid's per-row expandable details are disabled
+             when this panel is shown — the two ways of viewing details are mutually exclusive.
+             Collapsed when DetailsPanelToggle is off (the default "Inrow" mode). -->
+        <Border x:Name="DetailsPanel" Grid.Row="3" Visibility="Collapsed"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Padding="12,6"
+                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <TextBlock Text="Selected row details" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Content="Copy as JSON" Click="DetailsPanelCopyJson_Click"
+                                Height="28" FontSize="12"/>
+                        <Button Content="Copy as CSV"  Click="DetailsPanelCopyCsv_Click"
+                                Height="28" FontSize="12"/>
+                        <Button Content="Copy as XML"  Click="DetailsPanelCopyXml_Click"
+                                Height="28" FontSize="12"/>
+                        <Button Content="✕" Click="DetailsPanelClose_Click"
+                                Height="28" Width="32" FontSize="12"
+                                ToolTipService.ToolTip="Hide details panel (switch back to Inrow mode)"/>
+                    </StackPanel>
+                </Grid>
+                <ScrollViewer Grid.Row="1" MaxHeight="240" Padding="12,8"
+                              VerticalScrollBarVisibility="Auto">
+                    <Grid x:Name="DetailsPanelGrid" ColumnSpacing="12" RowSpacing="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="DetailsPanelPlaceholder"
+                                   Text="Select a row above to see its full details here."
+                                   Grid.ColumnSpan="2"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   FontStyle="Italic" Margin="0,4,0,4"/>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
         <!-- Pagination bar -->
-        <Border Grid.Row="3" Padding="12,6"
+        <Border Grid.Row="4" Padding="12,6"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">

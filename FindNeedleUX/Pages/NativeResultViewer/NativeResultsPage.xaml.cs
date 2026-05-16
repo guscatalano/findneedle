@@ -66,6 +66,7 @@ public sealed partial class NativeResultsPage : Page
         ApplyPersistedSettings();
         ApplyPersistedColumnDefaults();
         ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
+        ApplyDetailsPanelToggleState(ResultsViewerSettings.DetailsPanelVisible);
         ApplyPersistedPageSize();
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
         // After load, re-apply persisted level color overrides — LoadResultsAsync() repopulates
@@ -96,6 +97,31 @@ public sealed partial class NativeResultsPage : Page
         FiltersToggle.IsChecked = expanded;
         FiltersPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
         FiltersToggleGlyph.Text = expanded ? "▾" : "▸";
+    }
+
+    /// <summary>
+    /// Switches between the two row-detail modes.
+    ///   <c>visible=false</c> (default, "Inrow") — DataGrid shows an expandable details panel
+    ///     beneath the selected row via <see cref="DataGrid.RowDetailsTemplate"/>, no separate
+    ///     panel.
+    ///   <c>visible=true</c> ("Details panel") — the inline expand is suppressed and a
+    ///     persistent panel beneath the grid surfaces the selected row's full field set.
+    /// </summary>
+    private void ApplyDetailsPanelToggleState(bool visible)
+    {
+        DetailsPanelToggle.IsChecked = visible;
+        DetailsPanelToggleGlyph.Text = visible ? "▾" : "▸";
+        DetailsPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+        // The two modes are mutually exclusive: in details-panel mode the inline row expand is
+        // off, because having both would mean clicking a row puts the same data in two places.
+        ResultsGrid.RowDetailsVisibilityMode = visible
+            ? DataGridRowDetailsVisibilityMode.Collapsed
+            : DataGridRowDetailsVisibilityMode.VisibleWhenSelected;
+
+        // Re-populate so opening the panel immediately shows the current selection (or the
+        // placeholder if nothing's selected).
+        if (visible) RefreshDetailsPanel();
     }
 
     private void ApplyPersistedPageSize()
@@ -168,6 +194,100 @@ public sealed partial class NativeResultsPage : Page
         var expanded = FiltersToggle.IsChecked == true;
         ApplyFiltersToggleState(expanded);
         ResultsViewerSettings.FiltersExpanded = expanded;
+    }
+
+    // ----- Details panel mode -----
+    private void DetailsPanelToggle_Click(object sender, RoutedEventArgs e)
+    {
+        var visible = DetailsPanelToggle.IsChecked == true;
+        ApplyDetailsPanelToggleState(visible);
+        ResultsViewerSettings.DetailsPanelVisible = visible;
+    }
+
+    private void DetailsPanelClose_Click(object sender, RoutedEventArgs e)
+    {
+        // Closing the panel is equivalent to switching back to Inrow mode.
+        ApplyDetailsPanelToggleState(false);
+        ResultsViewerSettings.DetailsPanelVisible = false;
+    }
+
+    private void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DetailsPanel.Visibility == Visibility.Visible) RefreshDetailsPanel();
+    }
+
+    /// <summary>
+    /// Rebuild the panel's label/value grid from the currently selected row. Cheap — there are
+    /// only ~10 fields and we run on selection change. Skipping when nothing is selected leaves
+    /// the placeholder text in place.
+    /// </summary>
+    private void RefreshDetailsPanel()
+    {
+        DetailsPanelGrid.Children.Clear();
+        DetailsPanelGrid.RowDefinitions.Clear();
+
+        if (ResultsGrid.SelectedItem is not LogLine line)
+        {
+            DetailsPanelGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var placeholder = new TextBlock
+            {
+                Text = "Select a row above to see its full details here.",
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic,
+                Margin = new Thickness(0, 4, 0, 4),
+            };
+            Grid.SetRow(placeholder, 0);
+            Grid.SetColumnSpan(placeholder, 2);
+            DetailsPanelGrid.Children.Add(placeholder);
+            return;
+        }
+
+        AppendDetailRow("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AppendDetailRow("Time",        line.Time);
+        AppendDetailRow("Provider",    line.Provider);
+        AppendDetailRow("TaskName",    line.TaskName);
+        AppendDetailRow("Message",     line.Message);
+        AppendDetailRow("Source",      line.Source);
+        AppendDetailRow("Level",       line.Level);
+        AppendDetailRow("MachineName", line.MachineName);
+        AppendDetailRow("Username",    line.Username);
+        AppendDetailRow("OpCode",      line.OpCode);
+    }
+
+    private void AppendDetailRow(string label, string value)
+    {
+        int row = DetailsPanelGrid.RowDefinitions.Count;
+        DetailsPanelGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var k = new TextBlock { Text = label, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        Grid.SetRow(k, row);
+        Grid.SetColumn(k, 0);
+        DetailsPanelGrid.Children.Add(k);
+
+        var v = new TextBlock
+        {
+            Text = value ?? "",
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+        };
+        Grid.SetRow(v, row);
+        Grid.SetColumn(v, 1);
+        DetailsPanelGrid.Children.Add(v);
+    }
+
+    private void DetailsPanelCopyJson_Click(object sender, RoutedEventArgs e)
+    {
+        if (ResultsGrid.SelectedItem is LogLine line) CopyToClipboard(RowAsJson(line));
+    }
+
+    private void DetailsPanelCopyCsv_Click(object sender, RoutedEventArgs e)
+    {
+        if (ResultsGrid.SelectedItem is LogLine line) CopyToClipboard(RowAsCsv(line));
+    }
+
+    private void DetailsPanelCopyXml_Click(object sender, RoutedEventArgs e)
+    {
+        if (ResultsGrid.SelectedItem is LogLine line) CopyToClipboard(RowAsXml(line));
     }
 
     // ----- Pagination -----

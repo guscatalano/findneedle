@@ -37,6 +37,17 @@ public static class ResultsViewerSettings
         set { Data.FiltersExpanded = value; Save(); /* no Changed: per-window UI state */ }
     }
 
+    /// <summary>
+    /// When true, the native viewer shows a "Details panel" beneath the DataGrid with the full
+    /// field set of the selected row, and disables the inline expand-row details. When false
+    /// (default), the viewer uses the in-row expandable details (click a row to expand).
+    /// </summary>
+    public static bool DetailsPanelVisible
+    {
+        get => Data.DetailsPanelVisible ?? false;
+        set { Data.DetailsPanelVisible = value; Save(); /* no Changed: per-window UI state */ }
+    }
+
     public const int DefaultPageSize = 100;
     public static int PageSize
     {
@@ -233,5 +244,6 @@ public static class ResultsViewerSettings
         public string DefaultResultViewer { get; set; }
         public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
         public string CacheReuseMode { get; set; }
+        public bool? DetailsPanelVisible { get; set; }
     }
 }
