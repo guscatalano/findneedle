@@ -408,11 +408,176 @@ public sealed partial class NativeResultsPage : Page
     {
         if (sender is FrameworkElement fe && fe.DataContext is LogLine line)
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(line, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            var pkg = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
-            pkg.SetText(json);
-            global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
+            CopyToClipboard(RowAsJson(line));
         }
+    }
+
+    // ----- Row right-click context menu -----
+    //
+    // RightTapped fires on the DataGrid for any descendant. Walk the visual tree to find both
+    // the row (LogLine DataContext) and the clicked cell (DataGridCell — its Column.Header
+    // tells us which field). Show a MenuFlyout with cell-copy + row-as-JSON/CSV/XML options.
+    private void ResultsGrid_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject src) return;
+
+        LogLine row = null;
+        string cellColumnHeader = null;
+
+        var node = src;
+        while (node != null && (row == null || cellColumnHeader == null))
+        {
+            if (node is FrameworkElement fe)
+            {
+                if (row == null && fe.DataContext is LogLine ll) row = ll;
+                if (cellColumnHeader == null
+                    && fe is CommunityToolkit.WinUI.UI.Controls.DataGridCell cell)
+                {
+                    cellColumnHeader = TryGetCellColumnHeader(cell);
+                }
+            }
+            node = VisualTreeHelper.GetParent(node);
+        }
+        if (row == null) return;
+
+        var flyout = new MenuFlyout();
+
+        if (!string.IsNullOrEmpty(cellColumnHeader))
+        {
+            var cellValue = GetRowField(row, cellColumnHeader);
+            var copyCell = new MenuFlyoutItem
+            {
+                Text = $"Copy cell ({cellColumnHeader})",
+                Icon = new SymbolIcon(Symbol.Copy),
+            };
+            copyCell.Click += (_, __) => CopyToClipboard(cellValue ?? "");
+            flyout.Items.Add(copyCell);
+            flyout.Items.Add(new MenuFlyoutSeparator());
+        }
+
+        var copyJson = new MenuFlyoutItem { Text = "Copy row as JSON" };
+        copyJson.Click += (_, __) => CopyToClipboard(RowAsJson(row));
+        flyout.Items.Add(copyJson);
+
+        var copyCsv = new MenuFlyoutItem { Text = "Copy row as CSV" };
+        copyCsv.Click += (_, __) => CopyToClipboard(RowAsCsv(row));
+        flyout.Items.Add(copyCsv);
+
+        var copyXml = new MenuFlyoutItem { Text = "Copy row as XML" };
+        copyXml.Click += (_, __) => CopyToClipboard(RowAsXml(row));
+        flyout.Items.Add(copyXml);
+
+        // Anchor on ResultsGrid and position at the click point so the menu lands under the
+        // cursor regardless of which visual-tree descendant raised the event.
+        flyout.ShowAt(ResultsGrid, e.GetPosition(ResultsGrid));
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// CommunityToolkit's <c>DataGridCell.OwningColumn</c> is <c>internal</c>, so reflection
+    /// is the only way to read it from outside the assembly. Falls back to walking up to the
+    /// parent <c>DataGridColumnHeader</c> if reflection fails for whatever reason. Header
+    /// strings are stable (we set them in XAML) and aren't likely to change at runtime.
+    /// </summary>
+    private static string TryGetCellColumnHeader(CommunityToolkit.WinUI.UI.Controls.DataGridCell cell)
+    {
+        try
+        {
+            var prop = cell.GetType().GetProperty(
+                "OwningColumn",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var col = prop?.GetValue(cell) as CommunityToolkit.WinUI.UI.Controls.DataGridColumn;
+            return col?.Header as string;
+        }
+        catch { return null; }
+    }
+
+    private static string GetRowField(LogLine line, string column) => column switch
+    {
+        "Index"    => line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        "Time"     => line.Time,
+        "Provider" => line.Provider,
+        "TaskName" => line.TaskName,
+        "Message"  => line.Message,
+        "Source"   => line.Source,
+        "Level"    => line.Level,
+        _          => null
+    };
+
+    /// <summary>
+    /// Serialise every populated field on the row. We hand the whole LogLine to JsonSerializer
+    /// (rather than building a Dictionary) so any field added to LogLine later is included
+    /// automatically — same shape as the existing row-details "Copy as JSON" button.
+    /// </summary>
+    private static string RowAsJson(LogLine line)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(line,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// Two-line CSV with header + values. Column order matches the DataGrid's default. Includes
+    /// the less-common fields too so users pasting into a spreadsheet get the full row.
+    /// </summary>
+    private static string RowAsCsv(LogLine line)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Index,Time,Provider,TaskName,Message,Source,Level,MachineName,Username,OpCode");
+        sb.Append('\n');
+        sb.Append(EscapeCsv(line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture))).Append(',');
+        sb.Append(EscapeCsv(line.Time)).Append(',');
+        sb.Append(EscapeCsv(line.Provider)).Append(',');
+        sb.Append(EscapeCsv(line.TaskName)).Append(',');
+        sb.Append(EscapeCsv(line.Message)).Append(',');
+        sb.Append(EscapeCsv(line.Source)).Append(',');
+        sb.Append(EscapeCsv(line.Level)).Append(',');
+        sb.Append(EscapeCsv(line.MachineName)).Append(',');
+        sb.Append(EscapeCsv(line.Username)).Append(',');
+        sb.Append(EscapeCsv(line.OpCode));
+        return sb.ToString();
+    }
+
+    private static string EscapeCsv(string v)
+    {
+        if (string.IsNullOrEmpty(v)) return "";
+        if (v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) < 0) return v;
+        return "\"" + v.Replace("\"", "\"\"") + "\"";
+    }
+
+    /// <summary>
+    /// XML form with one element per field. Element content is escaped via SecurityElement.Escape.
+    /// </summary>
+    private static string RowAsXml(LogLine line)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<row>");
+        AppendXmlField(sb, "Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AppendXmlField(sb, "Time",        line.Time);
+        AppendXmlField(sb, "Provider",    line.Provider);
+        AppendXmlField(sb, "TaskName",    line.TaskName);
+        AppendXmlField(sb, "Message",     line.Message);
+        AppendXmlField(sb, "Source",      line.Source);
+        AppendXmlField(sb, "Level",       line.Level);
+        AppendXmlField(sb, "MachineName", line.MachineName);
+        AppendXmlField(sb, "Username",    line.Username);
+        AppendXmlField(sb, "OpCode",      line.OpCode);
+        sb.Append("</row>");
+        return sb.ToString();
+    }
+
+    private static void AppendXmlField(System.Text.StringBuilder sb, string name, string value)
+    {
+        if (string.IsNullOrEmpty(value)) { sb.Append("  <").Append(name).Append(" />\n"); return; }
+        sb.Append("  <").Append(name).Append('>');
+        sb.Append(System.Security.SecurityElement.Escape(value));
+        sb.Append("</").Append(name).Append(">\n");
+    }
+
+    private static void CopyToClipboard(string text)
+    {
+        var pkg = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
+        pkg.SetText(text ?? "");
+        global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
     }
 
     private static global::Windows.UI.Color ParseHex(string hex)

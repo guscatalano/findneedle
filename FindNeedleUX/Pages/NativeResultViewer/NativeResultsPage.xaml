@@ -210,6 +210,7 @@
                               ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}"
                               LoadingRow="ResultsGrid_LoadingRow"
                               Sorting="ResultsGrid_Sorting"
+                              RightTapped="ResultsGrid_RightTapped"
                               RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
                               RowDetailsVisibilityMode="VisibleWhenSelected"
                               SelectionMode="Single"
