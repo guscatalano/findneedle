@@ -409,15 +409,24 @@ public sealed partial class NativeResultsPage : Page
         ViewModel.ClearFilters();
     }
 
-    private async void ExportCsvButton_Click(object sender, RoutedEventArgs e)
+    private void ExportCsv_Click(object sender, RoutedEventArgs e)
+        => RunExport(NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Csv);
+
+    private void ExportJson_Click(object sender, RoutedEventArgs e)
+        => RunExport(NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Json);
+
+    private void ExportXml_Click(object sender, RoutedEventArgs e)
+        => RunExport(NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Xml);
+
+    private async void RunExport(NativeResultViewer.NativeResultsPageViewModel.ExportFormat format)
     {
-        var path = await ViewModel.ExportCsvAsync();
+        var path = await ViewModel.ExportAsync(format);
         if (path != null)
         {
             var dlg = new ContentDialog
             {
                 Title = "Export complete",
-                Content = $"Saved {ViewModel.Results.Count} rows to:\n{path}",
+                Content = $"Saved {ViewModel.TotalFilteredCount:N0} rows to:\n{path}",
                 CloseButtonText = "OK",
                 XamlRoot = this.XamlRoot
             };

@@ -459,32 +459,95 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     }
 
     // ----- CSV export -----
-    public async Task<string> ExportCsvAsync()
+    /// <summary>Output format for <see cref="ExportAsync"/>.</summary>
+    public enum ExportFormat { Csv, Json, Xml }
+
+    /// <summary>Back-compat wrapper — older callers still call ExportCsvAsync().</summary>
+    public Task<string> ExportCsvAsync() => ExportAsync(ExportFormat.Csv);
+
+    /// <summary>
+    /// Save the currently-filtered+sorted result set to a file the user picks. Rows are streamed
+    /// from the paged source so we never materialise the whole set in one chunk. Output covers
+    /// all visible columns (the user's column-visibility choice acts as a column filter on the
+    /// export, same as the CSV behaviour).
+    /// </summary>
+    public async Task<string> ExportAsync(ExportFormat format)
     {
         try
         {
+            var (ext, label, ftKey) = format switch
+            {
+                ExportFormat.Json => (".json", "JSON Files", "JSON"),
+                ExportFormat.Xml  => (".xml",  "XML Files",  "XML"),
+                _                 => (".csv",  "CSV Files",  "CSV"),
+            };
+
             var picker = new global::Windows.Storage.Pickers.FileSavePicker();
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
             WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-            picker.SuggestedFileName = $"findneedle-results-{DateTime.Now:yyyyMMdd-HHmmss}.csv";
-            picker.FileTypeChoices.Add("CSV Files", new[] { ".csv" });
+            picker.SuggestedFileName = $"findneedle-results-{DateTime.Now:yyyyMMdd-HHmmss}{ext}";
+            picker.FileTypeChoices.Add(label, new[] { ext });
 
             var file = await picker.PickSaveFileAsync();
             if (file == null) return null;
 
             var visibleNames = Columns.Where(c => c.IsVisible).Select(c => c.Name).ToList();
-            // Stream rows from the source so CSV export of a SQLite-backed result set
-            // doesn't have to load everything into memory.
-            var lines = new List<string>(_totalFilteredCount + 1)
-            {
-                string.Join(",", visibleNames.Select(EscapeCsv))
-            };
             var filters = BuildFilterSpec();
             var sort = new SortSpec(_sortColumn, _sortDescending);
-            _source.WalkAllFiltered(filters, sort, line =>
+
+            // Pre-size the line buffer (header + body + maybe footer) so AddRange-style growth
+            // doesn't double the underlying array ~20 times on a 500k-row export.
+            var lines = new List<string>(_totalFilteredCount + 4);
+
+            switch (format)
             {
-                lines.Add(string.Join(",", visibleNames.Select(name => EscapeCsv(GetField(line, name)))));
-            });
+                case ExportFormat.Csv:
+                    lines.Add(string.Join(",", visibleNames.Select(EscapeCsv)));
+                    _source.WalkAllFiltered(filters, sort, line =>
+                    {
+                        lines.Add(string.Join(",", visibleNames.Select(name => EscapeCsv(GetField(line, name)))));
+                    });
+                    break;
+
+                case ExportFormat.Json:
+                    // JSON array of objects. We emit one object per line + commas between them
+                    // ourselves rather than building a single giant string with JsonSerializer —
+                    // that would force the entire row collection into memory as a single string.
+                    lines.Add("[");
+                    bool first = true;
+                    var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = false };
+                    _source.WalkAllFiltered(filters, sort, line =>
+                    {
+                        var dict = new Dictionary<string, object>(visibleNames.Count);
+                        foreach (var name in visibleNames) dict[name] = GetField(line, name) ?? "";
+                        var entry = System.Text.Json.JsonSerializer.Serialize(dict, jsonOpts);
+                        lines.Add(first ? "  " + entry : ", " + entry);
+                        first = false;
+                    });
+                    lines.Add("]");
+                    break;
+
+                case ExportFormat.Xml:
+                    lines.Add("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+                    lines.Add("<rows>");
+                    var xmlSb = new System.Text.StringBuilder(256);
+                    _source.WalkAllFiltered(filters, sort, line =>
+                    {
+                        xmlSb.Clear();
+                        xmlSb.Append("  <row>");
+                        foreach (var name in visibleNames)
+                        {
+                            var val = GetField(line, name) ?? "";
+                            xmlSb.Append('<').Append(name).Append('>');
+                            xmlSb.Append(System.Security.SecurityElement.Escape(val));
+                            xmlSb.Append("</").Append(name).Append('>');
+                        }
+                        xmlSb.Append("</row>");
+                        lines.Add(xmlSb.ToString());
+                    });
+                    lines.Add("</rows>");
+                    break;
+            }
 
             await global::Windows.Storage.FileIO.WriteLinesAsync(file, lines);
             return file.Path;
