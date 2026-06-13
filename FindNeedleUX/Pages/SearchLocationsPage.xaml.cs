@@ -1,8 +1,6 @@
 using System;
-using System.Collections.ObjectModel;
-using FindNeedleUX.Services;
 using FindNeedleUX.Utils;
-using FindNeedleUX.ViewObjects;
+using FindNeedleUX.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
@@ -12,22 +10,21 @@ namespace FindNeedleUX.Pages;
 
 public sealed partial class SearchLocationsPage : Page
 {
-    ObservableCollection<LocationListItem> RecipeList = new();
+    private readonly SearchLocationsViewModel _viewModel = new();
 
     public SearchLocationsPage()
     {
         this.InitializeComponent();
         CheckOtherDLLs.AreWeInstalledOk();
-        RecipeList = MiddleLayerService.GetLocationListItems();
-        VariedImageSizeRepeater.ItemsSource = RecipeList;
+        // Bind the repeater once; the VM refreshes its collection in place.
+        VariedImageSizeRepeater.ItemsSource = _viewModel.Locations;
     }
 
     private void Button_Remove(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string name })
         {
-            MiddleLayerService.RemoveLocationByName(name);
-            RefreshList();
+            _viewModel.RemoveLocation(name);
         }
     }
 
@@ -41,8 +38,7 @@ public sealed partial class SearchLocationsPage : Page
         var folder = await picker.PickSingleFolderAsync();
         if (folder != null)
         {
-            MiddleLayerService.AddFolderLocation(folder.Path);
-            RefreshList();
+            _viewModel.AddLocation(folder.Path);
         }
     }
 
@@ -59,14 +55,7 @@ public sealed partial class SearchLocationsPage : Page
         var file = await picker.PickSingleFileAsync();
         if (file != null)
         {
-            MiddleLayerService.AddFolderLocation(file.Path);
-            RefreshList();
+            _viewModel.AddLocation(file.Path);
         }
-    }
-
-    private void RefreshList()
-    {
-        RecipeList = MiddleLayerService.GetLocationListItems();
-        VariedImageSizeRepeater.ItemsSource = RecipeList;
     }
 }

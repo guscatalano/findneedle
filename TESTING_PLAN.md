@@ -13,8 +13,11 @@ Style targets: behaviour/integration, edge cases, snapshot/regression, UI automa
 | R-13 snapshot tests | ✓ Done | `FindNeedleRuleDSLTests/ExampleSnapshotTests.cs` + 13 goldens under `TestData/snapshots/`. Hand-rolled. Hits all 13 example rule files × 3 providers (`*`, `EventLog`, `ETW`). Surfaces R-11 (empty providers = no match) and R-14 (`tag` vs `value` mismatch) — both currently pinned as-is. |
 | Rule DSL suite | ✓ Green | 114/114 (was 78). |
 | CI fail-on-red (CI #2) | ✓ Done | Added "Fail job if any tests failed" step at end of `test-publish` (parses TRX, exits 1 on any `Failed` outcome). Plugged release-on-red hole: `actually_release` now also requires `needs.test-publish.result == 'success'` (`create-release` was already gated). YAML re-validated. Badges still upload before the gate so they're visible even on red. |
+| U-A1 / U-B1..U-B4 (SearchRules) | ✓ Done | Extracted `SearchRulesPageViewModel` + `IQueryStateService`/`MiddleLayerQueryStateService` seam; `SearchRulesPage.xaml.cs` now a thin proxy (282→~36 lines). `FindNeedleUXTests/ViewModels/SearchRulesPageViewModelTests.cs` — 9 tests. |
+| U-A / U-B5 (SearchLocations) | ✓ Done | Extracted `SearchLocationsViewModel` + `ILocationStateService`/`MiddleLayerLocationStateService` seam; `SearchLocationsPage.xaml.cs` now a thin proxy, repeater bound once to a VM collection refreshed in place. `FindNeedleUXTests/ViewModels/SearchLocationsViewModelTests.cs` — 6 tests. |
+| UX VM suite | ✓ Green | 15/15 ViewModel-category tests. |
 
-Next: UX view-model extraction (refactor — pulls logic from `*.xaml.cs` into testable view-models). Deferred: separate UI-tests job in CI (CI #1) — needs FlaUI/WinAppDriver verification on `windows-latest`, ideally after view-models give UX a real foundation.
+Next: remaining page VM extractions as needed. Deferred: separate UI-tests job in CI (CI #1) — needs FlaUI/WinAppDriver verification on `windows-latest`, ideally after view-models give UX a real foundation.
 
 ---
 
