@@ -614,7 +614,7 @@ jobs:
 
   actually_release:
     needs: [make_msix_signed, make_msix_unsigned, make_msi, test-publish]
-    if: needs.make_msix_signed.result == 'success' && needs.make_msix_unsigned.result == 'success' && needs.make_msi.result == 'success'
+    if: needs.make_msix_signed.result == 'success' && needs.make_msix_unsigned.result == 'success' && needs.make_msi.result == 'success' && needs.test-publish.result == 'success'
     strategy:
       matrix:
         configuration: [Release]
@@ -979,6 +979,35 @@ jobs:
         with:
           name: test-duration-badge
           path: test-duration.svg
+
+      # Gate: fail this job (and therefore block `create-release` via its
+      # `if: needs.test-publish.result == 'success'`) when any TRX has a failed
+      # test. Runs LAST so badges and test results still publish on red — the
+      # team gets visibility even though the workflow turns red.
+      - name: Fail job if any tests failed
+        shell: pwsh
+        run: |
+          $trxFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter *.trx -Recurse -ErrorAction SilentlyContinue
+          if ($trxFiles.Count -eq 0) {
+            Write-Host "::error::No TRX files found — tests did not run. Failing."
+            exit 1
+          }
+          $failed = 0
+          $total = 0
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file.FullName
+            $results = $xml.TestRun.Results.UnitTestResult
+            if ($null -eq $results) { continue }
+            foreach ($r in $results) {
+              $total++
+              if ($r.outcome -eq 'Failed') { $failed++ }
+            }
+          }
+          Write-Host "Test totals: $total run, $failed failed."
+          if ($failed -gt 0) {
+            Write-Host "::error::$failed test(s) failed. Failing the workflow."
+            exit 1
+          }
 
   update-badges:
     needs: test-publish

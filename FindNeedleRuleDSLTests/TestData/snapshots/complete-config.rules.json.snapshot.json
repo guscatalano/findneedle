@@ -1,0 +1,23 @@
+{
+  "ruleFile": "complete-config.rules.json",
+  "logFile": "sample-errors.log",
+  "providersSweep": [
+    "*",
+    "EventLog",
+    "ETW"
+  ],
+  "providers": {
+    "*": {
+      "matchedResults": 15,
+      "tags": {}
+    },
+    "ETW": {
+      "matchedResults": 0,
+      "tags": {}
+    },
+    "EventLog": {
+      "matchedResults": 0,
+      "tags": {}
+    }
+  }
+}

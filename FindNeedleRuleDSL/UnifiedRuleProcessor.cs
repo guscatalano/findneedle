@@ -7,6 +7,12 @@ namespace FindNeedleRuleDSL;
 
 public class UnifiedRuleProcessor
 {
+    // Worst-case time we will let a single Regex.IsMatch call burn before bailing
+    // out to the substring fallback. Bounds catastrophic backtracking on
+    // attacker-controlled (or accidentally-pathological) rule patterns like
+    // "^(a+)+$" against long near-matching inputs.
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
+
     private readonly UnifiedRuleSet _ruleSet;
     private readonly string _provider;
 
@@ -28,12 +34,12 @@ public class UnifiedRuleProcessor
                     var data = getData(result) ?? string.Empty;
 
                     bool isMatch = false;
-                    // Try regex match first (allow rules like "ERROR|CRITICAL"). Fall back to substring if regex invalid.
+                    // Try regex match first (allow rules like "ERROR|CRITICAL"). Fall back to substring if regex invalid or times out.
                     if (!string.IsNullOrEmpty(rule.Match))
                     {
                         try
                         {
-                            isMatch = Regex.IsMatch(data, rule.Match, RegexOptions.IgnoreCase);
+                            isMatch = Regex.IsMatch(data, rule.Match, RegexOptions.IgnoreCase, RegexTimeout);
                         }
                         catch (Exception)
                         {
@@ -49,7 +55,7 @@ public class UnifiedRuleProcessor
                         bool isUnmatch = false;
                         try
                         {
-                            isUnmatch = Regex.IsMatch(data, rule.Unmatch, RegexOptions.IgnoreCase);
+                            isUnmatch = Regex.IsMatch(data, rule.Unmatch, RegexOptions.IgnoreCase, RegexTimeout);
                         }
                         catch (Exception)
                         {

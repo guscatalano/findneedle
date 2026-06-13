@@ -1,0 +1,29 @@
+{
+  "ruleFile": "sample-rules.json",
+  "logFile": "sample-errors.log",
+  "providersSweep": [
+    "*",
+    "EventLog",
+    "ETW"
+  ],
+  "providers": {
+    "*": {
+      "matchedResults": 27,
+      "tags": {
+        "Crash": 2,
+        "Critical": 2,
+        "FailedAuth": 1,
+        "SecurityAlert": 1,
+        "UserSession": 2
+      }
+    },
+    "ETW": {
+      "matchedResults": 0,
+      "tags": {}
+    },
+    "EventLog": {
+      "matchedResults": 0,
+      "tags": {}
+    }
+  }
+}

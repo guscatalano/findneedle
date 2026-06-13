@@ -1,0 +1,23 @@
+{
+  "ruleFile": "example-uml-only.rules.json",
+  "logFile": "sample-errors.log",
+  "providersSweep": [
+    "*",
+    "EventLog",
+    "ETW"
+  ],
+  "providers": {
+    "*": {
+      "matchedResults": 0,
+      "tags": {}
+    },
+    "ETW": {
+      "matchedResults": 0,
+      "tags": {}
+    },
+    "EventLog": {
+      "matchedResults": 0,
+      "tags": {}
+    }
+  }
+}

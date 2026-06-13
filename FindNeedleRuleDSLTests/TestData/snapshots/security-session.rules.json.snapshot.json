@@ -1,0 +1,25 @@
+{
+  "ruleFile": "security-session.rules.json",
+  "logFile": "sample-errors.log",
+  "providersSweep": [
+    "*",
+    "EventLog",
+    "ETW"
+  ],
+  "providers": {
+    "*": {
+      "matchedResults": 0,
+      "tags": {}
+    },
+    "ETW": {
+      "matchedResults": 0,
+      "tags": {}
+    },
+    "EventLog": {
+      "matchedResults": 1,
+      "tags": {
+        "UnauthorizedAccess": 1
+      }
+    }
+  }
+}

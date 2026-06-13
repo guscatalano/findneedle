@@ -1,0 +1,31 @@
+{
+  "ruleFile": "crash-detection.rules.json",
+  "logFile": "sample-errors.log",
+  "providersSweep": [
+    "*",
+    "EventLog",
+    "ETW"
+  ],
+  "providers": {
+    "*": {
+      "matchedResults": 0,
+      "tags": {}
+    },
+    "ETW": {
+      "matchedResults": 3,
+      "tags": {
+        "AccessViolation": 1,
+        "OutOfMemory": 1,
+        "StackOverflow": 1
+      }
+    },
+    "EventLog": {
+      "matchedResults": 3,
+      "tags": {
+        "AccessViolation": 1,
+        "OutOfMemory": 1,
+        "StackOverflow": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,230 @@
+# Testing Audit & Plan — Rules + UX
+
+Audit date: 2026-05-25. Scope: `FindNeedleRuleDSL` and `FindNeedleUX` (plus their CI wiring).
+Style targets: behaviour/integration, edge cases, snapshot/regression, UI automation.
+
+## Progress
+
+| Item | Status | Notes |
+|---|---|---|
+| R-01..R-04, R-12 | ✓ Done | `FindNeedleRuleDSLTests/RobustnessTests.cs` — 10 tests. |
+| R-02 source-code fix | ✓ Done | Added 100 ms `Regex.IsMatch` timeout in `UnifiedRuleProcessor.cs`. Test caught real DoS surface; minimum fix applied. |
+| R-05..R-08, R-10 | ✓ Done | `FindNeedleRuleDSLTests/OutputRuleProcessorTests.cs` — 13 tests (incl. R-11/Txt bonus). |
+| R-13 snapshot tests | ✓ Done | `FindNeedleRuleDSLTests/ExampleSnapshotTests.cs` + 13 goldens under `TestData/snapshots/`. Hand-rolled. Hits all 13 example rule files × 3 providers (`*`, `EventLog`, `ETW`). Surfaces R-11 (empty providers = no match) and R-14 (`tag` vs `value` mismatch) — both currently pinned as-is. |
+| Rule DSL suite | ✓ Green | 114/114 (was 78). |
+| CI fail-on-red (CI #2) | ✓ Done | Added "Fail job if any tests failed" step at end of `test-publish` (parses TRX, exits 1 on any `Failed` outcome). Plugged release-on-red hole: `actually_release` now also requires `needs.test-publish.result == 'success'` (`create-release` was already gated). YAML re-validated. Badges still upload before the gate so they're visible even on red. |
+
+Next: UX view-model extraction (refactor — pulls logic from `*.xaml.cs` into testable view-models). Deferred: separate UI-tests job in CI (CI #1) — needs FlaUI/WinAppDriver verification on `windows-latest`, ideally after view-models give UX a real foundation.
+
+---
+
+## 1. Coverage today
+
+### Rules — `FindNeedleRuleDSL*` (78 tests, 5 files)
+
+| File | Tests | What it covers |
+|---|---|---|
+| `UnifiedRuleProcessorTests.cs` | 10 | match / unmatch / disabled / provider filter / case-insensitivity / multi-rule |
+| `FindNeedleRuleDSLPluginTests.cs` | 17 | plugin façade: load file, ProcessResults, tag counting, friendly name |
+| `SystemConfigTests.cs` | 22 | `systemConfig` shape: plugins, search, tools, storage type |
+| `DeprecatedPluginReplacementTests.cs` | 18 | RuleDSL replacing legacy filter/processor/output behaviour |
+| `SampleLogRulesIntegrationTests.cs` | 11 | end-to-end against `sample-errors.log` |
+
+### UX — `FindNeedleUX*` (18 tests, 2 files)
+
+| File | Tests | What it covers |
+|---|---|---|
+| `FindNeedleUXTests/SearchRulesPageLogicTests.cs` | 12 | `RuleFileItem` / `RuleSectionItem` view-objects + ObservableCollection events |
+| `FindNeedleUX.UITests/SearchRulesPageUITests.cs` | 6 | FlaUI smoke: 4 elements exist on `SearchRulesPage`, 2 are `[Ignore]`d |
+
+### CI today (`.github/workflows/dotnet-desktop.yml`)
+
+- Discovers any `*Tests/*.csproj` and runs each with `dotnet test --filter "TestCategory!=SkipCI&TestCategory!=UITests"`.
+- TRX + Cobertura coverage uploaded, three badges generated, `fail_below_min: false` (coverage is informational).
+- **Gap:** UI tests carry `[TestCategory("UITests")]` and `[TestCategory("SkipCI")]` → they never run on PRs. The badge says "tests pass" while UI assertions are skipped.
+
+---
+
+## 2. Rules — gap analysis
+
+Source under test: `UnifiedRuleProcessor.cs`, `OutputRuleProcessor.cs`, `FindNeedleRuleDSLPlugin.cs`, `UnifiedRuleModel.cs`, and the search-pipeline integration in `FindPluginCore/Searching/RuleDSL/`.
+
+### What's missing
+
+**A. Malformed input — the regex fallback path is silent.** `UnifiedRuleProcessor.Process` (lines 33–42) catches every regex exception and silently falls back to substring. There is no test that proves the fallback fires, no test that an invalid regex still produces a defined result, and no test for catastrophic-backtracking inputs (e.g., `^(a+)+$` against `aaaaaaaaab`). Today an evil rule file can hang the search thread.
+
+**B. `OutputRuleProcessor` has zero direct unit tests.** It's 788 lines: CSV/JSON/XML/TXT writers, `{date}/{time}/{output}` path expansion, XML name sanitisation, CSV escaping, the UML branch with 6+ path-resolution strategies, tag-based result filtering by reflection. All of this is currently exercised only incidentally via the integration suite.
+
+**C. No schema-version negotiation tests.** `UnifiedRuleSet.SchemaVersion` exists but no test asserts behaviour when it's missing, wrong, or future-versioned.
+
+**D. No round-trip snapshot tests.** 13 example `.rules.json` files exist under `FindNeedleRuleDSL/Examples/` — none of them are run as fixtures with locked-in expected output. A refactor today can silently change the meaning of `crash-detection.rules.json` and no test will notice.
+
+**E. `tag` action coverage drift.** `FindNeedleRuleDSLPlugin.ProcessResults` reads `action.Tag`, but `OutputRuleProcessor.ProcessSection` reads `ruleObj.tag` (top-level) for output filtering. The two reads can't possibly agree on a fixture — there's no test that pins this convention.
+
+**F. No pipeline-ordering tests.** `RuleDSLSearchPipeline` runs filter → enrichment → output. There is no test that an enrichment rule's tags are visible to a downstream output rule's `tag:` filter in the same pass.
+
+**G. No concurrency tests.** `TagStore.cs` exists but isn't covered by the test list above. If filter rules run on multiple locations in parallel (they do — Step2 scans locations concurrently), tag writes are a race.
+
+### Prioritized test cases
+
+| ID | Pri | Surface | Test |
+|---|---|---|---|
+| R-01 | P0 | `UnifiedRuleProcessor` | Invalid regex (`[unclosed`) → fallback to substring → returns the substring match, doesn't throw. |
+| R-02 | P0 | `UnifiedRuleProcessor` | Pathological regex (`(a+)+$`) on long non-matching input completes under 1 second (catches backtracking). Mark as perf budget test. |
+| R-03 | P0 | `FindNeedleRuleDSLPlugin` | Rules file with malformed JSON → `ProcessResults` does not throw, returns 0 tags, logs to `Debug.WriteLine`. Capture trace via `Trace.Listeners`. |
+| R-04 | P0 | `FindNeedleRuleDSLPlugin` | Rules file path doesn't exist → no throw, 0 matches. |
+| R-05 | P0 | `OutputRuleProcessor` | CSV: result with comma, quote, newline in `Message` is properly escaped + round-trips through CsvHelper or `string.Split` after unescaping. |
+| R-06 | P0 | `OutputRuleProcessor` | JSON output is valid JSON (`JsonDocument.Parse`) for 0, 1, and 10k results. |
+| R-07 | P0 | `OutputRuleProcessor` | XML output is valid XML; field name with `<`, `&`, digit-prefix is sanitised. |
+| R-08 | P1 | `OutputRuleProcessor` | `{date}` / `{time}` / `{datetime}` / `{output}` / `{temp}` in `path` all expand correctly; `{date}` matches `\d{4}-\d{2}-\d{2}`. |
+| R-09 | P1 | `OutputRuleProcessor` | UML action with no `rulesFile` falls back to bundled `crash-detection-uml.rules.json` without throwing. |
+| R-10 | P1 | `OutputRuleProcessor` | `format: "unknown"` doesn't crash — logs and skips (already the behaviour; pin it). |
+| R-11 | P1 | `UnifiedRuleProcessor` | Provider list is case-insensitive (already covered), AND providers `[]` matches nothing (pin behaviour). |
+| R-12 | P1 | `UnifiedRuleProcessor` | `Unmatch` invalid regex falls back to substring (mirror of R-01 for unmatch). |
+| R-13 | P1 | Integration | All 13 `Examples/*.rules.json` files: parse + run against a fixed 50-line log → snapshot the produced tag-counts dictionary. Locked in via `[DataRow]`-driven test + golden JSON files under `TestData/snapshots/`. |
+| R-14 | P1 | Integration | `tag` action key normalisation: write a test that uses both `"tag"` and `"value"` on the action object (the model supports both — line 209/212 of `UnifiedRuleModel`); assert which one wins and document it. |
+| R-15 | P2 | Integration | Filter → enrichment → output in one pass: a result tagged by enrichment is then picked up by an output rule that filters by `tag:`. Currently undefined — pin it. |
+| R-16 | P2 | `TagStore` | Concurrent `Add` from 8 threads of 1000 tags each → no exception, all 8000 present. |
+| R-17 | P2 | Schema | Missing `schemaVersion`, `schemaVersion: "999.0"` → behaviour is graceful (warn or proceed with defaults). |
+| R-18 | P2 | Property-based | FsCheck or hand-rolled: random rule sets of N=100 rules produce a stable output for the same input (idempotence). |
+
+**Files to create:**
+- `FindNeedleRuleDSLTests/OutputRuleProcessorTests.cs` — R-05..R-11
+- `FindNeedleRuleDSLTests/RobustnessTests.cs` — R-01..R-04, R-12, R-17
+- `FindNeedleRuleDSLTests/ExampleSnapshotTests.cs` — R-13
+- `FindNeedleRuleDSLTests/TestData/snapshots/*.json` — golden outputs
+- `FindNeedleRuleDSLTests/TagStoreTests.cs` — R-16 (currently zero tests)
+
+---
+
+## 3. UX — gap analysis
+
+19 of ~20 pages have no test coverage. The one that's tested (`SearchRulesPage`) has 12 view-object tests + 6 FlaUI element-exists smoke tests; none of them actually drive a workflow.
+
+### Pages and their testable surfaces
+
+| Page | Untested? | Testable workflows |
+|---|---|---|
+| `WelcomePage` | Y | Recent files list renders, click-to-open. |
+| `SearchLocationsPage` | Y | Add folder/file/event-log location, remove, set depth, persist to query. |
+| `SearchRulesPage` | partial | Add rule file, validation banner on bad JSON, removal, purpose filter combo (currently only element existence). |
+| `QuickLogWithRulesPage` | Y | One-shot: pick log + rule file → run → results visible. |
+| `RunSearchPage` | Y | Cancel button cancels search, progress reporter updates, error surfaces. |
+| `SearchResultPage` (web) | Y | Below/above 10k threshold render mode switch (`ResultsViewerSettings.WebViewerServerSideThreshold`). |
+| `ResultsWebPage` | Y | DataTables pagination, level-color theme push, server-side `getPage` round-trip. |
+| `NativeResultsPage` | Y | Column sort, filter, AutoHide column behaviour, paging. |
+| `ResultsViewerSettingsPage` | Y | Settings save + reload, threshold field validation. |
+| `PluginsPage` | Y | Plugin list reflects `PluginConfig.json`, enable/disable toggle persists. |
+| `SearchProcessorsPage` | Y | (legacy — confirm it still loads). |
+| `DiagramToolsPage` | Y | PlantUML / Mermaid path browse, "test tool" success/failure messages. |
+| `SystemInfoPage` | Y | Renders without exception on a fresh machine. |
+| `ProcessorOutputPage` | Y | Output file path opens in file-explorer. |
+| `LogsPage` | Y | Tail-follow on `findneedle_log.txt`. |
+
+### Why the existing UX tests aren't enough
+
+- `SearchRulesPageLogicTests.cs` tests `ObservableCollection<T>.Add` — that's testing .NET, not the page. The actual logic in `SearchRulesPage.xaml.cs` (`LoadRuleFile`, `SyncRulesToQuery`, the purpose filter combo, the validation status) is **not** under test.
+- `SearchRulesPageUITests.cs` only verifies four elements exist. It doesn't click Browse, doesn't load a file, doesn't assert the validation badge appears.
+- `[TestCategory("SkipCI")]` means CI never catches a UX regression.
+
+### Prioritized test cases
+
+**Tier U-A: Extract view-models so logic is testable without a window.**
+
+Today most page logic lives in `*.xaml.cs` code-behind, which can't be instantiated without the WinUI runtime. Step zero is a small refactor: pull testable logic into plain classes the unit-test project can `new` up.
+
+| ID | Pri | Page | Refactor |
+|---|---|---|---|
+| U-A1 | P0 | `SearchRulesPage` | Extract `LoadRuleFile`, validation, and `SyncRulesToQuery` into `SearchRulesPageViewModel`. |
+| U-A2 | P0 | `SearchLocationsPage` | Extract location list management (add/remove/persist). |
+| U-A3 | P0 | `RunSearchPage` | Extract `SearchOrchestrator` covering the cancel + progress wiring. |
+| U-A4 | P1 | `ResultsViewerSettingsPage` | Extract settings serialisation. |
+
+**Tier U-B: View-model unit tests (no UI thread needed).**
+
+| ID | Pri | Test |
+|---|---|---|
+| U-B1 | P0 | `SearchRulesPageViewModel.LoadRuleFile` with valid file → 1 valid item, sections parsed. |
+| U-B2 | P0 | Same with malformed JSON → 1 invalid item, `ValidationError` populated. |
+| U-B3 | P0 | Same with file-not-found → invalid + correct error. |
+| U-B4 | P0 | `LoadRulesFromQuery` does not re-enter (the `_isLoadingFromQuery` guard) when query change fires mid-load. |
+| U-B5 | P0 | `SearchLocationsViewModel.Add` / `Remove` persists to `MiddleLayerService.GetCurrentQuery()`. |
+| U-B6 | P0 | `SearchOrchestrator.Run` cancels promptly when `CancellationTokenSource.Cancel()` is invoked (≤ 200 ms). |
+| U-B7 | P1 | `ResultsViewerSettings` round-trip: write → read → identical instance. |
+| U-B8 | P1 | `ResultsViewerSettings.WebViewerServerSideThreshold` rejects negative values. |
+
+**Tier U-C: FlaUI driven workflows (currently `SkipCI` — must run on CI).**
+
+Each test launches the built `FindNeedleUX.exe`, drives it, asserts a visible outcome. These are slow (~5–10 s each) so keep them small and grouped per page.
+
+| ID | Pri | Workflow |
+|---|---|---|
+| U-C1 | P0 | Smoke: app starts, MainWindow appears, no unhandled exception in 5s. |
+| U-C2 | P0 | `SearchRulesPage`: Browse → file picker → cancel → 0 files in list. (Use `Windows.Storage.Pickers` automation, or call `AddRuleFileByPath` via UIA pattern.) |
+| U-C3 | P0 | `SearchRulesPage`: load malformed rules file → red-status badge visible, item count = 1. |
+| U-C4 | P0 | `QuickLogWithRulesPage`: pick log + rule file → Run → results page appears with ≥1 row. (Use canned `Samples/`-like fixture.) |
+| U-C5 | P1 | `RunSearchPage`: start search → click Stop within 500 ms → search task cancels, status reads cancelled. |
+| U-C6 | P1 | `NativeResultsPage`: open with a 5k-row SQLite-backed source → sort header click changes order. |
+| U-C7 | P1 | `ResultsWebPage`: open with 50 rows (under threshold) → client-side mode, DataTable renders. Then with 20k rows (above threshold) → server-side mode, paging `getPage` is exercised. |
+| U-C8 | P2 | `ResultsViewerSettingsPage`: change theme → results viewer reflects new colours on next open. |
+| U-C9 | P2 | `PluginsPage`: toggle a plugin → `PluginConfig.json` on disk updates. |
+| U-C10 | P2 | Navigation matrix: open every page, assert no XAML parse / binding exception in the debug log. Drives the 19 untested pages cheaply. |
+
+**Tier U-D: Snapshot tests for HTML / data-binding output.**
+
+`ResultsWebPage` injects data into a webview. Snapshot the generated JSON envelope + initial HTML so client-side template churn is visible.
+
+| ID | Pri | Test |
+|---|---|---|
+| U-D1 | P1 | `ResultsWebPage.BuildClientSideJson(50 rows)` → matches golden file. |
+| U-D2 | P1 | `ResultsWebPage.HandleGetPage(filterSpec, sortSpec, page=0, len=25)` → matches golden envelope. |
+
+**Files to create:**
+- `FindNeedleUX/ViewModels/` — view-models extracted from code-behind (Tier U-A).
+- `FindNeedleUXTests/ViewModels/*.cs` — Tier U-B tests.
+- `FindNeedleUX.UITests/Workflows/*.cs` — Tier U-C tests, each per page.
+- `FindNeedleUX.UITests/TestData/` — canned logs + rules fixtures.
+
+---
+
+## 4. CI changes required
+
+### Must-do
+
+1. **Run UI tests on PR.** Today `[TestCategory("UITests")]` is excluded. Add a second `run-ui-tests` job:
+   - Depends on `build-debug`.
+   - Uses a Windows runner with interactive desktop session (GitHub-hosted `windows-latest` works for headless FlaUI via UIA3; for true desktop use a self-hosted runner or `microsoft/setup-msbuild` + `windows-latest` with `RDP` workaround).
+   - Filter inversion: `--filter "TestCategory=UITests"`.
+   - **Mark this job as required for PR merge.** Set branch protection on `master`.
+2. **Fail the workflow on red tests.** `test-publish` runs with `if: always()` but does **not** fail when `run-tests` outcome ≠ success. Add a final step that exits non-zero when any TRX has `outcome="Failed"`. (The current setup publishes badges even on red.)
+3. **Coverage threshold.** `fail_below_min: false` today. Once the new tests land, set thresholds to current numbers + 5 % and ratchet up.
+
+### Nice-to-do
+
+4. **Test categorisation.** Add `[TestCategory("Robustness")]`, `[TestCategory("Snapshot")]`, `[TestCategory("Workflow")]` so the matrix can shard and the badges can be split.
+5. **Snapshot diff visibility.** When a snapshot test fails, post a `gh pr comment` with the diff. Cheap with `actions/github-script`.
+
+---
+
+## 5. Recommended order
+
+If you implement bottom-up, each step pays for the next:
+
+1. **R-01 .. R-04 + R-12** (rules robustness — ~1 day). Tiny tests against the regex fallback path that currently has zero coverage and a real DoS risk.
+2. **CI change #1 + #2** (~½ day). Land UI tests on PR and make red tests block. Without this the new tests don't earn their keep.
+3. **R-05 .. R-11** (`OutputRuleProcessor` — ~1 day). 788 lines with no direct tests is the single biggest rules gap.
+4. **U-A1 + U-B1..U-B4** (`SearchRulesPageViewModel` extraction + tests — ~1 day). Establishes the view-model pattern.
+5. **U-C1 + U-C10** (smoke + navigation matrix — ~½ day). Cheap UI test that protects every page from regressions.
+6. **R-13 + snapshot infra** (~½ day). Once snapshot helpers exist, U-D follows.
+7. Iterate U-A/U-B/U-C per page in priority order.
+
+Total P0 work: ~3.5 dev-days. P0+P1: ~7 dev-days.
+
+---
+
+## 6. Open questions
+
+- Is there appetite to refactor code-behind into view-models? Most UX testing improvements depend on it.
+- Self-hosted runner available for `[UITests]`, or stay on `windows-latest`?
+- Snapshot library preference: hand-rolled (current style), `Verify.Xunit`, or `Snapshooter.MSTest`?
+- Do you want property-based tests (R-18) — adds FsCheck dependency.
