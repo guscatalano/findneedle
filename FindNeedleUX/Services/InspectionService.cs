@@ -72,6 +72,30 @@ public static class InspectionService
                 TextWrapping = TextWrapping.Wrap
             });
 
+            // Copy-out row: plaintext / JSON / XML / CSV to the clipboard.
+            var copyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
+            void AddCopy(string label, Func<string> getText)
+            {
+                var btn = new Button { Content = label };
+                btn.Click += (_, _) =>
+                {
+                    try
+                    {
+                        var pkg = new DataPackage();
+                        pkg.SetText(getText());
+                        Clipboard.SetContent(pkg);
+                    }
+                    catch { /* clipboard contention — ignore */ }
+                };
+                copyRow.Children.Add(btn);
+            }
+            copyRow.Children.Add(new TextBlock { Text = "Copy as:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+            AddCopy("Text", () => EtlInfoExtractor.ToPlainText(info));
+            AddCopy("JSON", () => EtlInfoExtractor.ToJson(info));
+            AddCopy("XML", () => EtlInfoExtractor.ToXml(info));
+            AddCopy("CSV", () => EtlInfoExtractor.ToCsv(info));
+            stack.Children.Add(copyRow);
+
             // Build number from tracerpt's -report (often present when the header OS version isn't).
             if (!string.IsNullOrWhiteSpace(reportSummary?.WindowsBuildInfo))
                 stack.Children.Add(Bold($"\nWindows build (tracerpt): {reportSummary.WindowsBuildInfo}"));

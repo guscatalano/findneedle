@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Xml.Linq;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Etlx;
 
@@ -116,6 +118,64 @@ public class EtlInfoExtractor
         sb.AppendLine($"Providers:   {info.Providers.Count}");
         foreach (var kv in info.Providers)
             sb.AppendLine($"   {kv.Value,10:N0}  {kv.Key}");
+        return sb.ToString();
+    }
+
+    // ----- exports (for "copy as" in the inspector) -----
+
+    /// <summary>Plain-text report (same as <see cref="Format"/>).</summary>
+    public static string ToPlainText(EtlInfo info) => Format(info);
+
+    public static string ToJson(EtlInfo info)
+        => JsonSerializer.Serialize(info, new JsonSerializerOptions { WriteIndented = true });
+
+    public static string ToXml(EtlInfo info)
+    {
+        var providers = new XElement("Providers",
+            info.Providers.Select(kv =>
+                new XElement("Provider", new XAttribute("name", kv.Key), new XAttribute("count", kv.Value))));
+        var root = new XElement("EtlInfo",
+            new XElement("FilePath", info.FilePath),
+            new XElement("FileSizeBytes", info.FileSizeBytes),
+            new XElement("OsVersion", info.OsVersion),
+            new XElement("PointerSizeBits", info.PointerSizeBits),
+            new XElement("NumberOfProcessors", info.NumberOfProcessors),
+            new XElement("CpuSpeedMHz", info.CpuSpeedMHz),
+            new XElement("SessionStartTime", info.SessionStartTime.ToString("o")),
+            new XElement("SessionEndTime", info.SessionEndTime.ToString("o")),
+            new XElement("SessionDuration", info.SessionDuration.ToString()),
+            new XElement("EventCount", info.EventCount),
+            new XElement("EventsLost", info.EventsLost),
+            new XElement("KernelEventCount", info.KernelEventCount),
+            new XElement("ManifestOrTraceLoggingEventCount", info.ManifestOrTraceLoggingEventCount),
+            new XElement("FormatSummary", info.FormatSummary),
+            providers);
+        return new XDocument(new XDeclaration("1.0", "utf-8", null), root).ToString();
+    }
+
+    public static string ToCsv(EtlInfo info)
+    {
+        static string Q(string s) => "\"" + (s ?? string.Empty).Replace("\"", "\"\"") + "\"";
+        var sb = new StringBuilder();
+        sb.AppendLine("Field,Value");
+        sb.AppendLine($"File,{Q(Path.GetFileName(info.FilePath))}");
+        sb.AppendLine($"FileSizeBytes,{info.FileSizeBytes}");
+        sb.AppendLine($"OsVersion,{Q(info.OsVersion)}");
+        sb.AppendLine($"PointerSizeBits,{info.PointerSizeBits}");
+        sb.AppendLine($"NumberOfProcessors,{info.NumberOfProcessors}");
+        sb.AppendLine($"CpuSpeedMHz,{info.CpuSpeedMHz}");
+        sb.AppendLine($"SessionStartTime,{Q(info.SessionStartTime.ToString("o"))}");
+        sb.AppendLine($"SessionEndTime,{Q(info.SessionEndTime.ToString("o"))}");
+        sb.AppendLine($"SessionDuration,{Q(info.SessionDuration.ToString())}");
+        sb.AppendLine($"EventCount,{info.EventCount}");
+        sb.AppendLine($"EventsLost,{info.EventsLost}");
+        sb.AppendLine($"KernelEventCount,{info.KernelEventCount}");
+        sb.AppendLine($"ManifestOrTraceLoggingEventCount,{info.ManifestOrTraceLoggingEventCount}");
+        sb.AppendLine($"FormatSummary,{Q(info.FormatSummary)}");
+        sb.AppendLine();
+        sb.AppendLine("Provider,Count");
+        foreach (var kv in info.Providers)
+            sb.AppendLine($"{Q(kv.Key)},{kv.Value}");
         return sb.ToString();
     }
 }
