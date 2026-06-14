@@ -6,13 +6,18 @@ namespace PerformanceTests.Configuration;
 /// </summary>
 public static class PerformanceTestConfig
 {
-    // Test scale. 500k (not 2M) so every backend — including direct SQLite — completes within
-    // the per-storage TimeoutSeconds budget on ordinary hardware. SQLite writes at ~12k rows/s on
-    // a slow/AV-scanned disk, so 2M never finished its 80s budget; 500k lands around ~40s there
-    // and is near-instant on a healthy disk.
-    public const int TotalRecords = 500_000;
+    // Test scale is per-storage. Direct SQLite gets a smaller set so it finishes within the
+    // per-storage TimeoutSeconds budget even on a slow/AV-scanned disk (~12k rows/s there, so 2M
+    // never finished its 80s budget; 500k lands ~40s). The in-memory-backed tiers still get a
+    // genuinely large set to prove they scale — InMemory/Hybrid/HybridCapped all do 2M inside the
+    // budget.
+    public const int LargeRecordCount = 2_000_000;
+    public const int SqliteRecordCount = 500_000;
     public const int BatchSize = 5000;
-    public const int TotalBatches = TotalRecords / BatchSize; // 100 batches
+
+    /// <summary>Records written for a given storage kind — SQLite gets the smaller set.</summary>
+    public static int RecordCountFor(string storageKind) =>
+        storageKind == "Sqlite" ? SqliteRecordCount : LargeRecordCount;
     
     // Timing
     public const double TimeoutSeconds = 80.0;

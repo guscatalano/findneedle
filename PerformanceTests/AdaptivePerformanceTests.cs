@@ -76,22 +76,23 @@ public class AdaptivePerformanceTests
     }
 
     /// <summary>
-    /// Comparative write performance test: writes 500,000 records across all storage types.
-    /// Each storage type must complete within 80 seconds.
-    /// Generates an HTML graph comparing performance degradation.
+    /// Comparative write performance test. The in-memory-backed tiers (InMemory/Hybrid/
+    /// HybridCapped) write a large set (2M) to prove they scale; direct SQLite writes a smaller
+    /// set (500k) so it finishes within the 80s per-storage budget on slow disks. Each storage
+    /// type must complete within that budget. Generates an HTML graph comparing the results.
     /// </summary>
     [TestMethod]
     [TestCategory("Performance")]
     [RequiresMinimumSpecs(MinimumRamGb = 4, MinimumProcessorCount = 2,
         Reason = "Stress test writes a large record set and requires adequate CPU and memory")]
     [Timeout(PerformanceTestConfig.TotalTestTimeoutMilliseconds)]
-    public void ComparativeWritePerformance_500KRecords()
+    public void ComparativeWritePerformance_LargeDataset()
     {
         var results = new Dictionary<string, WriteTestResult>();
 
         Console.WriteLine("=== COMPARATIVE WRITE PERFORMANCE TEST ===");
         Console.WriteLine(SystemSpecificationChecker.GetSystemSpecificationSummary());
-        Console.WriteLine($"Target: {PerformanceTestConfig.TotalRecords:N0} records ({PerformanceTestConfig.TotalBatches} batches of {PerformanceTestConfig.BatchSize:N0})");
+        Console.WriteLine($"Target: {PerformanceTestConfig.LargeRecordCount:N0} records (SQLite: {PerformanceTestConfig.SqliteRecordCount:N0}), batches of {PerformanceTestConfig.BatchSize:N0}");
         Console.WriteLine($"Timeout: {PerformanceTestConfig.TimeoutSeconds}s per storage type");
         Console.WriteLine($"Hybrid: No record cap (memory threshold only)");
         Console.WriteLine($"HybridCapped: {PerformanceTestConfig.HybridCappedMaxRecords:N0} record cap in memory");
@@ -107,7 +108,7 @@ public class AdaptivePerformanceTests
         PrintComparisonResults(results);
 
         // Generate HTML graph
-        var htmlPath = PerformanceReportGenerator.GenerateHtmlReport(results, PerformanceTestConfig.TotalRecords);
+        var htmlPath = PerformanceReportGenerator.GenerateHtmlReport(results, PerformanceTestConfig.LargeRecordCount);
         Console.WriteLine($"?? Interactive graph generated: {htmlPath}");
         Console.WriteLine($"   Open in browser to view performance comparison");
         Console.WriteLine();
@@ -123,6 +124,9 @@ public class AdaptivePerformanceTests
     {
         Console.WriteLine($"? Testing: {storageKind}");
         Console.WriteLine(new string('?', 60));
+
+        int recordCount = PerformanceTestConfig.RecordCountFor(storageKind);
+        int totalBatches = recordCount / PerformanceTestConfig.BatchSize;
 
         var factory = CreateStorageFactory(storageKind);
         using var storage = factory.create();
@@ -140,13 +144,13 @@ public class AdaptivePerformanceTests
         int getStatisticsCallCount = 0;
 
         // Write all batches with timeout check
-        for (int batchNum = 0; batchNum < PerformanceTestConfig.TotalBatches; batchNum++)
+        for (int batchNum = 0; batchNum < totalBatches; batchNum++)
         {
             // Check if we're approaching timeout (with 2 second buffer)
             if (overallSw.Elapsed.TotalSeconds > PerformanceTestConfig.TimeoutSeconds - 2)
             {
                 timedOut = true;
-                Console.WriteLine($"  ? Approaching timeout at batch {batchNum + 1}/{PerformanceTestConfig.TotalBatches}");
+                Console.WriteLine($"  ? Approaching timeout at batch {batchNum + 1}/{totalBatches}");
                 Console.WriteLine($"  ? Completed {batchNum * PerformanceTestConfig.BatchSize:N0} records in {overallSw.Elapsed.TotalSeconds:F2}s");
                 break;
             }
@@ -169,7 +173,7 @@ public class AdaptivePerformanceTests
             batchesCompleted = batchNum + 1;
 
             // Record data point every N batches for graphing
-            if (batchNum % PerformanceTestConfig.StatisticsSampleInterval == 0 || batchNum == PerformanceTestConfig.TotalBatches - 1)
+            if (batchNum % PerformanceTestConfig.StatisticsSampleInterval == 0 || batchNum == totalBatches - 1)
             {
                 // Measure GetStatistics time
                 var statsSw = Stopwatch.StartNew();
@@ -196,7 +200,7 @@ public class AdaptivePerformanceTests
                 var elapsed = overallSw.Elapsed.TotalSeconds;
                 var recordsWritten = (batchNum + 1) * PerformanceTestConfig.BatchSize;
                 var remainingTime = PerformanceTestConfig.TimeoutSeconds - elapsed;
-                Console.WriteLine($"  [{batchNum + 1}/{PerformanceTestConfig.TotalBatches}] {recordsWritten:N0} records, {elapsed:F1}s elapsed, {remainingTime:F1}s remaining");
+                Console.WriteLine($"  [{batchNum + 1}/{totalBatches}] {recordsWritten:N0} records, {elapsed:F1}s elapsed, {remainingTime:F1}s remaining");
             }
         }
 
@@ -286,7 +290,7 @@ public class AdaptivePerformanceTests
             if (result.TimedOut)
             {
                 var systemSpecs = SystemSpecificationChecker.GetSystemSpecificationSummary();
-                Assert.Fail($"{result.StorageKind} exceeded timeout: {result.TotalTimeSeconds:F2}s > {PerformanceTestConfig.TimeoutSeconds}s (completed {result.TotalRecords:N0}/{PerformanceTestConfig.TotalRecords:N0} records)\n{systemSpecs}");
+                Assert.Fail($"{result.StorageKind} exceeded timeout: {result.TotalTimeSeconds:F2}s > {PerformanceTestConfig.TimeoutSeconds}s (completed {result.TotalRecords:N0}/{PerformanceTestConfig.RecordCountFor(result.StorageKind):N0} records)\n{systemSpecs}");
             }
             else
             {
