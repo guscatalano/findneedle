@@ -1282,3 +1282,63 @@ jobs:
               Get-Content $file.FullName | Write-Host
             }
           }
+
+  # ---------------------------------------------------------------------------
+  # CI #1 (TESTING_PLAN.md): run the FlaUI UI tests on PRs.
+  #
+  # DRAFT — validation needed before this is relied upon. The UI tests drive the real
+  # FindNeedleUX app via UIA3 (FlaUI), which needs a desktop session. GitHub-hosted
+  # windows-latest *may* work for headless UIA3; if these go red here, the fix per the plan is a
+  # self-hosted runner (or windows-latest with an RDP/interactive-session workaround), NOT
+  # deleting the tests.
+  #
+  # This job is intentionally standalone: it is NOT wired into the `test-publish` fail-on-red
+  # gate, so it can't break releases while it's being proven. Once it's reliably green, make it a
+  # required status check via branch protection on `master` (a repo-admin action) to actually
+  # block merges on UI regressions.
+  #
+  # The existing UI tests also carry [TestCategory("SkipCI")]; once this job is trusted, drop that
+  # category from them so intent matches reality (the filter below selects on UITests regardless).
+  # ---------------------------------------------------------------------------
+  run-ui-tests:
+    needs: [build-debug]
+    runs-on: windows-latest
+    env:
+      UI_TEST_PROJECT: FindNeedleUX.UITests/FindNeedleUX.UITests.csproj
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v2
+      - name: Download build outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-Debug
+          path: .
+      - name: Restore NuGet packages for UI test project
+        shell: pwsh
+        run: dotnet restore $env:UI_TEST_PROJECT
+      - name: Run UI tests (FlaUI)
+        id: uitestrun
+        shell: pwsh
+        run: |
+          dotnet test $env:UI_TEST_PROJECT --configuration Debug --no-build --logger trx --framework net8.0-windows10.0.19041.0 --filter "TestCategory=UITests"
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: ${{ github.workspace }}/**/TestResults/**/*.trx
+          retention-days: 5
