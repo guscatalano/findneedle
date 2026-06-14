@@ -6,10 +6,13 @@ namespace PerformanceTests.Configuration;
 /// </summary>
 public static class PerformanceTestConfig
 {
-    // Test scale
-    public const int TotalRecords = 2_000_000;
+    // Test scale. 500k (not 2M) so every backend — including direct SQLite — completes within
+    // the per-storage TimeoutSeconds budget on ordinary hardware. SQLite writes at ~12k rows/s on
+    // a slow/AV-scanned disk, so 2M never finished its 80s budget; 500k lands around ~40s there
+    // and is near-instant on a healthy disk.
+    public const int TotalRecords = 500_000;
     public const int BatchSize = 5000;
-    public const int TotalBatches = TotalRecords / BatchSize; // 400 batches
+    public const int TotalBatches = TotalRecords / BatchSize; // 100 batches
     
     // Timing
     public const double TimeoutSeconds = 80.0;

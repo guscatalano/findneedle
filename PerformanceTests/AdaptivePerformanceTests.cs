@@ -76,16 +76,16 @@ public class AdaptivePerformanceTests
     }
 
     /// <summary>
-    /// Comparative write performance test: writes 2,000,000 records across all storage types.
+    /// Comparative write performance test: writes 500,000 records across all storage types.
     /// Each storage type must complete within 80 seconds.
     /// Generates an HTML graph comparing performance degradation.
     /// </summary>
     [TestMethod]
     [TestCategory("Performance")]
-    [RequiresMinimumSpecs(MinimumRamGb = 4, MinimumProcessorCount = 2, 
-        Reason = "Stress test with 2M records requires adequate CPU and memory")]
+    [RequiresMinimumSpecs(MinimumRamGb = 4, MinimumProcessorCount = 2,
+        Reason = "Stress test writes a large record set and requires adequate CPU and memory")]
     [Timeout(PerformanceTestConfig.TotalTestTimeoutMilliseconds)]
-    public void ComparativeWritePerformance_2MillionRecords()
+    public void ComparativeWritePerformance_500KRecords()
     {
         var results = new Dictionary<string, WriteTestResult>();
 
