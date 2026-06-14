@@ -56,22 +56,23 @@ public static class ResultsViewerSettings
     public const double DefaultDetailsPanelHeight = 240;
     public const double MinDetailsPanelHeight = 80;
     public const double MaxDetailsPanelHeight = 800;
+
+    /// <summary>
+    /// Clamp a details-panel height into [<see cref="MinDetailsPanelHeight"/>,
+    /// <see cref="MaxDetailsPanelHeight"/>]. Pure (no I/O / no static state) so it's unit-testable;
+    /// both the getter and setter route through it.
+    /// </summary>
+    public static double ClampDetailsPanelHeight(double value)
+    {
+        if (value < MinDetailsPanelHeight) return MinDetailsPanelHeight;
+        if (value > MaxDetailsPanelHeight) return MaxDetailsPanelHeight;
+        return value;
+    }
+
     public static double DetailsPanelHeight
     {
-        get
-        {
-            var v = Data.DetailsPanelHeight ?? DefaultDetailsPanelHeight;
-            if (v < MinDetailsPanelHeight) v = MinDetailsPanelHeight;
-            if (v > MaxDetailsPanelHeight) v = MaxDetailsPanelHeight;
-            return v;
-        }
-        set
-        {
-            if (value < MinDetailsPanelHeight) value = MinDetailsPanelHeight;
-            if (value > MaxDetailsPanelHeight) value = MaxDetailsPanelHeight;
-            Data.DetailsPanelHeight = value;
-            Save();
-        }
+        get => ClampDetailsPanelHeight(Data.DetailsPanelHeight ?? DefaultDetailsPanelHeight);
+        set { Data.DetailsPanelHeight = ClampDetailsPanelHeight(value); Save(); }
     }
 
     public const int DefaultPageSize = 100;
@@ -104,12 +105,21 @@ public static class ResultsViewerSettings
     /// WebView2 memory use.
     /// </summary>
     public const int DefaultWebViewerServerSideThreshold = 10000;
+
+    /// <summary>
+    /// Normalize a server-side threshold: zero/negative values are invalid and fall back to
+    /// <see cref="DefaultWebViewerServerSideThreshold"/>. Pure (no I/O / no static state) so it's
+    /// unit-testable; both the getter and setter route through it.
+    /// </summary>
+    public static int NormalizeThreshold(int value) =>
+        value > 0 ? value : DefaultWebViewerServerSideThreshold;
+
     public static int WebViewerServerSideThreshold
     {
         get => Data.WebViewerServerSideThreshold is int n && n > 0 ? n : DefaultWebViewerServerSideThreshold;
         set
         {
-            Data.WebViewerServerSideThreshold = value > 0 ? value : DefaultWebViewerServerSideThreshold;
+            Data.WebViewerServerSideThreshold = NormalizeThreshold(value);
             Save();
             // No Changed event — applies on next viewer open, not to a viewer that's already up.
         }

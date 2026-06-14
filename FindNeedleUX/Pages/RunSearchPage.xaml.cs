@@ -1,15 +1,13 @@
-using System;
-using System.Threading;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
+using FindNeedleUX.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using StreamingSearchHandle = FindNeedleUX.Services.MiddleLayerService.StreamingSearchHandle;
 
 namespace FindNeedleUX.Pages;
 public sealed partial class RunSearchPage : Page
 {
-    private CancellationTokenSource _cts;
+    private readonly SearchOrchestrator _orchestrator = new();
     public RunSearchPage()
     {
         this.InitializeComponent();
@@ -51,43 +49,15 @@ public sealed partial class RunSearchPage : Page
         MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
         MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);
 
-        // Streaming path: SQLite is forced, search runs on threadpool, viewer can open while
-        // it's still producing. We grant the search a short grace period — if it finishes in
-        // that window we skip the auto-navigation to avoid flicker on trivial searches.
-        StreamingSearchHandle handle = null;
         try
         {
-            handle = MiddleLayerService.RunSearchStreaming(_shallowSearch);
-            _cts = handle.Cancellation;
-
-            const int GraceMs = 150;
-            var grace = Task.Delay(GraceMs);
-            var first = await Task.WhenAny(handle.SearchTask, grace);
-
-            if (first != handle.SearchTask)
-            {
-                // Still running past the grace window — open the viewer now so the user sees
-                // rows accumulating. The viewer subscribes to source.RowsAvailable and
-                // refreshes on its own.
-                MainWindowActions.NavigateToNativeResultsPage();
-            }
-
-            // Either way, keep showing progress here until the search finishes. Cancel button
-            // is wired to handle.Cancellation via _cts.
-            await handle.SearchTask;
-
-            var report = MiddleLayerService.GetStats()?.GetSummaryReport() ?? "";
-            summary.Text = MiddleLayerService.LastSearchReusedCache
-                ? "(from cache) " + report
-                : "(scanned) "    + report;
-        }
-        catch (System.Threading.Tasks.TaskCanceledException)
-        {
-            summary.Text = "Search cancelled.";
-        }
-        catch (OperationCanceledException)
-        {
-            summary.Text = "Search cancelled.";
+            // The orchestrator owns the streaming run/grace/cancel flow; the page just supplies
+            // the two UI side effects (open viewer, show status). Both callbacks run on the UI
+            // thread because RunAsync resumes on the captured WinUI context.
+            await _orchestrator.RunAsync(
+                _shallowSearch,
+                onOpenViewer: MainWindowActions.NavigateToNativeResultsPage,
+                onStatus: text => summary.Text = text);
         }
         finally
         {
@@ -103,7 +73,7 @@ public sealed partial class RunSearchPage : Page
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        _cts?.Cancel();
+        _orchestrator.Cancel();
         summary.Text = "Cancelling...";
     }
 }
