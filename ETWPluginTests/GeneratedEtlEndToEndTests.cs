@@ -43,22 +43,38 @@ public sealed class GeneratedEtlEndToEndTests
         } // Dispose stops the session and finalizes the .etl
     }
 
-    [TestMethod]
-    [TestCategory("Performance")]
-    [Timeout(180000)]
-    public void GenerateEtl_FullPipeline_LoadsResults()
+    private static void GenerateTraceLoggingEtl(string etlPath, int events)
+    {
+        // TraceLogging = self-describing ETW (no manifest; schema travels with each event), emitted
+        // via EventSource.Write<T>. Distinct from the manifest path above and common in modern
+        // Windows components.
+        using var es = new EventSource("FindNeedle-TraceLoggingTest", EventSourceSettings.EtwSelfDescribingEventFormat);
+        using (var session = new TraceEventSession("FindNeedle_GenTL_Session", etlPath))
+        {
+            session.EnableProvider(es.Guid);
+            Thread.Sleep(300);
+            for (int i = 0; i < events; i++)
+                es.Write("Tick", new { id = i, message = $"tracelogging event {i}" });
+            Thread.Sleep(500);
+        }
+    }
+
+    /// <summary>Generate an .etl with <paramref name="generate"/>, run it through the full pipeline,
+    /// and assert results loaded. Shared by the manifest and TraceLogging cases.</summary>
+    private void GenerateThenAssertLoads(string label, Action<string> generate)
     {
         var dir = Path.Combine(Path.GetTempPath(), $"FN_genetl_{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         var etl = Path.Combine(dir, "generated.etl");
         try
         {
-            GenerateEtl(etl, events: 2000);
+            generate(etl);
             Assert.IsTrue(File.Exists(etl), "a real .etl file should have been generated");
-            TestContext.WriteLine($"Generated .etl: {new FileInfo(etl).Length / 1024.0:F1} KB");
+            TestContext.WriteLine($"[{label}] generated .etl: {new FileInfo(etl).Length / 1024.0:F1} KB");
 
-            // ----- full pipeline: FolderLocation + ETLProcessor -> NuSearchQuery -> storage -----
-            ETWTestUtils.UseTestTraceFmt(); // tracefmt will fail to decode (non-WPP); fallback kicks in
+            // full pipeline: FolderLocation + ETLProcessor -> NuSearchQuery -> storage.
+            // tracefmt can't decode these non-WPP traces, so ETLProcessor's TraceEvent fallback runs.
+            ETWTestUtils.UseTestTraceFmt();
 
             var loc = new FolderLocation { path = etl };
             loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new ETLProcessor() });
@@ -70,10 +86,9 @@ public sealed class GeneratedEtlEndToEndTests
             var storage = query.ResultStorage;
             Assert.IsNotNull(storage, "search should have created result storage");
             int rows = storage!.GetStatistics().filteredRecordCount;
-            TestContext.WriteLine($"Pipeline loaded {rows} results from the generated .etl");
+            TestContext.WriteLine($"[{label}] pipeline loaded {rows} results");
 
-            Assert.IsTrue(rows > 0,
-                "the generated .etl should load results via the TraceEvent fallback (tracefmt can't decode it)");
+            Assert.IsTrue(rows > 0, $"[{label}] the generated .etl should load results via the TraceEvent fallback");
 
             query.DisposeStorage();
         }
@@ -82,4 +97,16 @@ public sealed class GeneratedEtlEndToEndTests
             try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
         }
     }
+
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(180000)]
+    public void GenerateEtl_FullPipeline_LoadsResults()
+        => GenerateThenAssertLoads("manifest", etl => GenerateEtl(etl, events: 2000));
+
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(180000)]
+    public void GenerateTraceLoggingEtl_FullPipeline_LoadsResults()
+        => GenerateThenAssertLoads("tracelogging", etl => GenerateTraceLoggingEtl(etl, events: 2000));
 }
