@@ -76,7 +76,7 @@ public class EtlInfoExtractor
         info.SessionEndTime = source.SessionEndTime;
         info.SessionDuration = source.SessionDuration;
 
-        int total = 0, kernel = 0, manifest = 0;
+        int total = 0, kernel = 0, manifest = 0, buildNumber = 0;
 
         // AllEvents = every dispatched event (total + provider tally). Kernel.All / Dynamic.All fire
         // additionally for their subsets (own counters), giving the format breakdown without
@@ -87,6 +87,21 @@ public class EtlInfoExtractor
             var p = e.ProviderName;
             if (!string.IsNullOrEmpty(p))
                 info.Providers[p] = info.Providers.TryGetValue(p, out var c) ? c + 1 : 1;
+
+            // The OS build number lives in the ETW header event's ProviderVersion (the header's
+            // OSVersion is often just 10.0.0.0). Read it once. (BuildLabEx / branch like
+            // "rs_prerelease" is a registry value and is NOT present in ETW traces.)
+            if (buildNumber == 0 && p != null
+                && p.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
+                && e.EventName.IndexOf("EventTrace", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                try
+                {
+                    var pv = e.PayloadByName("ProviderVersion");
+                    if (pv != null) buildNumber = Convert.ToInt32(pv);
+                }
+                catch { /* not this event */ }
+            }
         };
         source.Kernel.All += _ => kernel++;
         source.Dynamic.All += _ => manifest++;
@@ -97,6 +112,13 @@ public class EtlInfoExtractor
         info.KernelEventCount = kernel;
         info.ManifestOrTraceLoggingEventCount = manifest;
         info.EventsLost = source.EventsLost;
+
+        // Prefer the real build number from the header event; the source.OSVersion build field is
+        // often 0. Compose major.minor.build so the report shows e.g. 10.0.26100.
+        info.BuildNumber = buildNumber;
+        var osv = source.OSVersion;
+        if (osv != null && buildNumber > 0 && osv.Build <= 0)
+            info.OsVersion = $"{osv.Major}.{osv.Minor}.{buildNumber}";
 
         info.Providers = info.Providers
             .OrderByDescending(kv => kv.Value)
@@ -138,6 +160,7 @@ public class EtlInfoExtractor
             new XElement("FilePath", info.FilePath),
             new XElement("FileSizeBytes", info.FileSizeBytes),
             new XElement("OsVersion", info.OsVersion),
+            new XElement("BuildNumber", info.BuildNumber),
             new XElement("PointerSizeBits", info.PointerSizeBits),
             new XElement("NumberOfProcessors", info.NumberOfProcessors),
             new XElement("CpuSpeedMHz", info.CpuSpeedMHz),
@@ -161,6 +184,7 @@ public class EtlInfoExtractor
         sb.AppendLine($"File,{Q(Path.GetFileName(info.FilePath))}");
         sb.AppendLine($"FileSizeBytes,{info.FileSizeBytes}");
         sb.AppendLine($"OsVersion,{Q(info.OsVersion)}");
+        sb.AppendLine($"BuildNumber,{info.BuildNumber}");
         sb.AppendLine($"PointerSizeBits,{info.PointerSizeBits}");
         sb.AppendLine($"NumberOfProcessors,{info.NumberOfProcessors}");
         sb.AppendLine($"CpuSpeedMHz,{info.CpuSpeedMHz}");
@@ -187,6 +211,7 @@ public sealed class EtlInfo
     public long FileSizeBytes { get; set; }
 
     public string OsVersion { get; set; } = string.Empty;     // e.g. "10.0.26100" — the Windows build
+    public int BuildNumber { get; set; }                      // OS build from the ETW header (e.g. 26100); 0 if absent
     public int PointerSizeBits { get; set; }                  // 32 or 64
     public int NumberOfProcessors { get; set; }
     public int CpuSpeedMHz { get; set; }
