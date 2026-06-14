@@ -122,8 +122,8 @@ public sealed class GeneratedEtlEndToEndTests
         {
             GenerateEtl(etl, events: 1500);
 
-            var info = findneedle.ETWPlugin.EtlInspector.Inspect(etl);
-            TestContext.WriteLine(findneedle.ETWPlugin.EtlInspector.Format(info));
+            var info = findneedle.ETWPlugin.EtlInfoExtractor.Inspect(etl);
+            TestContext.WriteLine(findneedle.ETWPlugin.EtlInfoExtractor.Format(info));
 
             Assert.IsFalse(string.IsNullOrEmpty(info.OsVersion), "should report the Windows/OS build");
             Assert.IsTrue(info.OsVersion.StartsWith("10.") || info.OsVersion.StartsWith("11."),
