@@ -368,3 +368,6 @@ FodyWeavers.xsd
 
 # Generated stress-test sample logs (script lives at Samples/generate_large_sample.py)
 Samples/*.log
+
+# Generated locally by the comparative write-performance test (PerformanceReportGenerator)
+WritePerformance_Comparison*.html
