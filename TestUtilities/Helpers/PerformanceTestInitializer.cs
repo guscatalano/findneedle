@@ -45,32 +45,40 @@ public class PerformanceTestInitializer
     /// </summary>
     public static void CheckSystemRequirements(TestContext testContext)
     {
-        var testName = testContext.TestName;
-        if (string.IsNullOrEmpty(testName))
+        var methodName = testContext.TestName;
+        if (string.IsNullOrEmpty(methodName))
             return;
+        // TestName is normally just the method name, but tolerate a fully-qualified form too.
+        methodName = methodName.Split('.').Last();
 
-        // Extract method name from full test name (format: Namespace.ClassName.MethodName)
-        var testNameParts = testName.Split('.');
-        if (testNameParts.Length < 2)
-            return;
+        // Resolve the declaring class. MSTest exposes it via FullyQualifiedTestClassName; the old
+        // code instead parsed it out of TestName and bailed (Length < 2) whenever TestName was the
+        // bare method name — i.e. the normal case — so this whole spec check silently no-opped and
+        // the [RequiresMinimumSpecs] gate never ran.
+        var className = testContext.FullyQualifiedTestClassName;
 
-        var methodName = testNameParts[testNameParts.Length - 1];
-        var className = testNameParts.Length > 1 ? testNameParts[testNameParts.Length - 2] : null;
-
-        if (className == null)
-            return;
-
-        // Get the test class type from the calling assembly
         var assembly = Assembly.GetCallingAssembly();
-        var testType = assembly.GetTypes()
-            .FirstOrDefault(t => t.Name == className);
+        Type? testType = null;
+        if (!string.IsNullOrEmpty(className))
+            testType = assembly.GetTypes().FirstOrDefault(t => t.FullName == className || t.Name == className);
 
-        if (testType == null)
-            return;
-
-        var testMethod = testType.GetMethod(methodName, 
+        var testMethod = testType?.GetMethod(methodName,
             BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
 
+        // Fallback: if the class couldn't be pinned, find any method with this name that actually
+        // carries the attribute (keeps the gate working if a test is renamed/relocated).
+        if (testMethod == null)
+        {
+            foreach (var t in assembly.GetTypes())
+            {
+                var m = t.GetMethod(methodName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+                if (m != null && m.GetCustomAttribute<RequiresMinimumSpecsAttribute>() != null)
+                {
+                    testMethod = m;
+                    break;
+                }
+            }
+        }
         if (testMethod == null)
             return;
 
@@ -79,7 +87,7 @@ public class PerformanceTestInitializer
             return;
 
         var processorCount = Environment.ProcessorCount;
-        var ramGb = GC.GetTotalMemory(false) / (1024.0 * 1024.0 * 1024.0);
+        var ramGb = SystemSpecificationChecker.GetTotalMemoryGb();
 
         var minRam = attr.MinimumRamGb >= 0 ? attr.MinimumRamGb : SystemSpecificationChecker.MinimumRamGb;
         var minProcessors = attr.MinimumProcessorCount >= 0 ? attr.MinimumProcessorCount : SystemSpecificationChecker.MinimumProcessorCount;

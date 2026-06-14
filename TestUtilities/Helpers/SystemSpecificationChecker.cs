@@ -19,12 +19,16 @@ public class SystemSpecificationChecker
     public const int MinimumProcessorCount = 2;
 
     /// <summary>
-    /// Gets the total physical memory in GB.
+    /// Gets the total physical memory available to the runtime, in GB.
+    /// Uses <see cref="GC.GetGCMemoryInfo()"/>.<c>TotalAvailableMemoryBytes</c>, which reports the
+    /// machine's physical RAM (or the container/cgroup limit when constrained) — the thing we
+    /// actually want to gate on. The previous implementation used <c>GC.GetTotalMemory()</c>, the
+    /// managed heap size (a few tens of MB), so this check always saw ~0 GB and could never be met.
     /// </summary>
     public static double GetTotalMemoryGb()
     {
-        var ram = GC.GetTotalMemory(false);
-        return ram / (1024.0 * 1024.0 * 1024.0);
+        var totalBytes = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+        return totalBytes / (1024.0 * 1024.0 * 1024.0);
     }
 
     /// <summary>
@@ -49,8 +53,8 @@ public class SystemSpecificationChecker
     public static string GetSystemSpecificationSummary()
     {
         var processorCount = GetProcessorCount();
-        var memoryGb = GC.GetTotalMemory(false) / (1024.0 * 1024.0 * 1024.0);
-        
+        var memoryGb = GetTotalMemoryGb();
+
         return $"System: {processorCount} CPU cores, {memoryGb:F2} GB RAM " +
                $"(Min required: {MinimumProcessorCount} cores, {MinimumRamGb} GB)";
     }
