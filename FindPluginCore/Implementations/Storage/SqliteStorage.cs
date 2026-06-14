@@ -20,6 +20,19 @@ namespace FindPluginCore.Implementations.Storage
         private SqliteConnection _connection;
         private readonly object _sync = new();
 
+        // Running row counts, maintained on every insert/clear so GetStatistics is O(1). SQLite
+        // has no cached row count, so SELECT COUNT(*) is a full table scan; GetStatistics is
+        // called repeatedly during a search (status text, per-location PerfLog, cache prompt), so
+        // scanning per call was O(rows) and dominated wall time on large spilled tables (~93s
+        // across 40 calls in the 2M-record perf test). Seeded once from the tables at construction
+        // so a reused warm cache reports the right numbers. volatile so GetStatistics can read
+        // them without taking _sync — otherwise a status/viewer call to GetStatistics blocks behind
+        // an in-progress write/spill that holds _sync for the duration of a slow multi-row insert
+        // (on a slow disk that was ~90s of lock-wait in the 2M-record perf test). int reads/writes
+        // are atomic; the += updates stay under _sync so they remain serialized with each other.
+        private volatile int _rawCount;
+        private volatile int _filteredCount;
+
         /// <summary>
         /// Fires after each <see cref="AddFilteredBatch"/> commits. The argument is the number of
         /// rows that just landed (the batch size, not the running total). Used by the streaming
@@ -56,6 +69,15 @@ namespace FindPluginCore.Implementations.Storage
             // search is near-instant); otherwise that method calls ClearTables and we run a
             // fresh scan as before. For callers that don't care about caching, calling
             // ClearTables() directly post-construction matches the old behaviour.
+
+            // Seed the running counts from whatever the (possibly warm) cache holds. One COUNT
+            // scan here — cheap on a fresh/empty DB, and paid once instead of on every
+            // GetStatistics call. ClearTables() and the insert paths keep them in sync thereafter.
+            lock (_sync)
+            {
+                _rawCount = GetCount("RawResults");
+                _filteredCount = GetCount("FilteredResults");
+            }
         }
 
         /// <summary>
@@ -551,6 +573,10 @@ namespace FindPluginCore.Implementations.Storage
 
                 // Recreate the FTS5 table + triggers fresh.
                 InitializeFts5();
+
+                // Tables are now empty — keep the running counts in sync.
+                _rawCount = 0;
+                _filteredCount = 0;
             }
         }
 
@@ -569,8 +595,9 @@ namespace FindPluginCore.Implementations.Storage
             lock (_sync)
             {
                 using var transaction = _connection.BeginTransaction();
-                BulkInsert("RawResults", batch, transaction, cancellationToken, out _);
+                BulkInsert("RawResults", batch, transaction, cancellationToken, out var insertedRaw);
                 transaction.Commit();
+                _rawCount += insertedRaw;
             }
         }
 
@@ -596,6 +623,7 @@ namespace FindPluginCore.Implementations.Storage
                 using var transaction = _connection.BeginTransaction();
                 BulkInsert("FilteredResults", batch, transaction, cancellationToken, out inserted, onProgress);
                 transaction.Commit();
+                _filteredCount += inserted;
             }
             // Fire outside the lock so subscribers can re-enter (e.g. read a page) without
             // deadlocking the writer thread.
@@ -1079,16 +1107,20 @@ namespace FindPluginCore.Implementations.Storage
 
         public (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory) GetStatistics()
         {
-            int rawCount;
-            int filteredCount;
+            // Deliberately lock-free. The counts are volatile ints (atomic reads) and the file
+            // size is a filesystem metadata call that doesn't touch the DB connection — so this
+            // never blocks behind a writer/spill that holds _sync for a slow multi-row insert.
+            // Stats are a point-in-time snapshot; reading a count that omits an in-flight (not yet
+            // committed) batch is fine for status display.
+            int rawCount = _rawCount;
+            int filteredCount = _filteredCount;
             long sizeOnDisk = 0;
-            lock (_sync)
+            try
             {
-                rawCount = GetCount("RawResults");
-                filteredCount = GetCount("FilteredResults");
                 if (File.Exists(_dbPath))
                     sizeOnDisk = new FileInfo(_dbPath).Length;
             }
+            catch { /* file briefly inaccessible — report 0, never throw from a stats read */ }
             long sizeInMemory = 0; // Not applicable for SQLite
             return (rawCount, filteredCount, sizeOnDisk, sizeInMemory);
         }

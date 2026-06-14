@@ -279,6 +279,35 @@ public class StorageTests
         factory.cleanup();
     }
 
+    // GetStatistics returns running counts maintained on insert/clear (not a SELECT COUNT(*) scan).
+    // This guards both the maintenance paths and the constructor seeding: a reopened (warm) store
+    // must report the persisted counts without rescanning.
+    [DataTestMethod]
+    [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
+    public void GetStatistics_AfterReopen_ReflectsPersistedCounts(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+
+        using (var storage = factory.create())
+        {
+            storage.AddRawBatch(Enumerable.Range(0, 7).Select(i => (ISearchResult)new DummySearchResult($"R{i}")).ToList());
+            storage.AddFilteredBatch(Enumerable.Range(0, 3).Select(i => (ISearchResult)new DummySearchResult($"F{i}")).ToList());
+            var s = storage.GetStatistics();
+            Assert.AreEqual(7, s.rawRecordCount, "raw count after inserts");
+            Assert.AreEqual(3, s.filteredRecordCount, "filtered count after inserts");
+        }
+
+        using (var storage = factory.create())
+        {
+            var s = storage.GetStatistics();
+            Assert.AreEqual(7, s.rawRecordCount, "reopened store should report persisted raw count without rescanning");
+            Assert.AreEqual(3, s.filteredRecordCount, "reopened store should report persisted filtered count");
+        }
+
+        factory.cleanup();
+    }
+
     // --- Additional tests added ---
 
     [DataTestMethod]

@@ -17,9 +17,13 @@ namespace FindPluginCore.Implementations.Storage
         private readonly List<AccessTrackedResult> _filteredResults = new();
         private readonly object _sync = new();
 
-        // Cache statistics to avoid expensive recalculation on every call
-        private (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory)? _cachedStats = null;
-        private bool _statsInvalid = true;
+        // Running total of the in-memory payload size, maintained on add/remove/clear so
+        // GetStatistics is O(1). The previous implementation recomputed this by iterating every
+        // record and UTF8-byte-counting all string fields on each call — O(rows) per call — which
+        // dominated GetStatistics for large in-memory tiers (e.g. HybridCapped held ~1M records,
+        // costing ~91s across 40 calls in the 2M-record perf test). Counts come straight from the
+        // list .Count properties, which are already O(1).
+        private long _sizeInMemory;
 
         // Wrapper to track access time for LRU eviction
         private class AccessTrackedResult
@@ -52,10 +56,12 @@ namespace FindPluginCore.Implementations.Storage
                 toAdd.Add(new AccessTrackedResult(result));
             }
             if (toAdd.Count == 0) return;
+            long addedSize = 0;
+            foreach (var t in toAdd) addedSize += CalculateResultSize(t.Result);
             lock (_sync)
             {
                 _rawResults.AddRange(toAdd);
-                _statsInvalid = true; // Invalidate cache
+                _sizeInMemory += addedSize;
             }
         }
 
@@ -72,10 +78,12 @@ namespace FindPluginCore.Implementations.Storage
                 toAdd.Add(new AccessTrackedResult(result));
             }
             if (toAdd.Count == 0) return;
+            long addedSize = 0;
+            foreach (var t in toAdd) addedSize += CalculateResultSize(t.Result);
             lock (_sync)
             {
                 _filteredResults.AddRange(toAdd);
-                _statsInvalid = true; // Invalidate cache
+                _sizeInMemory += addedSize;
             }
         }
 
@@ -155,38 +163,8 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
-                // Return cached statistics if still valid
-                if (!_statsInvalid && _cachedStats.HasValue)
-                {
-                    return _cachedStats.Value;
-                }
-
-                // Recalculate statistics
-                int rawRecordCount = _rawResults.Count; // O(1) - just get Count
-                int filteredRecordCount = _filteredResults.Count; // O(1)
-                long sizeInMemory = 0;
-                
-                // Only calculate size if we actually have records
-                if (rawRecordCount > 0 || filteredRecordCount > 0)
-                {
-                    foreach (var trackedResult in _rawResults)
-                    {
-                        sizeInMemory += CalculateResultSize(trackedResult.Result);
-                    }
-                    foreach (var trackedResult in _filteredResults)
-                    {
-                        sizeInMemory += CalculateResultSize(trackedResult.Result);
-                    }
-                }
-                
-                long sizeOnDisk = 0;
-                var stats = (rawRecordCount, filteredRecordCount, sizeOnDisk, sizeInMemory);
-                
-                // Cache the result
-                _cachedStats = stats;
-                _statsInvalid = false;
-                
-                return stats;
+                // All O(1): list counts plus the running size total maintained on add/remove.
+                return (_rawResults.Count, _filteredResults.Count, 0L, _sizeInMemory);
             }
         }
 
@@ -239,7 +217,7 @@ namespace FindPluginCore.Implementations.Storage
             {
                 _rawResults.Clear();
                 _filteredResults.Clear();
-                _statsInvalid = true;
+                _sizeInMemory = 0;
             }
         }
 
@@ -274,7 +252,7 @@ namespace FindPluginCore.Implementations.Storage
                 // Use RemoveAll for efficient O(n) bulk removal instead of O(n�)
                 _rawResults.RemoveAll(item => toRemoveSet.Contains(item));
 
-                _statsInvalid = true; // Invalidate cache after removing
+                foreach (var r in toRemove) _sizeInMemory -= CalculateResultSize(r.Result);
 
                 // Return the actual ISearchResult objects
                 return toRemove.Select(r => r.Result).ToList();
@@ -305,7 +283,7 @@ namespace FindPluginCore.Implementations.Storage
                 // Use RemoveAll for efficient O(n) bulk removal instead of O(n�)
                 _filteredResults.RemoveAll(item => toRemoveSet.Contains(item));
 
-                _statsInvalid = true; // Invalidate cache after removing
+                foreach (var r in toRemove) _sizeInMemory -= CalculateResultSize(r.Result);
 
                 // Return the actual ISearchResult objects
                 return toRemove.Select(r => r.Result).ToList();
