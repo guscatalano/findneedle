@@ -23,7 +23,7 @@ Style targets: behaviour/integration, edge cases, snapshot/regression, UI automa
 | Storage GetStatistics perf | ✓ Fixed | The 2M-record perf report showed HybridCapped spending ~93s in `GetStatistics` (40 calls). Three distinct O(rows)/contention bugs found & fixed: (1) `SqliteStorage.GetStatistics` ran two `SELECT COUNT(*)` full-table scans per call → now maintains O(1) running counts (`_rawCount`/`_filteredCount`) updated on insert/clear, seeded once at construction. (2) `InMemoryStorage.GetStatistics` recomputed `sizeInMemory` by iterating every record + UTF8-byte-counting all fields per call → now a running total maintained on add/remove/clear. (3) `SqliteStorage.GetStatistics` took `_sync`, blocking behind an in-progress write/spill on a slow disk (the bulk of the ~93s was lock-wait) → counts made `volatile`, GetStatistics is now lock-free. Result: Sqlite 0.54s→0.00s, Hybrid 3.07s→0.00s, HybridCapped 92.91s→0.01s; HybridCapped now completes 2M writes in ~24s and PASSES (was TIMEOUT). Added `GetStatistics_AfterReopen_ReflectsPersistedCounts`. CoreTests 130/130 (ex-Performance). |
 | Storage cache-reuse bug | ✓ Fixed | Full-suite run surfaced 5 red `StorageTests` (Sqlite/Hybrid reopen → 0 rows). Root cause: `SqliteStorage` constructor still called `ClearTables()` unconditionally, defeating the documented cache-reuse contract (and the warm-cache feature was dead in production — a `cache.hit` could never fire). Fix: constructor opens without wiping; clearing moved to the consumer (`NuSearchQuery.Step2` clears before a fresh scan; `EvaluateCacheReuse` clears on a miss). Added `ISearchStorage.ClearTables()` + impls + a no-stale-duplicates regression test. CoreTests 132/132. NOTE: this had to be fixed because the new CI fail-on-red gate would otherwise turn the build red on these pre-existing failures. |
 
-Next: remaining page VM extractions as needed. Deferred: separate UI-tests job in CI (CI #1) — needs FlaUI/WinAppDriver verification on `windows-latest`, ideally after view-models give UX a real foundation.
+Next: remaining page VM extractions as needed. **Decided against CI #1** (a UI-tests job in CI): per maintainer decision the FlaUI UI tests are run **manually**, not on CI — so they stay `[TestCategory("UITests")]` and excluded from the CI test filter. (Tier U-C FlaUI workflow tests below remain optional/manual for the same reason.)
 
 ---
 
@@ -200,11 +200,7 @@ Each test launches the built `FindNeedleUX.exe`, drives it, asserts a visible ou
 
 ### Must-do
 
-1. **Run UI tests on PR.** Today `[TestCategory("UITests")]` is excluded. Add a second `run-ui-tests` job:
-   - Depends on `build-debug`.
-   - Uses a Windows runner with interactive desktop session (GitHub-hosted `windows-latest` works for headless FlaUI via UIA3; for true desktop use a self-hosted runner or `microsoft/setup-msbuild` + `windows-latest` with `RDP` workaround).
-   - Filter inversion: `--filter "TestCategory=UITests"`.
-   - **Mark this job as required for PR merge.** Set branch protection on `master`.
+1. ~~**Run UI tests on PR.**~~ **Not doing this** (maintainer decision, 2026-06): the FlaUI UI tests are run manually rather than on CI. A draft `run-ui-tests` job was prototyped (closed PR #2) and dropped. The UI tests stay `[TestCategory("UITests")]` and excluded from the CI test filter; no branch-protection check for them.
 2. **Fail the workflow on red tests.** `test-publish` runs with `if: always()` but does **not** fail when `run-tests` outcome ≠ success. Add a final step that exits non-zero when any TRX has `outcome="Failed"`. (The current setup publishes badges even on red.)
 3. **Coverage threshold.** `fail_below_min: false` today. Once the new tests land, set thresholds to current numbers + 5 % and ratchet up.
 
