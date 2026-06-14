@@ -109,4 +109,35 @@ public sealed class GeneratedEtlEndToEndTests
     [Timeout(180000)]
     public void GenerateTraceLoggingEtl_FullPipeline_LoadsResults()
         => GenerateThenAssertLoads("tracelogging", etl => GenerateTraceLoggingEtl(etl, events: 2000));
+
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(180000)]
+    public void InspectEtl_ReportsBuildProvidersAndCounts()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"FN_inspect_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var etl = Path.Combine(dir, "inspect.etl");
+        try
+        {
+            GenerateEtl(etl, events: 1500);
+
+            var info = findneedle.ETWPlugin.EtlInspector.Inspect(etl);
+            TestContext.WriteLine(findneedle.ETWPlugin.EtlInspector.Format(info));
+
+            Assert.IsFalse(string.IsNullOrEmpty(info.OsVersion), "should report the Windows/OS build");
+            Assert.IsTrue(info.OsVersion.StartsWith("10.") || info.OsVersion.StartsWith("11."),
+                $"OS version looks like a Windows build: {info.OsVersion}");
+            Assert.IsTrue(info.PointerSizeBits == 32 || info.PointerSizeBits == 64);
+            Assert.IsTrue(info.NumberOfProcessors > 0);
+            Assert.IsTrue(info.EventCount > 0, "should have counted events");
+            Assert.IsTrue(info.Providers.Keys.Any(p => p.Contains("FindNeedle-GenTest", StringComparison.OrdinalIgnoreCase)),
+                "the provider we emitted should be listed");
+            Assert.IsTrue(info.ManifestOrTraceLoggingEventCount > 0, "our EventSource events are manifest-format");
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
 }
