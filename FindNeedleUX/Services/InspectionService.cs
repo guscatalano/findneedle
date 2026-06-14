@@ -28,7 +28,7 @@ public static class InspectionService
         var file = await picker.PickSingleFileAsync();
         if (file == null) { showSpinner(false, null); return; }
 
-        List<string> providers = null!;
+        EtlInfo info = null!;
         Dictionary<string, string> sysInfo = null!;
         ETLSummary reportSummary = null!;
         string error = null!;
@@ -37,7 +37,7 @@ public static class InspectionService
         {
             try
             {
-                providers = EtlInfoExtractor.GetProviders(file.Path);
+                info = EtlInfoExtractor.Inspect(file.Path);
                 sysInfo = EtlInfoExtractor.GetSystemInfo(file.Path);
                 tempPath = TempStorage.GetNewTempPath("tracerpt");
                 reportSummary = TracerptRunner.RunAndParseReport(file.Path, tempPath);
@@ -50,6 +50,7 @@ public static class InspectionService
         {
             Title = error == null ? "ETL Inspection Results" : "ETL Inspection Error",
             CloseButtonText = "OK",
+            MinWidth = 700,
             XamlRoot = window.Content.XamlRoot
         };
         if (error != null)
@@ -59,20 +60,34 @@ public static class InspectionService
         else
         {
             var stack = new StackPanel();
-            AppendList(stack, $"Providers (TraceEvent) ({providers.Count}):", providers, 20);
-            if (reportSummary?.Providers != null && reportSummary.Providers.Count > 0)
-                AppendList(stack, $"\nProviders (tracerpt -report) ({reportSummary.Providers.Count}):", reportSummary.Providers, 20);
+
+            // Everything the engine extracted: file, Windows build, machine, capture window,
+            // event/lost counts, format breakdown, and providers with per-provider counts.
+            stack.Children.Add(new TextBlock
+            {
+                Text = EtlInfoExtractor.Format(info),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                IsTextSelectionEnabled = true,
+                TextWrapping = TextWrapping.Wrap
+            });
+
+            // Build number from tracerpt's -report (often present when the header OS version isn't).
             if (!string.IsNullOrWhiteSpace(reportSummary?.WindowsBuildInfo))
-                stack.Children.Add(Bold($"\nWindows Build: {reportSummary.WindowsBuildInfo}"));
+                stack.Children.Add(Bold($"\nWindows build (tracerpt): {reportSummary.WindowsBuildInfo}"));
+
+            // SystemConfig / build event messages (the richest OS/hardware detail, present in
+            // kernel traces).
             stack.Children.Add(Bold("\nSystem Info:"));
             if (sysInfo == null || sysInfo.Count == 0)
                 stack.Children.Add(new TextBlock { Text = "(No system info found)" });
             else
-                foreach (var kv in sysInfo.Take(10))
-                    stack.Children.Add(new TextBlock { Text = $"{kv.Key}: {kv.Value}" });
-            if (sysInfo != null && sysInfo.Count > 10)
-                stack.Children.Add(new TextBlock { Text = $"...and {sysInfo.Count - 10} more" });
-            dialog.Content = stack;
+                foreach (var kv in sysInfo.Take(15))
+                    stack.Children.Add(new TextBlock { Text = $"{kv.Key}: {kv.Value}", IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap });
+            if (sysInfo != null && sysInfo.Count > 15)
+                stack.Children.Add(new TextBlock { Text = $"...and {sysInfo.Count - 15} more" });
+
+            dialog.Content = new ScrollViewer { Content = stack, MaxHeight = 520 };
         }
         await dialog.ShowAsync();
         if (tempPath != null) TempStorage.DeleteSomeTempPath(tempPath);
