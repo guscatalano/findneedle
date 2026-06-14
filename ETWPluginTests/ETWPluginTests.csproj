@@ -69,6 +69,8 @@
     <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
     <ProjectReference Include="..\LogETWApp\LogETWApp.csproj" />
     <ProjectReference Include="..\TestUtilities\TestUtilities.csproj" />
+    <!-- Generated-ETL end-to-end test: NuSearchQuery / FolderLocation / StorageType. -->
+    <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
   </ItemGroup>
 
 

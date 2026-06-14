@@ -1,0 +1,85 @@
+using System.Diagnostics.Tracing;
+using System.IO;
+using System.Threading;
+using findneedle.Implementations;
+using findneedle.Implementations.FileExtensions;
+using FindNeedlePluginLib;
+using FindPluginCore.PluginSubsystem;
+using FindPluginCore.Searching;
+using Microsoft.Diagnostics.Tracing.Session;
+
+namespace ETWPluginTests;
+
+/// <summary>
+/// Generates a real .etl on the fly (a file-mode ETW session capturing a custom EventSource — no
+/// LiveCollector), then loads it through the full search pipeline the UX uses: FolderLocation +
+/// ETLProcessor run by NuSearchQuery.RunThrough, results read back from storage. Proves a freshly
+/// produced, modern (non-WPP) ETL flows end-to-end — which relies on ETLProcessor's TraceEvent
+/// fallback (tracefmt alone can't decode EventSource traces). Slow + Windows/ETW + admin
+/// dependent, so Performance / local-only.
+/// </summary>
+[TestClass]
+public sealed class GeneratedEtlEndToEndTests
+{
+    [EventSource(Name = "FindNeedle-GenTest")]
+    private sealed class GenSource : EventSource
+    {
+        public static readonly GenSource Log = new();
+        public void Tick(int id, string message) => WriteEvent(1, id, message);
+    }
+
+    public TestContext TestContext { get; set; } = null!;
+
+    private static void GenerateEtl(string etlPath, int events)
+    {
+        // File-mode session: writes the trace straight to etlPath instead of real-time delivery.
+        using (var session = new TraceEventSession("FindNeedle_GenTest_Session", etlPath))
+        {
+            session.EnableProvider(GenSource.Log.Guid);
+            Thread.Sleep(300); // let the session start before we emit
+            for (int i = 0; i < events; i++)
+                GenSource.Log.Tick(i, $"generated event {i} - payload");
+            Thread.Sleep(500); // let the buffers flush to the file
+        } // Dispose stops the session and finalizes the .etl
+    }
+
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(180000)]
+    public void GenerateEtl_FullPipeline_LoadsResults()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"FN_genetl_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var etl = Path.Combine(dir, "generated.etl");
+        try
+        {
+            GenerateEtl(etl, events: 2000);
+            Assert.IsTrue(File.Exists(etl), "a real .etl file should have been generated");
+            TestContext.WriteLine($"Generated .etl: {new FileInfo(etl).Length / 1024.0:F1} KB");
+
+            // ----- full pipeline: FolderLocation + ETLProcessor -> NuSearchQuery -> storage -----
+            ETWTestUtils.UseTestTraceFmt(); // tracefmt will fail to decode (non-WPP); fallback kicks in
+
+            var loc = new FolderLocation { path = etl };
+            loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new ETLProcessor() });
+
+            var query = new NuSearchQuery { OverrideStorageType = StorageType.InMemory };
+            query.Locations.Add(loc);
+            query.RunThrough();
+
+            var storage = query.ResultStorage;
+            Assert.IsNotNull(storage, "search should have created result storage");
+            int rows = storage!.GetStatistics().filteredRecordCount;
+            TestContext.WriteLine($"Pipeline loaded {rows} results from the generated .etl");
+
+            Assert.IsTrue(rows > 0,
+                "the generated .etl should load results via the TraceEvent fallback (tracefmt can't decode it)");
+
+            query.DisposeStorage();
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+}

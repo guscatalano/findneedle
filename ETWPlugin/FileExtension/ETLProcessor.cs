@@ -155,8 +155,59 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 getLock--; // Sometimes tracefmt can hold the lock, wait until file is ready
             }
         }
+
+        // Fallback for non-WPP traces. tracefmt only formats WPP (driver/software) traces; for a
+        // modern .etl (EventSource / manifest / kernel) it emits "Unknown" lines and we end up
+        // with zero rows. In that case decode the .etl directly with the TraceEvent library — the
+        // same source LiveCollector uses for real-time — which understands those event kinds.
+        // Gated on results.Count == 0 so the existing WPP path (e.g. the sample test.etl) is
+        // untouched; this only rescues traces tracefmt couldn't read.
+        if (results.Count == 0
+            && !inputfile.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
+            && !inputfile.EndsWith(".log", StringComparison.OrdinalIgnoreCase)
+            && File.Exists(inputfile))
+        {
+            Logger.Instance.Log($"tracefmt produced no rows for {inputfile}; falling back to TraceEvent decode");
+            _progressSink?.NotifyProgress(50, "Decoding ETL with TraceEvent (non-WPP trace)");
+            DecodeWithTraceEvent(cancellationToken);
+        }
+
         Logger.Instance.Log($"DoPreProcessing complete for {inputfile}");
         _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
+    }
+
+    /// <summary>
+    /// Decode an .etl directly via the TraceEvent library (manifest / EventSource / kernel events).
+    /// Used as a fallback when tracefmt yields nothing because the trace isn't WPP. Builds the same
+    /// <see cref="ETLLogLine"/> objects as the real-time collector, so downstream is identical.
+    /// Never throws — a decode failure just leaves results as-is.
+    /// </summary>
+    private void DecodeWithTraceEvent(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var source = new Microsoft.Diagnostics.Tracing.ETWTraceEventSource(inputfile);
+
+            void Handle(Microsoft.Diagnostics.Tracing.TraceEvent e)
+            {
+                if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
+                var line = new ETLLogLine(e);
+                var src = line.GetSource() ?? string.Empty;
+                providers[src] = providers.TryGetValue(src, out var c) ? c + 1 : 1;
+                results.Add(line);
+            }
+
+            // Dynamic = manifest/EventSource providers; Kernel = NT kernel logger events. Each event
+            // is dispatched to exactly one, so no double counting.
+            source.Dynamic.All += Handle;
+            source.Kernel.All += Handle;
+            source.Process();
+            Logger.Instance.Log($"TraceEvent decode produced {results.Count} rows for {inputfile}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"TraceEvent decode failed for {inputfile}: {ex.Message}");
+        }
     }
 
     readonly List<ISearchResult> results = new();
