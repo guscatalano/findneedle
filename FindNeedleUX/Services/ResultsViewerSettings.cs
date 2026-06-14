@@ -12,12 +12,24 @@ namespace FindNeedleUX.Services;
 /// </summary>
 public static class ResultsViewerSettings
 {
-    private static readonly string SettingsPath = Path.Combine(
+    private static readonly string DefaultSettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "FindNeedle", "viewer-settings.json");
 
+    // Mutable so tests can redirect persistence to a temp file via the seam below; production
+    // always uses DefaultSettingsPath.
+    private static string _settingsPath = DefaultSettingsPath;
+
     private static SettingsData _data;
     private static SettingsData Data => _data ??= Load();
+
+    // --- Test seam (only the unit-test assembly sees these, via InternalsVisibleTo) ---
+    // Point persistence at a custom path and drop the cache so the next access reloads from there.
+    internal static void SetStorageLocationForTests(string path) { _settingsPath = path; _data = null; }
+    // Drop the in-memory cache so the next access reloads from disk (round-trip tests).
+    internal static void ReloadFromDiskForTests() => _data = null;
+    // Restore the production path + clear cache (call in a test's finally so nothing leaks).
+    internal static void ResetStorageForTests() { _settingsPath = DefaultSettingsPath; _data = null; }
 
     /// <summary>Raised after any setter completes, on the same thread that called set.</summary>
     public static event Action Changed;
@@ -243,9 +255,9 @@ public static class ResultsViewerSettings
     {
         try
         {
-            if (File.Exists(SettingsPath))
+            if (File.Exists(_settingsPath))
             {
-                var json = File.ReadAllText(SettingsPath);
+                var json = File.ReadAllText(_settingsPath);
                 return JsonSerializer.Deserialize<SettingsData>(json) ?? new SettingsData();
             }
         }
@@ -257,9 +269,9 @@ public static class ResultsViewerSettings
     {
         try
         {
-            var dir = Path.GetDirectoryName(SettingsPath);
+            var dir = Path.GetDirectoryName(_settingsPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(SettingsPath,
+            File.WriteAllText(_settingsPath,
                 JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception ex)

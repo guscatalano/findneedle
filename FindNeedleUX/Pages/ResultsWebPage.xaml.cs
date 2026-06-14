@@ -496,7 +496,7 @@ public sealed partial class ResultsWebPage : Page
 
     // ----- request → spec translators -----
 
-    private static FilterSpec BuildFilterSpec(JsonElement req)
+    internal static FilterSpec BuildFilterSpec(JsonElement req)
     {
         string search = "";
         if (req.TryGetProperty("search", out var sEl)
@@ -551,7 +551,7 @@ public sealed partial class ResultsWebPage : Page
         return new FilterSpec(search, provider, taskName, message, source, level, from, to);
     }
 
-    private static SortSpec BuildSortSpec(JsonElement req)
+    internal static SortSpec BuildSortSpec(JsonElement req)
     {
         if (!req.TryGetProperty("order", out var ord) || ord.ValueKind != JsonValueKind.Array)
             return SortSpec.None;
