@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EventLogPlugin\EventLogPlugin.csproj" />
+    <!-- EVTX end-to-end test: NuSearchQuery / FolderLocation / StorageType. -->
+    <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>
