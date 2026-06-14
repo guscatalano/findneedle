@@ -511,6 +511,15 @@ public class NuSearchQuery : ISearchQuery
         // If a caller (e.g. the streaming entry point) already prepared storage on the UI thread
         // we reuse that instance — otherwise create it lazily here, preserving the legacy flow.
         _resultStorage ??= CreateStorage(cancellationToken);
+
+        // We're doing a fresh scan (a cache hit would have returned above via _skipScan). The
+        // storage constructor no longer wipes on open — it preserves any on-disk cache so the
+        // cache-reuse fast path can validate it — so guarantee a clean slate here before we
+        // start writing. Without this, a stale cache file (CacheReuseMode.Never, a multi-location
+        // search, or a cache miss) could surface duplicated rows. Harmless no-op when already
+        // empty (fresh InMemory, or a SQLite miss that EvaluateCacheReuse already cleared).
+        _resultStorage.ClearTables();
+
         var storageLabel = ShortStorageLabel(_resultStorage);
         var count = 1;
         var total = _locations.Count;

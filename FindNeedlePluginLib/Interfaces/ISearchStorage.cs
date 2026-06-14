@@ -45,6 +45,14 @@ namespace FindNeedlePluginLib.Interfaces
         /// </summary>
         /// <returns>Statistics: number of raw records, number of filtered records, size on disk (bytes), size in memory (bytes).</returns>
         (int rawRecordCount, int filteredRecordCount, long sizeOnDisk, long sizeInMemory) GetStatistics();
+
+        /// <summary>
+        /// Remove all stored raw and filtered results, returning the storage to an empty state.
+        /// Disk-backed implementations open any existing cache as-is (they do not wipe on
+        /// construction), so a consumer about to run a fresh scan must call this first to avoid
+        /// surfacing stale or duplicated rows. Cheap no-op when already empty.
+        /// </summary>
+        void ClearTables();
     }
 
     

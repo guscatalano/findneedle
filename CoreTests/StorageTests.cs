@@ -248,6 +248,37 @@ public class StorageTests
         factory.cleanup();
     }
 
+    // Disk-backed storage now opens an existing cache as-is (no wipe on construction), so a
+    // consumer running a fresh scan must ClearTables() first. This locks in that contract:
+    // reopen + clear + write must yield only the new rows, never the stale ones. Mirrors what
+    // NuSearchQuery.Step2 does on the non-cache-reuse path.
+    [DataTestMethod]
+    [DataRow("InMemory")]
+    [DataRow("Sqlite")]
+    [DataRow("Hybrid")]
+    public void ReopenThenClear_StartsEmpty_NoStaleDuplicates(string kind)
+    {
+        var factory = GetFactoryByKind(kind);
+
+        using (var storage = factory.create())
+        {
+            storage.AddRawBatch(new[] { new DummySearchResult("Stale") });
+        }
+
+        using (var storage = factory.create())
+        {
+            storage.ClearTables(); // consumer chooses a fresh scan
+            storage.AddRawBatch(new[] { new DummySearchResult("Fresh") });
+
+            var results = new List<ISearchResult>();
+            storage.GetRawResultsInBatches(batch => results.AddRange(batch), 10);
+            Assert.AreEqual(1, results.Count, "only the freshly-written row should be present");
+            Assert.AreEqual("Fresh", results[0].GetMessage());
+        }
+
+        factory.cleanup();
+    }
+
     // --- Additional tests added ---
 
     [DataTestMethod]

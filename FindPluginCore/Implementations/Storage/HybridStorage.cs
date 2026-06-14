@@ -98,10 +98,31 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        public void ClearTables()
+        {
+            lock (_sync)
+            {
+                // Wipe the disk tier and restore an empty in-memory tier so the instance behaves
+                // like a freshly constructed hybrid again (including after a SettleToDisk that set
+                // _memoryStorage = null / _useOnlySqlite = true). Assumes no scan is in flight —
+                // it's called at the start of a fresh scan, before any AddBatch.
+                _diskStorage.ClearTables();
+                _memoryStorage?.Dispose();
+                _memoryStorage = new InMemoryStorage();
+                _useOnlySqlite = false;
+                _hasSpilledRaw = false;
+                _hasSpilledFiltered = false;
+                _currentMemoryUsage = 0;
+                _currentRecordCount = 0;
+                _rawAccessTracking.Clear();
+                _filteredAccessTracking.Clear();
+            }
+        }
+
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
-            
+
             lock (_sync)
             {
                 var batchList = batch.ToList();

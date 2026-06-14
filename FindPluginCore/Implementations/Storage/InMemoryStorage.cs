@@ -233,6 +233,16 @@ namespace FindPluginCore.Implementations.Storage
             return size;
         }
 
+        public void ClearTables()
+        {
+            lock (_sync)
+            {
+                _rawResults.Clear();
+                _filteredResults.Clear();
+                _statsInvalid = true;
+            }
+        }
+
         // Implement IDisposable because ISearchStorage now inherits IDisposable.
         public void Dispose()
         {
@@ -261,7 +271,7 @@ namespace FindPluginCore.Implementations.Storage
                 // Create a HashSet for O(1) lookup during removal
                 var toRemoveSet = new HashSet<AccessTrackedResult>(toRemove);
 
-                // Use RemoveAll for efficient O(n) bulk removal instead of O(n²)
+                // Use RemoveAll for efficient O(n) bulk removal instead of O(nï¿½)
                 _rawResults.RemoveAll(item => toRemoveSet.Contains(item));
 
                 _statsInvalid = true; // Invalidate cache after removing
@@ -292,7 +302,7 @@ namespace FindPluginCore.Implementations.Storage
                 // Create a HashSet for O(1) lookup during removal
                 var toRemoveSet = new HashSet<AccessTrackedResult>(toRemove);
 
-                // Use RemoveAll for efficient O(n) bulk removal instead of O(n²)
+                // Use RemoveAll for efficient O(n) bulk removal instead of O(nï¿½)
                 _filteredResults.RemoveAll(item => toRemoveSet.Contains(item));
 
                 _statsInvalid = true; // Invalidate cache after removing

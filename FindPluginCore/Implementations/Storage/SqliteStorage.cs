@@ -59,12 +59,12 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         /// <summary>
-        /// Open the connection, apply pragmas, create the schema, and wipe any leftover rows. If
-        /// any of that throws <c>SQLITE_CORRUPT</c> (error code 11, "database disk image is
-        /// malformed"), the file is left over from a prior process crash — our pragmas
-        /// (<c>journal_mode=MEMORY</c> + <c>synchronous=OFF</c>) trade durability for throughput,
-        /// so a crash mid-write can leave the file unreadable. We can't repair it, but since this
-        /// file is a cache that's wiped every construction anyway, we delete it and start fresh.
+        /// Open the connection, apply pragmas, and create the schema (without wiping existing
+        /// rows — see the constructor note on cache reuse). If any of that throws
+        /// <c>SQLITE_CORRUPT</c> (error code 11, "database disk image is malformed"), the file is
+        /// left over from a prior process crash — our pragmas (<c>journal_mode=MEMORY</c> +
+        /// <c>synchronous=OFF</c>) trade durability for throughput, so a crash mid-write can leave
+        /// the file unreadable. We can't repair it, so we delete the cache file and start fresh.
         /// </summary>
         private void OpenAndInitialize(bool allowRetryAfterCorruption)
         {
@@ -74,11 +74,12 @@ namespace FindPluginCore.Implementations.Storage
             {
                 ApplyBulkInsertPragmas();
                 InitializeSchema();
-                // Cache files are keyed only by file path (no content hash / mtime), so a stale
-                // cache would silently surface old or duplicated rows on every reopen. Wipe both
-                // tables on construction — each new SqliteStorage instance starts from a clean
-                // slate.
-                ClearTables();
+                // Deliberately NOT wiping here. The constructor opens the (possibly warm) cache
+                // as-is so a caller can validate and reuse it via EvaluateCacheReuse() — that's
+                // the whole point of the on-disk cache. Clearing the tables here would make every
+                // reopen start empty and silently defeat cache reuse. The consumer is responsible
+                // for starting clean before a fresh scan: NuSearchQuery.Step2 calls ClearTables(),
+                // and EvaluateCacheReuse() itself clears on a cache miss.
             }
             catch (SqliteException ex) when (allowRetryAfterCorruption && IsCorruption(ex))
             {
