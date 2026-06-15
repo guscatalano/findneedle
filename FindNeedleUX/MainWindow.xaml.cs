@@ -67,6 +67,129 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// GUI equivalent of the findneedle.exe command line: load a log file/folder passed as a
+    /// program argument, run the search, and open the result viewer — without going through the
+    /// file picker. Recognized arguments (order-independent):
+    ///   &lt;path&gt;            first positional arg that exists on disk → the location to search
+    ///   --rules=&lt;file&gt;    optional rules DSL JSON to apply
+    ///   --viewer=native|web  which result viewer to open (default: user's configured viewer)
+    /// Unknown flags are ignored. If no existing path is supplied this is a no-op (normal launch).
+    /// The native-viewer path is what the FlaUI DataGrid scroll test drives.
+    /// </summary>
+    public async void LoadFromCommandLine(string[] args)
+    {
+        string path = null;
+        string rules = null;
+        string viewer = null;
+        string storage = null;
+        string cache = null;
+        int? estimate = null;
+        foreach (var raw in args ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var a = raw.Trim().Trim('"');
+            if (a.StartsWith("--rules=", StringComparison.OrdinalIgnoreCase))
+            {
+                rules = a.Substring("--rules=".Length).Trim().Trim('"');
+            }
+            else if (a.StartsWith("--viewer=", StringComparison.OrdinalIgnoreCase))
+            {
+                viewer = a.Substring("--viewer=".Length).Trim().Trim('"').ToLowerInvariant();
+            }
+            else if (a.StartsWith("--storage=", StringComparison.OrdinalIgnoreCase))
+            {
+                storage = a.Substring("--storage=".Length).Trim().Trim('"').ToLowerInvariant();
+            }
+            else if (a.StartsWith("--estimate=", StringComparison.OrdinalIgnoreCase))
+            {
+                if (int.TryParse(a.Substring("--estimate=".Length).Trim().Trim('"'), out var est)) estimate = est;
+            }
+            else if (a.StartsWith("--cache=", StringComparison.OrdinalIgnoreCase))
+            {
+                cache = a.Substring("--cache=".Length).Trim().Trim('"').ToLowerInvariant();
+            }
+            else if (a.StartsWith("--"))
+            {
+                // unknown flag — ignore
+            }
+            else if (path == null && (System.IO.File.Exists(a) || System.IO.Directory.Exists(a)))
+            {
+                path = a;
+            }
+        }
+
+        if (path == null)
+        {
+            // Nothing loadable on the command line — leave the app on the welcome page.
+            return;
+        }
+
+        try
+        {
+            Logger.Instance.Log($"CLI load: {path}" + (rules != null ? $" (rules: {rules})" : "")
+                + (storage != null ? $" (storage: {storage})" : "") + (estimate != null ? $" (estimate: {estimate})" : ""));
+
+            // Per-run storage / Auto-estimate overrides (consumed in MiddleLayerService.UpdateSearchQuery).
+            MiddleLayerService.StorageOverride = storage switch
+            {
+                "sqlite" or "sql" or "sqllite" => FindPluginCore.PluginSubsystem.StorageType.SqlLite,
+                "inmemory" or "memory" => FindPluginCore.PluginSubsystem.StorageType.InMemory,
+                "hybrid" => FindPluginCore.PluginSubsystem.StorageType.Hybrid,
+                "auto" => FindPluginCore.PluginSubsystem.StorageType.Auto,
+                _ => null,
+            };
+            MiddleLayerService.RowEstimateOverride = estimate;
+            MiddleLayerService.CacheModeOverride = cache switch
+            {
+                "on" or "reuse" or "always" => FindPluginCore.Searching.CacheReuseMode.Always,
+                "off" or "never" or "disabled" => FindPluginCore.Searching.CacheReuseMode.Never,
+                _ => null,
+            };
+
+            MiddleLayerService.NewWorkspace();
+            MiddleLayerService.AddFolderLocation(path);
+            if (!string.IsNullOrWhiteSpace(rules) && System.IO.File.Exists(rules))
+            {
+                var query = MiddleLayerService.GetCurrentQuery();
+                if (query != null)
+                {
+                    query.RulesConfigPaths ??= new List<string>();
+                    query.RulesConfigPaths.Add(rules);
+                }
+            }
+
+            ShowSpinner(true, "Opening file...", showCancel: true);
+            await RunSearchWithProgress();
+            ShowSpinner(false);
+
+            Type viewerType = viewer switch
+            {
+                "native" => typeof(FindNeedleUX.Pages.NativeResultsPage),
+                "web" => typeof(FindNeedleUX.Pages.ResultsWebPage),
+                _ => ResolveDefaultViewerType(),
+            };
+            contentFrame.Navigate(viewerType);
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"CLI load failed: {ex.Message}");
+            ShowSpinner(false);
+        }
+    }
+
+    /// <summary>
+    /// The result viewer page the user picked in Settings → Result Viewer, falling back to the
+    /// web viewer. Mirrors the selection logic used by the Quick file/folder open flows.
+    /// </summary>
+    private static Type ResolveDefaultViewerType()
+    {
+        var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
+        if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
+            viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
+        return viewerType;
+    }
+
+    /// <summary>
     /// Programmatically navigate to the native result viewer. Used by the streaming search flow
     /// to open the viewer mid-load when a search runs past the grace window.
     /// </summary>
@@ -202,6 +325,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: SearchStatisticsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage));
                 break;
+            case "results_perfreport":
+                Logger.Instance.Log("Showed performance report");
+                await ShowPerfReportAsync();
+                break;
             case "results_viewraw":
                 Logger.Instance.Log("Navigated: ViewRawResults");
                 // Load preferred view from persisted Settings → Results viewer.
@@ -269,6 +396,47 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Show the structured performance report for the most recent search + viewer load — the
+    /// "why did this take so long" breakdown (phase timings, storage tier + reason, and plain-
+    /// language hints). Selectable text plus a Copy button.
+    /// </summary>
+    private async Task ShowPerfReportAsync()
+    {
+        var report = MiddleLayerService.GetLastPerfReport();
+        var text = report?.ToText() ?? "No search has run yet — run a search, then check back here.";
+
+        var stack = new StackPanel { Spacing = 12 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+            FontSize = 12,
+            IsTextSelectionEnabled = true,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var dialog = new ContentDialog
+        {
+            Title = "Performance Report",
+            CloseButtonText = "Close",
+            PrimaryButtonText = report != null ? "Copy" : null,
+            MinWidth = 700,
+            XamlRoot = this.Content.XamlRoot,
+            Content = new ScrollViewer { Content = stack, MaxHeight = 520 },
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && report != null)
+        {
+            try
+            {
+                var pkg = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
+                pkg.SetText(text);
+                global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
+            }
+            catch { /* clipboard contention — ignore */ }
+        }
+    }
+
     private async Task RunSearchWithProgress(bool surfaceScan = false)
     {
         _quickActionCts = new CancellationTokenSource();
@@ -330,12 +498,7 @@ public sealed partial class MainWindow : Window
             ShowSpinner(true, "Opening file...", showCancel:true);
             await RunSearchWithProgress();
             ShowSpinner(false);
-            var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
-            if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
-            {
-                viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
-            }
-            contentFrame.Navigate(viewerType);
+            contentFrame.Navigate(ResolveDefaultViewerType());
         }
     }
 
@@ -354,12 +517,7 @@ public sealed partial class MainWindow : Window
             ShowSpinner(true, "Opening folder...", showCancel:true);
             await RunSearchWithProgress();
             ShowSpinner(false);
-            var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
-            if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
-            {
-                viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
-            }
-            contentFrame.Navigate(viewerType);
+            contentFrame.Navigate(ResolveDefaultViewerType());
         }
     }
 

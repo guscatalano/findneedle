@@ -1,6 +1,8 @@
 ﻿// To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
 
+using System;
+using System.Linq;
 using Microsoft.UI.Xaml;
 using FindPluginCore;
 using FindNeedleUX.Services;
@@ -33,6 +35,23 @@ public partial class App : Application
     {
         m_window = new MainWindow();
         m_window.Activate();
+
+        // GUI equivalent of the findneedle.exe CLI: if a log file/folder was passed on the
+        // command line, load it, run the search, and open straight to the viewer — no file
+        // picker. Usage: FindNeedleUX.exe "C:\path\log.etl" [--rules=rules.json] [--viewer=native|web]
+        // Also lets the FlaUI UI tests drive the real load→search→grid pipeline deterministically.
+        try
+        {
+            var cmd = Environment.GetCommandLineArgs();
+            if (cmd != null && cmd.Length > 1)
+            {
+                ((MainWindow)m_window).LoadFromCommandLine(cmd.Skip(1).ToArray());
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"CLI argument handling failed: {ex.Message}");
+        }
     }
 
     private Window m_window;

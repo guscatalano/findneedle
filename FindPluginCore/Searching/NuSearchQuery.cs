@@ -125,6 +125,13 @@ public class NuSearchQuery : ISearchQuery
     public StorageType? OverrideStorageType { get; set; }
 
     /// <summary>
+    /// When set, the Auto storage tier uses this row count instead of asking the locations for a
+    /// performance estimate. Lets callers (and tests) drive the Auto decision with a known-good or
+    /// deliberately-wrong prediction. Ignored unless the resolved storage type is Auto.
+    /// </summary>
+    public int? EstimatedRowCountOverride { get; set; }
+
+    /// <summary>
     /// How the cache-reuse fast path in Step 1 should behave. Set from the UX layer based on
     /// the user's Settings → Results viewer choice. Default is <see cref="CacheReuseMode.Always"/>
     /// so callers that never set it (tests, plugins) get the silently-reuse behaviour.
@@ -203,28 +210,40 @@ public class NuSearchQuery : ISearchQuery
         switch (requested)
         {
             case StorageType.SqlLite:
+                PerfLog.Log("storage.selected", ("type", nameof(SqliteStorage)), ("mode", "forced"));
                 return new SqliteStorage(filePath);
             case StorageType.InMemory:
+                PerfLog.Log("storage.selected", ("type", nameof(InMemoryStorage)), ("mode", "forced"));
                 return new InMemoryStorage();
             case StorageType.Hybrid:
+                PerfLog.Log("storage.selected", ("type", nameof(HybridStorage)), ("mode", "forced"));
                 return new HybridStorage(filePath);
             case StorageType.Auto:
             default:
                 var totalRecords = 0;
                 TimeSpan totalTime = TimeSpan.Zero;
-                foreach (var loc in _locations)
+                if (EstimatedRowCountOverride.HasValue)
                 {
-                    try
+                    // Caller (or test) supplied the prediction directly — exercise the Auto decision
+                    // with a known-good or deliberately-wrong estimate.
+                    totalRecords = EstimatedRowCountOverride.Value;
+                }
+                else
+                {
+                    foreach (var loc in _locations)
                     {
-                        var perf = loc.GetSearchPerformanceEstimate(cancellationToken);
-                        if (perf.recordCount.HasValue)
-                            totalRecords += perf.recordCount.Value;
-                        if (perf.timeTaken.HasValue)
-                            totalTime += perf.timeTaken.Value;
-                    }
-                    catch (NotImplementedException)
-                    {
-                        totalRecords += 100;
+                        try
+                        {
+                            var perf = loc.GetSearchPerformanceEstimate(cancellationToken);
+                            if (perf.recordCount.HasValue)
+                                totalRecords += perf.recordCount.Value;
+                            if (perf.timeTaken.HasValue)
+                                totalTime += perf.timeTaken.Value;
+                        }
+                        catch (NotImplementedException)
+                        {
+                            totalRecords += 100;
+                        }
                     }
                 }
                 // Tiered Auto, recalibrated based on perf-log data:
@@ -241,10 +260,12 @@ public class NuSearchQuery : ISearchQuery
                 // INSERT + prepared statement + journal_mode=MEMORY / synchronous=OFF), so the
                 // total wall-clock cost is roughly the same, but the user's wait between
                 // "search done" and "viewer open" disappears.
-                if (totalRecords < 10_000 && totalTime.TotalSeconds < 30)
-                    return new InMemoryStorage();
-                if (totalRecords < 50_000)
-                    return new HybridStorage(filePath);
+                string autoType = (totalRecords < 10_000 && totalTime.TotalSeconds < 30) ? nameof(InMemoryStorage)
+                                : (totalRecords < 50_000) ? nameof(HybridStorage)
+                                : nameof(SqliteStorage);
+                PerfLog.Log("storage.selected", ("type", autoType), ("mode", "auto"), ("est", totalRecords));
+                if (autoType == nameof(InMemoryStorage)) return new InMemoryStorage();
+                if (autoType == nameof(HybridStorage)) return new HybridStorage(filePath);
                 return new SqliteStorage(filePath);
         }
     }
@@ -813,6 +834,12 @@ public class NuSearchQuery : ISearchQuery
         {
             PerfLog.Log("cache.write.skip", ("reason", "cancelled"));
         }
+        else if (CacheReuseMode == CacheReuseMode.Never)
+        {
+            // Caching disabled — don't move results into a reusable cache (and we already never
+            // read one this run). "No moving to cache."
+            PerfLog.Log("cache.write.skip", ("reason", "disabled"));
+        }
         else if (_locations.Count != 1)
         {
             PerfLog.Log("cache.write.skip", ("reason", "multi_location"), ("count", _locations.Count));
@@ -831,7 +858,11 @@ public class NuSearchQuery : ISearchQuery
             }
             else
             {
-                try { sqliteForMeta.WriteCompletionMetadata(path, SqliteStorage.CacheSchemaVersion); }
+                try
+                {
+                    sqliteForMeta.WriteCompletionMetadata(path, SqliteStorage.CacheSchemaVersion);
+                    PerfLog.Log("cache.write.ok", ("rows", SafeFilteredCount()));
+                }
                 catch (Exception ex)
                 {
                     PerfLog.Log("cache.write.skip", ("reason", "exception"), ("msg", ex.GetType().Name));

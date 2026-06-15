@@ -69,6 +69,11 @@ public static class PerfLog
         }
         sb.Append('\n');
         WriteLineRaw(sb.ToString());
+
+        // Also fold this event into the structured in-memory report for the "why was it slow"
+        // view. Kept after the file write and self-guarded so report building can never affect
+        // the path being measured.
+        PerfReport.Ingest(phase, kvs);
     }
 
     /// <summary>

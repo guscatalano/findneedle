@@ -14,6 +14,7 @@ using FindNeedleCoreUtils;
 using FindNeedleUX.ViewObjects;
 using FindPluginCore.Searching;
 using FindPluginCore.Searching.Serializers;
+using FindPluginCore.Diagnostics;
 using FindPluginCore.Implementations.Storage;
 using FindPluginCore.PluginSubsystem;
 using FindNeedleUX.Services.PagedLogSource;
@@ -25,6 +26,25 @@ public class MiddleLayerService
     public static List<ISearchLocation> Locations = new();
     public static List<ISearchFilter> Filters = new();
     public static SearchQueryUX SearchQueryUX = new();
+
+    /// <summary>
+    /// Optional storage-tier override applied to the next search (null = use config/Auto). Set by
+    /// the command-line load hook (--storage=…) so the storage backend can be exercised directly.
+    /// </summary>
+    public static StorageType? StorageOverride { get; set; }
+
+    /// <summary>
+    /// Optional row-count estimate handed to the Auto tier for the next search (null = let the
+    /// plugins estimate). Set by the command-line load hook (--estimate=…) to drive Auto with a
+    /// known-good or deliberately-wrong prediction. Only meaningful when storage is Auto.
+    /// </summary>
+    public static int? RowEstimateOverride { get; set; }
+
+    /// <summary>
+    /// Optional cache-reuse mode for the next search (null = use the persisted setting). Set by the
+    /// command-line load hook (--cache=on|off) so fresh / cache-hit / cache-disabled can be exercised.
+    /// </summary>
+    public static CacheReuseMode? CacheModeOverride { get; set; }
 
     public static event Action StateChanged;
 
@@ -101,8 +121,12 @@ public class MiddleLayerService
             // invokes the callback to ask the user before reusing.
             if (SearchQueryUX.CurrentQuery is NuSearchQuery nu)
             {
-                nu.CacheReuseMode = ResultsViewerSettings.CacheReuseMode;
+                nu.CacheReuseMode = CacheModeOverride ?? ResultsViewerSettings.CacheReuseMode;
                 nu.CacheReusePrompt = CacheReusePromptService.Prompt;
+                // Apply per-run storage / estimate overrides (set by the CLI load hook). These let
+                // the storage backend and the Auto-tier prediction be driven explicitly.
+                if (StorageOverride.HasValue) nu.OverrideStorageType = StorageOverride.Value;
+                if (RowEstimateOverride.HasValue) nu.EstimatedRowCountOverride = RowEstimateOverride.Value;
             }
         }
     }
@@ -197,11 +221,18 @@ public class MiddleLayerService
             SearchResults = SearchQueryUX.GetSearchResults();
         }
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
+        try { PerfReport.SetSource(string.Join(", ", Locations.Select(l => l.GetName()))); } catch { /* label only */ }
         NotifyStateChanged();
         return Task.FromResult(x.GetSummaryReport());
 
 
     }
+
+    /// <summary>
+    /// The structured "why did this take so long" report for the most recently completed search +
+    /// viewer load, or null if nothing has run yet. Surfaced on the Statistics page.
+    /// </summary>
+    public static SearchRunReport GetLastPerfReport() => PerfReport.Last;
 
     public static SearchStatistics GetStats()
     {

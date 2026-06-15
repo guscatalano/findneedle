@@ -36,6 +36,7 @@
             <MenuBarItem Title="View Results">
                 <MenuFlyoutItem Text="Get" Click="MenuFlyoutItem_Click" Name="results_get"/>
                 <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
+                <MenuFlyoutItem Text="Performance Report (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_perfreport"/>
                 <MenuFlyoutItem Text="Default Viewer" Click="MenuFlyoutItem_Click" Name="results_viewraw"/>
                 <MenuFlyoutSubItem Text="Switch Viewer">
                     <MenuFlyoutItem Text="Web (DataTables)" Click="MenuFlyoutItem_Click" Name="results_viewweb"/>

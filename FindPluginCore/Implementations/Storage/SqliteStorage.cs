@@ -233,8 +233,23 @@ namespace FindPluginCore.Implementations.Storage
         /// in which case <see cref="_ftsAvailable"/> stays false and BuildWhere drops back to
         /// the LIKE OR-chain for the global search.
         /// </summary>
+        /// <summary>
+        /// Diagnostic switch: when true, the FTS5 trigram index is NOT created, so bulk inserts skip
+        /// the per-row AFTER INSERT trigram trigger. Used to measure how much of SQLite ingest cost
+        /// is the FTS index build. Set via the FINDNEEDLE_DISABLE_FTS environment variable (any
+        /// non-empty value) so it can be toggled per process launch. Global search falls back to LIKE.
+        /// </summary>
+        public static bool DisableFtsForMeasurement { get; set; } =
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_DISABLE_FTS"));
+
         private void InitializeFts5()
         {
+            if (DisableFtsForMeasurement)
+            {
+                _ftsAvailable = false;
+                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false), ("reason", "disabled"));
+                return;
+            }
             try
             {
                 using var cmd = _connection.CreateCommand();
@@ -282,6 +297,7 @@ namespace FindPluginCore.Implementations.Storage
                 ";
                 cmd.ExecuteNonQuery();
                 _ftsAvailable = true;
+                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", true));
             }
             catch (SqliteException ex)
             {
