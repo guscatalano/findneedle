@@ -112,7 +112,10 @@ public class ETLLogLine : ISearchResult
             this.eventtxt += prop + ": " + obj.PayloadStringByName(prop) + " | ";
         }
 
-        this.datetime = obj.TimeStamp.ToString();
+        // Carry the precise event time directly (round-trip string keeps sub-second precision; the
+        // metadatetime field is what GetLogTime returns, avoiding the lossy ToString()/re-parse).
+        this.datetime = obj.TimeStamp.ToString("o");
+        this.metadatetime = obj.TimeStamp;
         this.hexPid = obj.ProcessID.ToString("X");
         this.hexTid = obj.ThreadID.ToString("X");
     }
@@ -268,22 +271,30 @@ public class ETLLogLine : ISearchResult
     }
     public DateTime GetLogTime()
     {
+        // Precise time set by the TraceEvent ctor (or json meta) — return it directly and skip the
+        // lossy tracefmt-format string parse below.
+        if (metadatetime != DateTime.MinValue)
+        {
+            return metadatetime;
+        }
+
         if (parsedTime == DateTime.MinValue)
         {
             datetime = datetime.Replace("-", " ");
             parsedTime = DateTime.Parse(datetime);
-        }
-
-        //If we have the metadata one, return that one.
-        if (metadatetime != DateTime.MinValue)
-        {
-            return metadatetime;
         }
         return parsedTime;
     }
 
     public void PreLoad()
     {
+        // TraceEvent-decoded lines populate eventtxt/tasktxt/provider/time in the constructor and
+        // leave json empty — there's nothing to parse, and the (json-assuming) logic below would
+        // wipe the message. Only the tracefmt/json path carries a json payload to expand here.
+        if (string.IsNullOrEmpty(json))
+        {
+            return;
+        }
         if (!json.StartsWith("{"))
         {
             //This is likely not json and just plaintext

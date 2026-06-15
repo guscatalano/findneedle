@@ -90,6 +90,18 @@ public sealed class GeneratedEtlEndToEndTests
 
             Assert.IsTrue(rows > 0, $"[{label}] the generated .etl should load results via the TraceEvent fallback");
 
+            // Regression guard: the TraceEvent-decode path must populate Message + a real timestamp.
+            // (PreLoad used to wipe the message because the json field is empty on that path.)
+            var sample = new List<ISearchResult>();
+            storage.GetFilteredResultsInBatches(b => { if (sample.Count == 0 && b.Count > 0) sample.Add(b[0]); }, 16);
+            Assert.IsTrue(sample.Count > 0, $"[{label}] should be able to read a decoded row back");
+            var first = sample[0];
+            Assert.IsFalse(string.IsNullOrWhiteSpace(first.GetMessage()),
+                $"[{label}] decoded row Message should not be empty (got '{first.GetMessage()}')");
+            Assert.AreNotEqual(default(DateTime), first.GetLogTime(),
+                $"[{label}] decoded row should have a real timestamp");
+            TestContext.WriteLine($"[{label}] sample row: time={first.GetLogTime():o} msg='{first.GetMessage()}'");
+
             query.DisposeStorage();
         }
         finally
