@@ -29,19 +29,10 @@ public static class InspectionService
         if (file == null) { showSpinner(false, null); return; }
 
         EtlInfo info = null!;
-        Dictionary<string, string> sysInfo = null!;
-        ETLSummary reportSummary = null!;
         string error = null!;
-        string tempPath = null!;
         await Task.Run(() =>
         {
-            try
-            {
-                info = EtlInfoExtractor.Inspect(file.Path);
-                sysInfo = EtlInfoExtractor.GetSystemInfo(file.Path);
-                tempPath = TempStorage.GetNewTempPath("tracerpt");
-                reportSummary = TracerptRunner.RunAndParseReport(file.Path, tempPath);
-            }
+            try { info = EtlInfoExtractor.Inspect(file.Path); }
             catch (Exception ex) { error = ex.Message; }
         });
         showSpinner(false, null);
@@ -96,25 +87,9 @@ public static class InspectionService
             AddCopy("CSV", () => EtlInfoExtractor.ToCsv(info));
             stack.Children.Add(copyRow);
 
-            // Build number from tracerpt's -report (often present when the header OS version isn't).
-            if (!string.IsNullOrWhiteSpace(reportSummary?.WindowsBuildInfo))
-                stack.Children.Add(Bold($"\nWindows build (tracerpt): {reportSummary.WindowsBuildInfo}"));
-
-            // SystemConfig / build event messages (the richest OS/hardware detail, present in
-            // kernel traces).
-            stack.Children.Add(Bold("\nSystem Info:"));
-            if (sysInfo == null || sysInfo.Count == 0)
-                stack.Children.Add(new TextBlock { Text = "(No system info found)" });
-            else
-                foreach (var kv in sysInfo.Take(15))
-                    stack.Children.Add(new TextBlock { Text = $"{kv.Key}: {kv.Value}", IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap });
-            if (sysInfo != null && sysInfo.Count > 15)
-                stack.Children.Add(new TextBlock { Text = $"...and {sysInfo.Count - 15} more" });
-
             dialog.Content = new ScrollViewer { Content = stack, MaxHeight = 520 };
         }
         await dialog.ShowAsync();
-        if (tempPath != null) TempStorage.DeleteSomeTempPath(tempPath);
     }
 
     public static async Task InspectBinaryAsync(Window window, Action<bool, string> showSpinner)
