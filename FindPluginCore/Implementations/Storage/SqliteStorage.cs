@@ -597,13 +597,12 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         /// <summary>
-        /// Rows per multi-row INSERT statement. 500 × 10 columns = 5000 parameters, well under
-        /// SQLite's default <c>SQLITE_MAX_VARIABLE_NUMBER</c> (32766). Trades a slightly larger
-        /// prepared statement (~30 KB SQL string, built once per batch) for a 100–500× reduction
-        /// in managed↔native interop crossings vs. single-row inserts.
+        /// How often the bulk-insert loop fires its progress callback (every N rows). NOT a SQL
+        /// batch size: inserts go one row at a time through a reused prepared statement, which
+        /// benchmarks ~28× faster than a 500-row multi-VALUES statement under Microsoft.Data.Sqlite
+        /// (the 5000 named-parameter bind per chunk dominated). See SqliteInsertBenchmark.
         /// </summary>
         private const int InsertChunkRows = 500;
-        private const int InsertColumnsPerRow = 10;
 
         public void AddRawBatch(IEnumerable<ISearchResult> batch, CancellationToken cancellationToken = default)
         {
@@ -662,38 +661,21 @@ namespace FindPluginCore.Implementations.Storage
         {
             inserted = 0;
 
-            using var chunkCmd = CreatePreparedMultiInsert(table, InsertChunkRows, tx, out var chunkParams);
-            using var singleCmd = CreatePreparedInsert(table, tx, out var singleParams);
-
-            // Reusable row buffer — never allocates beyond the initial array.
-            var buffer = new ISearchResult[InsertChunkRows];
-            int bufferCount = 0;
-
+            // One prepared single-row INSERT, reused for every row inside the caller's transaction.
+            // Counterintuitively this is ~28× faster than a 500-row multi-VALUES statement here:
+            // Microsoft.Data.Sqlite's per-parameter bind cost makes a 5000-parameter chunk far more
+            // expensive than 500 cheap single-row binds. (Benchmarked: ~370k rows/s vs ~13k rows/s.)
+            using var cmd = CreatePreparedInsert(table, tx, out var p);
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested) break;
-                buffer[bufferCount++] = result;
-                if (bufferCount == InsertChunkRows)
-                {
-                    BindAndExecuteChunk(chunkCmd, chunkParams, buffer, InsertChunkRows);
-                    inserted += InsertChunkRows;
-                    bufferCount = 0;
-                    // Fire progress mid-transaction so the caller can update its status text.
-                    // The lock is still held; subscribers must not call back into storage from
-                    // here (we just pass a count — that's the contract).
-                    onProgress?.Invoke(inserted);
-                }
-            }
-
-            // Tail (anything fewer than InsertChunkRows left over). For a 500k-row search with
-            // chunks of 500 this is at worst ~499 single-row inserts — <0.1% of the total — so
-            // building a second prepared command sized to the exact tail isn't worth the parse cost.
-            for (int i = 0; i < bufferCount; i++)
-            {
-                BindAndExecute(singleCmd, singleParams, buffer[i]);
+                BindAndExecute(cmd, p, result);
                 inserted++;
+                // Fire progress mid-transaction so the caller can update status text. The lock is
+                // still held; subscribers must not call back into storage (the contract is: count only).
+                if (inserted % InsertChunkRows == 0) onProgress?.Invoke(inserted);
             }
-            if (bufferCount > 0) onProgress?.Invoke(inserted);
+            if (inserted % InsertChunkRows != 0) onProgress?.Invoke(inserted);
         }
 
         /// <summary>
@@ -750,74 +732,6 @@ namespace FindPluginCore.Implementations.Storage
             p.SearchableData.Value = r.GetSearchableData() ?? "";
             p.Message.Value        = r.GetMessage() ?? "";
             p.ResultSource.Value   = r.GetResultSource() ?? "";
-            cmd.ExecuteNonQuery();
-        }
-
-        /// <summary>
-        /// Build a single prepared statement of the form
-        /// <c>INSERT INTO T (…cols…) VALUES (?,?,…),(?,?,…),…</c> with <paramref name="rowCount"/>
-        /// row tuples, so one <c>ExecuteNonQuery</c> commits all of them. Returns a flat array of
-        /// the parameter handles in row-major order: index <c>row*10 + column</c>.
-        /// </summary>
-        private SqliteCommand CreatePreparedMultiInsert(string table, int rowCount, SqliteTransaction tx, out SqliteParameter[] flatParams)
-        {
-            var cmd = _connection.CreateCommand();
-            cmd.Transaction = tx;
-
-            // Build the SQL: ~60 bytes/tuple at 500 rows ≈ 30 KB. Cheap.
-            var sb = new System.Text.StringBuilder(rowCount * 64 + 200);
-            sb.Append("INSERT INTO ").Append(table).Append(
-                " (LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource) VALUES ");
-
-            flatParams = new SqliteParameter[rowCount * InsertColumnsPerRow];
-            for (int r = 0; r < rowCount; r++)
-            {
-                if (r > 0) sb.Append(',');
-                sb.Append('(');
-                int baseIdx = r * InsertColumnsPerRow;
-                for (int c = 0; c < InsertColumnsPerRow; c++)
-                {
-                    if (c > 0) sb.Append(',');
-                    string name = "@p" + (baseIdx + c).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    sb.Append(name);
-                    // Column 2 = Level (INTEGER). Everything else is TEXT.
-                    var type = c == 2 ? SqliteType.Integer : SqliteType.Text;
-                    flatParams[baseIdx + c] = cmd.Parameters.Add(name, type);
-                }
-                sb.Append(')');
-            }
-            cmd.CommandText = sb.ToString();
-            cmd.Prepare();
-            return cmd;
-        }
-
-        /// <summary>
-        /// Bind <paramref name="count"/> rows worth of parameters from <paramref name="rows"/>
-        /// into the flat parameter array and fire a single <c>ExecuteNonQuery</c>. Caller must
-        /// have built <paramref name="cmd"/>/<paramref name="flatParams"/> for the exact row
-        /// count (use <see cref="CreatePreparedMultiInsert"/>).
-        /// </summary>
-        private static void BindAndExecuteChunk(
-            SqliteCommand cmd,
-            SqliteParameter[] flatParams,
-            ISearchResult[] rows,
-            int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var r = rows[i];
-                int b = i * InsertColumnsPerRow;
-                flatParams[b + 0].Value = r.GetLogTime().ToString("o");
-                flatParams[b + 1].Value = r.GetMachineName() ?? "";
-                flatParams[b + 2].Value = (int)r.GetLevel();
-                flatParams[b + 3].Value = r.GetUsername() ?? "";
-                flatParams[b + 4].Value = r.GetTaskName() ?? "";
-                flatParams[b + 5].Value = r.GetOpCode() ?? "";
-                flatParams[b + 6].Value = r.GetSource() ?? "";
-                flatParams[b + 7].Value = r.GetSearchableData() ?? "";
-                flatParams[b + 8].Value = r.GetMessage() ?? "";
-                flatParams[b + 9].Value = r.GetResultSource() ?? "";
-            }
             cmd.ExecuteNonQuery();
         }
 
