@@ -77,7 +77,8 @@ public class EtlInfoExtractor
         info.SessionEndTime = source.SessionEndTime;
         info.SessionDuration = source.SessionDuration;
 
-        int total = 0, kernel = 0, manifest = 0, buildNumber = 0;
+        int total = 0, kernel = 0, manifest = 0, buildNumber = 0, memMb = 0;
+        string productName = "", installDate = "", computerName = "", buildLabDecoded = "";
 
         // AllEvents = every dispatched event (total + provider tally). Kernel.All / Dynamic.All fire
         // additionally for their subsets (own counters), giving the format breakdown without
@@ -103,6 +104,35 @@ public class EtlInfoExtractor
                 }
                 catch { /* not this event */ }
             }
+
+            // Rich machine identity from the kernel SystemConfig rundown (only present in kernel
+            // traces). EventName checks are cheap; PayloadByName only runs for these rare events.
+            var en = e.EventName;
+            if (en != null)
+            {
+                if (productName.Length == 0 && en.IndexOf("BuildInfo", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    try
+                    {
+                        productName = e.PayloadByName("ProductName")?.ToString() ?? "";
+                        installDate = e.PayloadByName("InstallDate")?.ToString() ?? "";
+                        var bl = e.PayloadByName("BuildLab")?.ToString();
+                        if (!string.IsNullOrEmpty(bl)) buildLabDecoded = bl;
+                    }
+                    catch { }
+                }
+                else if (computerName.Length == 0 && en.IndexOf("/CPU", StringComparison.OrdinalIgnoreCase) >= 0
+                         && (p?.IndexOf("Kernel", StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    try
+                    {
+                        computerName = e.PayloadByName("ComputerName")?.ToString() ?? "";
+                        var ms = e.PayloadByName("MemSize");
+                        if (ms != null) memMb = Convert.ToInt32(ms);
+                    }
+                    catch { }
+                }
+            }
         };
         source.Kernel.All += _ => kernel++;
         source.Dynamic.All += _ => manifest++;
@@ -121,10 +151,15 @@ public class EtlInfoExtractor
         if (osv != null && buildNumber > 0 && osv.Build <= 0)
             info.OsVersion = $"{osv.Major}.{osv.Minor}.{buildNumber}";
 
-        // The full BuildLabEx (e.g. "26100.3194.amd64fre.ge_release.240331-1435") isn't a decoded
-        // event field — it's a string inside a kernel SystemConfig/header blob — so the event walk
-        // above can't see it. Recover it with a raw byte scan of the file.
-        info.BuildLab = FindBuildLab(etlPath);
+        // Machine identity from the kernel SystemConfig rundown (blank for non-kernel traces).
+        info.ProductName = productName;
+        info.InstallDate = installDate;
+        info.ComputerName = computerName;
+        info.MemorySizeMB = memMb;
+
+        // BuildLabEx: prefer the decoded SysConfig/BuildInfo field; otherwise raw-scan the file
+        // bytes (it lives in an undecoded blob in traces that lack the kernel config rundown).
+        info.BuildLab = !string.IsNullOrEmpty(buildLabDecoded) ? buildLabDecoded : FindBuildLab(etlPath);
         if (!string.IsNullOrEmpty(info.BuildLab))
         {
             // build.rev.archfre.branch.date-time  →  branch is the 4th dot-segment.
@@ -199,6 +234,12 @@ public class EtlInfoExtractor
                       + (info.CpuSpeedMHz > 0 ? $" @ {info.CpuSpeedMHz} MHz)" : ")"));
         if (!string.IsNullOrEmpty(info.BuildLab))
             sb.AppendLine($"Build lab:   {info.BuildLab}   (branch: {info.Branch})");
+        if (!string.IsNullOrEmpty(info.ProductName))
+            sb.AppendLine($"Edition:     {info.ProductName}"
+                          + (string.IsNullOrEmpty(info.InstallDate) ? "" : $"   (installed {info.InstallDate})"));
+        if (!string.IsNullOrEmpty(info.ComputerName) || info.MemorySizeMB > 0)
+            sb.AppendLine($"Machine:     {info.ComputerName}"
+                          + (info.MemorySizeMB > 0 ? $"   ({info.MemorySizeMB / 1024.0:F0} GB RAM)" : ""));
         sb.AppendLine($"Captured:    {info.SessionStartTime:yyyy-MM-dd HH:mm:ss} → {info.SessionEndTime:HH:mm:ss}  (duration {info.SessionDuration})");
         sb.AppendLine($"Events:      {info.EventCount:N0}  (lost {info.EventsLost:N0})");
         sb.AppendLine($"Format:      {info.FormatSummary}");
@@ -228,6 +269,10 @@ public class EtlInfoExtractor
             new XElement("BuildNumber", info.BuildNumber),
             new XElement("BuildLab", info.BuildLab),
             new XElement("Branch", info.Branch),
+            new XElement("ProductName", info.ProductName),
+            new XElement("InstallDate", info.InstallDate),
+            new XElement("ComputerName", info.ComputerName),
+            new XElement("MemorySizeMB", info.MemorySizeMB),
             new XElement("PointerSizeBits", info.PointerSizeBits),
             new XElement("NumberOfProcessors", info.NumberOfProcessors),
             new XElement("CpuSpeedMHz", info.CpuSpeedMHz),
@@ -254,6 +299,10 @@ public class EtlInfoExtractor
         sb.AppendLine($"BuildNumber,{info.BuildNumber}");
         sb.AppendLine($"BuildLab,{Q(info.BuildLab)}");
         sb.AppendLine($"Branch,{Q(info.Branch)}");
+        sb.AppendLine($"ProductName,{Q(info.ProductName)}");
+        sb.AppendLine($"InstallDate,{Q(info.InstallDate)}");
+        sb.AppendLine($"ComputerName,{Q(info.ComputerName)}");
+        sb.AppendLine($"MemorySizeMB,{info.MemorySizeMB}");
         sb.AppendLine($"PointerSizeBits,{info.PointerSizeBits}");
         sb.AppendLine($"NumberOfProcessors,{info.NumberOfProcessors}");
         sb.AppendLine($"CpuSpeedMHz,{info.CpuSpeedMHz}");
@@ -283,6 +332,10 @@ public sealed class EtlInfo
     public int BuildNumber { get; set; }                      // OS build from the ETW header (e.g. 26100); 0 if absent
     public string BuildLab { get; set; } = string.Empty;      // full BuildLabEx, e.g. "26100.3194.amd64fre.ge_release.240331-1435"
     public string Branch { get; set; } = string.Empty;        // branch from BuildLabEx, e.g. "ge_release" / "rs_prerelease"
+    public string ProductName { get; set; } = string.Empty;   // edition, e.g. "Windows 10 Pro" (kernel SysConfig/BuildInfo)
+    public string InstallDate { get; set; } = string.Empty;   // OS install date (kernel SysConfig/BuildInfo)
+    public string ComputerName { get; set; } = string.Empty;  // machine name (kernel SystemConfig/CPU)
+    public int MemorySizeMB { get; set; }                     // physical RAM in MB (kernel SystemConfig/CPU)
     public int PointerSizeBits { get; set; }                  // 32 or 64
     public int NumberOfProcessors { get; set; }
     public int CpuSpeedMHz { get; set; }
