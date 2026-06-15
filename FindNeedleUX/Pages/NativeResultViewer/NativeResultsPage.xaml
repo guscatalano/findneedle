@@ -120,6 +120,18 @@
                     <Button Content="Stop" Height="28" Click="StopStreamingButton_Click"
                             AutomationProperties.Name="Stop loading"/>
                 </StackPanel>
+
+                <!-- Search-index build indicator + Cancel. Visible while the FTS index builds
+                     (lazy/background modes); substring search uses the slower scan until it clears. -->
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                            Margin="12,0,0,0"
+                            Visibility="{x:Bind ViewModel.IsIndexing, Mode=OneWay}">
+                    <ProgressRing IsActive="True" Width="16" Height="16"/>
+                    <TextBlock Text="{x:Bind ViewModel.IndexStatusText, Mode=OneWay}" VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <Button Content="Cancel" Height="28" Click="CancelIndexingButton_Click"
+                            AutomationProperties.Name="Cancel building search index"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 

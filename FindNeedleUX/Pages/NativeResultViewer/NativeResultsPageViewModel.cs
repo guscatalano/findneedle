@@ -139,6 +139,14 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private string _statusText = "0 / 0 results";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
 
+    // True while the substring-search (FTS) index is being built (lazy/background modes). Bound to a
+    // toolbar indicator + Cancel button. Substring search uses the slower scan until it clears.
+    private bool _isIndexing;
+    public bool IsIndexing { get => _isIndexing; set => Set(ref _isIndexing, value); }
+
+    private string _indexStatusText = "";
+    public string IndexStatusText { get => _indexStatusText; set => Set(ref _indexStatusText, value); }
+
     // ----- per-level + per-column metadata -----
     public ObservableCollection<LevelEntry> Levels { get; } = new();
     public ObservableCollection<string> KnownLevelNames { get; } = new();

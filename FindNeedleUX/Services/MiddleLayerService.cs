@@ -228,11 +228,10 @@ public class MiddleLayerService
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
         try { PerfReport.SetSource(string.Join(", ", Locations.Select(l => l.GetName()))); } catch { /* label only */ }
 
-        // Deferred indexing: Step2 skipped the FTS build so the viewer can open now. Kick the build
-        // off in the background (batched + cancellable; paging interleaves). Substring search uses
-        // the LIKE fallback until it finishes. (Step 3 will refine Lazy to build on first search +
-        // add the >30s warning / progress UI; for now both deferred modes background-build here.)
-        if (EffectiveIndexingMode != FindPluginCore.Searching.IndexingMode.Eager && !IsSearchIndexBuilt)
+        // Background mode: Step2 skipped the FTS build so the viewer opens now; kick the batched
+        // build off in the background (paging interleaves; substring search uses LIKE until ready).
+        // Lazy mode does NOT build here — the viewer builds it on the first substring search.
+        if (EffectiveIndexingMode == FindPluginCore.Searching.IndexingMode.Background && !IsSearchIndexBuilt)
             StartBackgroundIndexBuild();
 
         NotifyStateChanged();
@@ -270,6 +269,11 @@ public class MiddleLayerService
     /// <summary>The in-flight background index build, if any (so the UI can show/await it).</summary>
     public static Task CurrentIndexBuild { get; private set; }
 
+    /// <summary>Live progress of the current/last index build (rows). Read by the viewer's indicator;
+    /// int (atomic reads) since row counts fit comfortably.</summary>
+    public static int IndexBuildIndexed { get; private set; }
+    public static int IndexBuildTotal { get; private set; }
+
     /// <summary>
     /// Build the FTS index in the background (batched, cancellable), reporting progress. No-op if the
     /// index is already built or there's nothing to index. Used by Background mode (after the viewer
@@ -282,9 +286,16 @@ public class MiddleLayerService
         CancelBackgroundIndexBuild();
         var cts = new CancellationTokenSource();
         _indexBuildCts = cts;
+        void Progress(long indexed, long totalRows)
+        {
+            IndexBuildIndexed = (int)indexed;
+            IndexBuildTotal = (int)totalRows;
+            onProgress?.Invoke(indexed, totalRows);
+            NotifyStateChanged(); // viewer indicator refresh
+        }
         CurrentIndexBuild = Task.Run(() =>
         {
-            try { nu.BuildSearchIndexNow(onProgress, cts.Token); }
+            try { nu.BuildSearchIndexNow(Progress, cts.Token); }
             finally { NotifyStateChanged(); }
         }, cts.Token);
         return CurrentIndexBuild;

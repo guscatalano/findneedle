@@ -55,6 +55,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Cache reuse ---
             SelectCacheReuseMode();
 
+            // --- Indexing mode ---
+            SelectIndexingMode();
+
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
 
@@ -249,6 +252,31 @@ public sealed partial class ResultsViewerSettingsPage : Page
             && Enum.TryParse<FindPluginCore.Searching.CacheReuseMode>(tag, ignoreCase: true, out var mode))
         {
             ResultsViewerSettings.CacheReuseMode = mode;
+        }
+    }
+
+    // ----- Indexing mode -----
+    private void SelectIndexingMode()
+    {
+        var current = ResultsViewerSettings.IndexingMode.ToString();
+        foreach (var item in IndexingModeCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            {
+                IndexingModeCombo.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void IndexingModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (IndexingModeCombo.SelectedItem is ComboBoxItem item
+            && item.Tag is string tag
+            && Enum.TryParse<FindPluginCore.Searching.IndexingMode>(tag, ignoreCase: true, out var mode))
+        {
+            ResultsViewerSettings.IndexingMode = mode;
         }
     }
 

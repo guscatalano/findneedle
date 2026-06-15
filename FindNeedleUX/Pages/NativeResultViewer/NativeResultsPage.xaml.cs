@@ -49,7 +49,15 @@ public sealed partial class NativeResultsPage : Page
 
         foreach (var col in ViewModel.Columns)
             col.VisibilityChanged += OnColumnVisibilityChanged;
+
+        // Debounce for lazy index building: only act after the user pauses typing, so live search
+        // keystrokes don't kick off the (expensive) index build on the 3rd character.
+        _lazyIndexTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        _lazyIndexTimer.Tick += LazyIndexTimer_Tick;
     }
+
+    private readonly Microsoft.UI.Xaml.DispatcherTimer _lazyIndexTimer;
+    private bool _lazyPromptShown; // don't re-prompt for the >30s warning every keystroke
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
@@ -78,6 +86,13 @@ public sealed partial class NativeResultsPage : Page
 
         // Tell MainWindow to hide the pre-nav spinner now that we're fully rendered.
         MainWindowActions.HideNavigationSpinner();
+
+        // Reflect any in-flight background index build (Background mode starts it after the search),
+        // and let a fresh load prompt again for the >30s warning.
+        _lazyPromptShown = false;
+        MiddleLayerService.StateChanged -= OnMiddleLayerStateChanged;
+        MiddleLayerService.StateChanged += OnMiddleLayerStateChanged;
+        UpdateIndexingIndicator();
     }
 
     /// <summary>
@@ -215,7 +230,77 @@ public sealed partial class NativeResultsPage : Page
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         ResultsViewerSettings.Changed -= OnSettingsChanged;
+        MiddleLayerService.StateChanged -= OnMiddleLayerStateChanged;
+        _lazyIndexTimer.Stop();
         ViewModel.DetachFromStreaming();
+    }
+
+    // ----- Deferred search-index (lazy/background) UX -----
+
+    private void OnMiddleLayerStateChanged() => UpdateIndexingIndicator();
+
+    /// <summary>Show/refresh the "building search index… N%" indicator from the current build state.</summary>
+    private void UpdateIndexingIndicator()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var task = MiddleLayerService.CurrentIndexBuild;
+            bool running = task != null && !task.IsCompleted && !MiddleLayerService.IsSearchIndexBuilt;
+            ViewModel.IsIndexing = running;
+            if (running)
+            {
+                int done = MiddleLayerService.IndexBuildIndexed, total = MiddleLayerService.IndexBuildTotal;
+                ViewModel.IndexStatusText = total > 0
+                    ? $"Building search index… {Math.Min(100, (int)(done * 100L / total))}%"
+                    : "Building search index…";
+            }
+        });
+    }
+
+    private void CancelIndexingButton_Click(object sender, RoutedEventArgs e)
+    {
+        MiddleLayerService.CancelBackgroundIndexBuild();
+        ViewModel.IsIndexing = false;
+    }
+
+    private void LazyIndexTimer_Tick(object sender, object e)
+    {
+        _lazyIndexTimer.Stop();
+        _ = TryLazyBuildIndexAsync();
+    }
+
+    /// <summary>
+    /// Lazy mode: the first time the user runs a real substring search, kick off the index build so
+    /// subsequent searches are fast. The current search already returned correct results via the LIKE
+    /// fallback, so we don't block or refresh it. If the build is predicted to take a while, ask first.
+    /// </summary>
+    private async System.Threading.Tasks.Task TryLazyBuildIndexAsync()
+    {
+        if (MiddleLayerService.EffectiveIndexingMode != FindPluginCore.Searching.IndexingMode.Lazy) return;
+        var term = (SearchBox.Text ?? "").Trim();
+        if (term.Length < 3) return;                       // trigram index needs >= 3 chars
+        if (MiddleLayerService.IsSearchIndexBuilt) return; // already fast
+        var inFlight = MiddleLayerService.CurrentIndexBuild;
+        if (inFlight != null && !inFlight.IsCompleted) return; // already building
+
+        long predMs = MiddleLayerService.PredictSearchIndexMs();
+        if (predMs > 30000 && !_lazyPromptShown)
+        {
+            _lazyPromptShown = true;
+            var dialog = new ContentDialog
+            {
+                Title = "Build search index?",
+                Content = $"Fast substring search needs an index that will take about {predMs / 1000} seconds " +
+                          "to build for this log. Build it now? Until it's ready, search keeps working with a slower scan.",
+                PrimaryButtonText = "Build now",
+                CloseButtonText = "Keep using slower search",
+                XamlRoot = this.XamlRoot
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        }
+
+        MiddleLayerService.StartBackgroundIndexBuild();
+        UpdateIndexingIndicator();
     }
 
     private void StopStreamingButton_Click(object sender, RoutedEventArgs e)
@@ -447,7 +532,17 @@ public sealed partial class NativeResultsPage : Page
     }
 
     // ----- Search + filter inputs -----
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.SearchText = SearchBox.Text;
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        ViewModel.SearchText = SearchBox.Text; // live filter (uses FTS if built, else LIKE)
+        // Lazy mode: (re)start the debounce so we only consider building the index once typing pauses.
+        if (MiddleLayerService.EffectiveIndexingMode == FindPluginCore.Searching.IndexingMode.Lazy
+            && !MiddleLayerService.IsSearchIndexBuilt)
+        {
+            _lazyIndexTimer.Stop();
+            _lazyIndexTimer.Start();
+        }
+    }
     private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
     private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;
     private void MessageFilter_TextChanged(object sender, TextChangedEventArgs e)  => ViewModel.MessageFilter  = MessageFilterBox.Text;

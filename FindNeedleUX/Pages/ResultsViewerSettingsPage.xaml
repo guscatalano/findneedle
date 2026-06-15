@@ -161,6 +161,27 @@
                 </StackPanel>
             </Border>
 
+            <!-- Substring-search index -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Substring-search index" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Fast substring search on large logs needs a full-text index that can take a while to build. Choose when it's built (SQLite-backed searches only)."/>
+                    <ComboBox x:Name="IndexingModeCombo" Width="360"
+                              SelectionChanged="IndexingModeCombo_SelectionChanged"
+                              AutomationProperties.Name="Search index mode">
+                        <ComboBoxItem Content="Lazy — build on first search (default)" Tag="Lazy"/>
+                        <ComboBoxItem Content="Background — build after the viewer opens" Tag="Background"/>
+                        <ComboBoxItem Content="Eager — build during the search"          Tag="Eager"/>
+                    </ComboBox>
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                               Text="Lazy opens fastest and skips the index entirely if you never search. Until the index is built, substring search uses a slower scan. Takes effect on the next search."/>
+                </StackPanel>
+            </Border>
+
             <!-- Search storage backend -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
