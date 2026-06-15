@@ -37,5 +37,17 @@ public sealed class EtlBuildNumberTests
         Assert.AreEqual("PORTARE", info.ComputerName, "computer name from SystemConfig/CPU");
         Assert.IsTrue(info.MemorySizeMB > 0, "RAM size from SystemConfig/CPU");
         TestContext.WriteLine($"Edition={info.ProductName}  Computer={info.ComputerName}  RAM={info.MemorySizeMB} MB  Installed={info.InstallDate}");
+
+        // Hardware fingerprint from SystemConfig (Video/NIC/PhyDisk).
+        StringAssert.Contains(info.Gpu, "Radeon", "GPU adapter from SystemConfig/Video");
+        Assert.IsTrue(info.NetworkAdapters.Count > 0, "at least one NIC from SystemConfig/NIC");
+        Assert.IsTrue(info.Disks.Count > 0, "at least one disk from SystemConfig/PhyDisk");
+        TestContext.WriteLine($"GPU={info.Gpu}  NICs=[{string.Join("; ", info.NetworkAdapters)}]  Disks=[{string.Join("; ", info.Disks)}]  DNS={info.DnsServers}");
+
+        // Providers now carry their GUIDs.
+        Assert.IsTrue(info.ProviderGuids.Count > 0, "provider GUIDs captured");
+        Assert.IsTrue(info.ProviderGuids.TryGetValue("Microsoft-Windows-RPC", out var rpcGuid) && rpcGuid.Length > 0,
+            "a known provider should have a GUID");
+        TestContext.WriteLine($"Microsoft-Windows-RPC guid = {rpcGuid}");
     }
 }

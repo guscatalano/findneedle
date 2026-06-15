@@ -79,6 +79,9 @@ public class EtlInfoExtractor
 
         int total = 0, kernel = 0, manifest = 0, buildNumber = 0, memMb = 0;
         string productName = "", installDate = "", computerName = "", buildLabDecoded = "";
+        string gpu = "", dns = "";
+        var nics = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var disks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // AllEvents = every dispatched event (total + provider tally). Kernel.All / Dynamic.All fire
         // additionally for their subsets (own counters), giving the format breakdown without
@@ -88,7 +91,13 @@ public class EtlInfoExtractor
             total++;
             var p = e.ProviderName;
             if (!string.IsNullOrEmpty(p))
+            {
                 info.Providers[p] = info.Providers.TryGetValue(p, out var c) ? c + 1 : 1;
+                if (!info.ProviderGuids.ContainsKey(p))
+                {
+                    try { info.ProviderGuids[p] = e.ProviderGuid.ToString(); } catch { }
+                }
+            }
 
             // The OS build number lives in the ETW header event's ProviderVersion (the header's
             // OSVersion is often just 10.0.0.0). Read it once. (BuildLabEx / branch like
@@ -132,6 +141,33 @@ public class EtlInfoExtractor
                     }
                     catch { }
                 }
+                else if (gpu.Length == 0 && en.IndexOf("/Video", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    try { gpu = (e.PayloadByName("AdapterString") ?? e.PayloadByName("ChipType"))?.ToString() ?? ""; }
+                    catch { }
+                }
+                else if (en.IndexOf("/NIC", StringComparison.OrdinalIgnoreCase) >= 0 && nics.Count < 8)
+                {
+                    try
+                    {
+                        var desc = e.PayloadByName("NICDescription")?.ToString() ?? "";
+                        var ip = e.PayloadByName("IpAddresses")?.ToString() ?? "";
+                        if (desc.Length > 0 || ip.Length > 0)
+                            nics.Add(ip.Length > 0 ? $"{desc} — {ip}" : desc);
+                        if (dns.Length == 0)
+                            dns = e.PayloadByName("DnsServerAddresses")?.ToString() ?? "";
+                    }
+                    catch { }
+                }
+                else if (en.IndexOf("/PhyDisk", StringComparison.OrdinalIgnoreCase) >= 0 && disks.Count < 8)
+                {
+                    try
+                    {
+                        var mfr = e.PayloadByName("Manufacturer")?.ToString()?.Trim() ?? "";
+                        if (mfr.Length > 0) disks.Add(mfr);
+                    }
+                    catch { }
+                }
             }
         };
         source.Kernel.All += _ => kernel++;
@@ -151,11 +187,15 @@ public class EtlInfoExtractor
         if (osv != null && buildNumber > 0 && osv.Build <= 0)
             info.OsVersion = $"{osv.Major}.{osv.Minor}.{buildNumber}";
 
-        // Machine identity from the kernel SystemConfig rundown (blank for non-kernel traces).
+        // Machine identity + hardware from the kernel SystemConfig rundown (blank for non-kernel traces).
         info.ProductName = productName;
         info.InstallDate = installDate;
         info.ComputerName = computerName;
         info.MemorySizeMB = memMb;
+        info.Gpu = gpu;
+        info.DnsServers = dns;
+        info.NetworkAdapters = nics.ToList();
+        info.Disks = disks.ToList();
 
         // BuildLabEx: prefer the decoded SysConfig/BuildInfo field; otherwise raw-scan the file
         // bytes (it lives in an undecoded blob in traces that lack the kernel config rundown).
@@ -240,12 +280,23 @@ public class EtlInfoExtractor
         if (!string.IsNullOrEmpty(info.ComputerName) || info.MemorySizeMB > 0)
             sb.AppendLine($"Machine:     {info.ComputerName}"
                           + (info.MemorySizeMB > 0 ? $"   ({info.MemorySizeMB / 1024.0:F0} GB RAM)" : ""));
+        if (!string.IsNullOrEmpty(info.Gpu))
+            sb.AppendLine($"GPU:         {info.Gpu}");
+        foreach (var nic in info.NetworkAdapters)
+            sb.AppendLine($"Network:     {nic}");
+        if (!string.IsNullOrEmpty(info.DnsServers))
+            sb.AppendLine($"DNS:         {info.DnsServers}");
+        foreach (var d in info.Disks)
+            sb.AppendLine($"Disk:        {d}");
         sb.AppendLine($"Captured:    {info.SessionStartTime:yyyy-MM-dd HH:mm:ss} → {info.SessionEndTime:HH:mm:ss}  (duration {info.SessionDuration})");
         sb.AppendLine($"Events:      {info.EventCount:N0}  (lost {info.EventsLost:N0})");
         sb.AppendLine($"Format:      {info.FormatSummary}");
         sb.AppendLine($"Providers:   {info.Providers.Count}");
         foreach (var kv in info.Providers)
-            sb.AppendLine($"   {kv.Value,10:N0}  {kv.Key}");
+        {
+            var g = info.ProviderGuids.TryGetValue(kv.Key, out var gg) ? gg : "";
+            sb.AppendLine($"   {kv.Value,10:N0}  {kv.Key}  {{{g}}}");
+        }
         return sb.ToString();
     }
 
@@ -261,7 +312,10 @@ public class EtlInfoExtractor
     {
         var providers = new XElement("Providers",
             info.Providers.Select(kv =>
-                new XElement("Provider", new XAttribute("name", kv.Key), new XAttribute("count", kv.Value))));
+                new XElement("Provider",
+                    new XAttribute("name", kv.Key),
+                    new XAttribute("count", kv.Value),
+                    new XAttribute("guid", info.ProviderGuids.TryGetValue(kv.Key, out var g) ? g : ""))));
         var root = new XElement("EtlInfo",
             new XElement("FilePath", info.FilePath),
             new XElement("FileSizeBytes", info.FileSizeBytes),
@@ -284,6 +338,10 @@ public class EtlInfoExtractor
             new XElement("KernelEventCount", info.KernelEventCount),
             new XElement("ManifestOrTraceLoggingEventCount", info.ManifestOrTraceLoggingEventCount),
             new XElement("FormatSummary", info.FormatSummary),
+            new XElement("Gpu", info.Gpu),
+            new XElement("DnsServers", info.DnsServers),
+            new XElement("NetworkAdapters", info.NetworkAdapters.Select(n => new XElement("Nic", n))),
+            new XElement("Disks", info.Disks.Select(d => new XElement("Disk", d))),
             providers);
         return new XDocument(new XDeclaration("1.0", "utf-8", null), root).ToString();
     }
@@ -314,10 +372,14 @@ public class EtlInfoExtractor
         sb.AppendLine($"KernelEventCount,{info.KernelEventCount}");
         sb.AppendLine($"ManifestOrTraceLoggingEventCount,{info.ManifestOrTraceLoggingEventCount}");
         sb.AppendLine($"FormatSummary,{Q(info.FormatSummary)}");
+        sb.AppendLine($"Gpu,{Q(info.Gpu)}");
+        sb.AppendLine($"DnsServers,{Q(info.DnsServers)}");
+        sb.AppendLine($"NetworkAdapters,{Q(string.Join("; ", info.NetworkAdapters))}");
+        sb.AppendLine($"Disks,{Q(string.Join("; ", info.Disks))}");
         sb.AppendLine();
-        sb.AppendLine("Provider,Count");
+        sb.AppendLine("Provider,Count,Guid");
         foreach (var kv in info.Providers)
-            sb.AppendLine($"{Q(kv.Key)},{kv.Value}");
+            sb.AppendLine($"{Q(kv.Key)},{kv.Value},{Q(info.ProviderGuids.TryGetValue(kv.Key, out var g) ? g : string.Empty)}");
         return sb.ToString();
     }
 }
@@ -353,6 +415,15 @@ public sealed class EtlInfo
 
     /// <summary>Provider name → event count, most frequent first.</summary>
     public Dictionary<string, int> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Provider name → provider GUID (string form).</summary>
+    public Dictionary<string, string> ProviderGuids { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    // Hardware fingerprint (kernel SystemConfig rundown; empty for non-kernel traces).
+    public string Gpu { get; set; } = string.Empty;                     // primary video adapter
+    public List<string> NetworkAdapters { get; set; } = new();          // "<description> — <ip(s)>"
+    public string DnsServers { get; set; } = string.Empty;
+    public List<string> Disks { get; set; } = new();                    // physical disk models
 
     /// <summary>One-line human summary of the dominant format(s).</summary>
     public string FormatSummary
