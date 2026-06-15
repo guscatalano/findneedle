@@ -44,15 +44,17 @@
                 <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
             </MenuBarItem>
 
+            <MenuBarItem Title="Inspect">
+                <MenuFlyoutItem Text="Inspect ETL" Click="MenuFlyoutItem_Click" Name="inspect_etl"/>
+                <MenuFlyoutItem Text="Inspect Binary" Click="MenuFlyoutItem_Click" Name="inspect_binary"/>
+            </MenuBarItem>
+
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="Result Viewer..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
                 <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
                 <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
                 <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
-                <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="Inspect ETL" Click="MenuFlyoutItem_Click" Name="inspect_etl"/>
-                <MenuFlyoutItem Text="Inspect Binary" Click="MenuFlyoutItem_Click" Name="inspect_binary"/>
             </MenuBarItem>
         </MenuBar>
 
