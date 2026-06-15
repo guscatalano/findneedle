@@ -94,6 +94,40 @@ public class SqliteInsertBenchmark
         }
     }
 
+    /// <summary>
+    /// Same as the 200k baseline but at 5,000,000 rows, to see how the optimized pipeline
+    /// (single-row insert + bulk FTS rebuild) holds up at scale. Heavy: generates ~5M rows in RAM
+    /// and builds the full trigram index. Reports InMemory vs SQLite(insert+rebuild).
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(600000)]
+    public void Insert_Throughput_5M()
+    {
+        const int n = 5_000_000;
+        var rows = MakeRows(n);
+
+        using (var mem = new InMemoryStorage())
+        {
+            var ms = TimeInsert(mem, rows);
+            TestContext.WriteLine($"InMemory                    : {ms,8:N0} ms   ({Rate(n, ms)})");
+        }
+
+        SqliteStorage.DisableFtsForMeasurement = false;
+        using (var sql = NewSqlite())
+        {
+            var ms = TimeInsert(sql, rows, buildIndex: true);
+            TestContext.WriteLine($"SQLite (insert+FTS rebuild) : {ms,8:N0} ms   ({Rate(n, ms)})");
+        }
+
+        SqliteStorage.DisableFtsForMeasurement = true;
+        using (var sql = NewSqlite())
+        {
+            var ms = TimeInsert(sql, rows, buildIndex: true);
+            TestContext.WriteLine($"SQLite (no FTS)             : {ms,8:N0} ms   ({Rate(n, ms)})");
+        }
+    }
+
     // ---- Direct strategy comparison (bypasses SqliteStorage to isolate the insert mechanism) ----
 
     private readonly record struct Row(long Ticks, string Time, string Message);
