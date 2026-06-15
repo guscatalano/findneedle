@@ -144,6 +144,25 @@ public static class ResultsViewerSettings
     ///   Never  — always rescan
     ///   Prompt — ask the user via a dialog before reusing (default for new installs)
     /// </summary>
+    /// <summary>
+    /// When the substring-search (FTS) index is built for SQLite-backed searches:
+    ///   Lazy       — on first substring search (default; "just open + scroll" never pays for it)
+    ///   Background — right after the viewer opens, off the critical path
+    ///   Eager      — during the search, before the viewer opens
+    /// </summary>
+    public const FindPluginCore.Searching.IndexingMode DefaultIndexingMode = FindPluginCore.Searching.IndexingMode.Lazy;
+    public static FindPluginCore.Searching.IndexingMode IndexingMode
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(Data.IndexingMode)
+                && Enum.TryParse<FindPluginCore.Searching.IndexingMode>(Data.IndexingMode, ignoreCase: true, out var parsed))
+                return parsed;
+            return DefaultIndexingMode;
+        }
+        set { Data.IndexingMode = value.ToString(); Save(); }
+    }
+
     public const FindPluginCore.Searching.CacheReuseMode DefaultCacheReuseMode = FindPluginCore.Searching.CacheReuseMode.Prompt;
     public static FindPluginCore.Searching.CacheReuseMode CacheReuseMode
     {
@@ -292,6 +311,7 @@ public static class ResultsViewerSettings
         public string DefaultResultViewer { get; set; }
         public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
         public string CacheReuseMode { get; set; }
+        public string IndexingMode { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public double? DetailsPanelHeight { get; set; }
     }

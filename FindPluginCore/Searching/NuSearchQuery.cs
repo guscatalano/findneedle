@@ -829,9 +829,11 @@ public class NuSearchQuery : ISearchQuery
 
         // ----- Build the full-text search index in one bulk pass -----
         // All filtered rows are now in storage (and, for Hybrid, settled to disk above). Build the
-        // FTS5 trigram index once here instead of maintaining it per-row during ingest — ~2.8x
-        // faster. Until this returns, substring search falls back to LIKE (handled in storage).
-        if (!cancellationToken.IsCancellationRequested)
+        // FTS5 trigram index once here instead of maintaining it per-row during ingest. Skipped when
+        // DeferIndexBuild is set (UI lazy/background modes build it later via BuildSearchIndexNow so
+        // the viewer can open before the index finishes); until it's built, substring search falls
+        // back to LIKE (handled in storage).
+        if (!cancellationToken.IsCancellationRequested && !DeferIndexBuild)
         {
             try
             {
@@ -844,18 +846,62 @@ public class NuSearchQuery : ISearchQuery
                 Logger.Instance.Log($"BuildSearchIndex failed (search falls back to LIKE): {ex.Message}");
             }
         }
+        else if (DeferIndexBuild)
+        {
+            PerfLog.Log("search.build_index.deferred");
+        }
 
-        // ----- Stamp the cache as valid for the next run -----
-        // Only meaningful when the backing store is SqliteStorage (Hybrid's inner SQLite isn't
-        // cached today) and the search was a single-file workspace (cache key is one file).
+        TryStampCacheCompletion(cancellationToken);
+
+        Logger.Instance.Log($"Step2_GetFilteredResults (with cancellation) complete: {_filteredResults.Count} total filtered results");
+        return _filteredResults;
+    }
+
+    /// <summary>
+    /// When set, Step2 does NOT build the FTS search index inline. The UI's lazy/background indexing
+    /// modes set this so the viewer can open before the (potentially multi-minute) index build, then
+    /// drive the build later via <see cref="BuildSearchIndexNow"/>. The CLI / RunThrough path leaves
+    /// it false so search works immediately without a viewer to orchestrate the build.
+    /// </summary>
+    public bool DeferIndexBuild { get; set; }
+
+    /// <summary>
+    /// Build the search index on demand (lazy first-search, or background after the viewer opens),
+    /// reporting progress, then re-stamp the cache so a warm reopen reuses the now-built index.
+    /// Cancellable between batches. Safe to call when the index is already built (cheap rebuild).
+    /// </summary>
+    public void BuildSearchIndexNow(Action<long, long> onProgress = null, CancellationToken cancellationToken = default)
+    {
+        if (_resultStorage == null) return;
+        try
+        {
+            using (PerfLog.Scope("search.build_index.ondemand"))
+                _resultStorage.BuildSearchIndex(cancellationToken, onProgress);
+        }
+        catch (Exception ex)
+        {
+            PerfLog.Log("search.build_index.error", ("msg", ex.GetType().Name));
+            Logger.Instance.Log($"BuildSearchIndexNow failed (search falls back to LIKE): {ex.Message}");
+            return;
+        }
+        // Persist the now-built index state so the next reopen's cache reuse sees fts_built=1.
+        if (!cancellationToken.IsCancellationRequested)
+            TryStampCacheCompletion(cancellationToken);
+    }
+
+    /// <summary>
+    /// Stamp the on-disk cache as complete + valid for the next run. Only meaningful for a
+    /// single-file SqliteStorage workspace; no-op otherwise. The fts_built flag it records reflects
+    /// whether the index has been built at the time of the call.
+    /// </summary>
+    private void TryStampCacheCompletion(CancellationToken cancellationToken)
+    {
         if (cancellationToken.IsCancellationRequested)
         {
             PerfLog.Log("cache.write.skip", ("reason", "cancelled"));
         }
         else if (CacheReuseMode == CacheReuseMode.Never)
         {
-            // Caching disabled — don't move results into a reusable cache (and we already never
-            // read one this run). "No moving to cache."
             PerfLog.Log("cache.write.skip", ("reason", "disabled"));
         }
         else if (_locations.Count != 1)
@@ -888,9 +934,6 @@ public class NuSearchQuery : ISearchQuery
                 }
             }
         }
-
-        Logger.Instance.Log($"Step2_GetFilteredResults (with cancellation) complete: {_filteredResults.Count} total filtered results");
-        return _filteredResults;
     }
 
     /// <summary>

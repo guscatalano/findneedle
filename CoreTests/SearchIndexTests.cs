@@ -51,6 +51,49 @@ public class SearchIndexTests
     private static int SearchCount(SqliteStorage s, string term)
         => s.GetFilteredCount(new SqliteStorage.FilterInput { Search = term });
 
+    /// <summary>A real on-disk "source" file (cache reuse stats its size/mtime) + tracked db path.</summary>
+    private string NewSourceFile()
+    {
+        var f = Path.Combine(Path.GetTempPath(), "idxsrc_" + Guid.NewGuid().ToString("N") + ".log");
+        File.WriteAllText(f, "source-for-cache-eval");
+        _dbPaths.Add(f);
+        _dbPaths.Add(CachedStorage.GetCacheFilePath(f, ".db"));
+        return f;
+    }
+
+    [TestMethod]
+    public void Cache_FtsBuiltFlag_RoundTrips_AcrossReopen()
+    {
+        var src = NewSourceFile();
+        const int sver = SqliteStorage.CacheSchemaVersion;
+
+        // Deferred run: ingest rows, do NOT build the index, stamp the cache (fts_built=0).
+        using (var s = new SqliteStorage(src))
+        {
+            s.ClearTables();
+            s.AddFilteredBatch(MakeRows());
+            s.WriteCompletionMetadata(src, sver);
+        }
+
+        // Reopen: cache is reusable (rows complete) but the index isn't built → search via LIKE.
+        using (var s = new SqliteStorage(src))
+        {
+            Assert.IsTrue(s.EvaluateCacheReuse(src, sver), "complete cache should be reusable");
+            Assert.IsFalse(s.IsSearchIndexBuilt, "deferred run wrote fts_built=0");
+            Assert.AreEqual(ExpectedNeedles, SearchCount(s, "needle"), "search correct via LIKE fallback");
+            s.BuildSearchIndex();                 // lazy/background build now
+            s.WriteCompletionMetadata(src, sver); // persist fts_built=1
+        }
+
+        // Reopen again: the built index is recognized and reused (no rebuild).
+        using (var s = new SqliteStorage(src))
+        {
+            Assert.IsTrue(s.EvaluateCacheReuse(src, sver));
+            Assert.IsTrue(s.IsSearchIndexBuilt, "fts_built=1 should round-trip through the cache");
+            Assert.AreEqual(ExpectedNeedles, SearchCount(s, "needle"));
+        }
+    }
+
     [TestMethod]
     public void BuildSearchIndex_Batched_ReportsProgress_AndSearchIsCorrect()
     {

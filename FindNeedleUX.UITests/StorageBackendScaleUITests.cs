@@ -67,7 +67,8 @@ namespace FindNeedleUX.UITests
             try { if (File.Exists(ReportPath)) File.Delete(ReportPath); } catch { }
 
             // --cache=off so each scenario is a clean scan (no cache-hit skew between the two SQLite runs).
-            var args = $"\"{_tempLogPath}\" --viewer=native --storage={storageArg} --cache=off";
+            // --indexing=eager so the FTS index is built during the search (deterministic for the assertions).
+            var args = $"\"{_tempLogPath}\" --viewer=native --storage={storageArg} --cache=off --indexing=eager";
             if (estimate.HasValue) args += $" --estimate={estimate.Value}";
 
             var app = Application.Launch(UiTestHelpers.GetAppExecutablePath(), args);

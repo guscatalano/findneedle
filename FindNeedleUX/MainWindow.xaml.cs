@@ -83,6 +83,7 @@ public sealed partial class MainWindow : Window
         string viewer = null;
         string storage = null;
         string cache = null;
+        string indexing = null;
         int? estimate = null;
         foreach (var raw in args ?? Array.Empty<string>())
         {
@@ -107,6 +108,10 @@ public sealed partial class MainWindow : Window
             else if (a.StartsWith("--cache=", StringComparison.OrdinalIgnoreCase))
             {
                 cache = a.Substring("--cache=".Length).Trim().Trim('"').ToLowerInvariant();
+            }
+            else if (a.StartsWith("--indexing=", StringComparison.OrdinalIgnoreCase))
+            {
+                indexing = a.Substring("--indexing=".Length).Trim().Trim('"').ToLowerInvariant();
             }
             else if (a.StartsWith("--"))
             {
@@ -143,6 +148,13 @@ public sealed partial class MainWindow : Window
             {
                 "on" or "reuse" or "always" => FindPluginCore.Searching.CacheReuseMode.Always,
                 "off" or "never" or "disabled" => FindPluginCore.Searching.CacheReuseMode.Never,
+                _ => null,
+            };
+            MiddleLayerService.IndexingModeOverride = indexing switch
+            {
+                "eager" => FindPluginCore.Searching.IndexingMode.Eager,
+                "lazy" => FindPluginCore.Searching.IndexingMode.Lazy,
+                "background" or "bg" => FindPluginCore.Searching.IndexingMode.Background,
                 _ => null,
             };
 

@@ -311,6 +311,13 @@ namespace FindPluginCore.Implementations.Storage
         private bool UseFts => _ftsAvailable && _ftsIndexBuilt;
 
         /// <summary>
+        /// True once the FTS trigram index is built and substring search runs against it; false when
+        /// the index is missing/stale and search falls back to LIKE. Lets the UI decide whether a
+        /// lazy/background build is needed. Always effectively "ready" for non-FTS backends.
+        /// </summary>
+        public bool IsSearchIndexBuilt => !_ftsAvailable || _ftsIndexBuilt;
+
+        /// <summary>
         /// Build the FTS5 trigram index over FilteredResults in one bulk pass, after all rows are
         /// inserted (called by NuSearchQuery Step2). ~2.8x faster than maintaining it per-row via an
         /// insert trigger and produces an identical index. No-op when FTS isn't available (trigram
@@ -522,11 +529,15 @@ namespace FindPluginCore.Implementations.Storage
                     return false;
                 }
 
-                FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", true), ("rows", rows));
+                // The reused cache holds a built FTS index only if the run that wrote it actually
+                // built one (eager search, or a deferred build that completed before close). If
+                // fts_built=0 (deferred run that was never searched), substring search uses LIKE
+                // until a lazy/background build runs.
+                bool cachedIndex = meta.TryGetValue("fts_built", out var fb) && fb == "1";
+                _ftsIndexBuilt = _ftsAvailable && cachedIndex;
+
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", true), ("rows", rows), ("fts_built", cachedIndex));
                 ReusedExistingCache = true;
-                // The reused cache DB already holds a built FTS index, so substring search can use
-                // it immediately (no rebuild this run).
-                _ftsIndexBuilt = _ftsAvailable;
                 return true;
             }
             catch (Exception ex)
@@ -581,6 +592,10 @@ namespace FindPluginCore.Implementations.Storage
                     WriteMetaKey(tx, "source_size",    size.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     WriteMetaKey(tx, "source_mtime",   mtime);
                     WriteMetaKey(tx, "completed",      "1");
+                    // Whether the FTS index is already built. With deferred (lazy/background) indexing
+                    // the rows can be cache-complete while the index isn't built yet — a warm reopen
+                    // reads this to decide whether substring search can use FTS or must (re)build.
+                    WriteMetaKey(tx, "fts_built",      _ftsIndexBuilt ? "1" : "0");
                     WriteMetaKey(tx, "completed_at",   DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
                     tx.Commit();
                     FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", true), ("size", size), ("path_len", sourcePath.Length));

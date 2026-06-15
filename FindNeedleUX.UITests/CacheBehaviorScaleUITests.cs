@@ -73,7 +73,7 @@ namespace FindNeedleUX.UITests
         {
             try { if (File.Exists(ReportPath)) File.Delete(ReportPath); } catch { }
 
-            var args = $"\"{_tempLogPath}\" --viewer=native --storage=sqlite --cache={cacheArg}";
+            var args = $"\"{_tempLogPath}\" --viewer=native --storage=sqlite --cache={cacheArg} --indexing=eager";
             var app = Application.Launch(UiTestHelpers.GetAppExecutablePath(), args);
             try
             {

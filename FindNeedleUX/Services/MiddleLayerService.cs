@@ -127,6 +127,9 @@ public class MiddleLayerService
                 // the storage backend and the Auto-tier prediction be driven explicitly.
                 if (StorageOverride.HasValue) nu.OverrideStorageType = StorageOverride.Value;
                 if (RowEstimateOverride.HasValue) nu.EstimatedRowCountOverride = RowEstimateOverride.Value;
+                // Lazy/Background modes defer the in-search FTS index build so the viewer opens
+                // before the (potentially multi-minute) index finishes; Eager builds it in Step2.
+                nu.DeferIndexBuild = EffectiveIndexingMode != FindPluginCore.Searching.IndexingMode.Eager;
             }
         }
     }
@@ -199,6 +202,8 @@ public class MiddleLayerService
         // storage cleanup doesn't yank the storage out from under a live writer.
         try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
         CurrentStreamingSearch = null;
+        // Stop any background index build from a previous search before we wipe/replace storage.
+        CancelBackgroundIndexBuild();
 
         UpdateSearchQuery();
         var query = SearchQueryUX.CurrentQuery;
@@ -222,6 +227,14 @@ public class MiddleLayerService
         }
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
         try { PerfReport.SetSource(string.Join(", ", Locations.Select(l => l.GetName()))); } catch { /* label only */ }
+
+        // Deferred indexing: Step2 skipped the FTS build so the viewer can open now. Kick the build
+        // off in the background (batched + cancellable; paging interleaves). Substring search uses
+        // the LIKE fallback until it finishes. (Step 3 will refine Lazy to build on first search +
+        // add the >30s warning / progress UI; for now both deferred modes background-build here.)
+        if (EffectiveIndexingMode != FindPluginCore.Searching.IndexingMode.Eager && !IsSearchIndexBuilt)
+            StartBackgroundIndexBuild();
+
         NotifyStateChanged();
         return Task.FromResult(x.GetSummaryReport());
 
@@ -233,6 +246,69 @@ public class MiddleLayerService
     /// viewer load, or null if nothing has run yet. Surfaced on the Statistics page.
     /// </summary>
     public static SearchRunReport GetLastPerfReport() => PerfReport.Last;
+
+    // ----- Deferred search-index (lazy/background) orchestration -----
+
+    /// <summary>Per-run override of the indexing mode (set by the CLI --indexing hook). Null = use
+    /// the persisted ResultsViewerSettings.IndexingMode (Lazy by default).</summary>
+    public static FindPluginCore.Searching.IndexingMode? IndexingModeOverride { get; set; }
+
+    public static FindPluginCore.Searching.IndexingMode EffectiveIndexingMode
+        => IndexingModeOverride ?? ResultsViewerSettings.IndexingMode;
+
+    /// <summary>True if substring search can use the fast FTS index now (vs the LIKE fallback).</summary>
+    public static bool IsSearchIndexBuilt
+        => (GetSearchStorage() as SqliteStorage)?.IsSearchIndexBuilt ?? true;
+
+    /// <summary>Predicted FTS index build time (ms) for the current result set — for the "this will
+    /// take a while" warning before a lazy build.</summary>
+    public static long PredictSearchIndexMs()
+        => SqliteStorage.PredictIndexBuildMs(GetFilteredRowCount());
+
+    private static CancellationTokenSource _indexBuildCts;
+
+    /// <summary>The in-flight background index build, if any (so the UI can show/await it).</summary>
+    public static Task CurrentIndexBuild { get; private set; }
+
+    /// <summary>
+    /// Build the FTS index in the background (batched, cancellable), reporting progress. No-op if the
+    /// index is already built or there's nothing to index. Used by Background mode (after the viewer
+    /// opens) — the viewer keeps paging while this runs (each batch releases the storage lock).
+    /// </summary>
+    public static Task StartBackgroundIndexBuild(Action<long, long> onProgress = null)
+    {
+        if (SearchQueryUX.CurrentQuery is not NuSearchQuery nu) return Task.CompletedTask;
+        if (IsSearchIndexBuilt) return Task.CompletedTask;
+        CancelBackgroundIndexBuild();
+        var cts = new CancellationTokenSource();
+        _indexBuildCts = cts;
+        CurrentIndexBuild = Task.Run(() =>
+        {
+            try { nu.BuildSearchIndexNow(onProgress, cts.Token); }
+            finally { NotifyStateChanged(); }
+        }, cts.Token);
+        return CurrentIndexBuild;
+    }
+
+    /// <summary>Cancel any in-flight background index build and wait briefly for it to stop (the
+    /// batched build halts between batches, so this returns within ~one batch).</summary>
+    public static void CancelBackgroundIndexBuild()
+    {
+        try { _indexBuildCts?.Cancel(); } catch { /* already disposed */ }
+        try { CurrentIndexBuild?.Wait(10000); } catch { /* cancelled / faulted */ }
+        _indexBuildCts = null;
+        CurrentIndexBuild = null;
+    }
+
+    /// <summary>
+    /// Build the FTS index synchronously on the calling thread (the Lazy "first substring search"
+    /// path). Reports progress and is cancellable. No-op if already built.
+    /// </summary>
+    public static void EnsureSearchIndex(Action<long, long> onProgress = null, CancellationToken cancellationToken = default)
+    {
+        if (SearchQueryUX.CurrentQuery is NuSearchQuery nu && !IsSearchIndexBuilt)
+            nu.BuildSearchIndexNow(onProgress, cancellationToken);
+    }
 
     public static SearchStatistics GetStats()
     {

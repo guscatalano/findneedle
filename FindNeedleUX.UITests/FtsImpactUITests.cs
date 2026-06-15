@@ -67,7 +67,7 @@ namespace FindNeedleUX.UITests
             // for the no-index run. --cache=off keeps both runs as clean, comparable fresh scans.
             var psi = new ProcessStartInfo(UiTestHelpers.GetAppExecutablePath())
             {
-                Arguments = $"\"{_tempLogPath}\" --viewer=native --storage=sqlite --cache=off",
+                Arguments = $"\"{_tempLogPath}\" --viewer=native --storage=sqlite --cache=off --indexing=eager",
                 UseShellExecute = false,
             };
             if (disableFts) psi.Environment["FINDNEEDLE_DISABLE_FTS"] = "1";
