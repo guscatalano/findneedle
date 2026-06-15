@@ -98,6 +98,18 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        /// <summary>
+        /// Build the search index on the disk tier (where the rows live after SettleToDisk). Called
+        /// once after ingest. The in-memory tier needs no index — small searches scan it directly.
+        /// </summary>
+        public void BuildSearchIndex(CancellationToken cancellationToken = default)
+        {
+            lock (_sync)
+            {
+                _diskStorage.BuildSearchIndex(cancellationToken);
+            }
+        }
+
         public void ClearTables()
         {
             lock (_sync)

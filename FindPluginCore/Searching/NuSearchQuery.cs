@@ -827,6 +827,24 @@ public class NuSearchQuery : ISearchQuery
             }
         }
 
+        // ----- Build the full-text search index in one bulk pass -----
+        // All filtered rows are now in storage (and, for Hybrid, settled to disk above). Build the
+        // FTS5 trigram index once here instead of maintaining it per-row during ingest — ~2.8x
+        // faster. Until this returns, substring search falls back to LIKE (handled in storage).
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                using (PerfLog.Scope("search.build_index"))
+                    _resultStorage.BuildSearchIndex(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                PerfLog.Log("search.build_index.error", ("msg", ex.GetType().Name));
+                Logger.Instance.Log($"BuildSearchIndex failed (search falls back to LIKE): {ex.Message}");
+            }
+        }
+
         // ----- Stamp the cache as valid for the next run -----
         // Only meaningful when the backing store is SqliteStorage (Hybrid's inner SQLite isn't
         // cached today) and the search was a single-file workspace (cache key is one file).

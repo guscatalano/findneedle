@@ -211,6 +211,10 @@ namespace FindPluginCore.Implementations.Storage
             return size;
         }
 
+        /// <summary>No-op: in-memory storage has no separate search index — substring search scans
+        /// the list directly.</summary>
+        public void BuildSearchIndex(CancellationToken cancellationToken = default) { }
+
         public void ClearTables()
         {
             lock (_sync)

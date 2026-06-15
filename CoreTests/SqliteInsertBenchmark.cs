@@ -55,10 +55,11 @@ public class SqliteInsertBenchmark
         return new SqliteStorage(searchedFile);
     }
 
-    private long TimeInsert(ISearchStorage storage, List<ISearchResult> rows)
+    private long TimeInsert(ISearchStorage storage, List<ISearchResult> rows, bool buildIndex = false)
     {
         var sw = Stopwatch.StartNew();
         storage.AddFilteredBatch(rows);
+        if (buildIndex) storage.BuildSearchIndex();
         sw.Stop();
         return sw.ElapsedMilliseconds;
     }
@@ -81,15 +82,15 @@ public class SqliteInsertBenchmark
         SqliteStorage.DisableFtsForMeasurement = false;
         using (var sql = NewSqlite())
         {
-            var ms = TimeInsert(sql, rows);
-            TestContext.WriteLine($"SQLite (FTS on) : {ms,7:N0} ms   ({Rate(RowCount, ms)})");
+            var ms = TimeInsert(sql, rows, buildIndex: true);
+            TestContext.WriteLine($"SQLite (insert+FTS rebuild) : {ms,7:N0} ms   ({Rate(RowCount, ms)})");
         }
 
         SqliteStorage.DisableFtsForMeasurement = true;
         using (var sql = NewSqlite())
         {
-            var ms = TimeInsert(sql, rows);
-            TestContext.WriteLine($"SQLite (no FTS) : {ms,7:N0} ms   ({Rate(RowCount, ms)})");
+            var ms = TimeInsert(sql, rows, buildIndex: true);
+            TestContext.WriteLine($"SQLite (no FTS)             : {ms,7:N0} ms   ({Rate(RowCount, ms)})");
         }
     }
 
@@ -208,6 +209,101 @@ public class SqliteInsertBenchmark
             sw.Stop();
             TestContext.WriteLine($"C single-row int-time    : {sw.ElapsedMilliseconds,7:N0} ms   ({Rate(RowCount, sw.ElapsedMilliseconds)})");
         }
+    }
+
+    private Microsoft.Data.Sqlite.SqliteConnection OpenFtsDb(bool withInsertTrigger)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "benchfts_" + Guid.NewGuid().ToString("N") + ".db");
+        _dbPaths.Add(path);
+        var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}");
+        conn.Open();
+        using var c = conn.CreateCommand();
+        // Faithful to production: base table with Id PK, the viewer indexes, and an external-content
+        // FTS5 trigram table. Optionally the per-row AFTER INSERT trigger that keeps it in sync.
+        c.CommandText = @"
+            PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-65536;
+            CREATE TABLE T (Id INTEGER PRIMARY KEY AUTOINCREMENT, LogTime TEXT, MachineName TEXT, Level INTEGER,
+                Username TEXT, TaskName TEXT, OpCode TEXT, Source TEXT, SearchableData TEXT, Message TEXT, ResultSource TEXT);
+            CREATE INDEX IX_T_Level ON T(Level); CREATE INDEX IX_T_Source ON T(Source); CREATE INDEX IX_T_LogTime ON T(LogTime);
+            CREATE VIRTUAL TABLE T_fts USING fts5(Source, TaskName, Message, ResultSource, SearchableData, LogTime,
+                content='T', content_rowid='Id', tokenize='trigram');";
+        if (withInsertTrigger)
+            c.CommandText += @"
+                CREATE TRIGGER T_ai AFTER INSERT ON T BEGIN
+                    INSERT INTO T_fts(rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
+                    VALUES (new.Id, new.Source, new.TaskName, new.Message, new.ResultSource, new.SearchableData, new.LogTime);
+                END;";
+        c.ExecuteNonQuery();
+        return conn;
+    }
+
+    private static void InsertRows(Microsoft.Data.Sqlite.SqliteConnection conn, List<Row> rows)
+    {
+        using var tx = conn.BeginTransaction();
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "INSERT INTO T (LogTime,MachineName,Level,Username,TaskName,OpCode,Source,SearchableData,Message,ResultSource) " +
+                          "VALUES (@a,@b,@c,@d,@e,@f,@g,@h,@i,@j)";
+        var ps = new Microsoft.Data.Sqlite.SqliteParameter[10];
+        string[] names = { "@a", "@b", "@c", "@d", "@e", "@f", "@g", "@h", "@i", "@j" };
+        for (int k = 0; k < 10; k++) ps[k] = cmd.Parameters.Add(names[k], k == 2 ? Microsoft.Data.Sqlite.SqliteType.Integer : Microsoft.Data.Sqlite.SqliteType.Text);
+        cmd.Prepare();
+        foreach (var row in rows) { BindRow(ps, 0, row, intTime: false); cmd.ExecuteNonQuery(); }
+        tx.Commit();
+    }
+
+    private static long FtsMatchCount(Microsoft.Data.Sqlite.SqliteConnection conn, string term)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT count(*) FROM T_fts WHERE T_fts MATCH @t";
+        cmd.Parameters.AddWithValue("@t", term);
+        return (long)cmd.ExecuteScalar();
+    }
+
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(300000)]
+    public void Fts_TriggerVsRebuild()
+    {
+        var rows = MakeRawRows(RowCount);
+
+        // Current: per-row AFTER INSERT trigram trigger fires during the insert.
+        long triggerMs, triggerMatches;
+        using (var conn = OpenFtsDb(withInsertTrigger: true))
+        {
+            var sw = Stopwatch.StartNew();
+            InsertRows(conn, rows);
+            sw.Stop();
+            triggerMs = sw.ElapsedMilliseconds;
+            triggerMatches = FtsMatchCount(conn, "message");
+        }
+
+        // Proposed: no insert trigger; insert fast, then build the whole index once with 'rebuild'.
+        long rebuildMs, rebuildOnlyMs, rebuildMatches;
+        using (var conn = OpenFtsDb(withInsertTrigger: false))
+        {
+            var sw = Stopwatch.StartNew();
+            InsertRows(conn, rows);
+            var afterInsert = sw.ElapsedMilliseconds;
+            using (var rb = conn.CreateCommand())
+            {
+                rb.CommandText = "INSERT INTO T_fts(T_fts) VALUES('rebuild');";
+                rb.ExecuteNonQuery();
+            }
+            sw.Stop();
+            rebuildMs = sw.ElapsedMilliseconds;
+            rebuildOnlyMs = rebuildMs - afterInsert;
+            rebuildMatches = FtsMatchCount(conn, "message");
+        }
+
+        TestContext.WriteLine($"FTS index over {RowCount:N0} rows:");
+        TestContext.WriteLine($"   per-row trigger : {triggerMs,7:N0} ms total   ({Rate(RowCount, triggerMs)})");
+        TestContext.WriteLine($"   insert+rebuild  : {rebuildMs,7:N0} ms total   (insert {rebuildMs - rebuildOnlyMs:N0} + rebuild {rebuildOnlyMs:N0})");
+        TestContext.WriteLine($"   saving          : {triggerMs - rebuildMs:N0} ms  ({(triggerMs > 0 ? 100.0 * (triggerMs - rebuildMs) / triggerMs : 0):F0}%)   ({(rebuildMs > 0 ? (double)triggerMs / rebuildMs : 0):F1}x faster)");
+        TestContext.WriteLine($"   index correctness: trigger MATCH={triggerMatches:N0}  rebuild MATCH={rebuildMatches:N0}");
+
+        Assert.AreEqual(triggerMatches, rebuildMatches, "Rebuilt index must return the same matches as the trigger-maintained one.");
+        Assert.IsTrue(rebuildMatches > 0, "FTS MATCH should find rows.");
     }
 
     private static void BindRow(Microsoft.Data.Sqlite.SqliteParameter[] ps, int b, Row row, bool intTime)

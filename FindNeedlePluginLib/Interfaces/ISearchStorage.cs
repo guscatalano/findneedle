@@ -53,6 +53,14 @@ namespace FindNeedlePluginLib.Interfaces
         /// surfacing stale or duplicated rows. Cheap no-op when already empty.
         /// </summary>
         void ClearTables();
+
+        /// <summary>
+        /// Build (or finish building) any search index over the filtered results, after all batches
+        /// have been added. Disk-backed implementations defer the expensive full-text index to this
+        /// single bulk step instead of maintaining it per-row during ingest — far faster. Until this
+        /// is called, substring search falls back to a scan. No-op for backends without an index.
+        /// </summary>
+        void BuildSearchIndex(CancellationToken cancellationToken = default);
     }
 
     

@@ -261,15 +261,10 @@ namespace FindPluginCore.Implementations.Storage
                         tokenize='trigram'
                     );
 
-                    CREATE TRIGGER IF NOT EXISTS FilteredResults_ai AFTER INSERT ON FilteredResults
-                    BEGIN
-                        INSERT INTO FilteredResults_fts
-                            (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
-                        VALUES
-                            (new.Id, new.Source, new.TaskName, new.Message,
-                             new.ResultSource, new.SearchableData, new.LogTime);
-                    END;
-
+                    -- No AFTER INSERT trigger: maintaining the trigram index per row during a bulk
+                    -- load is ~2.8x slower than inserting rows trigger-free and running one
+                    -- 'rebuild' afterward (see BuildSearchIndex / SqliteInsertBenchmark). The
+                    -- delete/update triggers stay so incremental row changes remain consistent.
                     CREATE TRIGGER IF NOT EXISTS FilteredResults_ad AFTER DELETE ON FilteredResults
                     BEGIN
                         INSERT INTO FilteredResults_fts
@@ -297,7 +292,7 @@ namespace FindPluginCore.Implementations.Storage
                 ";
                 cmd.ExecuteNonQuery();
                 _ftsAvailable = true;
-                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", true));
+                _ftsIndexBuilt = false; // empty until BuildSearchIndex runs
             }
             catch (SqliteException ex)
             {
@@ -308,6 +303,44 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         private bool _ftsAvailable;
+
+        // The FTS5 index is built in one bulk step (BuildSearchIndex) after ingest, not per-row via
+        // an insert trigger (~2.8x faster). Until that runs the index is stale, so substring search
+        // must fall back to LIKE. _ftsIndexBuilt tracks readiness; UseFts gates the FTS query path.
+        private volatile bool _ftsIndexBuilt;
+        private bool UseFts => _ftsAvailable && _ftsIndexBuilt;
+
+        /// <summary>
+        /// Build the FTS5 trigram index over FilteredResults in one bulk pass, after all rows are
+        /// inserted (called by NuSearchQuery Step2). ~2.8x faster than maintaining it per-row via an
+        /// insert trigger and produces an identical index. No-op when FTS isn't available (trigram
+        /// tokenizer unsupported, or disabled via FINDNEEDLE_DISABLE_FTS).
+        /// </summary>
+        public void BuildSearchIndex(CancellationToken cancellationToken = default)
+        {
+            if (!_ftsAvailable) { _ftsIndexBuilt = false; return; }
+            lock (_sync)
+            {
+                var start = Environment.TickCount64;
+                try
+                {
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = "INSERT INTO FilteredResults_fts(FilteredResults_fts) VALUES('rebuild');";
+                    cmd.ExecuteNonQuery();
+                    _ftsIndexBuilt = true;
+                    FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", true),
+                        ("rebuild_ms", Environment.TickCount64 - start));
+                }
+                catch (SqliteException ex)
+                {
+                    _ftsIndexBuilt = false;
+                    FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false),
+                        ("reason", "rebuild_failed"), ("msg", ex.GetType().Name));
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[SqliteStorage] FTS rebuild failed; substring search falls back to LIKE: {ex.Message}");
+                }
+            }
+        }
 
         // ----- Cache reuse (size + mtime + schema version) -----
 
@@ -416,6 +449,9 @@ namespace FindPluginCore.Implementations.Storage
 
                 FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", true), ("rows", rows));
                 ReusedExistingCache = true;
+                // The reused cache DB already holds a built FTS index, so substring search can use
+                // it immediately (no rebuild this run).
+                _ftsIndexBuilt = _ftsAvailable;
                 return true;
             }
             catch (Exception ex)
@@ -587,8 +623,9 @@ namespace FindPluginCore.Implementations.Storage
                     vac.ExecuteNonQuery();
                 }
 
-                // Recreate the FTS5 table + triggers fresh.
+                // Recreate the FTS5 table + triggers fresh (empty index, not yet built).
                 InitializeFts5();
+                _ftsIndexBuilt = false;
 
                 // Tables are now empty — keep the running counts in sync.
                 _rawCount = 0;
@@ -639,6 +676,9 @@ namespace FindPluginCore.Implementations.Storage
                 BulkInsert("FilteredResults", batch, transaction, cancellationToken, out inserted, onProgress);
                 transaction.Commit();
                 _filteredCount += inserted;
+                // New rows aren't in the FTS index (no insert trigger) — mark it stale until the
+                // caller runs BuildSearchIndex. Substring search falls back to LIKE meanwhile.
+                if (inserted > 0) _ftsIndexBuilt = false;
             }
             // Fire outside the lock so subscribers can re-enter (e.g. read a page) without
             // deadlocking the writer thread.
@@ -805,7 +845,7 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
-                var (where, ps) = BuildWhere(filter, _ftsAvailable);
+                var (where, ps) = BuildWhere(filter, UseFts);
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = $"SELECT COUNT(*) FROM FilteredResults {where}";
                 BindParams(cmd, ps);
@@ -813,7 +853,7 @@ namespace FindPluginCore.Implementations.Storage
                 {
                     return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
                 }
-                catch (SqliteException) when (_ftsAvailable && HasGlobalSearch(filter))
+                catch (SqliteException) when (UseFts && HasGlobalSearch(filter))
                 {
                     return GetFilteredCountLikeFallback(filter);
                 }
@@ -824,7 +864,7 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
-                var (where, ps) = BuildWhere(filter, _ftsAvailable);
+                var (where, ps) = BuildWhere(filter, UseFts);
                 var orderBy = BuildOrderBy(sort);
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText =
@@ -841,7 +881,7 @@ namespace FindPluginCore.Implementations.Storage
                     while (reader.Read()) list.Add(new SqliteSearchResult(reader));
                     return list;
                 }
-                catch (SqliteException) when (_ftsAvailable && HasGlobalSearch(filter))
+                catch (SqliteException) when (UseFts && HasGlobalSearch(filter))
                 {
                     return GetFilteredPageLikeFallback(filter, sort, offset, limit);
                 }
@@ -897,7 +937,7 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
-                var (where, ps) = BuildWhere(filter, _ftsAvailable);
+                var (where, ps) = BuildWhere(filter, UseFts);
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = $"SELECT Level, COUNT(*) FROM FilteredResults {where} GROUP BY Level";
                 BindParams(cmd, ps);
@@ -908,7 +948,7 @@ namespace FindPluginCore.Implementations.Storage
                     while (reader.Read()) counts[reader.GetInt32(0)] = reader.GetInt32(1);
                     return counts;
                 }
-                catch (SqliteException) when (_ftsAvailable && HasGlobalSearch(filter))
+                catch (SqliteException) when (UseFts && HasGlobalSearch(filter))
                 {
                     var (where2, ps2) = BuildWhere(filter, ftsAvailable: false);
                     using var cmd2 = _connection.CreateCommand();
