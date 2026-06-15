@@ -371,3 +371,6 @@ Samples/*.log
 
 # Generated locally by the comparative write-performance test (PerformanceReportGenerator)
 WritePerformance_Comparison*.html
+
+# Large, locally-generated test fixtures (see ETWPluginTests/LargeFixtureGenerator.cs)
+LargeSamples/
