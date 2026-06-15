@@ -23,9 +23,13 @@ public sealed class EtlBuildNumberTests
         Assert.IsTrue(File.Exists(etl), etl);
 
         var info = EtlInfoExtractor.Inspect(etl);
-        TestContext.WriteLine($"OsVersion={info.OsVersion}  BuildNumber={info.BuildNumber}");
+        TestContext.WriteLine($"OsVersion={info.OsVersion}  BuildNumber={info.BuildNumber}  BuildLab={info.BuildLab}  Branch={info.Branch}");
 
         Assert.AreEqual(26100, info.BuildNumber, "build number should come from the ETW header ProviderVersion");
         StringAssert.Contains(info.OsVersion, "26100", "OsVersion should include the real build");
+
+        // Full BuildLabEx is recovered by raw-scanning the file (it's in an undecoded kernel blob).
+        Assert.AreEqual("26100.3194.amd64fre.ge_release.240331-1435", info.BuildLab, "full BuildLabEx");
+        Assert.AreEqual("ge_release", info.Branch, "branch parsed from BuildLabEx");
     }
 }

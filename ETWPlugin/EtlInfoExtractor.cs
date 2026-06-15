@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Etlx;
@@ -120,11 +121,73 @@ public class EtlInfoExtractor
         if (osv != null && buildNumber > 0 && osv.Build <= 0)
             info.OsVersion = $"{osv.Major}.{osv.Minor}.{buildNumber}";
 
+        // The full BuildLabEx (e.g. "26100.3194.amd64fre.ge_release.240331-1435") isn't a decoded
+        // event field — it's a string inside a kernel SystemConfig/header blob — so the event walk
+        // above can't see it. Recover it with a raw byte scan of the file.
+        info.BuildLab = FindBuildLab(etlPath);
+        if (!string.IsNullOrEmpty(info.BuildLab))
+        {
+            // build.rev.archfre.branch.date-time  →  branch is the 4th dot-segment.
+            var parts = info.BuildLab.Split('.');
+            if (parts.Length >= 4) info.Branch = parts[3];
+        }
+
         info.Providers = info.Providers
             .OrderByDescending(kv => kv.Value)
             .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
 
         return info;
+    }
+
+    // BuildLabEx, e.g. "26100.3194.amd64fre.ge_release.240331-1435".
+    private static readonly Regex BuildLabRx =
+        new(@"\d{4,6}\.\d+\.[a-z0-9]*fre\.[A-Za-z0-9_]+\.\d{6}-\d{4}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Raw-scan the .etl bytes for the BuildLabEx string (stored as UTF-16 in an undecoded kernel
+    /// blob). For files larger than the cap, scans the head + tail (where the header / config
+    /// rundown live). Returns "" if not present. Never throws.
+    /// </summary>
+    public static string FindBuildLab(string etlPath)
+    {
+        try
+        {
+            const long Cap = 96L * 1024 * 1024; // bound memory for large traces
+            var len = new FileInfo(etlPath).Length;
+            byte[] bytes;
+            if (len <= Cap)
+            {
+                bytes = File.ReadAllBytes(etlPath);
+            }
+            else
+            {
+                int half = (int)(Cap / 2);
+                bytes = new byte[half * 2];
+                using var fs = File.OpenRead(etlPath);
+                ReadFully(fs, bytes, 0, half);
+                fs.Seek(-half, SeekOrigin.End);
+                ReadFully(fs, bytes, half, half);
+            }
+            // Most Windows strings (incl. BuildLabEx in the trace) are UTF-16; check ASCII too.
+            foreach (var enc in new[] { Encoding.Unicode, Encoding.ASCII })
+            {
+                var m = BuildLabRx.Match(enc.GetString(bytes));
+                if (m.Success) return m.Value;
+            }
+        }
+        catch { /* best-effort */ }
+        return string.Empty;
+    }
+
+    private static void ReadFully(Stream s, byte[] buf, int offset, int count)
+    {
+        int read = 0;
+        while (read < count)
+        {
+            int n = s.Read(buf, offset + read, count - read);
+            if (n <= 0) break;
+            read += n;
+        }
     }
 
     /// <summary>Multi-line human-readable report (used by the UI/CLI inspector).</summary>
@@ -134,6 +197,8 @@ public class EtlInfoExtractor
         sb.AppendLine($"File:        {Path.GetFileName(info.FilePath)} ({info.FileSizeBytes / 1024.0 / 1024.0:F2} MB)");
         sb.AppendLine($"Windows:     {info.OsVersion}   ({info.PointerSizeBits}-bit, {info.NumberOfProcessors} CPUs"
                       + (info.CpuSpeedMHz > 0 ? $" @ {info.CpuSpeedMHz} MHz)" : ")"));
+        if (!string.IsNullOrEmpty(info.BuildLab))
+            sb.AppendLine($"Build lab:   {info.BuildLab}   (branch: {info.Branch})");
         sb.AppendLine($"Captured:    {info.SessionStartTime:yyyy-MM-dd HH:mm:ss} → {info.SessionEndTime:HH:mm:ss}  (duration {info.SessionDuration})");
         sb.AppendLine($"Events:      {info.EventCount:N0}  (lost {info.EventsLost:N0})");
         sb.AppendLine($"Format:      {info.FormatSummary}");
@@ -161,6 +226,8 @@ public class EtlInfoExtractor
             new XElement("FileSizeBytes", info.FileSizeBytes),
             new XElement("OsVersion", info.OsVersion),
             new XElement("BuildNumber", info.BuildNumber),
+            new XElement("BuildLab", info.BuildLab),
+            new XElement("Branch", info.Branch),
             new XElement("PointerSizeBits", info.PointerSizeBits),
             new XElement("NumberOfProcessors", info.NumberOfProcessors),
             new XElement("CpuSpeedMHz", info.CpuSpeedMHz),
@@ -185,6 +252,8 @@ public class EtlInfoExtractor
         sb.AppendLine($"FileSizeBytes,{info.FileSizeBytes}");
         sb.AppendLine($"OsVersion,{Q(info.OsVersion)}");
         sb.AppendLine($"BuildNumber,{info.BuildNumber}");
+        sb.AppendLine($"BuildLab,{Q(info.BuildLab)}");
+        sb.AppendLine($"Branch,{Q(info.Branch)}");
         sb.AppendLine($"PointerSizeBits,{info.PointerSizeBits}");
         sb.AppendLine($"NumberOfProcessors,{info.NumberOfProcessors}");
         sb.AppendLine($"CpuSpeedMHz,{info.CpuSpeedMHz}");
@@ -212,6 +281,8 @@ public sealed class EtlInfo
 
     public string OsVersion { get; set; } = string.Empty;     // e.g. "10.0.26100" — the Windows build
     public int BuildNumber { get; set; }                      // OS build from the ETW header (e.g. 26100); 0 if absent
+    public string BuildLab { get; set; } = string.Empty;      // full BuildLabEx, e.g. "26100.3194.amd64fre.ge_release.240331-1435"
+    public string Branch { get; set; } = string.Empty;        // branch from BuildLabEx, e.g. "ge_release" / "rs_prerelease"
     public int PointerSizeBits { get; set; }                  // 32 or 64
     public int NumberOfProcessors { get; set; }
     public int CpuSpeedMHz { get; set; }
