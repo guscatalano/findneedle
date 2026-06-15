@@ -102,11 +102,11 @@ namespace FindPluginCore.Implementations.Storage
         /// Build the search index on the disk tier (where the rows live after SettleToDisk). Called
         /// once after ingest. The in-memory tier needs no index — small searches scan it directly.
         /// </summary>
-        public void BuildSearchIndex(CancellationToken cancellationToken = default)
+        public void BuildSearchIndex(CancellationToken cancellationToken = default, Action<long, long> onProgress = null)
         {
             lock (_sync)
             {
-                _diskStorage.BuildSearchIndex(cancellationToken);
+                _diskStorage.BuildSearchIndex(cancellationToken, onProgress);
             }
         }
 

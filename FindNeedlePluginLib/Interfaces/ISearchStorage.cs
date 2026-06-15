@@ -59,8 +59,9 @@ namespace FindNeedlePluginLib.Interfaces
         /// have been added. Disk-backed implementations defer the expensive full-text index to this
         /// single bulk step instead of maintaining it per-row during ingest — far faster. Until this
         /// is called, substring search falls back to a scan. No-op for backends without an index.
+        /// Cancellable; <paramref name="onProgress"/> receives (rowsIndexed, totalRows) as it runs.
         /// </summary>
-        void BuildSearchIndex(CancellationToken cancellationToken = default);
+        void BuildSearchIndex(CancellationToken cancellationToken = default, Action<long, long> onProgress = null);
     }
 
     

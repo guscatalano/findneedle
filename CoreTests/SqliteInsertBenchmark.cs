@@ -340,6 +340,65 @@ public class SqliteInsertBenchmark
         Assert.IsTrue(rebuildMatches > 0, "FTS MATCH should find rows.");
     }
 
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(300000)]
+    public void Fts_RebuildVsBatched()
+    {
+        var rows = MakeRawRows(RowCount);
+
+        // A) Optimized one-shot 'rebuild' (not cancellable, no progress).
+        long rebuildMs, rebuildMatches;
+        using (var conn = OpenFtsDb(withInsertTrigger: false))
+        {
+            InsertRows(conn, rows);
+            var sw = Stopwatch.StartNew();
+            using (var rb = conn.CreateCommand()) { rb.CommandText = "INSERT INTO T_fts(T_fts) VALUES('rebuild');"; rb.ExecuteNonQuery(); }
+            sw.Stop();
+            rebuildMs = sw.ElapsedMilliseconds;
+            rebuildMatches = FtsMatchCount(conn, "message");
+        }
+
+        // B) Batched INSERT...SELECT by Id range — cancellable between batches, supports progress
+        //    + a live time estimate. Measures whether we give up much speed for that control.
+        const int batch = 50_000;
+        long batchedMs, batchedMatches; int batches = 0;
+        using (var conn = OpenFtsDb(withInsertTrigger: false))
+        {
+            InsertRows(conn, rows);
+            var sw = Stopwatch.StartNew();
+            long lastId = 0;
+            while (true)
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"INSERT INTO T_fts(rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
+                                    SELECT Id, Source, TaskName, Message, ResultSource, SearchableData, LogTime
+                                    FROM T WHERE Id > @last ORDER BY Id LIMIT @bs;";
+                cmd.Parameters.AddWithValue("@last", lastId);
+                cmd.Parameters.AddWithValue("@bs", batch);
+                int n = cmd.ExecuteNonQuery();
+                if (n == 0) break;
+                batches++;
+                // Advance to the highest Id we just indexed (the n-th Id greater than lastId).
+                using var mx = conn.CreateCommand();
+                mx.CommandText = "SELECT Id FROM T WHERE Id > @last ORDER BY Id LIMIT 1 OFFSET @off";
+                mx.Parameters.AddWithValue("@last", lastId);
+                mx.Parameters.AddWithValue("@off", n - 1);
+                lastId = Convert.ToInt64(mx.ExecuteScalar());
+            }
+            sw.Stop();
+            batchedMs = sw.ElapsedMilliseconds;
+            batchedMatches = FtsMatchCount(conn, "message");
+        }
+
+        TestContext.WriteLine($"FTS build of {RowCount:N0} rows:");
+        TestContext.WriteLine($"   one-shot 'rebuild' : {rebuildMs,7:N0} ms");
+        TestContext.WriteLine($"   batched ({batch:N0}) : {batchedMs,7:N0} ms  in {batches} batches  ({(rebuildMs > 0 ? (double)batchedMs / rebuildMs : 0):F2}x rebuild)");
+        TestContext.WriteLine($"   matches: rebuild={rebuildMatches:N0}  batched={batchedMatches:N0}");
+        Assert.AreEqual(rebuildMatches, batchedMatches, "Batched index must match the one-shot rebuild.");
+        Assert.IsTrue(batchedMatches > 0);
+    }
+
     private static void BindRow(Microsoft.Data.Sqlite.SqliteParameter[] ps, int b, Row row, bool intTime)
     {
         ps[b + 0].Value = intTime ? row.Ticks : row.Time;
