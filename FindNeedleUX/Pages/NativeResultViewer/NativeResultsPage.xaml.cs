@@ -62,6 +62,9 @@ public sealed partial class NativeResultsPage : Page
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         LoadingOverlay.Visibility = Visibility.Visible;
+        FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.OpenViewer);
+        FindNeedlePluginLib.FlowProgress.Updated -= OnFlowProgress;
+        FindNeedlePluginLib.FlowProgress.Updated += OnFlowProgress;
 
         // Subscribe to settings changes per Loaded cycle. With NavigationCacheMode.Required,
         // the page survives navigation; Unloaded unsubscribes so a backgrounded viewer doesn't
@@ -76,6 +79,7 @@ public sealed partial class NativeResultsPage : Page
         ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
         ApplyDetailsPanelToggleState(ResultsViewerSettings.DetailsPanelVisible);
         ApplyPersistedPageSize();
+        FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.LoadFirstPage);
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
         // After load, re-apply persisted level color overrides — LoadResultsAsync() repopulates
         // ViewModel.Levels from the theme defaults, which would clobber overrides otherwise.
@@ -86,6 +90,10 @@ public sealed partial class NativeResultsPage : Page
 
         // Tell MainWindow to hide the pre-nav spinner now that we're fully rendered.
         MainWindowActions.HideNavigationSpinner();
+
+        // The search→view flow is fully done — clear the "Step X of N" status.
+        FindNeedlePluginLib.FlowProgress.Updated -= OnFlowProgress;
+        FindNeedlePluginLib.FlowProgress.Complete();
 
         // Reflect any in-flight background index build (Background mode starts it after the search),
         // and let a fresh load prompt again for the >30s warning.
@@ -231,8 +239,18 @@ public sealed partial class NativeResultsPage : Page
     {
         ResultsViewerSettings.Changed -= OnSettingsChanged;
         MiddleLayerService.StateChanged -= OnMiddleLayerStateChanged;
+        FindNeedlePluginLib.FlowProgress.Updated -= OnFlowProgress;
         _lazyIndexTimer.Stop();
         ViewModel.DetachFromStreaming();
+    }
+
+    /// <summary>Show the unified "Step X of N · …" flow status in the page's loading overlay.</summary>
+    private void OnFlowProgress(string label, int step, int total)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!string.IsNullOrEmpty(label)) LoadingOverlayText.Text = label;
+        });
     }
 
     // ----- Deferred search-index (lazy/background) UX -----

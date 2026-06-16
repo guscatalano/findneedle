@@ -68,10 +68,37 @@
         <Grid Grid.Row="2">
             <Frame x:Name="contentFrame" />
             <!-- Full-window overlay spinner for ETL inspection and quick actions -->
-            <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SystemControlPageBackgroundMediumAltMediumBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+            <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
                   AutomationProperties.Name="Operation in progress" AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
                     <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False" AutomationProperties.Name="Working"/>
+
+                    <!-- Structured step checklist (search→view flow). Fixed columns so the name,
+                         metric, and percent line up across every step. -->
+                    <ItemsControl x:Name="StepList" Margin="0,16,0,0" Visibility="Collapsed" MinWidth="480">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2,0,2" Opacity="{Binding Opacity}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="210"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="52"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14"
+                                               FontWeight="{Binding Weight}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Detail}" FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextAlignment="Right" Margin="8,0,8,0" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding PercentText}" FontSize="13"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Right"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
                     <TextBlock x:Name="SpinnerText" Text="Inspecting file..." Margin="0,16,0,0" FontSize="18" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
                     <Button x:Name="CancelQuickActionButton" Content="Cancel" Width="100" Margin="0,24,0,0" Click="CancelQuickActionButton_Click" Visibility="Collapsed"
                             AutomationProperties.Name="Cancel current operation"/>

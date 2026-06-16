@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.UI.Text;
 using FindNeedleUX.Services;
 using FindPluginCore.GlobalConfiguration;
 using FindNeedleCoreUtils;
@@ -35,6 +39,10 @@ public sealed partial class MainWindow : Window
         SetWindowIcon("Assets\\appicon.ico");
         contentFrame.Navigated += (s, e) => RefreshStatusStrip();
         MiddleLayerService.StateChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
+        // Unified "Step X of N · phase · detail" status: whenever the spinner is up (search or viewer
+        // open), show the current flow phase. Detail (row counts etc.) flows in via FlowProgress.Detail.
+        FindNeedlePluginLib.FlowProgress.Updated += OnFlowProgress;
+        StepList.ItemsSource = _stepRows;
         // Show WelcomePage on startup
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         RefreshStatusStrip();
@@ -449,26 +457,47 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private readonly ObservableCollection<StepRow> _stepRows = new();
+
+    private void OnFlowProgress(string label, int step, int total)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (SpinnerPanel.Visibility != Visibility.Visible) return;
+            var steps = FindNeedlePluginLib.FlowProgress.Steps();
+            if (steps.Count == 0) { StepList.Visibility = Visibility.Collapsed; return; }
+
+            // "Show completed steps" off → only the current step row; on → the whole checklist.
+            var view = ResultsViewerSettings.ShowStepHistory ? steps : steps.Where(s => s.Current).ToList();
+            while (_stepRows.Count > view.Count) _stepRows.RemoveAt(_stepRows.Count - 1);
+            while (_stepRows.Count < view.Count) _stepRows.Add(new StepRow());
+            for (int i = 0; i < view.Count; i++)
+            {
+                var s = view[i];
+                var r = _stepRows[i];
+                r.Glyph = s.Done ? "✓" : s.Current ? "▶" : "•";
+                r.Name = $"{s.Number}. {s.Name}";
+                r.Detail = s.Detail ?? "";
+                r.PercentText = s.Percent.HasValue ? (s.PercentIsEstimate ? $"~{s.Percent}%" : $"{s.Percent}%") : "";
+                r.Opacity = s.Current ? 1.0 : s.Done ? 0.85 : 0.4;
+                r.Weight = s.Current ? FontWeights.SemiBold : FontWeights.Normal;
+            }
+            StepList.Visibility = Visibility.Visible;
+            SpinnerText.Visibility = Visibility.Collapsed;
+        });
+    }
+
     private async Task RunSearchWithProgress(bool surfaceScan = false)
     {
         _quickActionCts = new CancellationTokenSource();
         ShowSpinner(true, "Running search...", showCancel:true);
         // Register for progress updates
         var sink = MiddleLayerService.GetProgressEventSink();
-        void OnTextProgress(string text)
-        {
-            DispatcherQueue.TryEnqueue(() => SpinnerText.Text = text);
-        }
-        void OnNumericProgress(int percent)
-        {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!string.IsNullOrWhiteSpace(SpinnerText.Text))
-                    SpinnerText.Text = $"{SpinnerText.Text.Split('(')[0].Trim()} ({percent}%)";
-                else
-                    SpinnerText.Text = $"Progress: {percent}%";
-            });
-        }
+        // The spinner is driven uniformly by FlowProgress (OnFlowProgress), which carries a clean,
+        // consistent per-phase metric set directly by the engine. The sink's verbose freeform text
+        // is intentionally not piped in (it duplicated/clashed with the phase names).
+        void OnTextProgress(string text) { /* superseded by FlowProgress per-phase detail */ }
+        void OnNumericProgress(int percent) { /* superseded by Step X of N */ }
         sink.RegisterForTextProgress(OnTextProgress);
         sink.RegisterForNumericProgress(OnNumericProgress);
         try
@@ -574,6 +603,10 @@ public sealed partial class MainWindow : Window
         EtlSpinner.IsActive = show;
         if (text != null)
             SpinnerText.Text = text;
+        // Non-flow spinners (ETL inspect, workspace load) show the plain text line; the structured
+        // step checklist is hidden until a search flow drives it via OnFlowProgress.
+        StepList.Visibility = Visibility.Collapsed;
+        SpinnerText.Visibility = Visibility.Visible;
         CancelQuickActionButton.Visibility = show && showCancel ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -585,6 +618,24 @@ public sealed partial class MainWindow : Window
             SpinnerText.Text = "Cancelling...";
         }
     }
+}
+
+/// <summary>One row in the structured search-flow checklist (fixed columns: glyph · name · metric · %).</summary>
+public sealed class StepRow : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler PropertyChanged;
+    private void Set<T>(ref T field, T value, string name)
+    {
+        if (!Equals(field, value)) { field = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name)); }
+    }
+
+    private string _glyph = ""; public string Glyph { get => _glyph; set => Set(ref _glyph, value, nameof(Glyph)); }
+    private string _name = ""; public string Name { get => _name; set => Set(ref _name, value, nameof(Name)); }
+    private string _detail = ""; public string Detail { get => _detail; set => Set(ref _detail, value, nameof(Detail)); }
+    private string _percentText = ""; public string PercentText { get => _percentText; set => Set(ref _percentText, value, nameof(PercentText)); }
+    private double _opacity = 1.0; public double Opacity { get => _opacity; set => Set(ref _opacity, value, nameof(Opacity)); }
+    private global::Windows.UI.Text.FontWeight _weight = FontWeights.Normal;
+    public global::Windows.UI.Text.FontWeight Weight { get => _weight; set => Set(ref _weight, value, nameof(Weight)); }
 }
 
 // Add the following public static class to expose the required PInvoke methods and constants.

@@ -243,8 +243,18 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     {
         try
         {
+            FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
+            // No exact event count for an .etl, so estimate total events from the file size using a
+            // typical bytes-per-event figure — surfaced as a clearly-marked "~%" estimate.
+            const long AvgEtlBytesPerEvent = 180;
+            long estTotalEvents = 0;
+            try { estTotalEvents = Math.Max(1, new System.IO.FileInfo(inputfile).Length / AvgEtlBytesPerEvent); } catch { }
             using var source = new Microsoft.Diagnostics.Tracing.ETWTraceEventSource(inputfile);
 
+            // source.Process() decodes the whole file synchronously with no built-in progress, so on
+            // a multi-million-event .etl it would sit silent for a long time. Report a running count,
+            // throttled by wall-clock so we don't flood the sink (no reliable total mid-decode).
+            long lastReportMs = Environment.TickCount64;
             void Handle(Microsoft.Diagnostics.Tracing.TraceEvent e)
             {
                 if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
@@ -252,6 +262,19 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 var src = line.GetSource() ?? string.Empty;
                 providers[src] = providers.TryGetValue(src, out var c) ? c + 1 : 1;
                 results.Add(line);
+
+                long now = Environment.TickCount64;
+                if (now - lastReportMs >= 300)
+                {
+                    lastReportMs = now;
+                    // No cheap total-event count for an .etl, but the file header gives the session
+                    // time span — so progress = how far this event's timestamp is through it.
+                    // Rough progress from the file-size estimate (marked "~%" since it's not exact).
+                    int? pct = estTotalEvents > 0
+                        ? Math.Clamp((int)(results.Count * 100L / estTotalEvents), 1, 99) : (int?)null;
+                    _progressSink?.NotifyProgress($"Decoding ETL with TraceEvent… {results.Count:N0} events");
+                    FindNeedlePluginLib.FlowProgress.Detail($"{results.Count:N0} events", pct, estimate: true);
+                }
             }
 
             // Dynamic = manifest/EventSource providers; Kernel = NT kernel logger events. Each event

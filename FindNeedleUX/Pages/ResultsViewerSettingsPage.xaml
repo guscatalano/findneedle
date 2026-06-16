@@ -182,6 +182,17 @@
                 </StackPanel>
             </Border>
 
+            <!-- Search progress -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Search progress" FontWeight="SemiBold"/>
+                    <CheckBox x:Name="ShowStepHistoryCheck" Content="Show completed steps above the current step"
+                              Checked="ShowStepHistoryCheck_Changed" Unchecked="ShowStepHistoryCheck_Changed"/>
+                </StackPanel>
+            </Border>
+
             <!-- Search storage backend -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

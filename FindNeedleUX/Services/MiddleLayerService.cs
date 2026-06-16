@@ -207,6 +207,7 @@ public class MiddleLayerService
 
         UpdateSearchQuery();
         var query = SearchQueryUX.CurrentQuery;
+        FlowProgress.StartPlan(BuildFlowPlan(query));
         if (query != null)
         {
             if (surfacescan)
@@ -319,6 +320,33 @@ public class MiddleLayerService
     {
         if (SearchQueryUX.CurrentQuery is NuSearchQuery nu && !IsSearchIndexBuilt)
             nu.BuildSearchIndexNow(onProgress, cancellationToken);
+    }
+
+    /// <summary>
+    /// The phases this search+open will actually use, for the "Step X of N" status. Skipped phases
+    /// (no cache check, no ETL, no consolidation, deferred index) are left out so N is accurate.
+    /// The viewer adds OpenViewer/LoadFirstPage as it reaches them.
+    /// </summary>
+    private static IEnumerable<FlowPhase> BuildFlowPlan(ISearchQuery query)
+    {
+        var phases = new List<FlowPhase>();
+        var cacheMode = CacheModeOverride ?? ResultsViewerSettings.CacheReuseMode;
+        if (cacheMode != FindPluginCore.Searching.CacheReuseMode.Never && Locations.Count == 1)
+            phases.Add(FlowPhase.CheckCache);
+        phases.Add(FlowPhase.OpenLocations);
+        if (Locations.Any(l => (l.GetName() ?? "").EndsWith(".etl", StringComparison.OrdinalIgnoreCase)))
+            phases.Add(FlowPhase.DecodeEtl);
+        phases.Add(FlowPhase.ReadParse);
+        phases.Add(FlowPhase.StoreResults);
+        bool hasConsumers = (query?.Processors?.Count ?? 0) > 0
+                            || (query?.Outputs?.Count ?? 0) > 0
+                            || (query?.RulesConfigPaths?.Count ?? 0) > 0;
+        if (hasConsumers) phases.Add(FlowPhase.Consolidate);
+        if (EffectiveIndexingMode == FindPluginCore.Searching.IndexingMode.Eager)
+            phases.Add(FlowPhase.BuildIndex);
+        phases.Add(FlowPhase.OpenViewer);
+        phases.Add(FlowPhase.LoadFirstPage);
+        return phases;
     }
 
     public static SearchStatistics GetStats()

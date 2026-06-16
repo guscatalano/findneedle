@@ -58,6 +58,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Indexing mode ---
             SelectIndexingMode();
 
+            // --- Search progress ---
+            ShowStepHistoryCheck.IsChecked = ResultsViewerSettings.ShowStepHistory;
+
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
 
@@ -278,6 +281,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
         {
             ResultsViewerSettings.IndexingMode = mode;
         }
+    }
+
+    private void ShowStepHistoryCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.ShowStepHistory = ShowStepHistoryCheck.IsChecked == true;
     }
 
     // ----- Web viewer threshold -----

@@ -265,7 +265,7 @@
                     AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
                     <ProgressRing Width="48" Height="48" IsActive="True"/>
-                    <TextBlock Text="Loading results..." Foreground="White" FontSize="14"
+                    <TextBlock x:Name="LoadingOverlayText" Text="Loading results..." Foreground="White" FontSize="14"
                                HorizontalAlignment="Center"/>
                 </StackPanel>
             </Border>

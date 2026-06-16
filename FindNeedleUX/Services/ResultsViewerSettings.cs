@@ -163,6 +163,15 @@ public static class ResultsViewerSettings
         set { Data.IndexingMode = value.ToString(); Save(); }
     }
 
+    /// <summary>Show the completed-steps checklist above the current step in the search progress
+    /// spinner. On by default.</summary>
+    public const bool DefaultShowStepHistory = true;
+    public static bool ShowStepHistory
+    {
+        get => Data.ShowStepHistory ?? DefaultShowStepHistory;
+        set { Data.ShowStepHistory = value; Save(); }
+    }
+
     public const FindPluginCore.Searching.CacheReuseMode DefaultCacheReuseMode = FindPluginCore.Searching.CacheReuseMode.Prompt;
     public static FindPluginCore.Searching.CacheReuseMode CacheReuseMode
     {
@@ -312,6 +321,7 @@ public static class ResultsViewerSettings
         public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
         public string CacheReuseMode { get; set; }
         public string IndexingMode { get; set; }
+        public bool? ShowStepHistory { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public double? DetailsPanelHeight { get; set; }
     }

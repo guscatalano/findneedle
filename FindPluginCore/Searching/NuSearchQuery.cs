@@ -397,6 +397,7 @@ public class NuSearchQuery : ISearchQuery
             && OverrideStorageType != StorageType.InMemory
             && OverrideStorageType != StorageType.Hybrid)
         {
+            FlowProgress.Begin(FlowPhase.CheckCache);
             var path = _locations[0].GetName();
             if (System.IO.File.Exists(path))
             {
@@ -449,6 +450,7 @@ public class NuSearchQuery : ISearchQuery
                             int n = sql.GetStatistics().filteredRecordCount;
                             _stepnotifysink.progressSink.NotifyProgress(
                                 100, $"reusing cached results · {n:N0} rows");
+                            FlowProgress.Detail($"reused {n:N0} rows");
                             PerfLog.Log("cache.hit", ("path", System.IO.Path.GetFileName(path)),
                                 ("rows", n), ("mode", CacheReuseMode.ToString()));
                             Logger.Instance.Log($"Cache hit for {path}: {n} rows. Skipping scan.");
@@ -463,11 +465,13 @@ public class NuSearchQuery : ISearchQuery
                                 0, "cache declined · rescanning…");
                             PerfLog.Log("cache.declined", ("path", System.IO.Path.GetFileName(path)));
                             Logger.Instance.Log($"Cache declined for {path}; running fresh scan.");
+                            FlowProgress.Detail("declined · rescanning");
                         }
                     }
                     else
                     {
                         PerfLog.Log("cache.miss", ("path", System.IO.Path.GetFileName(path)));
+                        FlowProgress.Detail("no usable cache · scanning");
                     }
                 }
                 catch (Exception ex)
@@ -480,10 +484,12 @@ public class NuSearchQuery : ISearchQuery
         var count = 1;
         var total = _locations.Count;
         _ = PluginManager.GetSingleton();
+        FlowProgress.Begin(FlowPhase.OpenLocations);
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) return;
             Logger.Instance.Log($"Loading location {count}/{total}: {loc.GetName()}");
+            FlowProgress.Detail(System.IO.Path.GetFileName(loc.GetName()?.TrimEnd('\\', '/')) ?? "");
             if (loc is FindNeedlePluginLib.Interfaces.IReportProgress reportable)
             {
                 reportable.SetProgressSink(_stepnotifysink.progressSink);
@@ -546,6 +552,7 @@ public class NuSearchQuery : ISearchQuery
         var total = _locations.Count;
         var pluginManager = PluginManager.GetSingleton();
         var useSync = pluginManager.config?.UseSynchronousSearch ?? false;
+        FlowProgress.Begin(FlowPhase.ReadParse);
         foreach (var loc in _locations)
         {
             if (cancellationToken.IsCancellationRequested) break;
@@ -649,6 +656,11 @@ public class NuSearchQuery : ISearchQuery
                             _stepnotifysink.progressSink.NotifyProgress(
                                 pct,
                                 $"[{locIdxCapture}/{totalCapture}] scanning {nameCapture} · {rowsText}{etaText} · {storageCapture}");
+                            // Structured flow detail: metric text + storage suffix, with percent in
+                            // its own field (no [i/j]/name noise, no ETA in the metric).
+                            FlowProgress.Detail($"{rowsText} · {storageCapture}",
+                                estCapture.HasValue && estCapture.Value > 0
+                                    ? Math.Clamp((int)(n * 100L / estCapture.Value), 0, 100) : (int?)null);
                         }
                     }, cancellationToken).Wait();
                 }
@@ -702,6 +714,7 @@ public class NuSearchQuery : ISearchQuery
                 }
             }
 
+            if (filteredBatch.Count > 0) FlowProgress.Begin(FlowPhase.StoreResults);
             if (filteredBatch.Count > 0 && _resultStorage is SqliteStorage sqlitePass)
             {
                 // SqliteStorage exposes a progress callback overload — fires every 500 rows so
@@ -721,6 +734,8 @@ public class NuSearchQuery : ISearchQuery
                     _stepnotifysink.progressSink.NotifyProgress(
                         pct,
                         $"[{locIdx}/{totCap}] indexing {nameCap} · {inserted:N0} / {filteredTotal:N0} rows · {storageCap}");
+                    FlowProgress.Detail($"{inserted:N0} / {filteredTotal:N0} rows · {storageCap}",
+                        filteredTotal > 0 ? Math.Clamp((int)(inserted * 100L / filteredTotal), 0, 100) : (int?)null);
                 });
             }
             else if (filteredBatch.Count > 0)
@@ -774,6 +789,7 @@ public class NuSearchQuery : ISearchQuery
             _stepnotifysink.progressSink.NotifyProgress(
                 100, $"consolidating {known:N0} rows from {storageLabel}…");
 
+            FlowProgress.Begin(FlowPhase.Consolidate);
             using (PerfLog.Scope("consolidate", ("known_rows", known), ("storage", storageLabel)))
             {
                 _resultStorage.GetFilteredResultsInBatches(batch =>
@@ -787,6 +803,8 @@ public class NuSearchQuery : ISearchQuery
                         lastReport = gathered;
                         _stepnotifysink.progressSink.NotifyProgress(
                             100, $"consolidating · {gathered:N0} / {known:N0} rows · {storageLabel}");
+                        FlowProgress.Detail($"{gathered:N0} / {known:N0} rows · {storageLabel}",
+                            known > 0 ? Math.Clamp((int)(gathered * 100L / known), 0, 100) : (int?)null);
                     }
                 }, 1000, cancellationToken);
             }
@@ -837,8 +855,12 @@ public class NuSearchQuery : ISearchQuery
         {
             try
             {
+                FlowProgress.Begin(FlowPhase.BuildIndex);
                 using (PerfLog.Scope("search.build_index"))
-                    _resultStorage.BuildSearchIndex(cancellationToken);
+                    _resultStorage.BuildSearchIndex(cancellationToken,
+                        (indexed, totalRows) => FlowProgress.Detail(
+                            $"{indexed:N0} / {totalRows:N0} rows",
+                            totalRows > 0 ? (int)(indexed * 100 / totalRows) : (int?)null));
             }
             catch (Exception ex)
             {
