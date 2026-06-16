@@ -552,6 +552,26 @@ public class NuSearchQuery : ISearchQuery
         var total = _locations.Count;
         var pluginManager = PluginManager.GetSingleton();
         var useSync = pluginManager.config?.UseSynchronousSearch ?? false;
+
+        // ----- Streaming-to-disk fast path (constant memory) -----
+        // For the "just view a huge log" case — no filters, no rules/processors/outputs (so no
+        // in-RAM list is needed), SQLite storage, async scan — we can write each batch to the
+        // filtered store as it arrives and never retain it. Without this we'd accumulate the entire
+        // result set in `rawResults` just to hand it to one post-scan AddFilteredBatch, holding every
+        // row alive (a 5M-row .etl peaked ~2.9 GB purely on that). synchronous=OFF + journal=MEMORY
+        // make per-batch transactions cheap, so streaming costs the same total insert work but keeps
+        // peak RAM to ~one batch. Any filters/rules/processors/outputs, sync scan, or non-SQLite
+        // storage fall back to the accumulate-then-store path below.
+        bool noFilters = _filters == null || _filters.Count == 0;
+        bool willMaterializeList =
+            LoadedRules != null
+            || (_processors != null && _processors.Count > 0)
+            || (_outputs != null && _outputs.Count > 0);
+        bool streamFilteredDuringScan =
+            !useSync && noFilters && !willMaterializeList && _resultStorage is SqliteStorage;
+        if (streamFilteredDuringScan)
+            Logger.Instance.Log("Step2: streaming filtered rows straight to SQLite (constant memory, no rawResults retention)");
+
         FlowProgress.Begin(FlowPhase.ReadParse);
         foreach (var loc in _locations)
         {
@@ -592,6 +612,9 @@ public class NuSearchQuery : ISearchQuery
             var locStart = Environment.TickCount64;
             loc.SetSearchDepth(_depth);
             List<ISearchResult> rawResults = new();
+            // Running row count for the streaming path (rawResults stays empty there, so we can't
+            // use rawResults.Count for the progress denominator).
+            int streamedCount = 0;
             if (!useSync)
             {
                 // Throttled per-batch status update so the user sees rows climbing during the
@@ -611,11 +634,21 @@ public class NuSearchQuery : ISearchQuery
                 {
                     loc.SearchWithCallback(batch => {
                         if (cancellationToken.IsCancellationRequested) return;
-                        rawResults.AddRange(batch);
-                        Logger.Instance.Log($"SearchWithCallback for {loc.GetName()} returned batch of {batch.Count} raw results");
-                        _resultStorage.AddRawBatch(batch, cancellationToken);
+                        // Constant-memory path: write filtered straight to disk and don't retain.
+                        // Otherwise accumulate for the post-scan filter/store/consolidate steps.
+                        if (streamFilteredDuringScan)
+                        {
+                            _resultStorage.AddRawBatch(batch, cancellationToken);
+                            _resultStorage.AddFilteredBatch(batch, cancellationToken);
+                            streamedCount += batch.Count;
+                        }
+                        else
+                        {
+                            rawResults.AddRange(batch);
+                            _resultStorage.AddRawBatch(batch, cancellationToken);
+                        }
 
-                        int n = rawResults.Count;
+                        int n = streamFilteredDuringScan ? streamedCount : rawResults.Count;
                         long now = Environment.TickCount64;
                         if (n - lastReportedRows >= 5000 || now - lastReportMs >= 250)
                         {
@@ -683,6 +716,23 @@ public class NuSearchQuery : ISearchQuery
                 {
                     Logger.Instance.Log($"Search not implemented for {loc.GetName()}");
                 }
+            }
+
+            // Streaming path already wrote filtered rows to disk during the scan (rawResults is
+            // empty) — nothing left to store for this location.
+            if (streamFilteredDuringScan)
+            {
+                Logger.Instance.Log($"Results streamed to storage for location: {loc.GetName()} ({streamedCount:N0} rows)");
+                int locEndPctStream = locBasePercent + locSpan;
+                _stepnotifysink.progressSink.NotifyProgress(
+                    locEndPctStream,
+                    $"[{count}/{total}] done {basename} · {SafeFilteredCount():N0} rows · {storageLabel}");
+                PerfLog.Log("location.end", ("idx", count), ("name", basename),
+                    ("rows_total", SafeFilteredCount()),
+                    ("rows_this_loc_raw", streamedCount),
+                    ("elapsed_ms", Environment.TickCount64 - locStart));
+                count++;
+                continue;
             }
 
             // ----- One bulk AddFilteredBatch per location -----

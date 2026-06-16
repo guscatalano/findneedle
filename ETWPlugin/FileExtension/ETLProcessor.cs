@@ -32,6 +32,15 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
 
     private int _badlyFormattedCount = 0;
 
+    // A modern (non-WPP) .etl decodes via the TraceEvent library. We *defer* that decode to the
+    // consumer instead of doing it eagerly in DoPreProcessing: GetResultsWithCallback streams it
+    // straight into batches (→ storage) without ever building the full in-memory list, so a 5M-row
+    // trace costs ~one batch of RAM instead of all rows at once. GetResults() (the legacy/sync
+    // contract) still materializes the list lazily on first call. _decodedToList guards that the
+    // eager decode runs at most once.
+    private bool _traceEventModern = false;
+    private bool _decodedToList = false;
+
     public ETLProcessor()
     {
         Logger.Instance.Log("ETLProcessor constructed");
@@ -85,11 +94,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             // "Unknown" line per event. Decode directly with TraceEvent instead.
             if (LooksLikeModernTrace(inputfile, cancellationToken))
             {
-                Logger.Instance.Log($"{inputfile} is a modern (non-WPP) trace; decoding with TraceEvent, skipping tracefmt");
-                _progressSink?.NotifyProgress(20, "Decoding ETL with TraceEvent");
-                DecodeWithTraceEvent(cancellationToken);
-                Logger.Instance.Log($"DoPreProcessing complete for {inputfile} (TraceEvent, {results.Count} rows)");
-                _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
+                // Don't decode here — defer to the consumer so the streaming search path
+                // (GetResultsWithCallback) can pump events straight to storage without ever
+                // holding the whole trace in RAM. GetResults() decodes lazily for legacy callers.
+                Logger.Instance.Log($"{inputfile} is a modern (non-WPP) trace; will decode with TraceEvent on demand (deferred)");
+                _traceEventModern = true;
+                _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile} (decode deferred)");
                 return;
             }
 
@@ -239,11 +249,27 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         return modern;
     }
 
+    /// <summary>Eager decode into the retained <see cref="results"/> list (legacy GetResults path).</summary>
     private void DecodeWithTraceEvent(CancellationToken cancellationToken)
+        => DecodeWithTraceEvent(line => results.Add(line), cancellationToken, reportFlow: true);
+
+    /// <summary>
+    /// Decode an .etl via the TraceEvent library, handing each decoded line to <paramref name="emit"/>.
+    /// The streaming search path passes a sink that batches straight to storage (so the full set is
+    /// never held); the legacy path passes <c>results.Add</c>. Progress is tracked from a local
+    /// counter rather than <c>results.Count</c> so it works regardless of whether rows are retained.
+    ///
+    /// <paramref name="reportFlow"/> gates the cross-layer FlowProgress updates. On the streaming
+    /// search path the engine's scan callback already owns the "Reading &amp; parsing" step and reports
+    /// it as it writes rows to storage; if the decoder *also* wrote that step (with an estimate "~%"),
+    /// the two alternated every few hundred ms and the percent/"~" flickered. So streaming passes
+    /// false and stays silent; only the eager/sync path (no other reporter) reports.
+    /// </summary>
+    private void DecodeWithTraceEvent(Action<ETLLogLine> emit, CancellationToken cancellationToken, bool reportFlow)
     {
         try
         {
-            FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
+            if (reportFlow) FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
             // No exact event count for an .etl, so estimate total events from the file size using a
             // typical bytes-per-event figure — surfaced as a clearly-marked "~%" estimate.
             const long AvgEtlBytesPerEvent = 180;
@@ -255,25 +281,26 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             // a multi-million-event .etl it would sit silent for a long time. Report a running count,
             // throttled by wall-clock so we don't flood the sink (no reliable total mid-decode).
             long lastReportMs = Environment.TickCount64;
+            long produced = 0;
             void Handle(Microsoft.Diagnostics.Tracing.TraceEvent e)
             {
                 if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
                 var line = new ETLLogLine(e);
                 var src = line.GetSource() ?? string.Empty;
                 providers[src] = providers.TryGetValue(src, out var c) ? c + 1 : 1;
-                results.Add(line);
+                emit(line);
+                produced++;
 
                 long now = Environment.TickCount64;
                 if (now - lastReportMs >= 300)
                 {
                     lastReportMs = now;
-                    // No cheap total-event count for an .etl, but the file header gives the session
-                    // time span — so progress = how far this event's timestamp is through it.
                     // Rough progress from the file-size estimate (marked "~%" since it's not exact).
                     int? pct = estTotalEvents > 0
-                        ? Math.Clamp((int)(results.Count * 100L / estTotalEvents), 1, 99) : (int?)null;
-                    _progressSink?.NotifyProgress($"Decoding ETL with TraceEvent… {results.Count:N0} events");
-                    FindNeedlePluginLib.FlowProgress.Detail($"{results.Count:N0} events", pct, estimate: true);
+                        ? Math.Clamp((int)(produced * 100L / estTotalEvents), 1, 99) : (int?)null;
+                    _progressSink?.NotifyProgress($"Decoding ETL with TraceEvent… {produced:N0} events");
+                    if (reportFlow)
+                        FindNeedlePluginLib.FlowProgress.Detail($"{produced:N0} events", pct, estimate: true);
                 }
             }
 
@@ -284,8 +311,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             source.Process();
             // Decode finished — snap to 100% with the true count so the estimate doesn't linger at
             // ~97% (it never reaches 100 mid-decode, and post-decode Step 1 work keeps this phase up).
-            FindNeedlePluginLib.FlowProgress.Detail($"{results.Count:N0} events", 100, estimate: false);
-            Logger.Instance.Log($"TraceEvent decode produced {results.Count} rows for {inputfile}");
+            if (reportFlow)
+                FindNeedlePluginLib.FlowProgress.Detail($"{produced:N0} events", 100, estimate: false);
+            Logger.Instance.Log($"TraceEvent decode produced {produced} rows for {inputfile}");
         }
         catch (Exception ex)
         {
@@ -341,12 +369,46 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
 
     public List<ISearchResult> GetResults()
     {
+        // Legacy/sync contract: callers expect the full materialized list. For a deferred modern
+        // trace, decode into the list on first request. (The streaming search path uses
+        // GetResultsWithCallback instead and never lands here, so the full list is never built.)
+        if (_traceEventModern && !_decodedToList && results.Count == 0)
+        {
+            Logger.Instance.Log($"GetResults: lazily decoding deferred modern trace into list for {inputfile}");
+            DecodeWithTraceEvent(CancellationToken.None);
+            _decodedToList = true;
+        }
         Logger.Instance.Log($"GetResults called for ETLProcessor, file: {inputfile}, results: {results.Count}");
         return results;
     }
 
     public async Task GetResultsWithCallback(Action<List<ISearchResult>> onBatch, CancellationToken cancellationToken = default, int batchSize = 1000)
     {
+        // Streaming path for a deferred modern trace that hasn't been materialized: decode straight
+        // into batches and hand each to onBatch (→ storage) without ever retaining the full set.
+        // This is what keeps a 5M-row .etl from piling every row into RAM at once.
+        if (_traceEventModern && !_decodedToList && results.Count == 0)
+        {
+            var streamBatch = new List<ISearchResult>(batchSize);
+            DecodeWithTraceEvent(line =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                streamBatch.Add(line);
+                if (streamBatch.Count >= batchSize)
+                {
+                    onBatch(streamBatch);
+                    streamBatch = new List<ISearchResult>(batchSize);
+                }
+            }, cancellationToken, reportFlow: false);
+            if (streamBatch.Count > 0 && !cancellationToken.IsCancellationRequested)
+            {
+                onBatch(streamBatch);
+            }
+            await Task.CompletedTask;
+            return;
+        }
+
+        // Already materialized (text / WPP path, or a prior GetResults) → batch from the list.
         var batch = new List<ISearchResult>(batchSize);
         foreach (var result in results)
         {
