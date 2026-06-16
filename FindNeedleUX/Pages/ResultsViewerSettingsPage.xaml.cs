@@ -52,6 +52,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Indexing mode ---
             SelectIndexingMode();
 
+            // --- Search submit mode ---
+            SelectSearchSubmitMode();
+
             // --- Search progress ---
             ShowStepHistoryCheck.IsChecked = ResultsViewerSettings.ShowStepHistory;
 
@@ -251,6 +254,31 @@ public sealed partial class ResultsViewerSettingsPage : Page
             && Enum.TryParse<FindPluginCore.Searching.IndexingMode>(tag, ignoreCase: true, out var mode))
         {
             ResultsViewerSettings.IndexingMode = mode;
+        }
+    }
+
+    // ----- Search submit mode -----
+    private void SelectSearchSubmitMode()
+    {
+        var current = ResultsViewerSettings.SearchSubmitMode.ToString();
+        foreach (var item in SearchSubmitModeCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            {
+                SearchSubmitModeCombo.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void SearchSubmitModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (SearchSubmitModeCombo.SelectedItem is ComboBoxItem item
+            && item.Tag is string tag
+            && Enum.TryParse<FindNeedleUX.Services.SearchSubmitMode>(tag, ignoreCase: true, out var mode))
+        {
+            ResultsViewerSettings.SearchSubmitMode = mode;
         }
     }
 

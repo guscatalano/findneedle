@@ -131,6 +131,25 @@ public static class ResultsViewerSettings
         set { Data.IndexingMode = value.ToString(); Save(); }
     }
 
+    /// <summary>
+    /// How the result viewer's search box submits searches:
+    ///   Auto    — live until a search is slow (>~1s) or the log is large, then Enter-to-search (default)
+    ///   Live    — search on every keystroke
+    ///   OnEnter — search only when Enter is pressed
+    /// </summary>
+    public const SearchSubmitMode DefaultSearchSubmitMode = SearchSubmitMode.Auto;
+    public static SearchSubmitMode SearchSubmitMode
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(Data.SearchSubmitMode)
+                && Enum.TryParse<SearchSubmitMode>(Data.SearchSubmitMode, ignoreCase: true, out var parsed))
+                return parsed;
+            return DefaultSearchSubmitMode;
+        }
+        set { Data.SearchSubmitMode = value.ToString(); Save(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -288,6 +307,7 @@ public static class ResultsViewerSettings
         public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
         public string CacheReuseMode { get; set; }
         public string IndexingMode { get; set; }
+        public string SearchSubmitMode { get; set; }
         public bool? ShowStepHistory { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public double? DetailsPanelHeight { get; set; }

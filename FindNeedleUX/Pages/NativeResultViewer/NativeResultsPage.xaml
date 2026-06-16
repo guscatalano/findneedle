@@ -65,7 +65,14 @@
                 <TextBox x:Name="SearchBox" Width="280" Height="32"
                          PlaceholderText="Search all columns... (Ctrl+F)"
                          TextChanged="SearchBox_TextChanged"
+                         KeyDown="SearchBox_KeyDown"
                          AutomationProperties.Name="Search results"/>
+                <!-- Shown when the viewer is in Enter-to-search mode (large/slow log) so the user
+                     knows mid-typing doesn't search. Hidden in live mode. -->
+                <TextBlock x:Name="SearchHint" VerticalAlignment="Center" FontSize="11"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Visibility="Collapsed"
+                           AutomationProperties.Name="Search submit hint"/>
 
                 <Button Content="Columns ▾" Click="ColumnsButton_Click" Height="32"
                         AutomationProperties.Name="Toggle column visibility"/>

@@ -142,6 +142,27 @@
                 </StackPanel>
             </Border>
 
+            <!-- Search box submit -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Search box" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="When the search box runs a search. Searching a huge log on every keystroke can make typing lag, so you can require pressing Enter instead."/>
+                    <ComboBox x:Name="SearchSubmitModeCombo" Width="360"
+                              SelectionChanged="SearchSubmitModeCombo_SelectionChanged"
+                              AutomationProperties.Name="Search submit mode">
+                        <ComboBoxItem Content="Auto — live, but Enter-to-search on large/slow logs (default)" Tag="Auto"/>
+                        <ComboBoxItem Content="Live — search as you type"  Tag="Live"/>
+                        <ComboBoxItem Content="On Enter — only search when you press Enter" Tag="OnEnter"/>
+                    </ComboBox>
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                               Text="Auto keeps live search on small logs and switches to Enter-to-search once a search takes about a second (or the log is large), then back to live once searches are fast again."/>
+                </StackPanel>
+            </Border>
+
             <!-- Search progress -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

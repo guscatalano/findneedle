@@ -50,6 +50,12 @@ public sealed partial class NativeResultsPage : Page
         foreach (var col in ViewModel.Columns)
             col.VisibilityChanged += OnColumnVisibilityChanged;
 
+        // Re-evaluate the adaptive search-submit mode whenever the row count changes. A streaming
+        // search opens the viewer before all rows have landed, so the count grows after load; without
+        // this, a huge log could stay in (laggy) live-search mode because the seed ran while the
+        // count was still small.
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+
         // Debounce for lazy index building: only act after the user pauses typing, so live search
         // keystrokes don't kick off the (expensive) index build on the 3rd character.
         _lazyIndexTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
@@ -58,6 +64,17 @@ public sealed partial class NativeResultsPage : Page
 
     private readonly Microsoft.UI.Xaml.DispatcherTimer _lazyIndexTimer;
     private bool _lazyPromptShown; // don't re-prompt for the >30s warning every keystroke
+
+    // ----- Adaptive search submit (live keystrokes vs Enter-to-search) -----
+    // Searching runs synchronously on the UI thread, so on a multi-million-row log a per-keystroke
+    // search blocks typing. Auto mode keeps live search for small/fast logs but flips to
+    // Enter-to-search once a search is slow (or the log is large), and flips back once it's fast.
+    // The decision logic lives in (testable) SearchSubmitPolicy; the page just holds the state.
+    private SearchSubmitMode _searchSubmitMode = SearchSubmitMode.Auto;
+    private bool _autoEnterActive;             // in Auto: currently requiring Enter?
+
+    /// <summary>Whether the current mode means "don't search until Enter".</summary>
+    private bool RequireEnterToSearch() => SearchSubmitPolicy.RequireEnter(_searchSubmitMode, _autoEnterActive);
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
@@ -101,6 +118,9 @@ public sealed partial class NativeResultsPage : Page
         MiddleLayerService.StateChanged -= OnMiddleLayerStateChanged;
         MiddleLayerService.StateChanged += OnMiddleLayerStateChanged;
         UpdateIndexingIndicator();
+
+        // Now that the row count is known, seed the adaptive search-submit mode.
+        RefreshSearchSubmitMode();
     }
 
     /// <summary>
@@ -341,6 +361,7 @@ public sealed partial class NativeResultsPage : Page
     {
         TimeFormatConverter.Format = ResultsViewerSettings.TimeFormat;
         ViewModel.ApplyTheme(ResultsViewerSettings.ThemeName);
+        RefreshSearchSubmitMode();
     }
 
     private void ApplyPersistedLevelOverrides()
@@ -552,7 +573,40 @@ public sealed partial class NativeResultsPage : Page
     // ----- Search + filter inputs -----
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        ViewModel.SearchText = SearchBox.Text; // live filter (uses FTS if built, else LIKE)
+        if (RequireEnterToSearch())
+        {
+            // Enter-to-search mode: don't run a search mid-typing. Just surface the hint so the
+            // user knows their edits aren't applied until they press Enter.
+            UpdateSearchHint(hasPendingEdit: !string.Equals(SearchBox.Text, ViewModel.SearchText ?? "", StringComparison.Ordinal));
+            return;
+        }
+        RunSearchFromBox(); // live
+    }
+
+    private void SearchBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == global::Windows.System.VirtualKey.Enter)
+        {
+            e.Handled = true;
+            RunSearchFromBox(); // commit now, regardless of mode
+        }
+    }
+
+    /// <summary>
+    /// Apply the search box text to the filter (synchronous; uses FTS if built, else LIKE), timing
+    /// it so Auto mode can adapt between live and Enter-to-search, then nudge the lazy index build.
+    /// </summary>
+    private void RunSearchFromBox()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        ViewModel.SearchText = SearchBox.Text; // triggers ReloadFromSource on this thread
+        sw.Stop();
+        long ms = sw.ElapsedMilliseconds;
+
+        if (_searchSubmitMode == SearchSubmitMode.Auto)
+            _autoEnterActive = SearchSubmitPolicy.NextAutoEnterState(_autoEnterActive, ms);
+        UpdateSearchHint(hasPendingEdit: false, lastSearchMs: ms);
+
         // Lazy mode: (re)start the debounce so we only consider building the index once typing pauses.
         if (MiddleLayerService.EffectiveIndexingMode == FindPluginCore.Searching.IndexingMode.Lazy
             && !MiddleLayerService.IsSearchIndexBuilt)
@@ -560,6 +614,40 @@ public sealed partial class NativeResultsPage : Page
             _lazyIndexTimer.Stop();
             _lazyIndexTimer.Start();
         }
+    }
+
+    /// <summary>Show/hide the "Press Enter to search" hint based on the effective submit mode.</summary>
+    private void UpdateSearchHint(bool hasPendingEdit, long lastSearchMs = -1)
+    {
+        if (SearchHint == null) return;
+        if (RequireEnterToSearch())
+        {
+            SearchHint.Visibility = Visibility.Visible;
+            SearchHint.Text = hasPendingEdit ? "↵ Press Enter to search" : "↵ Enter to search";
+        }
+        else
+        {
+            SearchHint.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Read the persisted submit mode and, for Auto, seed Enter-to-search when the log is large and
+    /// the FTS index isn't built yet (so the very first character doesn't pay a multi-second search).
+    /// Measured latency in <see cref="RunSearchFromBox"/> refines it from there.
+    /// </summary>
+    private void RefreshSearchSubmitMode()
+    {
+        _searchSubmitMode = ResultsViewerSettings.SearchSubmitMode;
+        _autoEnterActive = SearchSubmitPolicy.ShouldSeedEnterToSearch(
+            _searchSubmitMode, ViewModel.TotalCount, MiddleLayerService.IsSearchIndexBuilt);
+        UpdateSearchHint(hasPendingEdit: false);
+    }
+
+    private void OnViewModelPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalCount))
+            DispatcherQueue.TryEnqueue(RefreshSearchSubmitMode);
     }
     private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
     private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;
