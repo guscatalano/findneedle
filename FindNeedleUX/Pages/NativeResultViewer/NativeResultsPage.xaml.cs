@@ -728,9 +728,9 @@ public sealed partial class NativeResultsPage : Page
         g.Children.Clear();
         g.RowDefinitions.Clear();
         g.ColumnDefinitions.Clear();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });          // label
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // value
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });               // Copy
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });           // label
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // value
         g.ColumnSpacing = 8;
         g.RowSpacing = 6;
 
@@ -739,13 +739,25 @@ public sealed partial class NativeResultsPage : Page
             int row = g.RowDefinitions.Count;
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
+            var copy = new Button
+            {
+                Content = new FontIcon { Glyph = "", FontSize = 14 }, // Copy (Segoe MDL2 Assets)
+                Padding = new Thickness(6, 2, 6, 2),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            var captured = value ?? "";
+            copy.Click += (_, __) => CopyToClipboard(captured);
+            ToolTipService.SetToolTip(copy, $"Copy {label}");
+            Grid.SetRow(copy, row); Grid.SetColumn(copy, 0);
+            g.Children.Add(copy);
+
             var k = new TextBlock
             {
                 Text = label,
                 FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Top,
             };
-            Grid.SetRow(k, row); Grid.SetColumn(k, 0);
+            Grid.SetRow(k, row); Grid.SetColumn(k, 1);
             g.Children.Add(k);
 
             var text = new TextBlock
@@ -765,21 +777,8 @@ public sealed partial class NativeResultsPage : Page
                     HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 }
                 : text;
-            Grid.SetRow(valueElement, row); Grid.SetColumn(valueElement, 1);
+            Grid.SetRow(valueElement, row); Grid.SetColumn(valueElement, 2);
             g.Children.Add(valueElement);
-
-            var copy = new Button
-            {
-                Content = "Copy",
-                FontSize = 12,
-                Padding = new Thickness(8, 2, 8, 2),
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            var captured = value ?? "";
-            copy.Click += (_, __) => CopyToClipboard(captured);
-            ToolTipService.SetToolTip(copy, $"Copy {label}");
-            Grid.SetRow(copy, row); Grid.SetColumn(copy, 2);
-            g.Children.Add(copy);
         }
     }
 
