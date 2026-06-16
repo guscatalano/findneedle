@@ -102,7 +102,7 @@ public sealed partial class NativeResultsPage : Page
         ApplyPersistedSettings();
         ApplyPersistedColumnDefaults();
         ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
-        ApplyDetailsPanelToggleState(ResultsViewerSettings.DetailsPanelVisible);
+        ApplyDetailsMode(ResultsViewerSettings.DetailsMode);
         ApplyPersistedPageSize();
         FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.LoadFirstPage);
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
@@ -219,32 +219,80 @@ public sealed partial class NativeResultsPage : Page
         if (FilterDockLabel != null) FilterDockLabel.Text = left ? "Left" : "Top";
     }
 
+    private DetailsMode _detailsMode = DetailsMode.Inrow;
+
     /// <summary>
-    /// Switches between the two row-detail modes.
-    ///   <c>visible=false</c> (default, "Inrow") — DataGrid shows an expandable details panel
-    ///     beneath the selected row via <see cref="DataGrid.RowDetailsTemplate"/>, no separate
-    ///     panel.
-    ///   <c>visible=true</c> ("Details panel") — the inline expand is suppressed and a
-    ///     persistent panel beneath the grid surfaces the selected row's full field set.
+    /// Applies one of the three row-detail modes (mutually exclusive):
+    ///   Inrow       — DataGrid expands the row inline (RowDetailsTemplate) on selection.
+    ///   BottomPanel — inline expand off; a persistent panel below the grid shows the selection.
+    ///   Popup       — inline expand off, no panel; double-clicking a row opens a details dialog.
     /// </summary>
-    private void ApplyDetailsPanelToggleState(bool visible)
+    private void ApplyDetailsMode(DetailsMode mode)
     {
-        DetailsPanelToggle.IsChecked = visible;
-        DetailsPanelToggleGlyph.Text = visible ? "▾" : "▸";
-        DetailsPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        _detailsMode = mode;
 
-        // Restore the user's last-chosen panel height (clamped to [Min, Max] in the setter).
-        if (visible) DetailsPanel.Height = ResultsViewerSettings.DetailsPanelHeight;
+        DetailsPanel.Visibility = mode == DetailsMode.BottomPanel ? Visibility.Visible : Visibility.Collapsed;
+        if (mode == DetailsMode.BottomPanel)
+            DetailsPanel.Height = ResultsViewerSettings.DetailsPanelHeight; // clamped in the setter
 
-        // The two modes are mutually exclusive: in details-panel mode the inline row expand is
-        // off, because having both would mean clicking a row puts the same data in two places.
-        ResultsGrid.RowDetailsVisibilityMode = visible
-            ? DataGridRowDetailsVisibilityMode.Collapsed
-            : DataGridRowDetailsVisibilityMode.VisibleWhenSelected;
+        // Inline row expand only in Inrow mode (otherwise the same data would show in two places).
+        ResultsGrid.RowDetailsVisibilityMode = mode == DetailsMode.Inrow
+            ? DataGridRowDetailsVisibilityMode.VisibleWhenSelected
+            : DataGridRowDetailsVisibilityMode.Collapsed;
 
-        // Re-populate so opening the panel immediately shows the current selection (or the
-        // placeholder if nothing's selected).
-        if (visible) RefreshDetailsPanel();
+        if (mode == DetailsMode.BottomPanel) RefreshDetailsPanel();
+
+        // Reflect in the toolbar.
+        if (DetailsInrowItem != null) DetailsInrowItem.IsChecked = mode == DetailsMode.Inrow;
+        if (DetailsPanelItem != null) DetailsPanelItem.IsChecked = mode == DetailsMode.BottomPanel;
+        if (DetailsPopupItem != null) DetailsPopupItem.IsChecked = mode == DetailsMode.Popup;
+        if (DetailsModeLabel != null)
+            DetailsModeLabel.Text = mode switch
+            {
+                DetailsMode.BottomPanel => ": Bottom",
+                DetailsMode.Popup       => ": Popup",
+                _                       => ": Inrow",
+            };
+    }
+
+    private void SetDetailsMode(DetailsMode mode)
+    {
+        ApplyDetailsMode(mode);
+        ResultsViewerSettings.DetailsMode = mode;
+    }
+
+    private void DetailsModeInrow_Click(object sender, RoutedEventArgs e)       => SetDetailsMode(DetailsMode.Inrow);
+    private void DetailsModeBottomPanel_Click(object sender, RoutedEventArgs e) => SetDetailsMode(DetailsMode.BottomPanel);
+    private void DetailsModePopup_Click(object sender, RoutedEventArgs e)       => SetDetailsMode(DetailsMode.Popup);
+
+    private async void ResultsGrid_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    {
+        if (_detailsMode != DetailsMode.Popup) return;
+        if (ResultsGrid.SelectedItem is LogLine line) await ShowRowPopupAsync(line);
+    }
+
+    private async System.Threading.Tasks.Task ShowRowPopupAsync(LogLine line)
+    {
+        var grid = new Grid { ColumnSpacing = 12, RowSpacing = 2 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        PopulateDetailsGrid(grid, line);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Log entry details",
+            Content = new ScrollViewer
+            {
+                Content = grid,
+                MaxHeight = 460,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            },
+            PrimaryButtonText = "Copy as JSON",
+            CloseButtonText = "Close",
+            XamlRoot = this.XamlRoot,
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) CopyToClipboard(RowAsJson(line));
     }
 
     // ----- Details panel resize -----
@@ -551,19 +599,8 @@ public sealed partial class NativeResultsPage : Page
     }
 
     // ----- Details panel mode -----
-    private void DetailsPanelToggle_Click(object sender, RoutedEventArgs e)
-    {
-        var visible = DetailsPanelToggle.IsChecked == true;
-        ApplyDetailsPanelToggleState(visible);
-        ResultsViewerSettings.DetailsPanelVisible = visible;
-    }
-
     private void DetailsPanelClose_Click(object sender, RoutedEventArgs e)
-    {
-        // Closing the panel is equivalent to switching back to Inrow mode.
-        ApplyDetailsPanelToggleState(false);
-        ResultsViewerSettings.DetailsPanelVisible = false;
-    }
+        => SetDetailsMode(DetailsMode.Inrow); // closing the bottom panel returns to Inrow
 
     private void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -596,37 +633,36 @@ public sealed partial class NativeResultsPage : Page
             return;
         }
 
-        AppendDetailRow("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        AppendDetailRow("Time",        line.Time);
-        AppendDetailRow("Provider",    line.Provider);
-        AppendDetailRow("TaskName",    line.TaskName);
-        AppendDetailRow("Message",     line.Message);
-        AppendDetailRow("Source",      line.Source);
-        AppendDetailRow("Level",       line.Level);
-        AppendDetailRow("MachineName", line.MachineName);
-        AppendDetailRow("Username",    line.Username);
-        AppendDetailRow("OpCode",      line.OpCode);
+        PopulateDetailsGrid(DetailsPanelGrid, line);
     }
 
-    private void AppendDetailRow(string label, string value)
+    /// <summary>Fill a 2-column (label/value) grid with a row's fields. Shared by the bottom panel
+    /// and the double-click popup.</summary>
+    private static void PopulateDetailsGrid(Grid g, LogLine line)
     {
-        int row = DetailsPanelGrid.RowDefinitions.Count;
-        DetailsPanelGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var k = new TextBlock { Text = label, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        Grid.SetRow(k, row);
-        Grid.SetColumn(k, 0);
-        DetailsPanelGrid.Children.Add(k);
-
-        var v = new TextBlock
+        g.Children.Clear();
+        g.RowDefinitions.Clear();
+        void Row(string label, string value)
         {
-            Text = value ?? "",
-            TextWrapping = TextWrapping.Wrap,
-            IsTextSelectionEnabled = true,
-        };
-        Grid.SetRow(v, row);
-        Grid.SetColumn(v, 1);
-        DetailsPanelGrid.Children.Add(v);
+            int row = g.RowDefinitions.Count;
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var k = new TextBlock { Text = label, FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold };
+            Grid.SetRow(k, row); Grid.SetColumn(k, 0);
+            g.Children.Add(k);
+            var v = new TextBlock { Text = value ?? "", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+            Grid.SetRow(v, row); Grid.SetColumn(v, 1);
+            g.Children.Add(v);
+        }
+        Row("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Row("Time",        line.Time);
+        Row("Provider",    line.Provider);
+        Row("TaskName",    line.TaskName);
+        Row("Message",     line.Message);
+        Row("Source",      line.Source);
+        Row("Level",       line.Level);
+        Row("MachineName", line.MachineName);
+        Row("Username",    line.Username);
+        Row("OpCode",      line.OpCode);
     }
 
     private void DetailsPanelCopyJson_Click(object sender, RoutedEventArgs e)

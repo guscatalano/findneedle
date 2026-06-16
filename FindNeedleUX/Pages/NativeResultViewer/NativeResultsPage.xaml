@@ -123,15 +123,24 @@
                     </Button.Flyout>
                 </Button>
 
-                <ToggleButton x:Name="DetailsPanelToggle" Height="32"
-                              Click="DetailsPanelToggle_Click"
-                              AutomationProperties.Name="Show or hide the row details panel"
-                              ToolTipService.ToolTip="Two view modes: Inrow (click a row to expand details inline) or Details panel (persistent panel beneath the grid).">
+                <!-- Row details: three modes — inline expand, bottom panel, or double-click popup. -->
+                <Button x:Name="DetailsModeButton" Height="32"
+                        AutomationProperties.Name="Row details mode"
+                        ToolTipService.ToolTip="How a row's full details are shown">
                     <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock x:Name="DetailsPanelToggleGlyph" Text="▸" FontSize="11"/>
                         <TextBlock Text="Details"/>
+                        <TextBlock x:Name="DetailsModeLabel" Text=": Inrow"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="▾" FontSize="11"/>
                     </StackPanel>
-                </ToggleButton>
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <RadioMenuFlyoutItem x:Name="DetailsInrowItem"  Text="Inrow — click a row to expand"          GroupName="detailsMode" Click="DetailsModeInrow_Click"/>
+                            <RadioMenuFlyoutItem x:Name="DetailsPanelItem"  Text="Bottom panel — docked below the grid"   GroupName="detailsMode" Click="DetailsModeBottomPanel_Click"/>
+                            <RadioMenuFlyoutItem x:Name="DetailsPopupItem"  Text="Popup — double-click a row for a dialog" GroupName="detailsMode" Click="DetailsModePopup_Click"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
 
                 <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
                            VerticalAlignment="Center" Margin="16,0,0,0"
@@ -296,6 +305,7 @@
                               LoadingRow="ResultsGrid_LoadingRow"
                               Sorting="ResultsGrid_Sorting"
                               RightTapped="ResultsGrid_RightTapped"
+                              DoubleTapped="ResultsGrid_DoubleTapped"
                               SelectionChanged="ResultsGrid_SelectionChanged"
                               RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
                               RowDetailsVisibilityMode="VisibleWhenSelected"

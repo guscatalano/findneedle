@@ -61,6 +61,25 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// How the viewer shows a row's details: Inrow (click expands), BottomPanel (docked panel), or
+    /// Popup (double-click dialog). Migrates from the legacy <see cref="DetailsPanelVisible"/> bool.
+    /// Per-window UI state (no Changed broadcast).
+    /// </summary>
+    public const DetailsMode DefaultDetailsMode = DetailsMode.Inrow;
+    public static DetailsMode DetailsMode
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(Data.DetailsMode)
+                && Enum.TryParse<DetailsMode>(Data.DetailsMode, ignoreCase: true, out var parsed))
+                return parsed;
+            if (Data.DetailsPanelVisible == true) return DetailsMode.BottomPanel; // legacy migration
+            return DefaultDetailsMode;
+        }
+        set { Data.DetailsMode = value.ToString(); Save(); /* no Changed: per-window UI state */ }
+    }
+
+    /// <summary>
     /// User-chosen height in pixels of the native viewer's details panel. Clamped to the
     /// [<see cref="MinDetailsPanelHeight"/>, <see cref="MaxDetailsPanelHeight"/>] range on read
     /// so a corrupt / out-of-range JSON value can't make the panel disappear or fill the screen.
@@ -327,6 +346,7 @@ public static class ResultsViewerSettings
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }
         public bool? DetailsPanelVisible { get; set; }
+        public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }
     }
 }
