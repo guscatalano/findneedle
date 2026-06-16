@@ -282,6 +282,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             source.Dynamic.All += Handle;
             source.Kernel.All += Handle;
             source.Process();
+            // Decode finished — snap to 100% with the true count so the estimate doesn't linger at
+            // ~97% (it never reaches 100 mid-decode, and post-decode Step 1 work keeps this phase up).
+            FindNeedlePluginLib.FlowProgress.Detail($"{results.Count:N0} events", 100, estimate: false);
             Logger.Instance.Log($"TraceEvent decode produced {results.Count} rows for {inputfile}");
         }
         catch (Exception ex)
@@ -317,14 +320,18 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     }
                 }
                 count++;
-                if (count % 100 == 0 && total > 0)
+                // Throttle progress to wall-clock (not every 100 rows). Logging every 100 rows wrote
+                // ~50,000 lines to the log on a 5M-row file and dominated this pass; PreLoad itself is
+                // a no-op for TraceEvent-decoded rows, so that logging was pure waste.
+                if (total > 0)
                 {
                     var now = DateTime.UtcNow;
-                    var seconds = (now - lastProgressTime).TotalSeconds;
-                    lastProgressTime = now;
-                    int percent = (int)(100.0 * count / total);
-                    Logger.Instance.Log($"Loaded {count} of {total} results into memory for {inputfile} (last 100: {seconds:F2}s, badly formatted: {_badlyFormattedCount})");
-                    _progressSink?.NotifyProgress(percent, $"Loaded {count} of {total} results into memory for {inputfile} (last 100: {seconds:F2}s, badly formatted: {_badlyFormattedCount})");
+                    if ((now - lastProgressTime).TotalMilliseconds >= 250)
+                    {
+                        lastProgressTime = now;
+                        _progressSink?.NotifyProgress((int)(100.0 * count / total),
+                            $"Loading results into memory… {count:N0} / {total:N0}");
+                    }
                 }
             }
         }
