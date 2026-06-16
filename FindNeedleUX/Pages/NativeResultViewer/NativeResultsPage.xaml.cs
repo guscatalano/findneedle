@@ -143,11 +143,80 @@ public sealed partial class NativeResultsPage : Page
             if (prefs.TryGetValue(col.Name, out var v)) col.IsVisible = v;
     }
 
+    private bool _filtersExpanded = true;
+    private FilterDock _filterDock = FilterDock.Top;
+
     private void ApplyFiltersToggleState(bool expanded)
     {
+        _filtersExpanded = expanded;
         FiltersToggle.IsChecked = expanded;
-        FiltersPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
         FiltersToggleGlyph.Text = expanded ? "▾" : "▸";
+        RefreshFilterLayout();
+    }
+
+    // ----- Filter pane docking (Top / Left) -----
+    private void FilterDockTop_Click(object sender, RoutedEventArgs e)  => SetFilterDock(FilterDock.Top);
+    private void FilterDockLeft_Click(object sender, RoutedEventArgs e) => SetFilterDock(FilterDock.Left);
+
+    private void SetFilterDock(FilterDock dock)
+    {
+        _filterDock = dock;
+        RefreshFilterLayout();
+        ResultsViewerSettings.FilterDock = dock; // persists + broadcasts (other open viewers re-lay-out)
+    }
+
+    /// <summary>
+    /// Place the single FiltersPanel in the active host (top row or left column), switch its rows
+    /// between horizontal (top) and vertical (left), and reflect the current expand/dock state in the
+    /// toolbar. Re-parenting keeps the same control instances, so bindings/handlers stay intact.
+    /// </summary>
+    private void RefreshFilterLayout()
+    {
+        if (FiltersPanel == null) return; // not yet loaded
+        bool left = _filterDock == FilterDock.Left;
+
+        // Move FiltersPanel into the host for the current dock (detach from the other first).
+        if (left && LeftFilterHost.Content != FiltersPanel)
+        {
+            TopFilterHost.Content = null;
+            LeftFilterHost.Content = FiltersPanel;
+        }
+        else if (!left && TopFilterHost.Content != FiltersPanel)
+        {
+            LeftFilterHost.Content = null;
+            TopFilterHost.Content = FiltersPanel;
+        }
+
+        // Rows stack vertically when docked left (narrow column), horizontally when on top.
+        var orientation = left ? Orientation.Vertical : Orientation.Horizontal;
+        if (TimeRowPanel   != null) TimeRowPanel.Orientation   = orientation;
+        if (FilterRowPanel != null) FilterRowPanel.Orientation = orientation;
+        if (LevelsRowPanel != null) LevelsRowPanel.Orientation = orientation;
+
+        // Left dock: let the inputs fill the column (fixed widths leave a ragged right edge in a
+        // narrow vertical stack). Top dock: restore the compact fixed widths for the horizontal row.
+        void Field(Control c, double topWidth)
+        {
+            if (c == null) return;
+            c.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+            c.Width = left ? double.NaN : topWidth;
+        }
+        Field(FromDatePicker, 160); Field(ToDatePicker, 160);
+        Field(ProviderFilterBox, 120); Field(TaskNameFilterBox, 140);
+        Field(MessageFilterBox, 220);  Field(SourceFilterBox, 140);
+        Field(LevelFilterCombo, 140);
+        if (TimeRangeArrow != null) // the "→" reads sideways between stacked pickers
+            TimeRangeArrow.Visibility = left ? Visibility.Collapsed : Visibility.Visible;
+
+        // Host visibility follows the expand state; the inactive host stays collapsed.
+        FiltersPanel.Visibility  = _filtersExpanded ? Visibility.Visible : Visibility.Collapsed;
+        LeftFilterHost.Visibility = (left  && _filtersExpanded) ? Visibility.Visible : Visibility.Collapsed;
+        TopFilterHost.Visibility  = (!left && _filtersExpanded) ? Visibility.Visible : Visibility.Collapsed;
+
+        // Toolbar reflection.
+        if (DockTopItem  != null) DockTopItem.IsChecked  = !left;
+        if (DockLeftItem != null) DockLeftItem.IsChecked = left;
+        if (FilterDockLabel != null) FilterDockLabel.Text = left ? "Left" : "Top";
     }
 
     /// <summary>
@@ -371,6 +440,8 @@ public sealed partial class NativeResultsPage : Page
         TimeFormatConverter.Format = ResultsViewerSettings.TimeFormat;
         ViewModel.ApplyTheme(ResultsViewerSettings.ThemeName);
         RefreshSearchSubmitMode();
+        _filterDock = ResultsViewerSettings.FilterDock;
+        RefreshFilterLayout();
     }
 
     private void ApplyPersistedLevelOverrides()

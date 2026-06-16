@@ -50,11 +50,8 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <!-- Toolbar -->
-            <RowDefinition Height="Auto"/>  <!-- Filter expander (collapsible) -->
-            <RowDefinition Height="*"/>     <!-- Grid + overlays -->
-            <RowDefinition Height="Auto"/>  <!-- Details panel (visible only in DetailsPanel mode) -->
-            <RowDefinition Height="Auto"/>  <!-- Pagination bar -->
+            <RowDefinition Height="Auto"/>  <!-- Toolbar (full width) -->
+            <RowDefinition Height="*"/>     <!-- Body: optional left filter pane + main content -->
         </Grid.RowDefinitions>
 
         <!-- Toolbar -->
@@ -107,6 +104,22 @@
                     </StackPanel>
                 </ToggleButton>
 
+                <!-- Choose where the filter pane sits: across the top, or down the left side. -->
+                <Button x:Name="FilterDockButton" Height="32"
+                        AutomationProperties.Name="Filter pane position"
+                        ToolTipService.ToolTip="Dock the filter pane on top or on the left">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock x:Name="FilterDockGlyph" Text="&#xE7A0;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                        <TextBlock x:Name="FilterDockLabel" Text="Dock"/>
+                    </StackPanel>
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <RadioMenuFlyoutItem x:Name="DockTopItem"  Text="Filters on top"  GroupName="filterDock" Click="FilterDockTop_Click"/>
+                            <RadioMenuFlyoutItem x:Name="DockLeftItem" Text="Filters on left" GroupName="filterDock" Click="FilterDockLeft_Click"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+
                 <ToggleButton x:Name="DetailsPanelToggle" Height="32"
                               Click="DetailsPanelToggle_Click"
                               AutomationProperties.Name="Show or hide the row details panel"
@@ -148,23 +161,45 @@
             </StackPanel>
         </Border>
 
-        <!-- Collapsible filter content: time range / per-column filter row / level chips.
-             Visibility is driven by the FiltersToggle button in the toolbar above; when collapsed
-             this row disappears entirely so the toolbar fills the top edge. -->
+        <!-- Body: an optional left-docked filter pane (Column 0) beside the main content (Column 1).
+             The single FiltersPanel is re-parented between LeftFilterHost and TopFilterHost in code
+             (RefreshFilterLayout) per the dock setting; its inner rows switch horizontal/vertical. -->
+        <Grid Grid.Row="1" x:Name="BodyGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>  <!-- left filter pane (collapsed unless docked left) -->
+                <ColumnDefinition Width="*"/>     <!-- main content -->
+            </Grid.ColumnDefinitions>
+
+            <!-- Left-dock host: scrolls when the filters are taller than the viewport. -->
+            <ScrollViewer x:Name="LeftFilterHost" Grid.Column="0" Width="300" Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,1,0"/>
+
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>  <!-- Top-dock filter host -->
+                    <RowDefinition Height="*"/>     <!-- Grid + overlays -->
+                    <RowDefinition Height="Auto"/>  <!-- Details panel -->
+                    <RowDefinition Height="Auto"/>  <!-- Pagination bar -->
+                </Grid.RowDefinitions>
+
+                <!-- Top-dock host (default). FiltersPanel lives here initially. -->
+                <ContentControl x:Name="TopFilterHost" Grid.Row="0" HorizontalContentAlignment="Stretch">
+
+        <!-- Collapsible filter content: time range / per-column filter row / level chips. -->
         <Border x:Name="FiltersPanel"
-                Grid.Row="1"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
             <StackPanel>
                 <!-- Time range -->
                 <Border Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <StackPanel x:Name="TimeRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Time:" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <CalendarDatePicker x:Name="FromDatePicker" Width="160" PlaceholderText="From"
                                             DateChanged="FromDatePicker_DateChanged"/>
-                        <TextBlock Text="→" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TimeRangeArrow" Text="→" VerticalAlignment="Center"/>
                         <CalendarDatePicker x:Name="ToDatePicker" Width="160" PlaceholderText="To"
                                             DateChanged="ToDatePicker_DateChanged"/>
                         <Button Content="Clear" Click="ClearTimeRange_Click" Height="32"/>
@@ -174,7 +209,7 @@
                 <!-- Per-column filter row -->
                 <Border Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <StackPanel x:Name="FilterRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Filter:" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBox x:Name="ProviderFilterBox" Width="120" Height="28" FontSize="12"
@@ -195,13 +230,14 @@
 
                 <!-- Level color chips: per-level swatch + count + click-to-edit-color -->
                 <Border Padding="12,6">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <StackPanel x:Name="LevelsRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Levels:" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ItemsControl ItemsSource="{x:Bind ViewModel.Levels}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="6"/>
+                                    <!-- Reflows the chips so they wrap in the narrow left-docked pane. -->
+                                    <local:WrapPanelLite HorizontalSpacing="6" VerticalSpacing="6"/>
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
@@ -225,9 +261,10 @@
                 </Border>
             </StackPanel>
         </Border>
+                </ContentControl>
 
-        <!-- DataGrid + overlays -->
-        <Grid Grid.Row="2">
+                <!-- DataGrid + overlays -->
+                <Grid Grid.Row="1">
             <!-- RowHeight + explicit column widths matter a lot for scroll perf:
                  with both unset, DataGrid measures every visible cell on every scroll frame
                  (because Message text length varies). Fixing the row height makes the row
@@ -316,7 +353,7 @@
              when the user drags the resize grip at the top. The inner grid is Auto/Auto/*, so
              the ScrollViewer takes whatever vertical space remains after the grip + header and
              shows a scrollbar when content overflows it. -->
-        <Border x:Name="DetailsPanel" Grid.Row="3" Visibility="Collapsed"
+        <Border x:Name="DetailsPanel" Grid.Row="2" Visibility="Collapsed"
                 Height="240"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
@@ -384,7 +421,7 @@
         </Border>
 
         <!-- Pagination bar -->
-        <Border Grid.Row="4" Padding="12,6"
+        <Border Grid.Row="3" Padding="12,6"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -420,5 +457,7 @@
                 </ComboBox>
             </StackPanel>
         </Border>
+            </Grid>   <!-- main content column -->
+        </Grid>       <!-- BodyGrid -->
     </Grid>
 </Page>

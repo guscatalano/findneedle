@@ -151,6 +151,21 @@ public static class ResultsViewerSettings
         set { Data.SearchSubmitMode = value.ToString(); Save(); }
     }
 
+    /// <summary>Where the result viewer's filter pane is docked (Top or Left). Broadcasts Changed so
+    /// an open viewer re-lays-out live.</summary>
+    public const FilterDock DefaultFilterDock = FilterDock.Top;
+    public static FilterDock FilterDock
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(Data.FilterDock)
+                && Enum.TryParse<FilterDock>(Data.FilterDock, ignoreCase: true, out var parsed))
+                return parsed;
+            return DefaultFilterDock;
+        }
+        set { Data.FilterDock = value.ToString(); Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -309,6 +324,7 @@ public static class ResultsViewerSettings
         public string CacheReuseMode { get; set; }
         public string IndexingMode { get; set; }
         public string SearchSubmitMode { get; set; }
+        public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public double? DetailsPanelHeight { get; set; }
