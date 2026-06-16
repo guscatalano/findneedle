@@ -423,6 +423,39 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 }
             }
         }
+        // Pre-load fallback: before any file is parsed, knownProcessors is empty so the loop above
+        // yields no record count — which made the Auto storage tier always see 0 rows and pick
+        // in-memory even for huge logs. Estimate from the on-disk byte size instead (~150 bytes per
+        // record), so the tier decision (in NuSearchQuery.CreateStorage) is right from the start.
+        if (!anyRecords)
+        {
+            try
+            {
+                long bytes = EstimateBytesOnDisk();
+                if (bytes > 0)
+                {
+                    totalRecords = (int)Math.Min(int.MaxValue, bytes / 150);
+                    anyRecords = true;
+                }
+            }
+            catch { /* estimate is best-effort */ }
+        }
+
         return (anyTime ? totalTime : null, anyRecords ? totalRecords : null);
+    }
+
+    /// <summary>Total bytes of the location's source on disk (a single file, or all files under a
+    /// folder), for the pre-load row-count estimate. Metadata only — never reads file contents.</summary>
+    private long EstimateBytesOnDisk()
+    {
+        if (string.IsNullOrEmpty(path)) return 0;
+        if (System.IO.File.Exists(path)) return new System.IO.FileInfo(path).Length;
+        if (!System.IO.Directory.Exists(path)) return 0;
+        long bytes = 0;
+        foreach (var f in System.IO.Directory.EnumerateFiles(path, "*", System.IO.SearchOption.AllDirectories))
+        {
+            try { bytes += new System.IO.FileInfo(f).Length; } catch { /* skip unreadable */ }
+        }
+        return bytes;
     }
 }
