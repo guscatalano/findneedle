@@ -273,18 +273,58 @@ public sealed partial class NativeResultsPage : Page
 
     private async System.Threading.Tasks.Task ShowRowPopupAsync(LogLine line)
     {
-        var grid = new Grid { ColumnSpacing = 12, RowSpacing = 2 };
+        // 3 columns: label · value (wraps, selectable) · per-field Copy. The whole thing scrolls, and
+        // the dialog opens full-size so a huge Message has room. (ContentDialog can't be user-resized.)
+        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        PopulateDetailsGrid(grid, line);
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        foreach (var (label, value) in RowFields(line))
+        {
+            int row = grid.RowDefinitions.Count;
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var k = new TextBlock
+            {
+                Text = label,
+                FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Grid.SetRow(k, row); Grid.SetColumn(k, 0);
+            grid.Children.Add(k);
+
+            var v = new TextBlock
+            {
+                Text = value ?? "",
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Grid.SetRow(v, row); Grid.SetColumn(v, 1);
+            grid.Children.Add(v);
+
+            var copy = new Button
+            {
+                Content = "Copy",
+                FontSize = 12,
+                Padding = new Thickness(8, 2, 8, 2),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            var captured = value ?? "";
+            copy.Click += (_, __) => CopyToClipboard(captured);
+            ToolTipService.SetToolTip(copy, $"Copy {label}");
+            Grid.SetRow(copy, row); Grid.SetColumn(copy, 2);
+            grid.Children.Add(copy);
+        }
 
         var dialog = new ContentDialog
         {
             Title = "Log entry details",
+            FullSizeDesired = true, // use the window's space — Message values can be large
             Content = new ScrollViewer
             {
                 Content = grid,
-                MaxHeight = 460,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             },
@@ -636,13 +676,27 @@ public sealed partial class NativeResultsPage : Page
         PopulateDetailsGrid(DetailsPanelGrid, line);
     }
 
-    /// <summary>Fill a 2-column (label/value) grid with a row's fields. Shared by the bottom panel
-    /// and the double-click popup.</summary>
+    /// <summary>The (label, value) pairs shown for a row — shared by the panel and the popup.</summary>
+    private static System.Collections.Generic.IEnumerable<(string label, string value)> RowFields(LogLine line)
+    {
+        yield return ("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        yield return ("Time",        line.Time);
+        yield return ("Provider",    line.Provider);
+        yield return ("TaskName",    line.TaskName);
+        yield return ("Message",     line.Message);
+        yield return ("Source",      line.Source);
+        yield return ("Level",       line.Level);
+        yield return ("MachineName", line.MachineName);
+        yield return ("Username",    line.Username);
+        yield return ("OpCode",      line.OpCode);
+    }
+
+    /// <summary>Fill a 2-column (label/value) grid with a row's fields (the bottom panel).</summary>
     private static void PopulateDetailsGrid(Grid g, LogLine line)
     {
         g.Children.Clear();
         g.RowDefinitions.Clear();
-        void Row(string label, string value)
+        foreach (var (label, value) in RowFields(line))
         {
             int row = g.RowDefinitions.Count;
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -653,16 +707,6 @@ public sealed partial class NativeResultsPage : Page
             Grid.SetRow(v, row); Grid.SetColumn(v, 1);
             g.Children.Add(v);
         }
-        Row("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        Row("Time",        line.Time);
-        Row("Provider",    line.Provider);
-        Row("TaskName",    line.TaskName);
-        Row("Message",     line.Message);
-        Row("Source",      line.Source);
-        Row("Level",       line.Level);
-        Row("MachineName", line.MachineName);
-        Row("Username",    line.Username);
-        Row("OpCode",      line.OpCode);
     }
 
     private void DetailsPanelCopyJson_Click(object sender, RoutedEventArgs e)
