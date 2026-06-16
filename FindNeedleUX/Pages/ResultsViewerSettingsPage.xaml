@@ -133,9 +133,9 @@
                     <ComboBox x:Name="IndexingModeCombo" Width="360"
                               SelectionChanged="IndexingModeCombo_SelectionChanged"
                               AutomationProperties.Name="Search index mode">
-                        <ComboBoxItem Content="Lazy — build on first search (default)" Tag="Lazy"/>
-                        <ComboBoxItem Content="Background — build after the viewer opens" Tag="Background"/>
-                        <ComboBoxItem Content="Eager — build during the search"          Tag="Eager"/>
+                        <ComboBoxItem Content="Background — build after the viewer opens (default)" Tag="Background"/>
+                        <ComboBoxItem Content="Lazy — build on first search / focus"             Tag="Lazy"/>
+                        <ComboBoxItem Content="Eager — build during load (slower open, instant search)" Tag="Eager"/>
                     </ComboBox>
                     <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
                                Text="Lazy opens fastest and skips the index entirely if you never search. Until the index is built, substring search uses a slower scan. Takes effect on the next search."/>

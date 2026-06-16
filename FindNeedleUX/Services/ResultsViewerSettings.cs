@@ -114,11 +114,12 @@ public static class ResultsViewerSettings
     /// </summary>
     /// <summary>
     /// When the substring-search (FTS) index is built for SQLite-backed searches:
-    ///   Lazy       — on first substring search (default; "just open + scroll" never pays for it)
-    ///   Background — right after the viewer opens, off the critical path
-    ///   Eager      — during the search, before the viewer opens
+    ///   Background — right after the viewer opens, off the critical path (default; open stays fast and
+    ///                searches become fast on their own, without the user having to trigger a build)
+    ///   Lazy       — on first substring search / search-box focus ("just open + scroll" never pays for it)
+    ///   Eager      — during the search, before the viewer opens (slower open, instant first search)
     /// </summary>
-    public const FindPluginCore.Searching.IndexingMode DefaultIndexingMode = FindPluginCore.Searching.IndexingMode.Lazy;
+    public const FindPluginCore.Searching.IndexingMode DefaultIndexingMode = FindPluginCore.Searching.IndexingMode.Background;
     public static FindPluginCore.Searching.IndexingMode IndexingMode
     {
         get

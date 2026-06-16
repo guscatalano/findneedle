@@ -75,7 +75,9 @@ namespace FindNeedleUX.UITests
         [Timeout(600_000)]
         public void Search_LazyUnindexed_StaysResponsive()
         {
-            var t = RunScenario(indexingArgs: "");
+            // Force lazy explicitly: the shipped default is Background, so an empty flag would build
+            // the index automatically and this would no longer exercise the un-indexed scan path.
+            var t = RunScenario(indexingArgs: "--indexing=lazy");
             Report("lazy", t);
 
             Assert.AreEqual(1, t.Filtered, $"search for '{SearchTerm}' should match exactly line {UniqueLine:N0}");
