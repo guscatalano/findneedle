@@ -100,7 +100,7 @@ public static class ResultsViewerSettings
     /// every restart). Valid values are <c>GlobalSettings.NativeResultViewerKey</c> /
     /// <c>GlobalSettings.WebViewResultViewerKey</c>.
     /// </summary>
-    public const string DefaultDefaultResultViewer = FindPluginCore.GlobalConfiguration.GlobalSettings.WebViewResultViewerKey;
+    public const string DefaultDefaultResultViewer = FindPluginCore.GlobalConfiguration.GlobalSettings.NativeResultViewerKey;
     public static string DefaultResultViewer
     {
         get => string.IsNullOrEmpty(Data.DefaultResultViewer) ? DefaultDefaultResultViewer : Data.DefaultResultViewer;
