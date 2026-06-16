@@ -56,6 +56,50 @@ public sealed class LargeFixtureGenerator
         GenerateEtl(Path.Combine(outDir, "large-5M.etl"));
     }
 
+    /// <summary>
+    /// Cat-themed ETL companion to cats-5M.log: 5M EventSource events whose payload carries a cat
+    /// breed/color so the breeds are searchable in the decoded viewer. ETW may drop events under
+    /// load, so the unique "Mittens" line and exact counts can vary slightly (the captured count is
+    /// reported). Requires admin. Run explicitly: vstest.console ETWPluginTests.dll /Tests:Generate_CatEtlFixture
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Fixtures")]
+    [TestCategory("SkipCI")]
+    [Timeout(1200000)]
+    public void Generate_CatEtlFixture()
+    {
+        var outDir = Path.Combine(RepoRoot(), "LargeSamples");
+        Directory.CreateDirectory(outDir);
+        GenerateCatEtl(Path.Combine(outDir, "cats-5M.etl"));
+    }
+
+    private void GenerateCatEtl(string path)
+    {
+        string[] breeds = { "Siamese", "Persian", "Maine Coon", "Bengal", "Sphynx", "Ragdoll", "British Shorthair", "Abyssinian", "Scottish Fold", "Norwegian Forest" };
+        string[] colors = { "black", "white", "tabby", "calico", "orange", "grey", "tuxedo" };
+        var sw = Stopwatch.StartNew();
+        using (var session = new TraceEventSession("FindNeedle_CatFixture_Session", path))
+        {
+            session.BufferSizeMB = 256;
+            session.EnableProvider(Src.Log.Guid);
+            Thread.Sleep(500); // let the session start before emitting
+            for (int i = 0; i < Events; i++)
+            {
+                var extra = (i % 100000 == 0 ? " SPECIAL=Savannah" : string.Empty)
+                          + (i == 1234567 ? " NAME=Mittens" : string.Empty);
+                Src.Log.Tick(i, $"cat #{i} breed={breeds[i % breeds.Length]} color={colors[i % colors.Length]}{extra}");
+                if ((i & 0x1FFFF) == 0x1FFFF) Thread.Sleep(1); // ~every 128k events, yield for flush
+            }
+            Thread.Sleep(3000); // let the last buffers flush before Dispose finalizes the file
+        }
+        sw.Stop();
+
+        long captured = -1;
+        try { captured = EtlInfoExtractor.Inspect(path).EventCount; } catch (Exception ex) { TestContext.WriteLine($"inspect failed: {ex.Message}"); }
+        TestContext.WriteLine($"cats.etl: emitted {Events:N0}, captured {captured:N0} events, " +
+                              $"{new FileInfo(path).Length / (1024 * 1024)} MB, {sw.Elapsed.TotalSeconds:F1}s  -> {path}");
+    }
+
     private void GenerateLog(string path)
     {
         var sw = Stopwatch.StartNew();

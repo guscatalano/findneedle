@@ -22,6 +22,16 @@ public partial class App : Application
     public App()
     {
         this.InitializeComponent();
+
+        // Capture any unhandled UI exception with its full stack (the normal Logger doesn't see UI-
+        // thread crashes), and keep the session alive — a transient render/collection exception
+        // shouldn't tear down a log-viewing session. The logged stack is how we diagnose such crashes.
+        this.UnhandledException += (s, e) =>
+        {
+            try { Logger.Instance.Log($"UNHANDLED EXCEPTION: {e.Message}\n{e.Exception}"); } catch { }
+            e.Handled = true;
+        };
+
         Logger.Instance.Log("Application launched");
         // Precompute system info at app startup
         _ = SystemInfoMiddleware.GetPanelText();

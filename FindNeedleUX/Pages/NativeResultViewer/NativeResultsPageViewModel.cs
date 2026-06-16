@@ -25,6 +25,19 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 {
     private IPagedLogSource _source = new InMemoryPagedSource(Array.Empty<LogLine>());
 
+    // Captured on construction (the UI thread). Used to marshal the async-search result-apply back
+    // onto the UI thread deterministically — mutating Results off the UI thread crashes the DataGrid,
+    // e.g. when an async search's continuation overlaps a (UI-thread) page change.
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue _uiDispatcher = TryGetDispatcher();
+
+    private static Microsoft.UI.Dispatching.DispatcherQueue TryGetDispatcher()
+    {
+        // Throws (COMException) off a WinUI thread, e.g. in unit tests — fall back to null so
+        // RunOnUiAsync applies inline there.
+        try { return Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread(); }
+        catch { return null; }
+    }
+
     /// <summary>Test seam: inject a paged source directly (no MiddleLayerService/search needed).</summary>
     internal void SetSourceForTests(IPagedLogSource source) => _source = source;
 
@@ -421,18 +434,34 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             var levels = _source.GetLevelCounts(filters);
             var rows   = _source.GetPage(filters, sort, 0, pageSize);
             return (total, levels, rows);
-        }).ConfigureAwait(true);
+        }).ConfigureAwait(false);
 
         if (ct.IsCancellationRequested) return; // a newer search superseded this one
 
-        _currentPage = 1;
-        TotalFilteredCount = snapshot.total;
-        UpdateLevelCountsFrom(snapshot.levels);
-        Results.ReplaceAll(snapshot.rows);
-        OnPropertyChanged(nameof(CurrentPage));
-        OnPropertyChanged(nameof(TotalPages));
-        OnPropertyChanged(nameof(PageRangeText));
-        UpdateStatus();
+        // Publish on the UI thread, always — Results/INotify mutations off-thread crash the DataGrid.
+        await RunOnUiAsync(() =>
+        {
+            if (ct.IsCancellationRequested) return;
+            _currentPage = 1;
+            TotalFilteredCount = snapshot.total;
+            UpdateLevelCountsFrom(snapshot.levels);
+            Results.ReplaceAll(snapshot.rows);
+            OnPropertyChanged(nameof(CurrentPage));
+            OnPropertyChanged(nameof(TotalPages));
+            OnPropertyChanged(nameof(PageRangeText));
+            UpdateStatus();
+        });
+    }
+
+    /// <summary>Run <paramref name="action"/> on the UI thread (inline if already there).</summary>
+    private Task RunOnUiAsync(Action action)
+    {
+        var dq = _uiDispatcher;
+        if (dq == null || dq.HasThreadAccess) { action(); return Task.CompletedTask; }
+        var tcs = new TaskCompletionSource();
+        if (!dq.TryEnqueue(() => { try { action(); } finally { tcs.TrySetResult(); } }))
+            action(); // queue unavailable (shutting down) — best effort
+        return tcs.Task;
     }
 
     /// <summary>
