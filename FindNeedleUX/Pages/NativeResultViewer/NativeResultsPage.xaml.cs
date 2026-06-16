@@ -467,6 +467,82 @@ public sealed partial class NativeResultsPage : Page
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
         => this.Frame?.Navigate(typeof(ResultsViewerSettingsPage));
 
+    // ----- "Sources" dialog: which locations + rule files this search loaded -----
+    private async void ShowLoadedSources_Click(object sender, RoutedEventArgs e)
+    {
+        var panel = new StackPanel { Spacing = 10 };
+
+        var locs = MiddleLayerService.Locations; // static, initialized — never null
+        panel.Children.Add(SourcesHeader($"Locations ({locs.Count})"));
+        if (locs.Count == 0)
+            panel.Children.Add(SourcesNote("No locations loaded."));
+        else
+            foreach (var loc in locs)
+            {
+                string name, desc;
+                try { name = loc.GetName(); } catch { name = "(unknown)"; }
+                try { desc = loc.GetDescription(); } catch { desc = ""; }
+                panel.Children.Add(SourcesItem(name, desc));
+            }
+
+        var rules = MiddleLayerService.SearchQueryUX?.CurrentQuery?.RulesConfigPaths
+                    ?? new System.Collections.Generic.List<string>();
+        panel.Children.Add(SourcesHeader($"Rules ({rules.Count})"));
+        if (rules.Count == 0)
+            panel.Children.Add(SourcesNote("No rule files loaded."));
+        else
+            foreach (var r in rules)
+                panel.Children.Add(SourcesItem(System.IO.Path.GetFileName(r), r));
+
+        var dialog = new ContentDialog
+        {
+            Title = "Loaded sources",
+            Content = new ScrollViewer
+            {
+                Content = panel,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                MaxHeight = 460,
+            },
+            CloseButtonText = "Close",
+            XamlRoot = this.XamlRoot,
+        };
+        await dialog.ShowAsync();
+    }
+
+    private static TextBlock SourcesHeader(string text) => new()
+    {
+        Text = text,
+        FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+        FontSize = 14,
+        Margin = new Thickness(0, 4, 0, 0),
+    };
+
+    private static TextBlock SourcesNote(string text) => new()
+    {
+        Text = text,
+        Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        Margin = new Thickness(8, 0, 0, 0),
+    };
+
+    /// <summary>A bullet line: bold-ish title + a dimmed, wrapping, selectable detail (path/description).</summary>
+    private static FrameworkElement SourcesItem(string title, string detail)
+    {
+        var sp = new StackPanel { Margin = new Thickness(8, 0, 0, 0), Spacing = 1 };
+        sp.Children.Add(new TextBlock { Text = "• " + title, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+        if (!string.IsNullOrWhiteSpace(detail) && detail != title)
+            sp.Children.Add(new TextBlock
+            {
+                Text = detail,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Margin = new Thickness(12, 0, 0, 0),
+            });
+        return sp;
+    }
+
     private void FiltersToggle_Click(object sender, RoutedEventArgs e)
     {
         var expanded = FiltersToggle.IsChecked == true;

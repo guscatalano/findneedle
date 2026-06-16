@@ -90,6 +90,9 @@
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
+                <Button Content="Sources" Click="ShowLoadedSources_Click" Height="32"
+                        AutomationProperties.Name="Show loaded locations and rules"
+                        ToolTipService.ToolTip="See which locations and rule files this search loaded"/>
                 <Button Content="Help" Click="HelpButton_Click" Height="32"/>
                 <Button Content="Settings…" Click="SettingsButton_Click" Height="32"
                         AutomationProperties.Name="Open viewer settings"/>
