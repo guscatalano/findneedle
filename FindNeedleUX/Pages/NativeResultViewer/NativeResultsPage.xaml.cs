@@ -558,23 +558,37 @@ public sealed partial class NativeResultsPage : Page
     // ----- "Sources" dialog: which locations + rule files this search loaded -----
     private async void ShowLoadedSources_Click(object sender, RoutedEventArgs e)
     {
-        var panel = new StackPanel { Spacing = 10 };
-
-        var locs = MiddleLayerService.Locations; // static, initialized — never null
-        panel.Children.Add(SourcesHeader($"Locations ({locs.Count})"));
-        if (locs.Count == 0)
-            panel.Children.Add(SourcesNote("No locations loaded."));
-        else
-            foreach (var loc in locs)
-            {
-                string name, desc;
-                try { name = loc.GetName(); } catch { name = "(unknown)"; }
-                try { desc = loc.GetDescription(); } catch { desc = ""; }
-                panel.Children.Add(SourcesItem(name, desc));
-            }
-
+        // Collect once, then render + build the copyable text/JSON from the same data.
+        var locInfo = new System.Collections.Generic.List<(string name, string description)>();
+        foreach (var loc in MiddleLayerService.Locations)
+        {
+            string name, desc;
+            try { name = loc.GetName(); } catch { name = "(unknown)"; }
+            try { desc = loc.GetDescription(); } catch { desc = ""; }
+            locInfo.Add((name, desc));
+        }
         var rules = MiddleLayerService.SearchQueryUX?.CurrentQuery?.RulesConfigPaths
                     ?? new System.Collections.Generic.List<string>();
+
+        var panel = new StackPanel { Spacing = 10 };
+
+        // Copy buttons (kept inside the content so the dialog stays open after copying).
+        var copyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var copyText = new Button { Content = "Copy as text" };
+        copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules));
+        var copyJson = new Button { Content = "Copy as JSON" };
+        copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules));
+        copyRow.Children.Add(copyText);
+        copyRow.Children.Add(copyJson);
+        panel.Children.Add(copyRow);
+
+        panel.Children.Add(SourcesHeader($"Locations ({locInfo.Count})"));
+        if (locInfo.Count == 0)
+            panel.Children.Add(SourcesNote("No locations loaded."));
+        else
+            foreach (var (name, desc) in locInfo)
+                panel.Children.Add(SourcesItem(name, desc));
+
         panel.Children.Add(SourcesHeader($"Rules ({rules.Count})"));
         if (rules.Count == 0)
             panel.Children.Add(SourcesNote("No rule files loaded."));
@@ -596,6 +610,37 @@ public sealed partial class NativeResultsPage : Page
             XamlRoot = this.XamlRoot,
         };
         await dialog.ShowAsync();
+    }
+
+    private static string SourcesAsText(
+        System.Collections.Generic.List<(string name, string description)> locs,
+        System.Collections.Generic.List<string> rules)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Locations ({locs.Count}):");
+        if (locs.Count == 0) sb.AppendLine("  (none)");
+        foreach (var (name, desc) in locs)
+        {
+            sb.AppendLine($"  - {name}");
+            if (!string.IsNullOrWhiteSpace(desc) && desc != name) sb.AppendLine($"      {desc}");
+        }
+        sb.AppendLine($"Rules ({rules.Count}):");
+        if (rules.Count == 0) sb.AppendLine("  (none)");
+        foreach (var r in rules) sb.AppendLine($"  - {r}");
+        return sb.ToString();
+    }
+
+    private static string SourcesAsJson(
+        System.Collections.Generic.List<(string name, string description)> locs,
+        System.Collections.Generic.List<string> rules)
+    {
+        var payload = new
+        {
+            locations = locs.ConvertAll(l => new { name = l.name, description = l.description }),
+            rules,
+        };
+        return System.Text.Json.JsonSerializer.Serialize(payload,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
     }
 
     private static TextBlock SourcesHeader(string text) => new()
@@ -795,14 +840,6 @@ public sealed partial class NativeResultsPage : Page
             SearchBox.SelectAll();
             e.Handled = true;
             return;
-        }
-        if (e.Key == global::Windows.System.VirtualKey.Escape)
-        {
-            if (ColumnPanel.Visibility == Visibility.Visible)
-            {
-                ColumnPanel.Visibility = Visibility.Collapsed;
-                e.Handled = true;
-            }
         }
     }
 
@@ -1007,7 +1044,7 @@ public sealed partial class NativeResultsPage : Page
         Bullet("Level chips — click to edit that level's row background color.");
         Bullet("Click a row to expand details; use Copy as JSON to copy the full LogLine.");
         Bullet("Export CSV — saves the currently visible (filtered) rows, only currently visible columns.");
-        Bullet("Esc closes the column visibility popover.");
+        Bullet("Details modes (toolbar): Inrow expand, bottom panel, or double-click popup.");
         var dialog = new ContentDialog
         {
             Title = "Filtering & navigation",
@@ -1017,13 +1054,6 @@ public sealed partial class NativeResultsPage : Page
         };
         await dialog.ShowAsync();
     }
-
-    // ----- Column visibility popover -----
-    private void ColumnsButton_Click(object sender, RoutedEventArgs e)
-        => ColumnPanel.Visibility = ColumnPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-
-    private void CloseColumnPanel_Click(object sender, RoutedEventArgs e)
-        => ColumnPanel.Visibility = Visibility.Collapsed;
 
     private void OnColumnVisibilityChanged(ColumnEntry entry) => ApplyColumnVisibility(entry);
 

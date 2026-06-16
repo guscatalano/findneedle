@@ -77,9 +77,25 @@
                            Visibility="Collapsed"
                            AutomationProperties.Name="Search submit hint"/>
 
-                <Button Content="Columns ▾" Click="ColumnsButton_Click" Height="32"
-                        AutomationProperties.Name="Toggle column visibility"/>
-                <Button Content="Clear filters" Click="ClearFiltersButton_Click" Height="32"/>
+                <Button Content="Columns ▾" Height="32"
+                        AutomationProperties.Name="Toggle column visibility">
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel Spacing="6" MinWidth="180">
+                                <TextBlock Text="Columns" FontWeight="SemiBold" FontSize="13"/>
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.Columns}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ColumnEntry">
+                                            <CheckBox Content="{x:Bind Name}"
+                                                      IsChecked="{x:Bind IsVisible, Mode=TwoWay}"
+                                                      Margin="0,2,0,2"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
                 <DropDownButton x:Name="ExportButton" Content="Export" Height="32"
                                 AutomationProperties.Name="Export results">
                     <DropDownButton.Flyout>
@@ -271,6 +287,13 @@
                         </ItemsControl>
                     </StackPanel>
                 </Border>
+                <!-- Clear every filter at once (search box, per-column, time range, level). -->
+                <Border Padding="12,6"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+                    <Button Content="Clear all filters" Click="ClearFiltersButton_Click"
+                            Height="28" FontSize="12"
+                            AutomationProperties.Name="Clear all filters"/>
+                </Border>
             </StackPanel>
         </Border>
                 </ContentControl>
@@ -333,30 +356,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- Column visibility popover. SolidBackgroundFillColorBaseBrush is a fully-opaque
-                 theme brush (CardBackgroundFillColorDefaultBrush is semi-transparent and shows
-                 the grid bleed-through, making this popover hard to read.) -->
-            <Border x:Name="ColumnPanel" Visibility="Collapsed"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="12"
-                    HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,8,12,0">
-                <StackPanel Spacing="6" MinWidth="180">
-                    <TextBlock Text="Columns" FontWeight="SemiBold" FontSize="13"/>
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.Columns}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="local:ColumnEntry">
-                                <CheckBox Content="{x:Bind Name}"
-                                          IsChecked="{x:Bind IsVisible, Mode=TwoWay}"
-                                          Margin="0,2,0,2"/>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <Button Content="Close" Click="CloseColumnPanel_Click" HorizontalAlignment="Right"
-                            Margin="0,8,0,0"/>
-                </StackPanel>
-            </Border>
         </Grid>
 
         <!-- Details panel (Grid.Row=3). The DataGrid's per-row expandable details are disabled
