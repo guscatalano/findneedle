@@ -67,6 +67,11 @@
                          TextChanged="SearchBox_TextChanged"
                          KeyDown="SearchBox_KeyDown"
                          AutomationProperties.Name="Search results"/>
+                <!-- Spins while a search runs off the UI thread (so the window never freezes). -->
+                <ProgressRing x:Name="SearchBusyRing" Width="16" Height="16"
+                              IsActive="False" Visibility="Collapsed"
+                              VerticalAlignment="Center"
+                              AutomationProperties.Name="Searching"/>
                 <!-- Shown when the viewer is in Enter-to-search mode (large/slow log) so the user
                      knows mid-typing doesn't search. Hidden in live mode. -->
                 <TextBlock x:Name="SearchHint" VerticalAlignment="Center" FontSize="11"

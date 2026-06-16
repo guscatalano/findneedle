@@ -25,6 +25,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 {
     private IPagedLogSource _source = new InMemoryPagedSource(Array.Empty<LogLine>());
 
+    /// <summary>Test seam: inject a paged source directly (no MiddleLayerService/search needed).</summary>
+    internal void SetSourceForTests(IPagedLogSource source) => _source = source;
+
     public RangeObservableCollection<LogLine> Results { get; } = new();
 
     // ----- filter state -----
@@ -396,6 +399,53 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         _currentPage = 1;
         ReloadFromSource();
+    }
+
+    /// <summary>
+    /// Apply the current filters off the UI thread (count + level counts + first page), then publish
+    /// the results back on the UI thread. Keeps a multi-second search — e.g. a 1-2 char term that
+    /// falls back to a LIKE scan on a multi-million-row log — from freezing the UI. If
+    /// <paramref name="ct"/> was cancelled because a newer search started, the stale result is dropped.
+    /// </summary>
+    public async Task ApplyFiltersAsync(System.Threading.CancellationToken ct)
+    {
+        var filters = BuildFilterSpec();
+        var sort = new SortSpec(_sortColumn, _sortDescending);
+        int pageSize = _pageSize;
+
+        // The actual queries (COUNT, level counts, first page) run on a background thread. Awaiting
+        // from the UI thread resumes back on it, so the publish below is UI-thread-safe.
+        var snapshot = await Task.Run(() =>
+        {
+            var total  = _source.GetFilteredCount(filters);
+            var levels = _source.GetLevelCounts(filters);
+            var rows   = _source.GetPage(filters, sort, 0, pageSize);
+            return (total, levels, rows);
+        }).ConfigureAwait(true);
+
+        if (ct.IsCancellationRequested) return; // a newer search superseded this one
+
+        _currentPage = 1;
+        TotalFilteredCount = snapshot.total;
+        UpdateLevelCountsFrom(snapshot.levels);
+        Results.ReplaceAll(snapshot.rows);
+        OnPropertyChanged(nameof(CurrentPage));
+        OnPropertyChanged(nameof(TotalPages));
+        OnPropertyChanged(nameof(PageRangeText));
+        UpdateStatus();
+    }
+
+    /// <summary>
+    /// Set the search term WITHOUT running the synchronous filter — the caller drives the async apply
+    /// via <see cref="ApplyFiltersAsync"/>. Returns false if the term was unchanged.
+    /// </summary>
+    public bool SetSearchTextDeferred(string value)
+    {
+        value ??= "";
+        if (string.Equals(_searchText, value, StringComparison.Ordinal)) return false;
+        _searchText = value;
+        OnPropertyChanged(nameof(SearchText));
+        return true;
     }
 
     /// <summary>

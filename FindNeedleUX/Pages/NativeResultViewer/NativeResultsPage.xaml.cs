@@ -60,10 +60,18 @@ public sealed partial class NativeResultsPage : Page
         // keystrokes don't kick off the (expensive) index build on the 3rd character.
         _lazyIndexTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         _lazyIndexTimer.Tick += LazyIndexTimer_Tick;
+
+        // Debounce for live search: only run a search once typing pauses, so a burst of keystrokes
+        // collapses into one (off-UI-thread) search instead of one per character.
+        _searchDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _searchDebounceTimer.Tick += (_, _) => { _searchDebounceTimer.Stop(); _ = RunSearchAsync(); };
     }
 
     private readonly Microsoft.UI.Xaml.DispatcherTimer _lazyIndexTimer;
     private bool _lazyPromptShown; // don't re-prompt for the >30s warning every keystroke
+
+    private readonly Microsoft.UI.Xaml.DispatcherTimer _searchDebounceTimer;
+    private System.Threading.CancellationTokenSource _searchCts; // cancels the in-flight search
 
     // ----- Adaptive search submit (live keystrokes vs Enter-to-search) -----
     // Searching runs synchronously on the UI thread, so on a multi-million-row log a per-keystroke
@@ -580,7 +588,9 @@ public sealed partial class NativeResultsPage : Page
             UpdateSearchHint(hasPendingEdit: !string.Equals(SearchBox.Text, ViewModel.SearchText ?? "", StringComparison.Ordinal));
             return;
         }
-        RunSearchFromBox(); // live
+        // Live: debounce so a burst of keystrokes runs one (background) search, not one per char.
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Start();
     }
 
     private void SearchBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -588,32 +598,62 @@ public sealed partial class NativeResultsPage : Page
         if (e.Key == global::Windows.System.VirtualKey.Enter)
         {
             e.Handled = true;
-            RunSearchFromBox(); // commit now, regardless of mode
+            _searchDebounceTimer.Stop();
+            _ = RunSearchAsync(); // commit now, regardless of mode
         }
     }
 
     /// <summary>
-    /// Apply the search box text to the filter (synchronous; uses FTS if built, else LIKE), timing
-    /// it so Auto mode can adapt between live and Enter-to-search, then nudge the lazy index build.
+    /// Run the search box text against the filter OFF the UI thread, so even a multi-second LIKE scan
+    /// on a huge log never freezes the window. Cancels any in-flight search (only the latest applies),
+    /// shows a busy ring, times it so Auto mode can adapt, then nudges the lazy index build.
     /// </summary>
-    private void RunSearchFromBox()
+    private async Task RunSearchAsync()
     {
+        if (!ViewModel.SetSearchTextDeferred(SearchBox.Text))
+            return; // term unchanged — nothing to do (e.g. Enter pressed without edits)
+
+        _searchCts?.Cancel();
+        var cts = new System.Threading.CancellationTokenSource();
+        _searchCts = cts;
+
+        SetSearchBusy(true);
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        ViewModel.SearchText = SearchBox.Text; // triggers ReloadFromSource on this thread
-        sw.Stop();
-        long ms = sw.ElapsedMilliseconds;
-
-        if (_searchSubmitMode == SearchSubmitMode.Auto)
-            _autoEnterActive = SearchSubmitPolicy.NextAutoEnterState(_autoEnterActive, ms);
-        UpdateSearchHint(hasPendingEdit: false, lastSearchMs: ms);
-
-        // Lazy mode: (re)start the debounce so we only consider building the index once typing pauses.
-        if (MiddleLayerService.EffectiveIndexingMode == FindPluginCore.Searching.IndexingMode.Lazy
-            && !MiddleLayerService.IsSearchIndexBuilt)
+        try
         {
-            _lazyIndexTimer.Stop();
-            _lazyIndexTimer.Start();
+            await ViewModel.ApplyFiltersAsync(cts.Token);
         }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Search failed: {ex.Message}");
+        }
+        finally
+        {
+            sw.Stop();
+            // Only the most recent search updates shared UI state (busy ring, adaptive mode).
+            if (ReferenceEquals(_searchCts, cts))
+            {
+                SetSearchBusy(false);
+                if (_searchSubmitMode == SearchSubmitMode.Auto)
+                    _autoEnterActive = SearchSubmitPolicy.NextAutoEnterState(_autoEnterActive, sw.ElapsedMilliseconds);
+                UpdateSearchHint(hasPendingEdit: false, lastSearchMs: sw.ElapsedMilliseconds);
+
+                // Lazy mode: nudge the index build now that typing has paused (faster next search).
+                if (MiddleLayerService.EffectiveIndexingMode == FindPluginCore.Searching.IndexingMode.Lazy
+                    && !MiddleLayerService.IsSearchIndexBuilt)
+                {
+                    _lazyIndexTimer.Stop();
+                    _lazyIndexTimer.Start();
+                }
+            }
+        }
+    }
+
+    private void SetSearchBusy(bool busy)
+    {
+        if (SearchBusyRing == null) return;
+        SearchBusyRing.IsActive = busy;
+        SearchBusyRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Show/hide the "Press Enter to search" hint based on the effective submit mode.</summary>
