@@ -296,9 +296,10 @@ public sealed partial class NativeResultsPage : Page
             if (running)
             {
                 int done = MiddleLayerService.IndexBuildIndexed, total = MiddleLayerService.IndexBuildTotal;
+                // Tell the user *why* search is slow right now: the fast index isn't ready yet.
                 ViewModel.IndexStatusText = total > 0
-                    ? $"Building search index… {Math.Min(100, (int)(done * 100L / total))}%"
-                    : "Building search index…";
+                    ? $"Building search index… {Math.Min(100, (int)(done * 100L / total))}% — search is slower until ready"
+                    : "Building search index… — search is slower until ready";
             }
         });
     }
@@ -591,6 +592,22 @@ public sealed partial class NativeResultsPage : Page
         // Live: debounce so a burst of keystrokes runs one (background) search, not one per char.
         _searchDebounceTimer.Stop();
         _searchDebounceTimer.Start();
+    }
+
+    private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        // The user is about to search — start preparing the fast-search (FTS) index now, so the
+        // first search is fast (or at least the build is already underway). Lazy mode only; no-op if
+        // the index is already built or a build is in flight. It runs in the background and is
+        // cancellable, and search keeps working (via the slower scan) until it's ready — the
+        // "Building search index…" indicator explains the slowness meanwhile.
+        if (MiddleLayerService.EffectiveIndexingMode != FindPluginCore.Searching.IndexingMode.Lazy) return;
+        if (MiddleLayerService.IsSearchIndexBuilt) return;
+        var inFlight = MiddleLayerService.CurrentIndexBuild;
+        if (inFlight != null && !inFlight.IsCompleted) return;
+
+        MiddleLayerService.StartBackgroundIndexBuild();
+        UpdateIndexingIndicator();
     }
 
     private void SearchBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)

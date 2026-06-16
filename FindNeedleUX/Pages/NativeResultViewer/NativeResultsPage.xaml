@@ -66,6 +66,7 @@
                          PlaceholderText="Search all columns... (Ctrl+F)"
                          TextChanged="SearchBox_TextChanged"
                          KeyDown="SearchBox_KeyDown"
+                         GotFocus="SearchBox_GotFocus"
                          AutomationProperties.Name="Search results"/>
                 <!-- Spins while a search runs off the UI thread (so the window never freezes). -->
                 <ProgressRing x:Name="SearchBusyRing" Width="16" Height="16"
