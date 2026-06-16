@@ -273,66 +273,48 @@ public sealed partial class NativeResultsPage : Page
 
     private async System.Threading.Tasks.Task ShowRowPopupAsync(LogLine line)
     {
-        // 3 columns: label · value (wraps, selectable) · per-field Copy. The whole thing scrolls, and
-        // the dialog opens full-size so a huge Message has room. (ContentDialog can't be user-resized.)
-        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Same per-field grid as the bottom panel, plus a row-copy bar — kept in-content so the dialog
+        // stays open after copying. Opens full-size so a huge Message has room (ContentDialog can't be
+        // user-resized).
+        var grid = new Grid();
+        PopulateDetailsGrid(grid, line);
 
-        foreach (var (label, value) in RowFields(line))
+        var bar = RowCopyBar(line);
+
+        var content = new StackPanel { Spacing = 8 };
+        content.Children.Add(bar);
+        content.Children.Add(new ScrollViewer
         {
-            int row = grid.RowDefinitions.Count;
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var k = new TextBlock
-            {
-                Text = label,
-                FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            Grid.SetRow(k, row); Grid.SetColumn(k, 0);
-            grid.Children.Add(k);
-
-            var v = new TextBlock
-            {
-                Text = value ?? "",
-                TextWrapping = TextWrapping.Wrap,
-                IsTextSelectionEnabled = true,
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            Grid.SetRow(v, row); Grid.SetColumn(v, 1);
-            grid.Children.Add(v);
-
-            var copy = new Button
-            {
-                Content = "Copy",
-                FontSize = 12,
-                Padding = new Thickness(8, 2, 8, 2),
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            var captured = value ?? "";
-            copy.Click += (_, __) => CopyToClipboard(captured);
-            ToolTipService.SetToolTip(copy, $"Copy {label}");
-            Grid.SetRow(copy, row); Grid.SetColumn(copy, 2);
-            grid.Children.Add(copy);
-        }
+            Content = grid,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
 
         var dialog = new ContentDialog
         {
             Title = "Log entry details",
-            FullSizeDesired = true, // use the window's space — Message values can be large
-            Content = new ScrollViewer
-            {
-                Content = grid,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            },
-            PrimaryButtonText = "Copy as JSON",
+            FullSizeDesired = true,
+            Content = content,
             CloseButtonText = "Close",
             XamlRoot = this.XamlRoot,
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) CopyToClipboard(RowAsJson(line));
+        await dialog.ShowAsync();
+    }
+
+    /// <summary>A "Copy as JSON / CSV / XML" button row for one row (whole-row copy).</summary>
+    private StackPanel RowCopyBar(LogLine line)
+    {
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        Button Make(string label, Func<LogLine, string> fmt)
+        {
+            var b = new Button { Content = label, FontSize = 12 };
+            b.Click += (_, __) => CopyToClipboard(fmt(line));
+            return b;
+        }
+        bar.Children.Add(Make("Copy as JSON", RowAsJson));
+        bar.Children.Add(Make("Copy as CSV", RowAsCsv));
+        bar.Children.Add(Make("Copy as XML", RowAsXml));
+        return bar;
     }
 
     // ----- Details panel resize -----
@@ -736,21 +718,68 @@ public sealed partial class NativeResultsPage : Page
         yield return ("OpCode",      line.OpCode);
     }
 
-    /// <summary>Fill a 2-column (label/value) grid with a row's fields (the bottom panel).</summary>
+    /// <summary>
+    /// Fill a label / value / per-field-Copy grid with a row's fields. Shared by the bottom panel and
+    /// the double-click popup so both behave identically. Values wrap and are selectable; a very long
+    /// value gets its own bounded scroller so one giant field can't dominate.
+    /// </summary>
     private static void PopulateDetailsGrid(Grid g, LogLine line)
     {
         g.Children.Clear();
         g.RowDefinitions.Clear();
+        g.ColumnDefinitions.Clear();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });          // label
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // value
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });               // Copy
+        g.ColumnSpacing = 8;
+        g.RowSpacing = 6;
+
         foreach (var (label, value) in RowFields(line))
         {
             int row = g.RowDefinitions.Count;
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var k = new TextBlock { Text = label, FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold };
+
+            var k = new TextBlock
+            {
+                Text = label,
+                FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
             Grid.SetRow(k, row); Grid.SetColumn(k, 0);
             g.Children.Add(k);
-            var v = new TextBlock { Text = value ?? "", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-            Grid.SetRow(v, row); Grid.SetColumn(v, 1);
-            g.Children.Add(v);
+
+            var text = new TextBlock
+            {
+                Text = value ?? "",
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            // Large field: cap its height and let it scroll on its own.
+            FrameworkElement valueElement = (value?.Length ?? 0) > 1500
+                ? new ScrollViewer
+                {
+                    Content = text,
+                    MaxHeight = 220,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                }
+                : text;
+            Grid.SetRow(valueElement, row); Grid.SetColumn(valueElement, 1);
+            g.Children.Add(valueElement);
+
+            var copy = new Button
+            {
+                Content = "Copy",
+                FontSize = 12,
+                Padding = new Thickness(8, 2, 8, 2),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            var captured = value ?? "";
+            copy.Click += (_, __) => CopyToClipboard(captured);
+            ToolTipService.SetToolTip(copy, $"Copy {label}");
+            Grid.SetRow(copy, row); Grid.SetColumn(copy, 2);
+            g.Children.Add(copy);
         }
     }
 
