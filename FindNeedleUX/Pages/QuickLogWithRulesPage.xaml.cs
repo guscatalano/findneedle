@@ -215,18 +215,10 @@ public sealed partial class QuickLogWithRulesPage : Page
 
             StatusText.Text = "Search complete! Navigating to results...";
 
-            // Navigate to results using the user's persisted default viewer choice.
-            var viewerKey = FindNeedleUX.Services.ResultsViewerSettings.DefaultResultViewer?.ToLower()
-                            ?? GlobalSettings.WebViewResultViewerKey;
-            var viewerType = viewerKey switch
-            {
-                GlobalSettings.NativeResultViewerKey => typeof(FindNeedleUX.Pages.NativeResultsPage),
-                _                                    => typeof(ResultsWebPage)
-            };
-
+            // Navigate to the (only) result viewer.
             if (this.Frame != null)
             {
-                this.Frame.Navigate(viewerType);
+                this.Frame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
             }
         }
         catch (OperationCanceledException)

@@ -16,24 +16,6 @@
             <TextBlock Text="These preferences are saved per-user and apply to the native results viewer."
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
 
-            <!-- Default viewer -->
-            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="16">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Default result viewer" FontWeight="SemiBold"/>
-                    <TextBlock TextWrapping="Wrap" FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Text="Which viewer opens when you click 'View raw results' or finish a quick open."/>
-                    <ComboBox x:Name="DefaultViewerCombo" Width="280"
-                              SelectionChanged="DefaultViewerCombo_SelectionChanged"
-                              AutomationProperties.Name="Default result viewer">
-                        <ComboBoxItem Content="Native viewer (WinUI 3)"  Tag="nativereviewer"/>
-                        <ComboBoxItem Content="Web viewer (WebView2)"    Tag="resultswebpage"/>
-                    </ComboBox>
-                </StackPanel>
-            </Border>
-
             <!-- Time format -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
@@ -117,28 +99,6 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            <!-- Web viewer server-side threshold -->
-            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="16">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Web viewer paging cutover" FontWeight="SemiBold"/>
-                    <TextBlock TextWrapping="Wrap" FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Text="Result sets at or below this row count load entirely into the web viewer's browser (fastest for small data). Above it, the viewer asks the app for one page at a time — needed for million-row logs."/>
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <NumberBox x:Name="WebThresholdNumberBox" Width="160"
-                                   Minimum="100" Maximum="1000000" SmallChange="1000" LargeChange="10000"
-                                   SpinButtonPlacementMode="Inline"
-                                   ValueChanged="WebThresholdNumberBox_ValueChanged"
-                                   AutomationProperties.Name="Web viewer server-side threshold (rows)"/>
-                        <TextBlock Text="rows" VerticalAlignment="Center"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Button Content="Reset" Click="ResetWebThreshold_Click" FontSize="12"/>
-                    </StackPanel>
                 </StackPanel>
             </Border>
 

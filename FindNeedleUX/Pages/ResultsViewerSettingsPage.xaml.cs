@@ -43,14 +43,8 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Levels: start from the active theme preset, then layer per-level overrides. ---
             RebuildLevelEditor();
 
-            // --- Default viewer ---
-            SelectDefaultViewerInComboBox();
-
             // --- Storage backend ---
             SelectStorageInComboBox();
-
-            // --- Web viewer threshold ---
-            WebThresholdNumberBox.Value = ResultsViewerSettings.WebViewerServerSideThreshold;
 
             // --- Cache reuse ---
             SelectCacheReuseMode();
@@ -210,29 +204,6 @@ public sealed partial class ResultsViewerSettingsPage : Page
         RebuildLevelEditor();
     }
 
-    // ----- Default viewer -----
-    private void SelectDefaultViewerInComboBox()
-    {
-        var current = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
-        foreach (var item in DefaultViewerCombo.Items.OfType<ComboBoxItem>())
-        {
-            if (string.Equals(item.Tag as string, current, StringComparison.OrdinalIgnoreCase))
-            {
-                DefaultViewerCombo.SelectedItem = item;
-                return;
-            }
-        }
-    }
-
-    private void DefaultViewerCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        if (DefaultViewerCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
-        {
-            ResultsViewerSettings.DefaultResultViewer = tag;
-        }
-    }
-
     // ----- Cache reuse -----
     private void SelectCacheReuseMode()
     {
@@ -287,24 +258,6 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (_suppressEvents) return;
         ResultsViewerSettings.ShowStepHistory = ShowStepHistoryCheck.IsChecked == true;
-    }
-
-    // ----- Web viewer threshold -----
-    private void WebThresholdNumberBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        if (double.IsNaN(e.NewValue)) return;
-        int v = (int)e.NewValue;
-        if (v <= 0) return;
-        ResultsViewerSettings.WebViewerServerSideThreshold = v;
-    }
-
-    private void ResetWebThreshold_Click(object sender, RoutedEventArgs e)
-    {
-        _suppressEvents = true;
-        try { WebThresholdNumberBox.Value = ResultsViewerSettings.DefaultWebViewerServerSideThreshold; }
-        finally { _suppressEvents = false; }
-        ResultsViewerSettings.WebViewerServerSideThreshold = ResultsViewerSettings.DefaultWebViewerServerSideThreshold;
     }
 
     // ----- Storage backend -----

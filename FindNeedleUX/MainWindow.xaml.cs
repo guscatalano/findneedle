@@ -18,17 +18,6 @@ namespace FindNeedleUX;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly Dictionary<string, Type> ResultViewerPages = new()
-    {
-        { "resultswebpage", typeof(FindNeedleUX.Pages.ResultsWebPage) },
-        { "nativereviewer", typeof(FindNeedleUX.Pages.NativeResultsPage) }
-    };
-
-    private static readonly string[] RawResultViewers = new[]
-    {
-        "resultswebpage", "nativereviewer"
-    };
-
     private CancellationTokenSource _quickActionCts;
     private string _lastRunSummary = "—";
 
@@ -182,13 +171,8 @@ public sealed partial class MainWindow : Window
             await RunSearchWithProgress();
             ShowSpinner(false);
 
-            Type viewerType = viewer switch
-            {
-                "native" => typeof(FindNeedleUX.Pages.NativeResultsPage),
-                "web" => typeof(FindNeedleUX.Pages.ResultsWebPage),
-                _ => ResolveDefaultViewerType(),
-            };
-            contentFrame.Navigate(viewerType);
+            // Only the native viewer remains; --viewer is accepted for back-compat but always native.
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
         }
         catch (Exception ex)
         {
@@ -197,17 +181,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// The result viewer page the user picked in Settings → Result Viewer, falling back to the
-    /// web viewer. Mirrors the selection logic used by the Quick file/folder open flows.
-    /// </summary>
-    private static Type ResolveDefaultViewerType()
-    {
-        var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
-        if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
-            viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
-        return viewerType;
-    }
+    /// <summary>The result viewer page. Only the native viewer remains.</summary>
+    private static Type ResolveDefaultViewerType() => typeof(FindNeedleUX.Pages.NativeResultsPage);
 
     /// <summary>
     /// Programmatically navigate to the native result viewer. Used by the streaming search flow
@@ -351,21 +326,11 @@ public sealed partial class MainWindow : Window
                 break;
             case "results_viewraw":
                 Logger.Instance.Log("Navigated: ViewRawResults");
-                // Load preferred view from persisted Settings → Results viewer.
-                var viewerKey = ResultsViewerSettings.DefaultResultViewer?.ToLower() ?? GlobalSettings.WebViewResultViewerKey;
-                if (!((IList<string>)RawResultViewers).Contains(viewerKey))
-                    viewerKey = GlobalSettings.WebViewResultViewerKey;
-                if (!ResultViewerPages.TryGetValue(viewerKey, out var viewerType))
-                    viewerType = typeof(FindNeedleUX.Pages.ResultsWebPage);
-                NavigateWithSpinner(viewerType);
+                NavigateWithSpinner(ResolveDefaultViewerType());
                 break;
             case "results_processoroutput":
                 Logger.Instance.Log("Navigated: ProcessorOutputPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage));
-                break;
-            case "results_viewweb":
-                Logger.Instance.Log("Navigated: ResultsWebPage");
-                NavigateWithSpinner(typeof(FindNeedleUX.Pages.ResultsWebPage));
                 break;
             case "results_viewnative":
                 Logger.Instance.Log("Navigated: NativeResultsPage");

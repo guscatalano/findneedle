@@ -18,11 +18,10 @@ public class GlobalSettings
         set => _debug = value;
     }
 
-    // Result viewer configuration
+    // Result viewer configuration. (The web/DataTables viewer was removed; native is the only viewer.)
     public const string NativeResultViewerKey = "nativereviewer";
-    public const string WebViewResultViewerKey = "resultswebpage";
 
-    private static string _defaultResultViewer = WebViewResultViewerKey;
+    private static string _defaultResultViewer = NativeResultViewerKey;
 
     /// <summary>
     /// Legacy in-memory-only default-viewer setting. The persisted value lives on
@@ -34,7 +33,7 @@ public class GlobalSettings
     public static string DefaultResultViewer
     {
         get => _defaultResultViewer;
-        set => _defaultResultViewer = value?.ToLower() ?? WebViewResultViewerKey;
+        set => _defaultResultViewer = value?.ToLower() ?? NativeResultViewerKey;
     }
 
     // Toggle the debug flag

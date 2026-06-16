@@ -50,12 +50,6 @@
     <None Remove="Pages\SearchProcessorsPage.xaml" />
     <None Remove="Pages\SearchStatisticsPage.xaml" />
     <None Remove="Pages\SystemInfoPage.xaml" />
-    <None Remove="WebContent\datatables.css" />
-    <None Remove="WebContent\datatables.js" />
-    <None Remove="WebContent\datatables.min.css" />
-    <None Remove="WebContent\datatables.min.js" />
-    <None Remove="WebContent\resultsweb.html" />
-    <None Remove="WebContent\resultsweb.js" />
     <None Remove="Pages\DiagramToolsPage.xaml" />
   </ItemGroup>
   <ItemGroup>
@@ -76,24 +70,6 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <Content Include="Square44x44Logo.scale-200.ico" />
-    <Content Include="WebContent\datatables.css">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="WebContent\datatables.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="WebContent\datatables.min.css">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="WebContent\datatables.min.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="WebContent\resultsweb.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="WebContent\resultsweb.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="WebContent\timeline-demo.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

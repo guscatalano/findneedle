@@ -38,10 +38,7 @@
                 <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
                 <MenuFlyoutItem Text="Performance Report (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_perfreport"/>
                 <MenuFlyoutItem Text="Default Viewer" Click="MenuFlyoutItem_Click" Name="results_viewraw"/>
-                <MenuFlyoutSubItem Text="Switch Viewer">
-                    <MenuFlyoutItem Text="Web (DataTables)" Click="MenuFlyoutItem_Click" Name="results_viewweb"/>
-                    <MenuFlyoutItem Text="Native" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
-                </MenuFlyoutSubItem>
+                <MenuFlyoutItem Text="Native Viewer" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
                 <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
             </MenuBarItem>
 

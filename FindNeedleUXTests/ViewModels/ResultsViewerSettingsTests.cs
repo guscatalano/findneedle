@@ -17,26 +17,6 @@ namespace FindNeedleUXTests.ViewModels;
 [DoNotParallelize]
 public class ResultsViewerSettingsTests
 {
-    // U-B8: WebViewerServerSideThreshold rejects non-positive values.
-    [DataTestMethod]
-    [DataRow(0)]
-    [DataRow(-1)]
-    [DataRow(-10000)]
-    public void NormalizeThreshold_NonPositive_FallsBackToDefault(int bad)
-    {
-        Assert.AreEqual(ResultsViewerSettings.DefaultWebViewerServerSideThreshold,
-            ResultsViewerSettings.NormalizeThreshold(bad));
-    }
-
-    [DataTestMethod]
-    [DataRow(1)]
-    [DataRow(5000)]
-    [DataRow(250000)]
-    public void NormalizeThreshold_Positive_Preserved(int good)
-    {
-        Assert.AreEqual(good, ResultsViewerSettings.NormalizeThreshold(good));
-    }
-
     [TestMethod]
     public void ClampDetailsPanelHeight_BelowMin_ClampsToMin()
     {
@@ -69,7 +49,6 @@ public class ResultsViewerSettingsTests
 
             ResultsViewerSettings.ThemeName = "Dark";
             ResultsViewerSettings.PageSize = 250;
-            ResultsViewerSettings.WebViewerServerSideThreshold = 5000;
             ResultsViewerSettings.SetColumnVisibility("Source", true);
 
             Assert.IsTrue(File.Exists(tmp), "Save should have written the redirected file");
@@ -79,7 +58,6 @@ public class ResultsViewerSettingsTests
 
             Assert.AreEqual("Dark", ResultsViewerSettings.ThemeName);
             Assert.AreEqual(250, ResultsViewerSettings.PageSize);
-            Assert.AreEqual(5000, ResultsViewerSettings.WebViewerServerSideThreshold);
             Assert.IsTrue(ResultsViewerSettings.ColumnVisibility["Source"]);
         }
         finally
@@ -89,25 +67,4 @@ public class ResultsViewerSettingsTests
         }
     }
 
-    [TestMethod]
-    public void RoundTrip_InvalidThresholdWritten_ReloadsAsDefault()
-    {
-        var tmp = Path.Combine(Path.GetTempPath(), $"viewer-settings-{Guid.NewGuid():N}.json");
-        try
-        {
-            ResultsViewerSettings.SetStorageLocationForTests(tmp);
-
-            // A negative value must be normalized to the default both on set and after reload.
-            ResultsViewerSettings.WebViewerServerSideThreshold = -42;
-            ResultsViewerSettings.ReloadFromDiskForTests();
-
-            Assert.AreEqual(ResultsViewerSettings.DefaultWebViewerServerSideThreshold,
-                ResultsViewerSettings.WebViewerServerSideThreshold);
-        }
-        finally
-        {
-            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-            ResultsViewerSettings.ResetStorageForTests();
-        }
-    }
 }

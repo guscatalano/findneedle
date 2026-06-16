@@ -95,46 +95,14 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
-    /// Which viewer opens by default for "View Results → Default Viewer" and the Quick Open
-    /// flow. Now persisted (was an in-memory-only static on <c>GlobalSettings</c>, lost on
-    /// every restart). Valid values are <c>GlobalSettings.NativeResultViewerKey</c> /
-    /// <c>GlobalSettings.WebViewResultViewerKey</c>.
+    /// Which viewer opens by default. Only the native viewer remains, so this is effectively always
+    /// <c>GlobalSettings.NativeResultViewerKey</c>; kept persisted for forward/backward compatibility.
     /// </summary>
     public const string DefaultDefaultResultViewer = FindPluginCore.GlobalConfiguration.GlobalSettings.NativeResultViewerKey;
     public static string DefaultResultViewer
     {
         get => string.IsNullOrEmpty(Data.DefaultResultViewer) ? DefaultDefaultResultViewer : Data.DefaultResultViewer;
         set { Data.DefaultResultViewer = string.IsNullOrEmpty(value) ? DefaultDefaultResultViewer : value.ToLowerInvariant(); Save(); /* no Changed: applies on next viewer open */ }
-    }
-
-    /// <summary>
-    /// Row-count cutover for the web viewer. At or below this number, the viewer sends every row
-    /// to DataTables and lets it page client-side (fastest, no host round-trips). Above this,
-    /// the viewer switches to DataTables' serverSide mode and asks the host for one page at a
-    /// time — which is what makes browsing million-row searches feasible in the web viewer.
-    /// 10000 is the sweet spot in practice: DataTables handles ≤10k rows snappily in browser
-    /// memory; above that you start seeing scroll jank, slow filter response, and >100 MB
-    /// WebView2 memory use.
-    /// </summary>
-    public const int DefaultWebViewerServerSideThreshold = 10000;
-
-    /// <summary>
-    /// Normalize a server-side threshold: zero/negative values are invalid and fall back to
-    /// <see cref="DefaultWebViewerServerSideThreshold"/>. Pure (no I/O / no static state) so it's
-    /// unit-testable; both the getter and setter route through it.
-    /// </summary>
-    public static int NormalizeThreshold(int value) =>
-        value > 0 ? value : DefaultWebViewerServerSideThreshold;
-
-    public static int WebViewerServerSideThreshold
-    {
-        get => Data.WebViewerServerSideThreshold is int n && n > 0 ? n : DefaultWebViewerServerSideThreshold;
-        set
-        {
-            Data.WebViewerServerSideThreshold = NormalizeThreshold(value);
-            Save();
-            // No Changed event — applies on next viewer open, not to a viewer that's already up.
-        }
     }
 
     /// <summary>
@@ -316,7 +284,6 @@ public static class ResultsViewerSettings
         public bool? FiltersExpanded { get; set; }
         public Dictionary<string, bool> ColumnVisibility { get; set; }
         public int? PageSize { get; set; }
-        public int? WebViewerServerSideThreshold { get; set; }
         public string DefaultResultViewer { get; set; }
         public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
         public string CacheReuseMode { get; set; }
