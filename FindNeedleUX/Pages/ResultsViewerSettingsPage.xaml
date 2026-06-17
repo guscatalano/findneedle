@@ -174,6 +174,19 @@
                 </StackPanel>
             </Border>
 
+            <!-- Row tags -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Row tags" FontWeight="SemiBold"/>
+                    <CheckBox x:Name="ColorTaggedRowsCheck" Content="Also color the whole row with the tag color"
+                              Checked="ColorTaggedRowsCheck_Changed" Unchecked="ColorTaggedRowsCheck_Changed"/>
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                               Text="Tagged rows always show a colored tag glyph on the left. Turn this on to tint the whole row too."/>
+                </StackPanel>
+            </Border>
+
             <!-- Search storage backend -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

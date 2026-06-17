@@ -185,6 +185,15 @@ public static class ResultsViewerSettings
         set { Data.FilterDock = value.ToString(); Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>When a row is tagged (right-click → Tag), also tint the whole row with the tag
+    /// color (in addition to the tag glyph in the row header). Off by default.</summary>
+    public const bool DefaultColorTaggedRows = false;
+    public static bool ColorTaggedRows
+    {
+        get => Data.ColorTaggedRows ?? DefaultColorTaggedRows;
+        set { Data.ColorTaggedRows = value; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -345,6 +354,7 @@ public static class ResultsViewerSettings
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }
+        public bool? ColorTaggedRows { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }

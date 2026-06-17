@@ -58,6 +58,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Search progress ---
             ShowStepHistoryCheck.IsChecked = ResultsViewerSettings.ShowStepHistory;
 
+            // --- Row tags ---
+            ColorTaggedRowsCheck.IsChecked = ResultsViewerSettings.ColorTaggedRows;
+
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
 
@@ -280,6 +283,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
         {
             ResultsViewerSettings.SearchSubmitMode = mode;
         }
+    }
+
+    private void ColorTaggedRowsCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.ColorTaggedRows = ColorTaggedRowsCheck.IsChecked == true;
     }
 
     private void ShowStepHistoryCheck_Changed(object sender, RoutedEventArgs e)

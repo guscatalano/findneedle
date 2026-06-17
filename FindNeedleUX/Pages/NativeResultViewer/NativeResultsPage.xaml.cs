@@ -48,6 +48,7 @@ public sealed partial class NativeResultsPage : Page
     private static readonly Dictionary<string, string> _tagColors =
         TagOptions.ToDictionary(t => t.Name, t => t.Hex, StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _rowTags = new(StringComparer.Ordinal);
+    private bool _colorTaggedRows; // optional: also tint the whole row with the tag color
 
     private static string RowKey(LogLine line)
         => !string.IsNullOrEmpty(line.SearchableData)
@@ -534,6 +535,7 @@ public sealed partial class NativeResultsPage : Page
         RefreshSearchSubmitMode();
         _filterDock = ResultsViewerSettings.FilterDock;
         RefreshFilterLayout();
+        _colorTaggedRows = ResultsViewerSettings.ColorTaggedRows;
     }
 
     private void ApplyPersistedLevelOverrides()
@@ -1162,26 +1164,38 @@ public sealed partial class NativeResultsPage : Page
     {
         if (e.Row.DataContext is not LogLine line) return;
 
-        // Level tint as the row background (unchanged).
         var levelHex = (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
             ? entry.HexColor : null;
-        var brush = levelHex != null ? HexToBrushConverter.Parse(levelHex) : null;
-        if (!ReferenceEquals(e.Row.Background, brush))
-            e.Row.Background = brush;
+        string tagHex = null;
+        bool tagged = _rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out tagHex);
 
-        // Tag → a colored dot in the row header (to the left of the row). Cleared on recycle.
-        if (_rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out var tagHex))
+        // Background: when "color tagged rows" is on, a tagged row is tinted with its tag color;
+        // otherwise the level tint as before. (Rows are recycled, so always set.)
+        Microsoft.UI.Xaml.Media.Brush bg;
+        if (tagged && _colorTaggedRows)
         {
-            var dot = new TextBlock
+            var c = HexToBrushConverter.ParseColor(tagHex);
+            bg = new Microsoft.UI.Xaml.Media.SolidColorBrush(global::Windows.UI.Color.FromArgb(0x44, c.R, c.G, c.B));
+        }
+        else
+        {
+            bg = levelHex != null ? HexToBrushConverter.Parse(levelHex) : null;
+        }
+        e.Row.Background = bg;
+
+        // Tag → a colored tag glyph in the row header (to the left of the row). Cleared on recycle.
+        if (tagged)
+        {
+            var marker = new FontIcon
             {
-                Text = "●", // ●
+                Glyph = "", // Tag (Segoe MDL2 Assets)
+                FontSize = 12,
                 Foreground = HexToBrushConverter.Parse(tagHex),
-                FontSize = 13,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            ToolTipService.SetToolTip(dot, $"Tag: {tag}");
-            e.Row.Header = dot;
+            ToolTipService.SetToolTip(marker, $"Tag: {tag}");
+            e.Row.Header = marker;
         }
         else
         {
