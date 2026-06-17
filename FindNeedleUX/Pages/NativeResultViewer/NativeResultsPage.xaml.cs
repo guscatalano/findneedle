@@ -36,12 +36,14 @@ public sealed partial class NativeResultsPage : Page
     // User-applied marks (right-click → Tag). Keyed by row *content* so a tag survives paging,
     // sorting and re-filtering (the grid re-materializes LogLine objects each page, and the row
     // Index is positional, not a stable identity). In-memory for the viewer session.
+    // Bold/opaque — these paint a solid left stripe on the row (distinct from the pale, translucent
+    // level row-tints), so a tag reads as its own marker rather than blending into the level color.
     private static readonly (string Name, string Hex)[] TagOptions =
     {
-        ("Important", "#55E53935"), // red
-        ("Question",  "#55FB8C00"), // orange
-        ("Resolved",  "#5543A047"), // green
-        ("Note",      "#553949AB"), // indigo
+        ("Important", "#E53935"), // red
+        ("Question",  "#FB8C00"), // orange
+        ("Resolved",  "#43A047"), // green
+        ("Note",      "#3949AB"), // indigo
     };
     private static readonly Dictionary<string, string> _tagColors =
         TagOptions.ToDictionary(t => t.Name, t => t.Hex, StringComparer.OrdinalIgnoreCase);
@@ -1160,16 +1162,36 @@ public sealed partial class NativeResultsPage : Page
     {
         if (e.Row.DataContext is not LogLine line) return;
 
-        // A user tag wins over the level color; rows are recycled, so always set (or clear).
-        string hex = null;
-        if (_rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out var tagHex))
-            hex = tagHex;
-        else if (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
-            hex = entry.HexColor;
+        var levelHex = (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
+            ? entry.HexColor : null;
 
-        var brush = hex != null ? HexToBrushConverter.Parse(hex) : null;
-        if (!ReferenceEquals(e.Row.Background, brush))
-            e.Row.Background = brush;
+        string tagHex = null;
+        if (_rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out var th))
+            tagHex = th;
+
+        if (tagHex != null)
+        {
+            // Bold left stripe (the tag) + the level tint for the rest of the row, via a horizontal
+            // gradient with a hard stop. Rows are recycled, so we always rebuild this.
+            var tagColor = HexToBrushConverter.ParseColor(tagHex);
+            var lvlColor = levelHex != null ? HexToBrushConverter.ParseColor(levelHex) : Microsoft.UI.Colors.Transparent;
+            var lgb = new Microsoft.UI.Xaml.Media.LinearGradientBrush
+            {
+                StartPoint = new global::Windows.Foundation.Point(0, 0.5),
+                EndPoint = new global::Windows.Foundation.Point(1, 0.5),
+            };
+            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = tagColor, Offset = 0.0 });
+            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = tagColor, Offset = 0.015 });
+            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = lvlColor, Offset = 0.015 });
+            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = lvlColor, Offset = 1.0 });
+            e.Row.Background = lgb;
+        }
+        else
+        {
+            var brush = levelHex != null ? HexToBrushConverter.Parse(levelHex) : null;
+            if (!ReferenceEquals(e.Row.Background, brush))
+                e.Row.Background = brush;
+        }
     }
 
     // ----- Row details -----
