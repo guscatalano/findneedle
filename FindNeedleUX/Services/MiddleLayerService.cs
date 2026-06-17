@@ -61,6 +61,14 @@ public class MiddleLayerService
         NotifyStateChanged();
     }
 
+    /// <summary>Add a pre-built non-folder location (e.g. a live Kusto cluster).</summary>
+    public static void AddLocation(ISearchLocation location)
+    {
+        if (location == null) return;
+        Locations.Add(location);
+        NotifyStateChanged();
+    }
+
     public static List<ISearchResult> GetSearchResults()
     {
         return SearchResults;

@@ -1,6 +1,8 @@
 using System;
+using FindNeedleUX.Services;
 using FindNeedleUX.Utils;
 using FindNeedleUX.ViewModels;
+using KustoPlugin.Location;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
@@ -57,5 +59,57 @@ public sealed partial class SearchLocationsPage : Page
         {
             _viewModel.AddLocation(file.Path);
         }
+    }
+
+    private async void Button_AddKusto(object sender, RoutedEventArgs e)
+    {
+        var cluster = new TextBox
+        {
+            Header = "Cluster URI",
+            PlaceholderText = "https://<name>.<region>.kusto.windows.net",
+            Text = "https://kvc-6u9h87febddjedr8ed.southcentralus.kusto.windows.net",
+        };
+        var database = new TextBox { Header = "Database", PlaceholderText = "MyDatabase" };
+        var query = new TextBox
+        {
+            Header = "KQL query",
+            PlaceholderText = "MyTable | where Timestamp > ago(1h) | take 1000",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 120,
+        };
+        var auth = new ComboBox { Header = "Sign-in", SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+        auth.Items.Add("Interactive browser sign-in");
+        auth.Items.Add("Azure CLI (az login)");
+        auth.Items.Add("Device code");
+
+        var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
+        panel.Children.Add(cluster);
+        panel.Children.Add(database);
+        panel.Children.Add(query);
+        panel.Children.Add(auth);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add Kusto location",
+            Content = new ScrollViewer { Content = panel, MaxHeight = 520 },
+            PrimaryButtonText = "Add",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (string.IsNullOrWhiteSpace(cluster.Text) || string.IsNullOrWhiteSpace(database.Text)
+            || string.IsNullOrWhiteSpace(query.Text))
+            return;
+
+        var mode = auth.SelectedIndex switch
+        {
+            1 => KustoAuthMode.AzureCli,
+            2 => KustoAuthMode.DeviceCode,
+            _ => KustoAuthMode.Interactive,
+        };
+        MiddleLayerService.AddLocation(new KustoLocation(cluster.Text, database.Text, query.Text, mode));
+        _viewModel.Refresh();
     }
 }

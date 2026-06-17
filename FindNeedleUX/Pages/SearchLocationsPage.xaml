@@ -40,6 +40,8 @@
                             AutomationProperties.Name="Add folder location"/>
                     <Button Content="➕ Add File" Click="Button_AddFile" Width="120" Margin="0,8,0,0"
                             AutomationProperties.Name="Add file location"/>
+                    <Button Content="➕ Add Kusto" Click="Button_AddKusto" Width="120" Margin="0,8,0,0"
+                            AutomationProperties.Name="Add Kusto cluster location"/>
                 </StackPanel>
             </Border>
 
