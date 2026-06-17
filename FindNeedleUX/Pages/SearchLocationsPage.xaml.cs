@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindNeedleUX.Utils;
@@ -64,18 +65,40 @@ public sealed partial class SearchLocationsPage : Page
 
     private async void Button_AddKusto(object sender, RoutedEventArgs e)
     {
+        var loc = await ShowKustoDialogAsync(null);
+        if (loc != null) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
+    }
+
+    private async void Button_Edit(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string name }) return;
+        var existing = MiddleLayerService.Locations.OfType<KustoLocation>().FirstOrDefault(k => k.GetName() == name);
+        if (existing == null) return; // only Kusto locations are editable today
+        var updated = await ShowKustoDialogAsync(existing);
+        if (updated == null) return;
+        MiddleLayerService.RemoveLocationByName(name); // replace the old one (its name may have changed)
+        MiddleLayerService.AddLocation(updated);
+        _viewModel.Refresh();
+    }
+
+    /// <summary>
+    /// Shows the Kusto cluster/database/query/auth dialog. Pre-filled from <paramref name="existing"/>
+    /// when editing. Returns the configured location, or null if cancelled/incomplete.
+    /// </summary>
+    private async Task<KustoLocation> ShowKustoDialogAsync(KustoLocation existing)
+    {
         var cluster = new TextBox
         {
             Header = "Cluster URI",
             PlaceholderText = "https://<name>.<region>.kusto.windows.net",
-            Text = "https://kvc-6u9h87febddjedr8ed.southcentralus.kusto.windows.net",
+            Text = existing?.ClusterUri ?? "https://kvc-6u9h87febddjedr8ed.southcentralus.kusto.windows.net",
         };
         // RadioButtons (not a ComboBox) so there's no dropdown to get clipped by the dialog scroll.
         var auth = new RadioButtons { Header = "Sign-in", MaxColumns = 1 };
         auth.Items.Add("Interactive browser sign-in");
         auth.Items.Add("Azure CLI (az login)");
         auth.Items.Add("Device code");
-        auth.SelectedIndex = 0;
+        auth.SelectedIndex = existing != null ? (int)existing.AuthMode : 0;
 
         KustoAuthMode Mode() => auth.SelectedIndex switch
         {
@@ -88,7 +111,7 @@ public sealed partial class SearchLocationsPage : Page
             => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
 
         // Database: type it, or Load and click from the inline list (no dropdown → nothing to clip).
-        var dbBox = new TextBox { Header = "Database", PlaceholderText = "Load, or type a name" };
+        var dbBox = new TextBox { Header = "Database", PlaceholderText = "Load, or type a name", Text = existing?.Database ?? string.Empty };
         var dbList = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 120 };
         var loadDbBtn = new Button { Content = "Load databases" };
         var dbStatus = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Dim() };
@@ -116,6 +139,7 @@ public sealed partial class SearchLocationsPage : Page
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 110,
+            Text = existing?.Query ?? string.Empty,
         };
 
         // Tables in the chosen database — click one to seed a query from it.
@@ -199,25 +223,24 @@ public sealed partial class SearchLocationsPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = "Add Kusto location",
+            Title = existing == null ? "Add Kusto location" : "Edit Kusto location",
             Content = new ScrollViewer
             {
                 Content = panel, MaxHeight = 620,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             },
-            PrimaryButtonText = "Add",
+            PrimaryButtonText = existing == null ? "Add" : "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot,
         };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
 
         var database = (dbBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(cluster.Text) || string.IsNullOrWhiteSpace(database)
             || string.IsNullOrWhiteSpace(query.Text))
-            return;
+            return null;
 
-        MiddleLayerService.AddLocation(new KustoLocation(cluster.Text, database, query.Text, Mode()));
-        _viewModel.Refresh();
+        return new KustoLocation(cluster.Text, database, query.Text, Mode());
     }
 }

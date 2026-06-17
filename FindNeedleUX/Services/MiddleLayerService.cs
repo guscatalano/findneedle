@@ -423,7 +423,12 @@ public class MiddleLayerService
         ObservableCollection<LocationListItem> test = new ObservableCollection<LocationListItem>();
         foreach (ISearchLocation loc in Locations)
         {
-            test.Add(new LocationListItem() { Name = loc.GetName(), Description = loc.GetDescription() });
+            test.Add(new LocationListItem()
+            {
+                Name = loc.GetName(),
+                Description = loc.GetDescription(),
+                IsEditable = loc is KustoPlugin.Location.KustoLocation,
+            });
         }
         return test;
     }
