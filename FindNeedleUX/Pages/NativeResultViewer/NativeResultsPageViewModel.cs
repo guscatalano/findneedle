@@ -536,6 +536,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     /// Slice <see cref="_filtered"/> into the current page and bulk-replace <see cref="Results"/>.
     /// (Used by pagination button clicks; ReloadFromSource handles full filter rebuilds.)
     /// </summary>
+    /// <summary>Re-render the current page in place (e.g. after a row tag changes) without re-filtering.</summary>
+    public void RefreshCurrentPage() => PublishCurrentPage();
+
     private void PublishCurrentPage()
     {
         var filters = BuildFilterSpec();

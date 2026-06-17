@@ -32,6 +32,26 @@ public sealed partial class NativeResultsPage : Page
     private readonly Dictionary<string, LevelEntry> _levelLookup =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // ----- Row tags -----
+    // User-applied marks (right-click → Tag). Keyed by row *content* so a tag survives paging,
+    // sorting and re-filtering (the grid re-materializes LogLine objects each page, and the row
+    // Index is positional, not a stable identity). In-memory for the viewer session.
+    private static readonly (string Name, string Hex)[] TagOptions =
+    {
+        ("Important", "#55E53935"), // red
+        ("Question",  "#55FB8C00"), // orange
+        ("Resolved",  "#5543A047"), // green
+        ("Note",      "#553949AB"), // indigo
+    };
+    private static readonly Dictionary<string, string> _tagColors =
+        TagOptions.ToDictionary(t => t.Name, t => t.Hex, StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _rowTags = new(StringComparer.Ordinal);
+
+    private static string RowKey(LogLine line)
+        => !string.IsNullOrEmpty(line.SearchableData)
+            ? line.SearchableData
+            : $"{line.Time}{line.Message}{line.Source}";
+
     public NativeResultsPage()
     {
         this.InitializeComponent();
@@ -1138,9 +1158,16 @@ public sealed partial class NativeResultsPage : Page
     //      through some property-system bookkeeping, so an early-out is a win.
     private void ResultsGrid_LoadingRow(object sender, DataGridRowEventArgs e)
     {
-        if (e.Row.DataContext is not LogLine line || string.IsNullOrEmpty(line.Level)) return;
-        if (!_levelLookup.TryGetValue(line.Level, out var entry)) return;
-        var brush = HexToBrushConverter.Parse(entry.HexColor);
+        if (e.Row.DataContext is not LogLine line) return;
+
+        // A user tag wins over the level color; rows are recycled, so always set (or clear).
+        string hex = null;
+        if (_rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out var tagHex))
+            hex = tagHex;
+        else if (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
+            hex = entry.HexColor;
+
+        var brush = hex != null ? HexToBrushConverter.Parse(hex) : null;
         if (!ReferenceEquals(e.Row.Background, brush))
             e.Row.Background = brush;
     }
@@ -1183,6 +1210,25 @@ public sealed partial class NativeResultsPage : Page
         if (row == null) return;
 
         var flyout = new MenuFlyout();
+
+        // ----- Tag (mark this row) -----
+        var key = RowKey(row);
+        var tagSub = new MenuFlyoutSubItem { Text = "Tag" };
+        foreach (var (name, _) in TagOptions)
+        {
+            var capturedName = name;
+            var item = new MenuFlyoutItem { Text = name };
+            if (_rowTags.TryGetValue(key, out var current) && string.Equals(current, name, StringComparison.OrdinalIgnoreCase))
+                item.Icon = new SymbolIcon(Symbol.Accept); // checkmark on the active tag
+            item.Click += (_, __) => { _rowTags[key] = capturedName; ViewModel.RefreshCurrentPage(); };
+            tagSub.Items.Add(item);
+        }
+        tagSub.Items.Add(new MenuFlyoutSeparator());
+        var clearTag = new MenuFlyoutItem { Text = "Clear tag" };
+        clearTag.Click += (_, __) => { _rowTags.Remove(key); ViewModel.RefreshCurrentPage(); };
+        tagSub.Items.Add(clearTag);
+        flyout.Items.Add(tagSub);
+        flyout.Items.Add(new MenuFlyoutSeparator());
 
         if (!string.IsNullOrEmpty(cellColumnHeader))
         {
