@@ -50,12 +50,29 @@ public class KustoLocation : ISearchLocation
         AuthMode = authMode;
     }
 
-    private static TokenCredential CreateCredential(KustoAuthMode authMode) => authMode switch
+    // One credential instance per auth mode, reused across calls so the token is cached (in-memory,
+    // plus an on-disk persistent cache for interactive/device) — sign in once, not on every button.
+    private static readonly object _credLock = new();
+    private static readonly Dictionary<KustoAuthMode, TokenCredential> _credCache = new();
+
+    private static TokenCredential CreateCredential(KustoAuthMode authMode)
     {
-        KustoAuthMode.AzureCli => new AzureCliCredential(),
-        KustoAuthMode.DeviceCode => new DeviceCodeCredential(),
-        _ => new InteractiveBrowserCredential(),
-    };
+        lock (_credLock)
+        {
+            if (_credCache.TryGetValue(authMode, out var existing)) return existing;
+            var persist = new TokenCachePersistenceOptions { Name = "FindNeedleKusto" };
+            TokenCredential cred = authMode switch
+            {
+                KustoAuthMode.AzureCli => new AzureCliCredential(),
+                KustoAuthMode.DeviceCode => new DeviceCodeCredential(
+                    new DeviceCodeCredentialOptions { TokenCachePersistenceOptions = persist }),
+                _ => new InteractiveBrowserCredential(
+                    new InteractiveBrowserCredentialOptions { TokenCachePersistenceOptions = persist }),
+            };
+            _credCache[authMode] = cred;
+            return cred;
+        }
+    }
 
     private static KustoConnectionStringBuilder BuildConnection(string clusterUri, KustoAuthMode authMode)
     {

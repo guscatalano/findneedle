@@ -70,10 +70,12 @@ public sealed partial class SearchLocationsPage : Page
             PlaceholderText = "https://<name>.<region>.kusto.windows.net",
             Text = "https://kvc-6u9h87febddjedr8ed.southcentralus.kusto.windows.net",
         };
-        var auth = new ComboBox { Header = "Sign-in", SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+        // RadioButtons (not a ComboBox) so there's no dropdown to get clipped by the dialog scroll.
+        var auth = new RadioButtons { Header = "Sign-in", MaxColumns = 1 };
         auth.Items.Add("Interactive browser sign-in");
         auth.Items.Add("Azure CLI (az login)");
         auth.Items.Add("Device code");
+        auth.SelectedIndex = 0;
 
         KustoAuthMode Mode() => auth.SelectedIndex switch
         {
@@ -82,42 +84,30 @@ public sealed partial class SearchLocationsPage : Page
             _ => KustoAuthMode.Interactive,
         };
 
-        // Database is a picker populated from the cluster (most people won't know the name). Editable
-        // so it still works if listing fails (or you'd rather type it).
-        var dbCombo = new ComboBox
+        Microsoft.UI.Xaml.Media.Brush Dim()
+            => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+
+        // Database: type it, or Load and click from the inline list (no dropdown → nothing to clip).
+        var dbBox = new TextBox { Header = "Database", PlaceholderText = "Load, or type a name" };
+        var dbList = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 120 };
+        var loadDbBtn = new Button { Content = "Load databases" };
+        var dbStatus = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Dim() };
+        loadDbBtn.Click += async (_, __) =>
         {
-            Header = "Database",
-            IsEditable = true,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            PlaceholderText = "Load databases, or type a name",
-        };
-        var loadBtn = new Button { Content = "Load databases" };
-        var status = new TextBlock
-        {
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-        };
-        loadBtn.Click += async (_, __) =>
-        {
-            if (string.IsNullOrWhiteSpace(cluster.Text)) { status.Text = "Enter a cluster URI first."; return; }
-            var prev = loadBtn.Content;
-            loadBtn.IsEnabled = false; loadBtn.Content = "Loading…"; status.Text = "Connecting… (you may be prompted to sign in)";
+            if (string.IsNullOrWhiteSpace(cluster.Text)) { dbStatus.Text = "Enter a cluster URI first."; return; }
+            var prev = loadDbBtn.Content; loadDbBtn.IsEnabled = false; loadDbBtn.Content = "Loading…";
+            dbStatus.Text = "Connecting… (you may be prompted to sign in the first time)";
             try
             {
-                var clusterUri = cluster.Text;
-                var mode = Mode();
+                var clusterUri = cluster.Text; var mode = Mode();
                 var dbs = await Task.Run(() => KustoLocation.GetDatabases(clusterUri, mode));
-                var keep = dbCombo.Text;
-                dbCombo.Items.Clear();
-                foreach (var d in dbs) dbCombo.Items.Add(d);
-                status.Text = dbs.Count > 0 ? $"{dbs.Count} databases loaded." : "No databases found.";
-                if (dbs.Count > 0) dbCombo.SelectedIndex = 0;
-                if (!string.IsNullOrWhiteSpace(keep)) dbCombo.Text = keep;
+                dbList.ItemsSource = dbs;
+                dbStatus.Text = dbs.Count > 0 ? $"{dbs.Count} databases (click one)." : "No databases found.";
             }
-            catch (Exception ex) { status.Text = "Failed to load databases: " + ex.Message; }
-            finally { loadBtn.Content = prev; loadBtn.IsEnabled = true; }
+            catch (Exception ex) { dbStatus.Text = "Failed to load databases: " + ex.Message; }
+            finally { loadDbBtn.Content = prev; loadDbBtn.IsEnabled = true; }
         };
+        dbList.SelectionChanged += (_, __) => { if (dbList.SelectedItem is string d) dbBox.Text = d; };
 
         var query = new TextBox
         {
@@ -129,16 +119,12 @@ public sealed partial class SearchLocationsPage : Page
         };
 
         // Tables in the chosen database — click one to seed a query from it.
-        var tables = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 130 };
+        var tables = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 120 };
         var loadTablesBtn = new Button { Content = "Load tables" };
-        var tablesStatus = new TextBlock
-        {
-            FontSize = 12, TextWrapping = TextWrapping.Wrap,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-        };
+        var tablesStatus = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Dim() };
         loadTablesBtn.Click += async (_, __) =>
         {
-            var db = (dbCombo.Text ?? string.Empty).Trim();
+            var db = (dbBox.Text ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(cluster.Text) || string.IsNullOrWhiteSpace(db))
             { tablesStatus.Text = "Pick a cluster + database first."; return; }
             var prev = loadTablesBtn.Content; loadTablesBtn.IsEnabled = false; loadTablesBtn.Content = "Loading…"; tablesStatus.Text = "Loading tables…";
@@ -163,12 +149,12 @@ public sealed partial class SearchLocationsPage : Page
         {
             IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 12,
-            MaxHeight = 200, PlaceholderText = "Preview results appear here",
+            MaxHeight = 180, PlaceholderText = "Preview results appear here",
         };
         ScrollViewer.SetHorizontalScrollBarVisibility(previewOut, ScrollBarVisibility.Auto);
         previewBtn.Click += async (_, __) =>
         {
-            var db = (dbCombo.Text ?? string.Empty).Trim();
+            var db = (dbBox.Text ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(cluster.Text) || string.IsNullOrWhiteSpace(db) || string.IsNullOrWhiteSpace(query.Text))
             { previewOut.Text = "Enter cluster + database + query first."; return; }
             var prev = previewBtn.Content; previewBtn.IsEnabled = false; previewBtn.Content = "Running…"; previewOut.Text = "Running…";
@@ -188,9 +174,10 @@ public sealed partial class SearchLocationsPage : Page
         };
 
         var dbGroup = new StackPanel { Spacing = 4 };
-        dbGroup.Children.Add(dbCombo);
-        dbGroup.Children.Add(loadBtn);
-        dbGroup.Children.Add(status);
+        dbGroup.Children.Add(dbBox);
+        dbGroup.Children.Add(loadDbBtn);
+        dbGroup.Children.Add(dbList);
+        dbGroup.Children.Add(dbStatus);
 
         var tablesGroup = new StackPanel { Spacing = 4 };
         tablesGroup.Children.Add(new TextBlock { Text = "Tables", FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold });
@@ -213,7 +200,11 @@ public sealed partial class SearchLocationsPage : Page
         var dialog = new ContentDialog
         {
             Title = "Add Kusto location",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 600 },
+            Content = new ScrollViewer
+            {
+                Content = panel, MaxHeight = 620,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            },
             PrimaryButtonText = "Add",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -221,7 +212,7 @@ public sealed partial class SearchLocationsPage : Page
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        var database = (dbCombo.Text ?? string.Empty).Trim();
+        var database = (dbBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(cluster.Text) || string.IsNullOrWhiteSpace(database)
             || string.IsNullOrWhiteSpace(query.Text))
             return;
