@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
@@ -132,9 +133,22 @@ public sealed partial class SearchLocationsPage : Page
 
         // Database — type it, or Load and click from the inline list (no dropdown → nothing to clip).
         var dbBox = new TextBox { PlaceholderText = "Selected database (type, or pick below)", Text = existing?.Database ?? string.Empty };
-        var dbList = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 120 };
+        var dbFilter = new TextBox { PlaceholderText = "Filter databases…" };
+        var dbList = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 160 };
         var loadDbBtn = new Button { Content = "Load", VerticalAlignment = VerticalAlignment.Bottom, MinWidth = 72 };
         var dbStatus = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Dim() };
+        var allDbs = new List<string>();
+        // Filter the (possibly very large) list as you type; ListView virtualizes the rest.
+        void ApplyDbFilter()
+        {
+            var f = (dbFilter.Text ?? string.Empty).Trim();
+            var items = string.IsNullOrEmpty(f)
+                ? allDbs
+                : allDbs.Where(d => d.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            dbList.ItemsSource = items;
+            if (!string.IsNullOrWhiteSpace(dbBox.Text) && items.Contains(dbBox.Text)) dbList.SelectedItem = dbBox.Text;
+        }
+        dbFilter.TextChanged += (_, __) => ApplyDbFilter();
         loadDbBtn.Click += async (_, __) =>
         {
             if (string.IsNullOrWhiteSpace(cluster.Text)) { dbStatus.Text = "Enter a cluster URI first."; return; }
@@ -143,11 +157,9 @@ public sealed partial class SearchLocationsPage : Page
             try
             {
                 var clusterUri = cluster.Text; var mode = Mode();
-                var dbs = await Task.Run(() => KustoLocation.GetDatabases(clusterUri, mode));
-                dbList.ItemsSource = dbs;
-                // Highlight the current database when editing (or after a prior pick).
-                if (!string.IsNullOrWhiteSpace(dbBox.Text) && dbs.Contains(dbBox.Text)) dbList.SelectedItem = dbBox.Text;
-                dbStatus.Text = dbs.Count > 0 ? $"{dbs.Count} databases — click to choose." : "No databases found.";
+                allDbs = await Task.Run(() => KustoLocation.GetDatabases(clusterUri, mode));
+                ApplyDbFilter();
+                dbStatus.Text = allDbs.Count > 0 ? $"{allDbs.Count} databases — filter/click to choose." : "No databases found.";
             }
             catch (Exception ex) { dbStatus.Text = "Failed to load databases: " + ex.Message; }
             finally { loadDbBtn.Content = prev; loadDbBtn.IsEnabled = true; }
@@ -171,9 +183,19 @@ public sealed partial class SearchLocationsPage : Page
         };
 
         // Tables in the chosen database — click one to seed a query from it.
-        var tables = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 120 };
+        var tables = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 160 };
+        var tableFilter = new TextBox { PlaceholderText = "Filter tables…" };
         var loadTablesBtn = new Button { Content = "Load tables" };
         var tablesStatus = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Dim() };
+        var allTables = new List<string>();
+        void ApplyTableFilter()
+        {
+            var f = (tableFilter.Text ?? string.Empty).Trim();
+            tables.ItemsSource = string.IsNullOrEmpty(f)
+                ? allTables
+                : allTables.Where(t => t.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+        tableFilter.TextChanged += (_, __) => ApplyTableFilter();
         loadTablesBtn.Click += async (_, __) =>
         {
             var db = (dbBox.Text ?? string.Empty).Trim();
@@ -183,9 +205,9 @@ public sealed partial class SearchLocationsPage : Page
             try
             {
                 var clusterUri = cluster.Text; var mode = Mode();
-                var t = await Task.Run(() => KustoLocation.GetTables(clusterUri, db, mode));
-                tables.ItemsSource = t;
-                tablesStatus.Text = t.Count > 0 ? $"{t.Count} tables — click one to build a query." : "No tables found.";
+                allTables = await Task.Run(() => KustoLocation.GetTables(clusterUri, db, mode));
+                ApplyTableFilter();
+                tablesStatus.Text = allTables.Count > 0 ? $"{allTables.Count} tables — filter/click to build a query." : "No tables found.";
             }
             catch (Exception ex) { tablesStatus.Text = "Failed to load tables: " + ex.Message; }
             finally { loadTablesBtn.Content = prev; loadTablesBtn.IsEnabled = true; }
@@ -228,14 +250,16 @@ public sealed partial class SearchLocationsPage : Page
         var dbGroup = new StackPanel { Spacing = 4 };
         dbGroup.Children.Add(Section("Database"));
         dbGroup.Children.Add(dbRow);
-        dbGroup.Children.Add(Hint("Databases on the cluster (click to choose):"));
+        dbGroup.Children.Add(Hint("Databases on the cluster (filter, then click to choose):"));
+        dbGroup.Children.Add(dbFilter);
         dbGroup.Children.Add(Boxed(dbList));
         dbGroup.Children.Add(dbStatus);
 
         var tablesGroup = new StackPanel { Spacing = 4 };
         tablesGroup.Children.Add(Section("Tables"));
         tablesGroup.Children.Add(loadTablesBtn);
-        tablesGroup.Children.Add(Hint("Tables in the database (click to start a query):"));
+        tablesGroup.Children.Add(Hint("Tables in the database (filter, then click to start a query):"));
+        tablesGroup.Children.Add(tableFilter);
         tablesGroup.Children.Add(Boxed(tables));
         tablesGroup.Children.Add(tablesStatus);
 
