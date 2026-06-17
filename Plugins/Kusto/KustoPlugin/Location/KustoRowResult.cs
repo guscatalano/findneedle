@@ -32,8 +32,8 @@ public class KustoRowResult : ISearchResult
     private static readonly string[] MachineCols = { "HostInstance", "Machine", "Computer", "RoleInstance", "Hostname", "Host" };
     private static readonly string[] UserCols    = { "User", "Username", "UserName", "Identity" };
 
-    // "[2026-01-25 06:33:16] rest..."  →  ts + rest
-    private static readonly Regex BracketTime = new(@"^\s*\[(?<ts>[^\]]{4,40})\]\s*(?<rest>.*)$", RegexOptions.Singleline | RegexOptions.Compiled);
+    // "[2026-01-25 06:33:16] rest..."  (also tolerates a leading "name=" prefix)  →  ts + rest
+    private static readonly Regex BracketTime = new(@"^\s*(?:[\w.]+=)?\[(?<ts>[^\]]{4,40})\]\s*(?<rest>.*)$", RegexOptions.Singleline | RegexOptions.Compiled);
     // "INFO: rest..."  →  level + rest
     private static readonly Regex LeadLevel = new(@"^(?<lvl>[A-Za-z]{3,12}):\s*(?<rest>.*)$", RegexOptions.Singleline | RegexOptions.Compiled);
 
@@ -46,10 +46,21 @@ public class KustoRowResult : ISearchResult
         _time = ParseTime(First(TimeCols));
         _levelText = First(LevelCols);
 
-        // Choose the primary text: an explicit Message column, else the single column's value.
+        // Choose the primary text: an explicit Message column, else the single (or only non-empty)
+        // column's value — that's the "one text column holds the whole log line" case.
         string primary = First(MsgCols);
-        if (string.IsNullOrEmpty(primary) && row.Count == 1)
-            primary = row.Values.First();
+        if (string.IsNullOrEmpty(primary))
+        {
+            if (row.Count == 1)
+            {
+                primary = row.Values.First();
+            }
+            else
+            {
+                var nonEmpty = row.Where(kv => !string.IsNullOrEmpty(kv.Value)).ToList();
+                if (nonEmpty.Count == 1) primary = nonEmpty[0].Value;
+            }
+        }
 
         if (!string.IsNullOrEmpty(primary))
         {

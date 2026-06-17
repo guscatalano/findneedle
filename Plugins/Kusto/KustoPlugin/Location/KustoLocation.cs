@@ -87,6 +87,18 @@ public class KustoLocation : ISearchLocation
     private KustoConnectionStringBuilder BuildConnection() => BuildConnection(ClusterUri, AuthMode);
 
     /// <summary>
+    /// Request options for queries: defer partial failures so a result set larger than the service
+    /// cap (default 500k rows, E_QUERY_RESULT_SET_TOO_LARGE) returns the rows it got instead of
+    /// throwing. The viewer shows those; refine the KQL (add a time filter / take) for the rest.
+    /// </summary>
+    private static ClientRequestProperties RequestProps()
+    {
+        var p = new ClientRequestProperties();
+        p.SetOption("deferpartialqueryfailures", true);
+        return p;
+    }
+
+    /// <summary>
     /// List the databases on a cluster (runs the <c>.show databases</c> management command). Used by
     /// the UI so the user can pick a database instead of typing it. Authenticates the same way a query
     /// does (so the first call may prompt sign-in). Throws on connection/auth failure.
@@ -132,7 +144,7 @@ public class KustoLocation : ISearchLocation
         var kcsb = BuildConnection((clusterUri ?? string.Empty).Trim(), authMode);
         using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
         using var reader = client.ExecuteQuery((database ?? string.Empty).Trim(), (query ?? string.Empty).Trim(),
-                                               new ClientRequestProperties());
+                                               RequestProps());
 
         int n = reader.FieldCount;
         var cols = new List<string>(n);
@@ -163,7 +175,7 @@ public class KustoLocation : ISearchLocation
         {
             var kcsb = BuildConnection();
             using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
-            using var reader = client.ExecuteQuery(Database, Query, new ClientRequestProperties());
+            using var reader = client.ExecuteQuery(Database, Query, RequestProps());
 
             int cols = reader.FieldCount;
             var names = new string[cols];
