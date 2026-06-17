@@ -87,15 +87,36 @@ public class KustoLocation : ISearchLocation
     private KustoConnectionStringBuilder BuildConnection() => BuildConnection(ClusterUri, AuthMode);
 
     /// <summary>
-    /// Request options for queries: defer partial failures so a result set larger than the service
-    /// cap (default 500k rows, E_QUERY_RESULT_SET_TOO_LARGE) returns the rows it got instead of
-    /// throwing. The viewer shows those; refine the KQL (add a time filter / take) for the rest.
+    /// Turn a Kusto exception into a concise, actionable message (not a giant stack). For the
+    /// result-set-too-large case we surface it clearly AND suggest two narrowed queries built from
+    /// the user's own KQL — capping rows, and a time window — rather than silently truncating.
     /// </summary>
-    private static ClientRequestProperties RequestProps()
+    public static string FriendlyError(Exception ex, string query = null)
     {
-        var p = new ClientRequestProperties();
-        p.SetOption("deferpartialqueryfailures", true);
-        return p;
+        var msg = ex?.Message ?? "Unknown error";
+        bool tooLarge = msg.Contains("E_QUERY_RESULT_SET_TOO_LARGE")
+                        || msg.Contains("80DA0003")
+                        || msg.Contains("exceed the set limit");
+        if (tooLarge)
+        {
+            var q = (query ?? string.Empty).TrimEnd().TrimEnd(';').TrimEnd();
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("This query returns more than Kusto's 500,000-row limit, so nothing was loaded.");
+            sb.AppendLine("Narrow it and try again — for example:");
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                sb.AppendLine();
+                sb.AppendLine($"{q}\n| take 100000");
+                sb.AppendLine();
+                sb.Append($"{q}\n| where Timestamp > ago(1h)   // replace 'Timestamp' with your time column");
+            }
+            else
+            {
+                sb.Append("Add  | take 100000   or   | where Timestamp > ago(1h)");
+            }
+            return sb.ToString();
+        }
+        return msg.Split('\n')[0].Trim();
     }
 
     /// <summary>
@@ -144,7 +165,7 @@ public class KustoLocation : ISearchLocation
         var kcsb = BuildConnection((clusterUri ?? string.Empty).Trim(), authMode);
         using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
         using var reader = client.ExecuteQuery((database ?? string.Empty).Trim(), (query ?? string.Empty).Trim(),
-                                               RequestProps());
+                                               new ClientRequestProperties());
 
         int n = reader.FieldCount;
         var cols = new List<string>(n);
@@ -175,7 +196,7 @@ public class KustoLocation : ISearchLocation
         {
             var kcsb = BuildConnection();
             using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
-            using var reader = client.ExecuteQuery(Database, Query, RequestProps());
+            using var reader = client.ExecuteQuery(Database, Query, new ClientRequestProperties());
 
             int cols = reader.FieldCount;
             var names = new string[cols];
@@ -197,7 +218,7 @@ public class KustoLocation : ISearchLocation
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = FriendlyError(ex, Query);
             Logger.Instance.Log($"Kusto query failed for {ClusterUri}/{Database}: {ex}");
         }
         _loaded = true;

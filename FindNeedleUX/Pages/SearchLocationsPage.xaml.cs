@@ -243,7 +243,7 @@ public sealed partial class SearchLocationsPage : Page
                 sb.Append(truncated ? $"(showing first {rows.Count} rows)" : $"({rows.Count} rows)");
                 previewOut.Text = sb.ToString();
             }
-            catch (Exception ex) { previewOut.Text = "Query failed: " + ex.Message; }
+            catch (Exception ex) { previewOut.Text = KustoLocation.FriendlyError(ex, query.Text); }
             finally { previewBtn.Content = prev; previewBtn.IsEnabled = true; }
         };
 
