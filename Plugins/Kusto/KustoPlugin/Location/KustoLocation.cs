@@ -86,6 +86,22 @@ public class KustoLocation : ISearchLocation
 
     private KustoConnectionStringBuilder BuildConnection() => BuildConnection(ClusterUri, AuthMode);
 
+    /// <summary>Kusto's default result-set cap. Hitting exactly this implies truncation.</summary>
+    private const int RowCap = 500_000;
+    private bool _truncated;
+
+    /// <summary>
+    /// Query options: defer partial failures so a result set larger than the service cap returns the
+    /// rows it got (up to the cap) instead of throwing — we then flag truncation by row count and
+    /// warn, rather than failing outright or hiding it.
+    /// </summary>
+    private static ClientRequestProperties RequestProps()
+    {
+        var p = new ClientRequestProperties();
+        p.SetOption("deferpartialqueryfailures", true);
+        return p;
+    }
+
     /// <summary>
     /// Turn a Kusto exception into a concise, actionable message (not a giant stack). For the
     /// result-set-too-large case we surface it clearly AND suggest two narrowed queries built from
@@ -165,7 +181,7 @@ public class KustoLocation : ISearchLocation
         var kcsb = BuildConnection((clusterUri ?? string.Empty).Trim(), authMode);
         using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
         using var reader = client.ExecuteQuery((database ?? string.Empty).Trim(), (query ?? string.Empty).Trim(),
-                                               new ClientRequestProperties());
+                                               RequestProps());
 
         int n = reader.FieldCount;
         var cols = new List<string>(n);
@@ -192,11 +208,12 @@ public class KustoLocation : ISearchLocation
         if (_loaded) return;
         _results.Clear();
         _error = null;
+        _truncated = false;
         try
         {
             var kcsb = BuildConnection();
             using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
-            using var reader = client.ExecuteQuery(Database, Query, new ClientRequestProperties());
+            using var reader = client.ExecuteQuery(Database, Query, RequestProps());
 
             int cols = reader.FieldCount;
             var names = new string[cols];
@@ -214,7 +231,9 @@ public class KustoLocation : ISearchLocation
                 }
                 _results.Add(new KustoRowResult(map, label));
             }
-            Logger.Instance.Log($"Kusto query returned {_results.Count} rows from {ClusterUri}/{Database}");
+            // Hitting the cap means the service truncated the result set — load it, but flag it.
+            _truncated = _results.Count >= RowCap;
+            Logger.Instance.Log($"Kusto query returned {_results.Count} rows from {ClusterUri}/{Database}{(_truncated ? " (TRUNCATED at cap)" : "")}");
         }
         catch (Exception ex)
         {
@@ -255,12 +274,19 @@ public class KustoLocation : ISearchLocation
 
     public override string GetName() => $"Kusto: {ShortCluster()}/{Database}";
 
-    public override string GetDescription() =>
-        _error != null
-            ? $"Kusto {ShortCluster()}/{Database} — ERROR: {_error}"
-            : $"Kusto cluster {ClusterUri}, database {Database}, query: {Query}";
+    public override string GetDescription()
+    {
+        if (_error != null) return $"Kusto {ShortCluster()}/{Database} — ERROR: {_error}";
+        var desc = $"Kusto cluster {ClusterUri}, database {Database}, query: {Query}";
+        return _truncated
+            ? $"⚠ Showing the first {RowCap:N0} rows (Kusto's cap) — refine the query (add a time filter or | take) to see the rest.  {desc}"
+            : desc;
+    }
 
     public string? LastError => _error;
+
+    /// <summary>True after a load that hit the service row cap (results are incomplete).</summary>
+    public bool WasTruncated => _truncated;
 
     public override void ClearStatistics() { numRecordsInLastResult = 0; }
     public override List<ReportFromComponent> ReportStatistics() => new();
