@@ -50,21 +50,43 @@ public class KustoLocation : ISearchLocation
         AuthMode = authMode;
     }
 
-    private TokenCredential CreateCredential() => AuthMode switch
+    private static TokenCredential CreateCredential(KustoAuthMode authMode) => authMode switch
     {
         KustoAuthMode.AzureCli => new AzureCliCredential(),
         KustoAuthMode.DeviceCode => new DeviceCodeCredential(),
         _ => new InteractiveBrowserCredential(),
     };
 
-    private KustoConnectionStringBuilder BuildConnection()
+    private static KustoConnectionStringBuilder BuildConnection(string clusterUri, KustoAuthMode authMode)
     {
-        var credential = CreateCredential();
-        var scope = ClusterUri.TrimEnd('/') + "/.default";
+        var credential = CreateCredential(authMode);
+        var scope = clusterUri.TrimEnd('/') + "/.default";
         // Kusto SDK calls this whenever it needs a bearer token; Azure.Identity caches internally.
         Func<string> tokenProvider = () =>
             credential.GetToken(new TokenRequestContext(new[] { scope }), CancellationToken.None).Token;
-        return new KustoConnectionStringBuilder(ClusterUri).WithAadTokenProviderAuthentication(tokenProvider);
+        return new KustoConnectionStringBuilder(clusterUri).WithAadTokenProviderAuthentication(tokenProvider);
+    }
+
+    private KustoConnectionStringBuilder BuildConnection() => BuildConnection(ClusterUri, AuthMode);
+
+    /// <summary>
+    /// List the databases on a cluster (runs the <c>.show databases</c> management command). Used by
+    /// the UI so the user can pick a database instead of typing it. Authenticates the same way a query
+    /// does (so the first call may prompt sign-in). Throws on connection/auth failure.
+    /// </summary>
+    public static List<string> GetDatabases(string clusterUri, KustoAuthMode authMode)
+    {
+        var kcsb = BuildConnection((clusterUri ?? string.Empty).Trim(), authMode);
+        using var admin = KustoClientFactory.CreateCslAdminProvider(kcsb);
+        using var reader = admin.ExecuteControlCommand(".show databases | project DatabaseName");
+        var list = new List<string>();
+        while (reader.Read())
+        {
+            var name = reader.IsDBNull(0) ? null : reader.GetValue(0)?.ToString();
+            if (!string.IsNullOrWhiteSpace(name)) list.Add(name);
+        }
+        list.Sort(StringComparer.OrdinalIgnoreCase);
+        return list;
     }
 
     public override void LoadInMemory(CancellationToken cancellationToken = default)
