@@ -110,31 +110,59 @@ public sealed partial class SearchLocationsPage : Page
         Microsoft.UI.Xaml.Media.Brush Dim()
             => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
 
-        // Database: type it, or Load and click from the inline list (no dropdown → nothing to clip).
-        var dbBox = new TextBox { Header = "Database", PlaceholderText = "Load, or type a name", Text = existing?.Database ?? string.Empty };
+        // ---- small layout helpers for a cleaner, clearly-labelled dialog ----
+        TextBlock Section(string t) => new()
+        {
+            Text = t,
+            FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        TextBlock Hint(string t) => new() { Text = t, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Dim() };
+        Border Boxed(FrameworkElement child)
+        {
+            child.MinHeight = 64;
+            return new Border
+            {
+                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Child = child,
+            };
+        }
+
+        // Database — type it, or Load and click from the inline list (no dropdown → nothing to clip).
+        var dbBox = new TextBox { PlaceholderText = "Selected database (type, or pick below)", Text = existing?.Database ?? string.Empty };
         var dbList = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 120 };
-        var loadDbBtn = new Button { Content = "Load databases" };
+        var loadDbBtn = new Button { Content = "Load", VerticalAlignment = VerticalAlignment.Bottom, MinWidth = 72 };
         var dbStatus = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Dim() };
         loadDbBtn.Click += async (_, __) =>
         {
             if (string.IsNullOrWhiteSpace(cluster.Text)) { dbStatus.Text = "Enter a cluster URI first."; return; }
-            var prev = loadDbBtn.Content; loadDbBtn.IsEnabled = false; loadDbBtn.Content = "Loading…";
+            var prev = loadDbBtn.Content; loadDbBtn.IsEnabled = false; loadDbBtn.Content = "…";
             dbStatus.Text = "Connecting… (you may be prompted to sign in the first time)";
             try
             {
                 var clusterUri = cluster.Text; var mode = Mode();
                 var dbs = await Task.Run(() => KustoLocation.GetDatabases(clusterUri, mode));
                 dbList.ItemsSource = dbs;
-                dbStatus.Text = dbs.Count > 0 ? $"{dbs.Count} databases (click one)." : "No databases found.";
+                // Highlight the current database when editing (or after a prior pick).
+                if (!string.IsNullOrWhiteSpace(dbBox.Text) && dbs.Contains(dbBox.Text)) dbList.SelectedItem = dbBox.Text;
+                dbStatus.Text = dbs.Count > 0 ? $"{dbs.Count} databases — click to choose." : "No databases found.";
             }
             catch (Exception ex) { dbStatus.Text = "Failed to load databases: " + ex.Message; }
             finally { loadDbBtn.Content = prev; loadDbBtn.IsEnabled = true; }
         };
         dbList.SelectionChanged += (_, __) => { if (dbList.SelectedItem is string d) dbBox.Text = d; };
 
+        // dbBox stretches; Load sits to its right, baseline-aligned.
+        var dbRow = new Grid { ColumnSpacing = 8 };
+        dbRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        dbRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(dbBox, 0); Grid.SetColumn(loadDbBtn, 1);
+        dbRow.Children.Add(dbBox); dbRow.Children.Add(loadDbBtn);
+
         var query = new TextBox
         {
-            Header = "KQL query",
             PlaceholderText = "MyTable | where Timestamp > ago(1h) | take 1000",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
@@ -157,7 +185,7 @@ public sealed partial class SearchLocationsPage : Page
                 var clusterUri = cluster.Text; var mode = Mode();
                 var t = await Task.Run(() => KustoLocation.GetTables(clusterUri, db, mode));
                 tables.ItemsSource = t;
-                tablesStatus.Text = t.Count > 0 ? $"{t.Count} tables (click one to build a query)." : "No tables found.";
+                tablesStatus.Text = t.Count > 0 ? $"{t.Count} tables — click one to build a query." : "No tables found.";
             }
             catch (Exception ex) { tablesStatus.Text = "Failed to load tables: " + ex.Message; }
             finally { loadTablesBtn.Content = prev; loadTablesBtn.IsEnabled = true; }
@@ -168,12 +196,12 @@ public sealed partial class SearchLocationsPage : Page
         };
 
         // Preview the query's first rows before adding it.
-        var previewBtn = new Button { Content = "Preview" };
+        var previewBtn = new Button { Content = "Run preview" };
         var previewOut = new TextBox
         {
             IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 12,
-            MaxHeight = 180, PlaceholderText = "Preview results appear here",
+            MinHeight = 80, MaxHeight = 180, PlaceholderText = "Preview results appear here",
         };
         ScrollViewer.SetHorizontalScrollBarVisibility(previewOut, ScrollBarVisibility.Auto);
         previewBtn.Click += async (_, __) =>
@@ -198,27 +226,34 @@ public sealed partial class SearchLocationsPage : Page
         };
 
         var dbGroup = new StackPanel { Spacing = 4 };
-        dbGroup.Children.Add(dbBox);
-        dbGroup.Children.Add(loadDbBtn);
-        dbGroup.Children.Add(dbList);
+        dbGroup.Children.Add(Section("Database"));
+        dbGroup.Children.Add(dbRow);
+        dbGroup.Children.Add(Hint("Databases on the cluster (click to choose):"));
+        dbGroup.Children.Add(Boxed(dbList));
         dbGroup.Children.Add(dbStatus);
 
         var tablesGroup = new StackPanel { Spacing = 4 };
-        tablesGroup.Children.Add(new TextBlock { Text = "Tables", FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold });
+        tablesGroup.Children.Add(Section("Tables"));
         tablesGroup.Children.Add(loadTablesBtn);
-        tablesGroup.Children.Add(tables);
+        tablesGroup.Children.Add(Hint("Tables in the database (click to start a query):"));
+        tablesGroup.Children.Add(Boxed(tables));
         tablesGroup.Children.Add(tablesStatus);
 
+        var queryGroup = new StackPanel { Spacing = 4 };
+        queryGroup.Children.Add(Section("KQL query"));
+        queryGroup.Children.Add(query);
+
         var previewGroup = new StackPanel { Spacing = 4 };
+        previewGroup.Children.Add(Section("Preview"));
         previewGroup.Children.Add(previewBtn);
         previewGroup.Children.Add(previewOut);
 
-        var panel = new StackPanel { Spacing = 10, MinWidth = 520 };
+        var panel = new StackPanel { Spacing = 8, MinWidth = 520 };
         panel.Children.Add(cluster);
         panel.Children.Add(auth);
         panel.Children.Add(dbGroup);
         panel.Children.Add(tablesGroup);
-        panel.Children.Add(query);
+        panel.Children.Add(queryGroup);
         panel.Children.Add(previewGroup);
 
         var dialog = new ContentDialog
