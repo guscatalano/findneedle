@@ -248,7 +248,7 @@ public sealed partial class SearchLocationsPage : Page
         previewGroup.Children.Add(previewBtn);
         previewGroup.Children.Add(previewOut);
 
-        var panel = new StackPanel { Spacing = 8, MinWidth = 520 };
+        var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
         panel.Children.Add(cluster);
         panel.Children.Add(auth);
         panel.Children.Add(dbGroup);
@@ -263,12 +263,16 @@ public sealed partial class SearchLocationsPage : Page
             {
                 Content = panel, MaxHeight = 620,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                // Inset the content so the vertical scrollbar doesn't sit on top of the textboxes.
+                Padding = new Thickness(0, 0, 16, 0),
             },
             PrimaryButtonText = existing == null ? "Add" : "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot,
         };
+        // Let the dialog grow wider than the default (~548px) so the inset content has room.
+        dialog.Resources["ContentDialogMaxWidth"] = 760.0;
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
 
         var database = (dbBox.Text ?? string.Empty).Trim();
