@@ -1162,15 +1162,22 @@ public sealed partial class NativeResultsPage : Page
     //      through some property-system bookkeeping, so an early-out is a win.
     private void ResultsGrid_LoadingRow(object sender, DataGridRowEventArgs e)
     {
-        if (e.Row.DataContext is not LogLine line) return;
+        if (e.Row.DataContext is LogLine line) ApplyRowAppearance(e.Row, line);
+    }
 
+    /// <summary>
+    /// Set a row's background (level tint, or tag tint when "color tagged rows" is on) and its row-
+    /// header tag glyph. Used by LoadingRow and to refresh one row in place after a tag change (so we
+    /// don't re-publish the page, which would reset the grid selection to the top).
+    /// </summary>
+    private void ApplyRowAppearance(CommunityToolkit.WinUI.UI.Controls.DataGridRow rowEl, LogLine line)
+    {
         var levelHex = (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
             ? entry.HexColor : null;
         string tagHex = null;
         bool tagged = _rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out tagHex);
 
-        // Background: when "color tagged rows" is on, a tagged row is tinted with its tag color;
-        // otherwise the level tint as before. (Rows are recycled, so always set.)
+        // Background: tag tint (when the option is on) else the level tint. Rows recycle, so always set.
         Microsoft.UI.Xaml.Media.Brush bg;
         if (tagged && _colorTaggedRows)
         {
@@ -1181,7 +1188,7 @@ public sealed partial class NativeResultsPage : Page
         {
             bg = levelHex != null ? HexToBrushConverter.Parse(levelHex) : null;
         }
-        e.Row.Background = bg;
+        rowEl.Background = bg;
 
         // Tag → a colored tag glyph in the row header (to the left of the row). Cleared on recycle.
         if (tagged)
@@ -1195,11 +1202,11 @@ public sealed partial class NativeResultsPage : Page
                 VerticalAlignment = VerticalAlignment.Center,
             };
             ToolTipService.SetToolTip(marker, $"Tag: {tag}");
-            e.Row.Header = marker;
+            rowEl.Header = marker;
         }
         else
         {
-            e.Row.Header = null;
+            rowEl.Header = null;
         }
     }
 
@@ -1223,9 +1230,10 @@ public sealed partial class NativeResultsPage : Page
 
         LogLine row = null;
         string cellColumnHeader = null;
+        CommunityToolkit.WinUI.UI.Controls.DataGridRow rowEl = null;
 
         var node = src;
-        while (node != null && (row == null || cellColumnHeader == null))
+        while (node != null && (row == null || cellColumnHeader == null || rowEl == null))
         {
             if (node is FrameworkElement fe)
             {
@@ -1235,10 +1243,19 @@ public sealed partial class NativeResultsPage : Page
                 {
                     cellColumnHeader = TryGetCellColumnHeader(cell);
                 }
+                if (rowEl == null && fe is CommunityToolkit.WinUI.UI.Controls.DataGridRow dgr)
+                    rowEl = dgr;
             }
             node = VisualTreeHelper.GetParent(node);
         }
         if (row == null) return;
+
+        // Refresh just this row's appearance in place (no page re-publish → keeps the selection).
+        void RefreshRow()
+        {
+            if (rowEl != null) ApplyRowAppearance(rowEl, row);
+            else ViewModel.RefreshCurrentPage(); // fallback if the row element wasn't found
+        }
 
         var flyout = new MenuFlyout();
 
@@ -1251,12 +1268,12 @@ public sealed partial class NativeResultsPage : Page
             var item = new MenuFlyoutItem { Text = name };
             if (_rowTags.TryGetValue(key, out var current) && string.Equals(current, name, StringComparison.OrdinalIgnoreCase))
                 item.Icon = new SymbolIcon(Symbol.Accept); // checkmark on the active tag
-            item.Click += (_, __) => { _rowTags[key] = capturedName; ViewModel.RefreshCurrentPage(); };
+            item.Click += (_, __) => { _rowTags[key] = capturedName; RefreshRow(); };
             tagSub.Items.Add(item);
         }
         tagSub.Items.Add(new MenuFlyoutSeparator());
         var clearTag = new MenuFlyoutItem { Text = "Clear tag" };
-        clearTag.Click += (_, __) => { _rowTags.Remove(key); ViewModel.RefreshCurrentPage(); };
+        clearTag.Click += (_, __) => { _rowTags.Remove(key); RefreshRow(); };
         tagSub.Items.Add(clearTag);
         flyout.Items.Add(tagSub);
         flyout.Items.Add(new MenuFlyoutSeparator());
