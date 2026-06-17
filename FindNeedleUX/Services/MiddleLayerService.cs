@@ -513,6 +513,15 @@ public class MiddleLayerService
             {
                 SearchResults = SearchQueryUX.GetSearchResults(cts.Token);
                 NotifyStateChanged();
+
+                // Background mode: now that all rows are in storage, build the FTS index off the
+                // critical path (same as the non-streaming RunSearch path). Without this, a streaming
+                // search — e.g. a Kusto location — would never build its index, so substring search
+                // stays on the slow LIKE scan forever.
+                if (!cts.IsCancellationRequested
+                    && EffectiveIndexingMode == FindPluginCore.Searching.IndexingMode.Background
+                    && !IsSearchIndexBuilt)
+                    StartBackgroundIndexBuild();
             }
             finally
             {

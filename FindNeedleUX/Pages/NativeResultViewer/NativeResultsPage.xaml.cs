@@ -458,10 +458,10 @@ public sealed partial class NativeResultsPage : Page
             if (running)
             {
                 int done = MiddleLayerService.IndexBuildIndexed, total = MiddleLayerService.IndexBuildTotal;
-                // Tell the user *why* search is slow right now: the fast index isn't ready yet.
+                // Show row-count progress so it's clearly advancing (not stuck); search is slower meanwhile.
                 ViewModel.IndexStatusText = total > 0
-                    ? $"Building search index… {Math.Min(100, (int)(done * 100L / total))}% — search is slower until ready"
-                    : "Building search index… — search is slower until ready";
+                    ? $"Building search index… {done:N0} / {total:N0} ({Math.Min(100, (int)(done * 100L / total))}%)"
+                    : "Building search index… starting…";
             }
         });
     }
