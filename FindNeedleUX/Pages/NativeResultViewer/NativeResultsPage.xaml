@@ -408,9 +408,6 @@
                                 Height="28" FontSize="12"/>
                         <Button Content="Copy as XML"  Click="DetailsPanelCopyXml_Click"
                                 Height="28" FontSize="12"/>
-                        <Button Content="✕" Click="DetailsPanelClose_Click"
-                                Height="28" Width="32" FontSize="12"
-                                ToolTipService.ToolTip="Hide details panel (switch back to Inrow mode)"/>
                     </StackPanel>
                 </Grid>
 

@@ -665,10 +665,6 @@ public sealed partial class NativeResultsPage : Page
         ResultsViewerSettings.FiltersExpanded = expanded;
     }
 
-    // ----- Details panel mode -----
-    private void DetailsPanelClose_Click(object sender, RoutedEventArgs e)
-        => SetDetailsMode(DetailsMode.Inrow); // closing the bottom panel returns to Inrow
-
     private void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (DetailsPanel.Visibility == Visibility.Visible) RefreshDetailsPanel();
