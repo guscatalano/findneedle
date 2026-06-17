@@ -1162,35 +1162,30 @@ public sealed partial class NativeResultsPage : Page
     {
         if (e.Row.DataContext is not LogLine line) return;
 
+        // Level tint as the row background (unchanged).
         var levelHex = (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
             ? entry.HexColor : null;
+        var brush = levelHex != null ? HexToBrushConverter.Parse(levelHex) : null;
+        if (!ReferenceEquals(e.Row.Background, brush))
+            e.Row.Background = brush;
 
-        string tagHex = null;
-        if (_rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out var th))
-            tagHex = th;
-
-        if (tagHex != null)
+        // Tag → a colored dot in the row header (to the left of the row). Cleared on recycle.
+        if (_rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out var tagHex))
         {
-            // Bold left stripe (the tag) + the level tint for the rest of the row, via a horizontal
-            // gradient with a hard stop. Rows are recycled, so we always rebuild this.
-            var tagColor = HexToBrushConverter.ParseColor(tagHex);
-            var lvlColor = levelHex != null ? HexToBrushConverter.ParseColor(levelHex) : Microsoft.UI.Colors.Transparent;
-            var lgb = new Microsoft.UI.Xaml.Media.LinearGradientBrush
+            var dot = new TextBlock
             {
-                StartPoint = new global::Windows.Foundation.Point(0, 0.5),
-                EndPoint = new global::Windows.Foundation.Point(1, 0.5),
+                Text = "●", // ●
+                Foreground = HexToBrushConverter.Parse(tagHex),
+                FontSize = 13,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
             };
-            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = tagColor, Offset = 0.0 });
-            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = tagColor, Offset = 0.015 });
-            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = lvlColor, Offset = 0.015 });
-            lgb.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = lvlColor, Offset = 1.0 });
-            e.Row.Background = lgb;
+            ToolTipService.SetToolTip(dot, $"Tag: {tag}");
+            e.Row.Header = dot;
         }
         else
         {
-            var brush = levelHex != null ? HexToBrushConverter.Parse(levelHex) : null;
-            if (!ReferenceEquals(e.Row.Background, brush))
-                e.Row.Background = brush;
+            e.Row.Header = null;
         }
     }
 
