@@ -89,6 +89,54 @@ public class KustoLocation : ISearchLocation
         return list;
     }
 
+    /// <summary>List the tables in a database (<c>.show tables</c>), for the UI's table picker.</summary>
+    public static List<string> GetTables(string clusterUri, string database, KustoAuthMode authMode)
+    {
+        var kcsb = BuildConnection((clusterUri ?? string.Empty).Trim(), authMode);
+        using var admin = KustoClientFactory.CreateCslAdminProvider(kcsb);
+        using var reader = admin.ExecuteControlCommand((database ?? string.Empty).Trim(), ".show tables | project TableName");
+        var list = new List<string>();
+        while (reader.Read())
+        {
+            var name = reader.IsDBNull(0) ? null : reader.GetValue(0)?.ToString();
+            if (!string.IsNullOrWhiteSpace(name)) list.Add(name);
+        }
+        list.Sort(StringComparer.OrdinalIgnoreCase);
+        return list;
+    }
+
+    /// <summary>
+    /// Run a query and return up to <paramref name="maxRows"/> rows (columns + string cells) for a
+    /// preview in the UI, plus whether more rows were available. Same auth path as a real query.
+    /// </summary>
+    public static (List<string> Columns, List<List<string>> Rows, bool Truncated) PreviewQuery(
+        string clusterUri, string database, string query, KustoAuthMode authMode, int maxRows)
+    {
+        var kcsb = BuildConnection((clusterUri ?? string.Empty).Trim(), authMode);
+        using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
+        using var reader = client.ExecuteQuery((database ?? string.Empty).Trim(), (query ?? string.Empty).Trim(),
+                                               new ClientRequestProperties());
+
+        int n = reader.FieldCount;
+        var cols = new List<string>(n);
+        for (int i = 0; i < n; i++) cols.Add(reader.GetName(i));
+
+        var rows = new List<List<string>>();
+        bool truncated = false;
+        while (reader.Read())
+        {
+            if (rows.Count >= maxRows) { truncated = true; break; }
+            var r = new List<string>(n);
+            for (int i = 0; i < n; i++)
+            {
+                var v = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                r.Add(v?.ToString() ?? string.Empty);
+            }
+            rows.Add(r);
+        }
+        return (cols, rows, truncated);
+    }
+
     public override void LoadInMemory(CancellationToken cancellationToken = default)
     {
         if (_loaded) return;

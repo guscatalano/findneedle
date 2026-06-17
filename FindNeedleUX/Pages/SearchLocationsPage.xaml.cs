@@ -125,7 +125,66 @@ public sealed partial class SearchLocationsPage : Page
             PlaceholderText = "MyTable | where Timestamp > ago(1h) | take 1000",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            MinHeight = 120,
+            MinHeight = 110,
+        };
+
+        // Tables in the chosen database — click one to seed a query from it.
+        var tables = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 130 };
+        var loadTablesBtn = new Button { Content = "Load tables" };
+        var tablesStatus = new TextBlock
+        {
+            FontSize = 12, TextWrapping = TextWrapping.Wrap,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        loadTablesBtn.Click += async (_, __) =>
+        {
+            var db = (dbCombo.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(cluster.Text) || string.IsNullOrWhiteSpace(db))
+            { tablesStatus.Text = "Pick a cluster + database first."; return; }
+            var prev = loadTablesBtn.Content; loadTablesBtn.IsEnabled = false; loadTablesBtn.Content = "Loading…"; tablesStatus.Text = "Loading tables…";
+            try
+            {
+                var clusterUri = cluster.Text; var mode = Mode();
+                var t = await Task.Run(() => KustoLocation.GetTables(clusterUri, db, mode));
+                tables.ItemsSource = t;
+                tablesStatus.Text = t.Count > 0 ? $"{t.Count} tables (click one to build a query)." : "No tables found.";
+            }
+            catch (Exception ex) { tablesStatus.Text = "Failed to load tables: " + ex.Message; }
+            finally { loadTablesBtn.Content = prev; loadTablesBtn.IsEnabled = true; }
+        };
+        tables.SelectionChanged += (_, __) =>
+        {
+            if (tables.SelectedItem is string t) query.Text = $"['{t}']\n| take 100";
+        };
+
+        // Preview the query's first rows before adding it.
+        var previewBtn = new Button { Content = "Preview" };
+        var previewOut = new TextBox
+        {
+            IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 12,
+            MaxHeight = 200, PlaceholderText = "Preview results appear here",
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(previewOut, ScrollBarVisibility.Auto);
+        previewBtn.Click += async (_, __) =>
+        {
+            var db = (dbCombo.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(cluster.Text) || string.IsNullOrWhiteSpace(db) || string.IsNullOrWhiteSpace(query.Text))
+            { previewOut.Text = "Enter cluster + database + query first."; return; }
+            var prev = previewBtn.Content; previewBtn.IsEnabled = false; previewBtn.Content = "Running…"; previewOut.Text = "Running…";
+            try
+            {
+                var clusterUri = cluster.Text; var q = query.Text; var mode = Mode();
+                var (cols, rows, truncated) = await Task.Run(() => KustoLocation.PreviewQuery(clusterUri, db, q, mode, 50));
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine(string.Join("\t", cols));
+                foreach (var r in rows) sb.AppendLine(string.Join("\t", r));
+                sb.AppendLine();
+                sb.Append(truncated ? $"(showing first {rows.Count} rows)" : $"({rows.Count} rows)");
+                previewOut.Text = sb.ToString();
+            }
+            catch (Exception ex) { previewOut.Text = "Query failed: " + ex.Message; }
+            finally { previewBtn.Content = prev; previewBtn.IsEnabled = true; }
         };
 
         var dbGroup = new StackPanel { Spacing = 4 };
@@ -133,16 +192,28 @@ public sealed partial class SearchLocationsPage : Page
         dbGroup.Children.Add(loadBtn);
         dbGroup.Children.Add(status);
 
-        var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
+        var tablesGroup = new StackPanel { Spacing = 4 };
+        tablesGroup.Children.Add(new TextBlock { Text = "Tables", FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold });
+        tablesGroup.Children.Add(loadTablesBtn);
+        tablesGroup.Children.Add(tables);
+        tablesGroup.Children.Add(tablesStatus);
+
+        var previewGroup = new StackPanel { Spacing = 4 };
+        previewGroup.Children.Add(previewBtn);
+        previewGroup.Children.Add(previewOut);
+
+        var panel = new StackPanel { Spacing = 10, MinWidth = 520 };
         panel.Children.Add(cluster);
         panel.Children.Add(auth);
         panel.Children.Add(dbGroup);
+        panel.Children.Add(tablesGroup);
         panel.Children.Add(query);
+        panel.Children.Add(previewGroup);
 
         var dialog = new ContentDialog
         {
             Title = "Add Kusto location",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 560 },
+            Content = new ScrollViewer { Content = panel, MaxHeight = 600 },
             PrimaryButtonText = "Add",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
