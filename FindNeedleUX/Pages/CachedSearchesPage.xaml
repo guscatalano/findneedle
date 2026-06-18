@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FindNeedleUX.Pages.CachedSearchesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FindNeedleUX.Pages"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <StackPanel>
+                <TextBlock Text="Cached searches" FontSize="24" FontWeight="SemiBold"/>
+                <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="8">
+                <CheckBox x:Name="ShowUnnamedCheck" Content="Show unnamed" VerticalAlignment="Center"
+                          Checked="ShowUnnamed_Changed" Unchecked="ShowUnnamed_Changed"
+                          ToolTipService.ToolTip="Caches with no recorded source (usually test runs)"/>
+                <Button x:Name="RefreshButton" Content="Refresh" Click="Refresh_Click"/>
+                <Button x:Name="OpenFolderButton" Content="Open cache folder" Click="OpenFolder_Click"/>
+                <Button x:Name="ClearAllButton" Content="Clear all…" Click="ClearAll_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Grid.Row="1" x:Name="EmptyState" Visibility="Collapsed"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                   Text="No cached searches yet. Run a search on a file/folder (with caching enabled) and it'll show up here."/>
+
+        <ListView Grid.Row="2" x:Name="CacheList" SelectionMode="None"
+                  ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding" Value="0,4,0,4"/>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="8" Padding="14,10,14,10">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="{Binding SourceName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding SourcePath}" FontSize="12" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding Rows}" FontSize="12"/>
+                                    <TextBlock Text="{Binding When}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding Size}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <Button Content="Open" Click="Open_Click" Tag="{Binding}"/>
+                                <Button Content="Delete" Click="Delete_Click" Tag="{Binding}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Page>

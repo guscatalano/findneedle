@@ -90,7 +90,15 @@ public class NuSearchQuery : ISearchQuery
     public SearchStepNotificationSink SearchStepNotificationSink
     {
         get => _stepnotifysink;
-        set => _stepnotifysink = value;
+        set
+        {
+            _stepnotifysink = value;
+            // The ctor registered _stats on the original sink. UpdateAllParameters swaps in the
+            // prior query's sink (to keep the UI's progress subscriptions), which would otherwise
+            // orphan the stats — Step1/Step2 fire AtLoad/AtSearch on the new sink, so re-register
+            // here or the memory snapshots never get taken ("not snapped yet" on the Statistics page).
+            _stats?.RegisterForNotifications(_stepnotifysink, this);
+        }
     }
     private SearchStepNotificationSink _stepnotifysink;
 

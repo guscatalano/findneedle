@@ -19,6 +19,9 @@ namespace FindNeedleCoreUtils
             Directory.CreateDirectory(AppDataCacheDir);
         }
 
+        /// <summary>The directory where cache files live (created on first use).</summary>
+        public static string CacheDirectory => AppDataCacheDir;
+
         /// <summary>
         /// Gets a unique filename for a cache file based on a one-way hash of the original filename.
         /// </summary>

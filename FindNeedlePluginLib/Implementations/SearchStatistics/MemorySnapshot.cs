@@ -35,7 +35,9 @@ public class MemorySnapshot
         when = DateTime.Now;
         p.Refresh();
         privatememory = p.PrivateMemorySize64;
-        totalmemory = p.VirtualMemorySize64;
+        // Working set (physical RAM in use), not VirtualMemorySize64 — the latter is reserved
+        // address space and reads as terabytes on 64-bit, which is meaningless to the user.
+        totalmemory = p.WorkingSet64;
     }
     public long GetMemoryUsagePrivate()
     {
@@ -61,7 +63,7 @@ public class MemorySnapshot
         {
             throw new Exception("MemorySnapshot has not been snapped yet.");
         }
-        return " PrivateMemory (" + ByteUtils.BytesToFriendlyString(privatememory) + ") / Total Memory (" +
+        return " Private (" + ByteUtils.BytesToFriendlyString(privatememory) + ") / Working set (" +
             ByteUtils.BytesToFriendlyString(totalmemory) + ").";
     }
 

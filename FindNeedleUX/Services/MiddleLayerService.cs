@@ -210,6 +210,7 @@ public class MiddleLayerService
         // storage cleanup doesn't yank the storage out from under a live writer.
         try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
         CurrentStreamingSearch = null;
+        ClearOverrideStorage(); // a real search supersedes any cache being viewed
         // Stop any background index build from a previous search before we wipe/replace storage.
         CancelBackgroundIndexBuild();
 
@@ -235,6 +236,7 @@ public class MiddleLayerService
             SearchResults = SearchQueryUX.GetSearchResults();
         }
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
+        LastStats = x; // capture before the next UpdateSearchQuery() swaps in a fresh query
         try { PerfReport.SetSource(string.Join(", ", Locations.Select(l => l.GetName()))); } catch { /* label only */ }
 
         // Background mode: Step2 skipped the FTS build so the viewer opens now; kick the batched
@@ -357,12 +359,19 @@ public class MiddleLayerService
         return phases;
     }
 
+    /// <summary>
+    /// Stats from the most recently completed search, captured at completion. We can't just read
+    /// <c>CurrentQuery.GetSearchStatistics()</c> because <see cref="UpdateSearchQuery"/> swaps in a
+    /// fresh query (with un-snapped memory snapshots) for the next run — so by the time the
+    /// Statistics page reads it, the run's numbers are gone. Mirrors how <c>PerfReport.Last</c> works.
+    /// </summary>
+    public static SearchStatistics LastStats { get; private set; }
+
     public static SearchStatistics GetStats()
     {
-        // GetSearchStatistics() is on ISearchQuery, so this works for both the legacy SearchQuery
-        // and the current NuSearchQuery. (The old `query as SearchQuery` cast returned null for
-        // NuSearchQuery — which is why the Statistics page used to render empty.)
-        return SearchQueryUX.CurrentQuery?.GetSearchStatistics();
+        // Prefer the captured run; fall back to the current query (covers legacy SearchQuery and
+        // NuSearchQuery — GetSearchStatistics() is on the ISearchQuery interface).
+        return LastStats ?? SearchQueryUX.CurrentQuery?.GetSearchStatistics();
     }
 
 
@@ -455,12 +464,41 @@ public class MiddleLayerService
     /// to build a paged source (in-memory list, SQLite paging, or hybrid). Returns null until a
     /// search has run.
     /// </summary>
+    // When the user opens a cached search for viewing, we point the viewer at that cache's storage
+    // instead of the current query's. Cleared when a fresh search runs.
+    private static FindNeedlePluginLib.Interfaces.ISearchStorage? _overrideStorage;
+
     public static FindNeedlePluginLib.Interfaces.ISearchStorage? GetSearchStorage()
     {
+        if (_overrideStorage != null) return _overrideStorage;
         // NuSearchQuery exposes ResultStorage; older SearchQuery types don't.
         var query = SearchQueryUX?.CurrentQuery;
         var prop = query?.GetType().GetProperty("ResultStorage");
         return prop?.GetValue(query) as FindNeedlePluginLib.Interfaces.ISearchStorage;
+    }
+
+    /// <summary>
+    /// Open a cached search (a SQLite .db from the cache directory) for viewing — without rescanning
+    /// the original source. Points the viewer's storage at the cache; the caller then navigates to
+    /// the result viewer. Works even if the original source file is gone.
+    /// </summary>
+    public static void OpenCachedResult(string dbPath)
+    {
+        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
+        CurrentStreamingSearch = null;
+        CancelBackgroundIndexBuild();
+        try { _overrideStorage?.Dispose(); } catch { /* ignore */ }
+        _overrideStorage = FindPluginCore.Implementations.Storage.SqliteStorage.OpenExistingCache(dbPath);
+        LastStats = null; // the cache has no live SearchStatistics
+        NotifyStateChanged();
+    }
+
+    /// <summary>Drop any cache-viewing override so the next viewer load reads the live search again.</summary>
+    private static void ClearOverrideStorage()
+    {
+        if (_overrideStorage == null) return;
+        try { _overrideStorage.Dispose(); } catch { /* ignore */ }
+        _overrideStorage = null;
     }
 
     /// <summary>
@@ -495,6 +533,7 @@ public class MiddleLayerService
         // previous search's background task would keep producing into an orphaned SqliteStorage,
         // wasting CPU + disk and racing with the new search for the result handle.
         try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
+        ClearOverrideStorage(); // a real search supersedes any cache being viewed
 
         UpdateSearchQuery();
         if (SearchQueryUX.CurrentQuery is not NuSearchQuery nu)
@@ -513,6 +552,7 @@ public class MiddleLayerService
             try
             {
                 SearchResults = SearchQueryUX.GetSearchResults(cts.Token);
+                LastStats = nu.GetSearchStatistics(); // snapped during the steps above; capture it now
                 NotifyStateChanged();
 
                 // Background mode: now that all rows are in storage, build the FTS index off the

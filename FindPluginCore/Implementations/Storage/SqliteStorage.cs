@@ -81,6 +81,34 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         /// <summary>
+        /// Open an existing cache .db directly by its file path (not by hashing a source path), for
+        /// read-only viewing of a cached result set — e.g. the "Cached searches" page. Does not wipe;
+        /// honors the cache's <c>fts_built</c> flag so substring search uses the FTS index if present.
+        /// </summary>
+        public static SqliteStorage OpenExistingCache(string dbPath) => new SqliteStorage(dbPath, openExisting: true);
+
+        private SqliteStorage(string dbPath, bool openExisting)
+        {
+            SQLitePCL.Batteries.Init();
+            _dbPath = dbPath;
+            OpenAndInitialize(allowRetryAfterCorruption: true);
+            lock (_sync)
+            {
+                _rawCount = GetCount("RawResults");
+                _filteredCount = GetCount("FilteredResults");
+            }
+            // If the cache recorded that its FTS index was built, mark it ready so substring search
+            // uses the index immediately rather than falling back to LIKE.
+            try
+            {
+                var meta = ReadMeta();
+                if (_ftsAvailable && meta != null && meta.TryGetValue("fts_built", out var fb) && fb == "1")
+                    _ftsIndexBuilt = true;
+            }
+            catch { /* best effort */ }
+        }
+
+        /// <summary>
         /// Open the connection, apply pragmas, and create the schema (without wiping existing
         /// rows — see the constructor note on cache reuse). If any of that throws
         /// <c>SQLITE_CORRUPT</c> (error code 11, "database disk image is malformed"), the file is

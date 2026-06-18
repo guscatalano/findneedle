@@ -133,6 +133,22 @@ public class SearchStatistics
     }
 
 
+    /// <summary>Private-memory bytes captured at the given step's snapshot (0 if not snapped).</summary>
+    public long GetPrivateBytes(SearchStep step)
+    {
+        try
+        {
+            return step switch
+            {
+                SearchStep.AtLaunch => atLaunch.GetMemoryUsagePrivate(),
+                SearchStep.AtLoad => atLoad.GetMemoryUsagePrivate(),
+                SearchStep.AtSearch => atSearch.GetMemoryUsagePrivate(),
+                _ => 0,
+            };
+        }
+        catch { return 0; }
+    }
+
     public string GetMemoryUsage(SearchStep step)
     {
         switch (step)

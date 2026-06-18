@@ -451,6 +451,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Opened log folder picker");
                 QuickFolderOpen();
                 break;
+            case "cached_searches":
+                Logger.Instance.Log("Navigated: CachedSearchesPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.CachedSearchesPage));
+                break;
             case "openlogwithrules":
                 Logger.Instance.Log("Navigated: QuickLogWithRulesPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));

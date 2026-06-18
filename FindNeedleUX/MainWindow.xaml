@@ -21,6 +21,8 @@
                 <MenuFlyoutItem Text="Open Log File" Click="MenuFlyoutItem_Click" Name="openlogfile" />
                 <MenuFlyoutItem Text="Open Folder with logs" Click="MenuFlyoutItem_Click" Name="openlogfolder"/>
                 <MenuFlyoutItem Text="Open Log with Rules..." Click="MenuFlyoutItem_Click" Name="openlogwithrules"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Cached searches…" Click="MenuFlyoutItem_Click" Name="cached_searches"/>
             </MenuBarItem>
             <MenuBarItem Title="Workspace">
                 <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
