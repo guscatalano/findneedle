@@ -50,6 +50,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     // is deleted on Dispose) so the UI can offer "view raw tracefmt output". Null otherwise.
     private string _rawOutputPath = null;
     private string _resolveLogPath = null;
+    // Distinct message GUIDs tracefmt couldn't format (missing TMF) — the "requires symbol XYZ" list.
+    private readonly HashSet<string> _missingTmfGuids = new(StringComparer.OrdinalIgnoreCase);
 
     public ETLProcessor()
     {
@@ -94,9 +96,11 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             info["formatErrors"] = currentResult.TotalFormatErrors.ToString("N0");
             info["unknowns"] = currentResult.TotalFormatsUnknown.ToString("N0");
             if (!string.IsNullOrEmpty(currentResult.TotalElapsedTime)) info["elapsed"] = currentResult.TotalElapsedTime;
-            if (!string.IsNullOrEmpty(_rawOutputPath) && File.Exists(_rawOutputPath)) info["rawOutput"] = _rawOutputPath;
-            if (!string.IsNullOrEmpty(_resolveLogPath) && File.Exists(_resolveLogPath)) info["resolveLog"] = _resolveLogPath;
         }
+        // These can exist even if tracefmt fell back to TraceEvent, so report them regardless of method.
+        if (_missingTmfGuids.Count > 0) info["missingTmfs"] = string.Join(", ", _missingTmfGuids);
+        if (!string.IsNullOrEmpty(_rawOutputPath) && File.Exists(_rawOutputPath)) info["rawOutput"] = _rawOutputPath;
+        if (!string.IsNullOrEmpty(_resolveLogPath) && File.Exists(_resolveLogPath)) info["resolveLog"] = _resolveLogPath;
         return info;
     }
 
@@ -178,6 +182,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                             failsafe = 0; //This is corrupted, let's just bail;
                             if (corruptCount < 5) Logger.Instance.Log($"Corrupted line detected in {inputfile}: {line}");
                             corruptCount++;
+                            // "Unknown( N): GUID=<msg-guid> (No Format Information found)." — the GUID is
+                            // the message GUID = the TMF filename. Collect the distinct missing ones so
+                            // the resolution log can say exactly which TMFs/symbols are needed.
+                            var gm = System.Text.RegularExpressions.Regex.Match(line,
+                                @"GUID=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
+                            if (gm.Success) _missingTmfGuids.Add(gm.Groups[1].Value);
                             continue;
                         }
                         //line is not complete!
@@ -252,7 +262,14 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 rlog.AppendLine();
                 rlog.AppendLine("Outcome:");
                 rlog.AppendLine($"  events={currentResult.TotalEventsProcessed:N0}  formatErrors={currentResult.TotalFormatErrors:N0}  unknowns={currentResult.TotalFormatsUnknown:N0}");
-                rlog.AppendLine($"  {(currentResult.TotalFormatsUnknown == 0 ? "All events formatted — every required TMF was found." : "Some events couldn't be formatted — a TMF is missing. Add the matching PDB/symbol path and Build TMFs. (The unformatted 'Unknown(...)' lines in the raw output carry the message GUIDs.)")}");
+                rlog.AppendLine($"  {(currentResult.TotalFormatsUnknown == 0 ? "All events formatted — every required TMF was found." : "Some events couldn't be formatted — a TMF is missing. Add the matching PDB/symbol path and Build TMFs.")}");
+                if (_missingTmfGuids.Count > 0)
+                {
+                    rlog.AppendLine();
+                    rlog.AppendLine($"Missing TMFs ({_missingTmfGuids.Count}) — these message GUIDs had no format info; supply each TMF (or the PDB it comes from):");
+                    foreach (var g in _missingTmfGuids)
+                        rlog.AppendLine($"  {g}   →  expected file {g}.tmf");
+                }
                 rlog.AppendLine();
                 rlog.AppendLine("----- tracefmt output -----");
                 rlog.AppendLine(currentResult.ConsoleOutput ?? "(none)");
