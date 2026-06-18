@@ -33,12 +33,14 @@
                 <MenuFlyoutItem Text="Processors" Click="MenuFlyoutItem_Click" Name="search_processors"/>
                 <MenuFlyoutItem Text="UML" Click="MenuFlyoutItem_Click" Name="rules_uml"/>
             </MenuBarItem>
-            <MenuBarItem Title="View Results">
-                <MenuFlyoutItem Text="Get" Click="MenuFlyoutItem_Click" Name="results_get"/>
+            <MenuBarItem Title="Run">
+                <MenuFlyoutItem Text="Run Search" Click="MenuFlyoutItem_Click" Name="results_get"/>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
                 <MenuFlyoutItem Text="Performance Report (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_perfreport"/>
-                <MenuFlyoutItem Text="Default Viewer" Click="MenuFlyoutItem_Click" Name="results_viewraw"/>
-                <MenuFlyoutItem Text="Native Viewer" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
+            </MenuBarItem>
+            <MenuBarItem Title="View Results">
+                <MenuFlyoutItem Text="Results" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
                 <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
             </MenuBarItem>
 

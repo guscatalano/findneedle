@@ -418,10 +418,6 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Showed performance report");
                 await ShowPerfReportAsync();
                 break;
-            case "results_viewraw":
-                Logger.Instance.Log("Navigated: ViewRawResults");
-                NavigateWithSpinner(ResolveDefaultViewerType());
-                break;
             case "results_processoroutput":
                 Logger.Instance.Log("Navigated: ProcessorOutputPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage));
