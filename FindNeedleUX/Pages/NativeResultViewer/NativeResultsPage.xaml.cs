@@ -885,6 +885,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ResultsGrid.ItemsSource = ViewModel.Results;
     }
 
+    /// <summary>
+    /// Re-realize the visible rows (so per-row appearance like the tag glyph re-renders) while
+    /// keeping the current selection. Used after a row tag changes — DataGridRow.Header set in place
+    /// isn't reliably re-rendered, so we rebind, but restore the selection so it doesn't reset.
+    /// </summary>
+    private void RerenderRowsPreservingView()
+    {
+        var sel = ResultsGrid.SelectedItem;
+        ResultsGrid.ItemsSource = null;
+        ResultsGrid.ItemsSource = ViewModel.Results;
+        if (sel != null) ResultsGrid.SelectedItem = sel;
+    }
+
     // ----- Keyboard shortcuts -----
     private void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
@@ -1261,11 +1274,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
         if (row == null) return;
 
-        // Refresh just this row's appearance in place (no page re-publish → keeps the selection).
+        // Re-realize visible rows so the tag glyph in the row header shows immediately. Setting
+        // DataGridRow.Header in place isn't re-rendered until the row is re-created (which is why a
+        // tag only appeared after navigating away and back). Preserve selection + keep the tagged
+        // row in view so it doesn't jump to the top.
         void RefreshRow()
         {
-            if (rowEl != null) ApplyRowAppearance(rowEl, row);
-            else ViewModel.RefreshCurrentPage(); // fallback if the row element wasn't found
+            RerenderRowsPreservingView();
+            try { ResultsGrid.ScrollIntoView(row, null); } catch { /* row may be off-page */ }
         }
 
         var flyout = new MenuFlyout();
@@ -1715,14 +1731,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Note: null = keep existing; "" or a value = set it.
         var note = text ?? existing.Text;
         _rowTags[rowId] = new RowTag(name, note);
-        ViewModel.RefreshCurrentPage(); // re-render so the tag glyph/tooltip updates
+        RerenderRowsPreservingView(); // re-render so the tag glyph/tooltip updates immediately
         return true;
     });
 
     public Task<bool> ClearTagAsync(long rowId) => McpOnUiAsync(() =>
     {
         bool removed = _rowTags.Remove(rowId);
-        if (removed) ViewModel.RefreshCurrentPage();
+        if (removed) RerenderRowsPreservingView();
         return removed;
     });
 

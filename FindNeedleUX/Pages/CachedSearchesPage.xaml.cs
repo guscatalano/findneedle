@@ -28,6 +28,7 @@ public sealed partial class CachedSearchesPage : Page
         public string Size { get; set; } = "";
         public string Status { get; set; } = "";
         public bool Named { get; set; }
+        public bool CanDelete { get; set; } = true; // false while this cache is the one being viewed
     }
 
     private const int MaxShown = 500;
@@ -67,21 +68,28 @@ public sealed partial class CachedSearchesPage : Page
             return;
         }
 
+        var openPath = MiddleLayerService.OpenCacheDbPath;
         foreach (var e in entries)
         {
             bool named = !string.IsNullOrEmpty(e.SourcePath);
+            bool isOpen = !string.IsNullOrEmpty(openPath) && string.Equals(e.DbPath, openPath, StringComparison.OrdinalIgnoreCase);
             _all.Add(new CachedSearchItem
             {
                 DbPath = e.DbPath,
                 Named = named,
+                CanDelete = !isOpen, // can't delete the cache that's currently open (file is locked)
                 SourcePath = named ? e.SourcePath : "(no recorded source — likely a test run)",
                 SourceName = named ? SafeFileName(e.SourcePath) : "(unnamed cache)",
                 Rows = $"{e.Rows:N0} rows",
                 When = e.CompletedAt.HasValue ? e.CompletedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "—",
                 Size = ByteUtils.BytesToFriendlyString(e.SizeOnDiskBytes),
                 Status = string.Join("  ·  ",
-                    new[] { e.FtsBuilt ? "indexed" : null, (named && !e.SourceExists) ? "source missing" : null }
-                        .Where(s => !string.IsNullOrEmpty(s))),
+                    new[]
+                    {
+                        isOpen ? "open now" : null,
+                        e.FtsBuilt ? "indexed" : null,
+                        (named && !e.SourceExists) ? "source missing" : null,
+                    }.Where(s => !string.IsNullOrEmpty(s))),
             });
         }
 

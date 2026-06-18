@@ -518,6 +518,10 @@ public class MiddleLayerService
     // instead of the current query's. Cleared when a fresh search runs.
     private static FindNeedlePluginLib.Interfaces.ISearchStorage? _overrideStorage;
 
+    /// <summary>Path of the cache .db currently being viewed (held open), or null. The cache page
+    /// disables Delete for this one since the file is locked while open.</summary>
+    public static string? OpenCacheDbPath { get; private set; }
+
     public static FindNeedlePluginLib.Interfaces.ISearchStorage? GetSearchStorage()
     {
         if (_overrideStorage != null) return _overrideStorage;
@@ -539,6 +543,7 @@ public class MiddleLayerService
         CancelBackgroundIndexBuild();
         try { _overrideStorage?.Dispose(); } catch { /* ignore */ }
         _overrideStorage = FindPluginCore.Implementations.Storage.SqliteStorage.OpenExistingCache(dbPath);
+        OpenCacheDbPath = dbPath;
         LastStats = null; // the cache has no live SearchStatistics
         NotifyStateChanged();
     }
@@ -549,6 +554,7 @@ public class MiddleLayerService
         if (_overrideStorage == null) return;
         try { _overrideStorage.Dispose(); } catch { /* ignore */ }
         _overrideStorage = null;
+        OpenCacheDbPath = null;
     }
 
     /// <summary>
