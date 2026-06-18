@@ -42,6 +42,14 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         return _filtered.GetRange(offset, len);
     }
 
+    public LogLine GetByRowId(long rowId)
+    {
+        // In-memory RowId is the load-order position (see LogLine ctor); scan the master list.
+        for (int i = 0; i < _all.Count; i++)
+            if (_all[i].RowId == rowId) return _all[i];
+        return null;
+    }
+
     public List<string> GetDistinctLevels()
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

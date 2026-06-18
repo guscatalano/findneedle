@@ -37,4 +37,13 @@ public interface ISearchResult
 
 
     public string GetResultSource();
+
+    /// <summary>
+    /// A stable, durable identifier for this row within the result set it came from. For the
+    /// disk-backed store this is the SQLite <c>FilteredResults.Id</c>; it does not change when the
+    /// viewer's filter/sort/paging changes (unlike the displayed row position). Used as the handle
+    /// for record lookup and row tagging, including by the MCP server.
+    /// Returns -1 for backends that have no stable id (callers fall back to load-order position).
+    /// </summary>
+    public long GetRowId() => -1;
 }

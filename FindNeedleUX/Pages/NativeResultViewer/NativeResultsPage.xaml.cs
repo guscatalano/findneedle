@@ -22,7 +22,7 @@ namespace FindNeedleUX.Pages
 ///   (DataGrid built-ins), row coloring by Level, row details with Copy as JSON, Help dialog,
 ///   Ctrl+F focus search, Esc close popover, Export CSV.
 /// </summary>
-public sealed partial class NativeResultsPage : Page
+public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.IMcpViewerController
 {
     private NativeResultsPageViewModel ViewModel { get; } = new();
 
@@ -47,13 +47,11 @@ public sealed partial class NativeResultsPage : Page
     };
     private static readonly Dictionary<string, string> _tagColors =
         TagOptions.ToDictionary(t => t.Name, t => t.Hex, StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, string> _rowTags = new(StringComparer.Ordinal);
+    // Keyed by the row's stable LogLine.RowId (SQLite Id for disk-backed searches, load-order
+    // position for in-memory) so a tag survives paging, sorting and re-filtering, and so the MCP
+    // bridge can tag/clear by the same id it hands an agent. In-memory for the viewer session.
+    private readonly Dictionary<long, string> _rowTags = new();
     private bool _colorTaggedRows; // optional: also tint the whole row with the tag color
-
-    private static string RowKey(LogLine line)
-        => !string.IsNullOrEmpty(line.SearchableData)
-            ? line.SearchableData
-            : $"{line.Time}{line.Message}{line.Source}";
 
     public NativeResultsPage()
     {
@@ -152,6 +150,10 @@ public sealed partial class NativeResultsPage : Page
 
         // Now that the row count is known, seed the adaptive search-submit mode.
         RefreshSearchSubmitMode();
+
+        // Become the live view the MCP bridge reads/drives. Last-loaded viewer wins.
+        FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.UiDispatcher ??= DispatcherQueue;
+        FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.RegisterViewer(this);
     }
 
     /// <summary>
@@ -432,6 +434,7 @@ public sealed partial class NativeResultsPage : Page
         FindNeedlePluginLib.FlowProgress.Updated -= OnFlowProgress;
         _lazyIndexTimer.Stop();
         ViewModel.DetachFromStreaming();
+        FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.UnregisterViewer(this);
     }
 
     /// <summary>Show the unified "Step X of N · …" flow status in the page's loading overlay.</summary>
@@ -1175,7 +1178,7 @@ public sealed partial class NativeResultsPage : Page
         var levelHex = (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
             ? entry.HexColor : null;
         string tagHex = null;
-        bool tagged = _rowTags.TryGetValue(RowKey(line), out var tag) && _tagColors.TryGetValue(tag, out tagHex);
+        bool tagged = _rowTags.TryGetValue(line.RowId, out var tag) && _tagColors.TryGetValue(tag, out tagHex);
 
         // Background: tag tint (when the option is on) else the level tint. Rows recycle, so always set.
         Microsoft.UI.Xaml.Media.Brush bg;
@@ -1260,7 +1263,7 @@ public sealed partial class NativeResultsPage : Page
         var flyout = new MenuFlyout();
 
         // ----- Tag (mark this row) -----
-        var key = RowKey(row);
+        var key = row.RowId;
         var tagSub = new MenuFlyoutSubItem { Text = "Tag" };
         foreach (var (name, _) in TagOptions)
         {
@@ -1415,6 +1418,260 @@ public sealed partial class NativeResultsPage : Page
         pkg.SetText(text ?? "");
         global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
     }
+
+    // ===== MCP viewer controller (IMcpViewerController) =====
+    // Lets the MCP bridge read and drive THIS live view. Every method hops to the UI thread so the
+    // grid updates as the agent acts; reads return plain DTOs (no WinUI types).
+
+    private const int McpMessageCap = 300; // truncate Message in list results (token budget)
+
+    private Task McpOnUiAsync(Action a)
+    {
+        var dq = DispatcherQueue;
+        if (dq == null || dq.HasThreadAccess) { a(); return Task.CompletedTask; }
+        var tcs = new TaskCompletionSource();
+        if (!dq.TryEnqueue(() => { try { a(); tcs.TrySetResult(); } catch (Exception ex) { tcs.TrySetException(ex); } }))
+            a();
+        return tcs.Task;
+    }
+
+    private Task<T> McpOnUiAsync<T>(Func<T> f)
+    {
+        var dq = DispatcherQueue;
+        if (dq == null || dq.HasThreadAccess) return Task.FromResult(f());
+        var tcs = new TaskCompletionSource<T>();
+        if (!dq.TryEnqueue(() => { try { tcs.TrySetResult(f()); } catch (Exception ex) { tcs.TrySetException(ex); } }))
+            return Task.FromResult(f());
+        return tcs.Task;
+    }
+
+    private string McpTagFor(long rowId) => _rowTags.TryGetValue(rowId, out var t) ? t : null;
+
+    private FindNeedleUX.Services.Mcp.RecordDto McpToRecord(LogLine l, bool full)
+    {
+        if (l == null) return null;
+        var dto = new FindNeedleUX.Services.Mcp.RecordDto
+        {
+            RowId = l.RowId,
+            Index = l.Index,
+            Time = l.Time,
+            Level = l.Level,
+            Provider = l.Provider,
+            TaskName = l.TaskName,
+            Source = l.Source,
+            Message = full ? l.Message : McpTruncate(l.Message, McpMessageCap),
+            Tag = McpTagFor(l.RowId),
+        };
+        if (full)
+        {
+            dto.MachineName = l.MachineName;
+            dto.Username = l.Username;
+            dto.OpCode = l.OpCode;
+            dto.SearchableData = l.SearchableData;
+        }
+        return dto;
+    }
+
+    private static string McpTruncate(string s, int cap)
+        => string.IsNullOrEmpty(s) || s.Length <= cap ? s : s.Substring(0, cap) + "…";
+
+    public Task<FindNeedleUX.Services.Mcp.ViewStateDto> GetViewAsync() => McpOnUiAsync(() =>
+        new FindNeedleUX.Services.Mcp.ViewStateDto
+        {
+            Search = ViewModel.SearchText,
+            Provider = ViewModel.ProviderFilter,
+            TaskName = ViewModel.TaskNameFilter,
+            Message = ViewModel.MessageFilter,
+            Source = ViewModel.SourceFilter,
+            Level = ViewModel.LevelFilter,
+            FromTime = ViewModel.FromDate?.ToString("o"),
+            ToTime = ViewModel.ToDate?.ToString("o"),
+            SortColumn = ViewModel.SortColumn,
+            SortDescending = ViewModel.SortDescending,
+            CurrentPage = ViewModel.CurrentPage,
+            PageSize = ViewModel.PageSize,
+            TotalPages = ViewModel.TotalPages,
+            TotalFiltered = ViewModel.TotalFilteredCount,
+            Total = ViewModel.TotalCount,
+            DetailsMode = _detailsMode.ToString(),
+        });
+
+    public Task<FindNeedleUX.Services.Mcp.PageDto> GetPageAsync(int? offset, int limit) => McpOnUiAsync(() =>
+    {
+        if (limit <= 0) limit = ViewModel.PageSize;
+        if (limit > 500) limit = 500; // token-budget hard cap
+        int off = offset ?? (ViewModel.CurrentPage - 1) * ViewModel.PageSize;
+        if (off < 0) off = 0;
+        var rows = ViewModel.GetRows(off, limit);
+        var dto = new FindNeedleUX.Services.Mcp.PageDto
+        {
+            Offset = off,
+            Limit = limit,
+            TotalFiltered = ViewModel.TotalFilteredCount,
+            Total = ViewModel.TotalCount,
+        };
+        foreach (var r in rows) dto.Rows.Add(McpToRecord(r, full: false));
+        return dto;
+    });
+
+    public Task<FindNeedleUX.Services.Mcp.RecordDto> GetRecordAsync(long rowId) =>
+        McpOnUiAsync(() => McpToRecord(ViewModel.GetRecordByRowId(rowId), full: true));
+
+    public Task<FindNeedleUX.Services.Mcp.SummaryDto> GetSummaryAsync() => McpOnUiAsync(() =>
+    {
+        var (min, max) = ViewModel.GetFilteredTimeRange();
+        var dto = new FindNeedleUX.Services.Mcp.SummaryDto
+        {
+            Total = ViewModel.TotalCount,
+            TotalFiltered = ViewModel.TotalFilteredCount,
+            FromTime = min?.ToString("o"),
+            ToTime = max?.ToString("o"),
+            Levels = ViewModel.GetFilteredLevelCounts(),
+        };
+        foreach (var loc in MiddleLayerService.Locations)
+        {
+            string name, desc;
+            try { name = loc.GetName(); } catch { name = "(unknown)"; }
+            try { desc = loc.GetDescription(); } catch { desc = ""; }
+            dto.Sources.Add(new FindNeedleUX.Services.Mcp.LocationDto
+            {
+                Name = name, Description = desc,
+                IsEditable = loc is KustoPlugin.Location.KustoLocation,
+            });
+        }
+        var rules = MiddleLayerService.SearchQueryUX?.CurrentQuery?.RulesConfigPaths;
+        if (rules != null) dto.Rules.AddRange(rules);
+        return dto;
+    });
+
+    public Task<List<FindNeedleUX.Services.Mcp.HistogramBucketDto>> GetHistogramAsync(int buckets) => McpOnUiAsync(() =>
+    {
+        if (buckets <= 0) buckets = 20;
+        if (buckets > 200) buckets = 200;
+        var result = new List<FindNeedleUX.Services.Mcp.HistogramBucketDto>();
+        var (min, max) = ViewModel.GetFilteredTimeRange();
+        if (min == null || max == null) return result;
+        var start = min.Value;
+        var span = max.Value - start;
+        if (span <= TimeSpan.Zero)
+        {
+            result.Add(new FindNeedleUX.Services.Mcp.HistogramBucketDto
+            { Start = start.ToString("o"), Count = ViewModel.TotalFilteredCount });
+            return result;
+        }
+        var width = TimeSpan.FromTicks(span.Ticks / buckets);
+        for (int i = 0; i < buckets; i++)
+        {
+            var lo = start + TimeSpan.FromTicks(width.Ticks * i);
+            // Last bucket is inclusive of max; widen its upper bound slightly so max rows count.
+            var hi = i == buckets - 1 ? max.Value : lo + width;
+            result.Add(new FindNeedleUX.Services.Mcp.HistogramBucketDto
+            {
+                Start = lo.ToString("o"),
+                Count = ViewModel.CountInTimeRange(lo, hi),
+            });
+        }
+        return result;
+    });
+
+    public Task<int> SetFilterAsync(string search, string provider, string taskName, string message,
+        string source, string level, string fromTime, string toTime) => McpOnUiAsync(() =>
+    {
+        DateTime? from = null, to = null;
+        bool clearFrom = fromTime == "", clearTo = toTime == "";
+        if (!string.IsNullOrEmpty(fromTime) && DateTime.TryParse(fromTime, null,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var pf)) from = pf;
+        if (!string.IsNullOrEmpty(toTime) && DateTime.TryParse(toTime, null,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var pt)) to = pt;
+
+        // Keep the visible filter controls in sync so the agent's change shows in the UI.
+        if (search != null) SearchBox.Text = search;
+        if (provider != null) ProviderFilterBox.Text = provider;
+        if (taskName != null) TaskNameFilterBox.Text = taskName;
+        if (message != null) MessageFilterBox.Text = message;
+        if (source != null) SourceFilterBox.Text = source;
+        if (level != null) LevelFilterCombo.SelectedItem = string.IsNullOrEmpty(level) ? null : level;
+        if (clearFrom) FromDatePicker.Date = null; else if (from.HasValue) FromDatePicker.Date = from.Value;
+        if (clearTo) ToDatePicker.Date = null; else if (to.HasValue) ToDatePicker.Date = to.Value;
+
+        // Authoritative single apply + count (the controls' own events would each reload separately).
+        return ViewModel.SetFiltersBulk(search, provider, taskName, message, source, level,
+            from, to, clearFrom, clearTo);
+    });
+
+    public Task<int> ClearFiltersAsync() => McpOnUiAsync(() =>
+    {
+        SearchBox.Text = "";
+        ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
+        LevelFilterCombo.SelectedItem = null;
+        FromDatePicker.Date = null;
+        ToDatePicker.Date = null;
+        ViewModel.ClearFilters();
+        return ViewModel.TotalFilteredCount;
+    });
+
+    public Task SetSortAsync(string column, bool descending) => McpOnUiAsync(() =>
+    {
+        ViewModel.ApplySort(column, descending);
+        // Reflect the sort arrow on the matching column header.
+        foreach (var c in ResultsGrid.Columns)
+        {
+            if (string.Equals(c.Header?.ToString(), column, StringComparison.OrdinalIgnoreCase))
+                c.SortDirection = descending ? DataGridSortDirection.Descending : DataGridSortDirection.Ascending;
+            else
+                c.SortDirection = null;
+        }
+    });
+
+    public Task GoToPageAsync(int page) => McpOnUiAsync(() => ViewModel.GoToPage(page));
+
+    public Task SetPageSizeAsync(int pageSize) => McpOnUiAsync(() =>
+    {
+        if (pageSize <= 0) return;
+        ViewModel.PageSize = pageSize;
+        ResultsViewerSettings.PageSize = pageSize;
+    });
+
+    public Task<bool> SelectRowAsync(long rowId) => McpOnUiAsync(() =>
+    {
+        foreach (var item in ViewModel.Results)
+        {
+            if (item.RowId == rowId)
+            {
+                ResultsGrid.SelectedItem = item;
+                try { ResultsGrid.ScrollIntoView(item, null); } catch { /* best effort */ }
+                return true;
+            }
+        }
+        return false; // not on the current page — agent can page/filter to it first
+    });
+
+    public Task<bool> TagRowAsync(long rowId, string tag) => McpOnUiAsync(() =>
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return false;
+        if (!_tagColors.ContainsKey(tag)) return false; // unknown tag name
+        _rowTags[rowId] = tag;
+        ViewModel.RefreshCurrentPage(); // re-render so the tag glyph appears
+        return true;
+    });
+
+    public Task<bool> ClearTagAsync(long rowId) => McpOnUiAsync(() =>
+    {
+        bool removed = _rowTags.Remove(rowId);
+        if (removed) ViewModel.RefreshCurrentPage();
+        return removed;
+    });
+
+    public Task SetDetailsModeAsync(string mode) => McpOnUiAsync(() =>
+    {
+        var m = (mode ?? "").Trim().ToLowerInvariant() switch
+        {
+            "bottom" or "bottompanel" or "panel" => DetailsMode.BottomPanel,
+            "popup" => DetailsMode.Popup,
+            _ => DetailsMode.Inrow,
+        };
+        SetDetailsMode(m);
+    });
 
     private static global::Windows.UI.Color ParseHex(string hex)
     {

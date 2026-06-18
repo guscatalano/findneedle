@@ -24,6 +24,11 @@ public class LogLine
     public LogLine(ISearchResult searchResult, int index)
     {
         Index = index;
+        // Stable identity for record lookup / tagging / MCP. Disk-backed rows carry the SQLite Id;
+        // backends without one (in-memory) return -1, so fall back to the load-order Index, which is
+        // stable for those sources (the in-memory list is built once and only sliced/sorted after).
+        var rowId = searchResult.GetRowId();
+        RowId = rowId >= 0 ? rowId : index;
         Provider = NormalizeMissing(searchResult.GetSource());
         TaskName = NormalizeMissing(searchResult.GetTaskName());
         LogTime = searchResult.GetLogTime();
@@ -103,6 +108,17 @@ public class LogLine
     public int Index
     {
         get;set;
+    }
+
+    /// <summary>
+    /// Stable row identity, independent of the current filter/sort/page (unlike <see cref="Index"/>,
+    /// which is the displayed position). The SQLite <c>FilteredResults.Id</c> for disk-backed
+    /// searches; the load-order position for in-memory ones. Used by record lookup, row tagging,
+    /// and the MCP server as the durable handle for a row.
+    /// </summary>
+    public long RowId
+    {
+        get; set;
     }
     public string Time
     {

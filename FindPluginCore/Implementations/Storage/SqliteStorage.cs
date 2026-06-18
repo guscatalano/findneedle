@@ -880,7 +880,7 @@ namespace FindPluginCore.Implementations.Storage
             lock (_sync)
             {
                 var cmd = _connection.CreateCommand();
-                cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource FROM {table}";
+                cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, Id FROM {table}";
                 using var reader = cmd.ExecuteReader();
                 var batch = new List<ISearchResult>(batchSize);
                 while (reader.Read())
@@ -959,7 +959,7 @@ namespace FindPluginCore.Implementations.Storage
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText =
                     "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
-                    "SearchableData, Message, ResultSource FROM FilteredResults " +
+                    "SearchableData, Message, ResultSource, Id FROM FilteredResults " +
                     $"{where} {orderBy} LIMIT @limit OFFSET @offset";
                 BindParams(cmd, ps);
                 cmd.Parameters.AddWithValue("@limit", limit);
@@ -997,7 +997,7 @@ namespace FindPluginCore.Implementations.Storage
             using var cmd = _connection.CreateCommand();
             cmd.CommandText =
                 "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
-                "SearchableData, Message, ResultSource FROM FilteredResults " +
+                "SearchableData, Message, ResultSource, Id FROM FilteredResults " +
                 $"{where} {orderBy} LIMIT @limit OFFSET @offset";
             BindParams(cmd, ps);
             cmd.Parameters.AddWithValue("@limit", limit);
@@ -1009,6 +1009,25 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         private static bool HasGlobalSearch(FilterInput f) => f != null && !string.IsNullOrEmpty(f.Search);
+
+        /// <summary>
+        /// Fetch a single filtered row by its stable <c>FilteredResults.Id</c>, independent of any
+        /// filter/sort/paging. Returns null if no such row exists. Used for record lookup
+        /// (e.g. the MCP <c>get_record</c> tool and row tagging by stable id).
+        /// </summary>
+        public ISearchResult GetById(long id)
+        {
+            lock (_sync)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText =
+                    "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
+                    "SearchableData, Message, ResultSource, Id FROM FilteredResults WHERE Id = @id LIMIT 1";
+                cmd.Parameters.AddWithValue("@id", id);
+                using var reader = cmd.ExecuteReader();
+                return reader.Read() ? new SqliteSearchResult(reader) : null;
+            }
+        }
 
         public List<int> GetDistinctLevels()
         {
@@ -1224,6 +1243,7 @@ namespace FindPluginCore.Implementations.Storage
             private readonly string _searchableData;
             private readonly string _message;
             private readonly string _resultSource;
+            private readonly long _id;
 
             public SqliteSearchResult(IDataRecord record)
             {
@@ -1237,6 +1257,9 @@ namespace FindPluginCore.Implementations.Storage
                 _searchableData = record.GetString(7);
                 _message = record.GetString(8);
                 _resultSource = record.GetString(9);
+                // Id is the last column when present (all current SELECTs include it). Guard so a
+                // reader without the column still constructs (id stays -1 = "no stable id").
+                _id = record.FieldCount > 10 && !record.IsDBNull(10) ? record.GetInt64(10) : -1;
             }
 
             public DateTime GetLogTime() => _logTime;
@@ -1250,6 +1273,7 @@ namespace FindPluginCore.Implementations.Storage
             public string GetSearchableData() => _searchableData;
             public string GetMessage() => _message;
             public string GetResultSource() => _resultSource;
+            public long GetRowId() => _id;
         }
     }
 }

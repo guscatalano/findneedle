@@ -1,0 +1,48 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace FindNeedleUX.Services.Mcp;
+
+/// <summary>
+/// The surface the active result viewer exposes to the MCP bridge so an agent can read and drive
+/// the same live view the user sees. Implemented by <c>NativeResultsPage</c>, which marshals every
+/// call onto the UI thread (so the grid updates as the agent acts). The bridge holds at most one
+/// registered controller at a time (the last-loaded viewer); when none is registered, the bridge's
+/// viewer tools report "no active view".
+///
+/// All methods are async because they hop to the UI thread and await completion.
+/// </summary>
+public interface IMcpViewerController
+{
+    Task<ViewStateDto> GetViewAsync();
+
+    /// <summary>A page of the current filtered/sorted result. Null offset = the viewer's current page.</summary>
+    Task<PageDto> GetPageAsync(int? offset, int limit);
+
+    /// <summary>One row by stable id, with all fields (full Message). Null if no such row.</summary>
+    Task<RecordDto> GetRecordAsync(long rowId);
+
+    Task<SummaryDto> GetSummaryAsync();
+
+    Task<List<HistogramBucketDto>> GetHistogramAsync(int buckets);
+
+    /// <summary>Set any subset of filters (null = leave unchanged, "" = clear). Returns new filtered count.</summary>
+    Task<int> SetFilterAsync(string search, string provider, string taskName, string message,
+        string source, string level, string fromTime, string toTime);
+
+    Task<int> ClearFiltersAsync();
+
+    Task SetSortAsync(string column, bool descending);
+
+    Task GoToPageAsync(int page);
+
+    Task SetPageSizeAsync(int pageSize);
+
+    Task<bool> SelectRowAsync(long rowId);
+
+    Task<bool> TagRowAsync(long rowId, string tag);
+
+    Task<bool> ClearTagAsync(long rowId);
+
+    Task SetDetailsModeAsync(string mode);
+}

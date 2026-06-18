@@ -521,6 +521,79 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ToDate = null;
     }
 
+    // ----- Headless drive hooks (used by the MCP viewer bridge) -----
+
+    /// <summary>
+    /// Set all filter fields at once and reload exactly once (each individual setter would trigger
+    /// its own reload). A null argument leaves that field unchanged; pass "" to clear a text field.
+    /// Returns the new filtered count. Must run on the UI thread.
+    /// </summary>
+    public int SetFiltersBulk(string search, string provider, string taskName, string message,
+        string source, string level, DateTime? fromTime, DateTime? toTime,
+        bool clearFromTime = false, bool clearToTime = false)
+    {
+        if (search != null)   { _searchText = search;     OnPropertyChanged(nameof(SearchText)); }
+        if (provider != null) { _providerFilter = provider; OnPropertyChanged(nameof(ProviderFilter)); }
+        if (taskName != null) { _taskNameFilter = taskName; OnPropertyChanged(nameof(TaskNameFilter)); }
+        if (message != null)  { _messageFilter = message;   OnPropertyChanged(nameof(MessageFilter)); }
+        if (source != null)   { _sourceFilter = source;     OnPropertyChanged(nameof(SourceFilter)); }
+        if (level != null)    { _levelFilter = level;       OnPropertyChanged(nameof(LevelFilter)); }
+        if (fromTime.HasValue || clearFromTime) { _fromDate = clearFromTime ? null : fromTime; OnPropertyChanged(nameof(FromDate)); }
+        if (toTime.HasValue || clearToTime)     { _toDate = clearToTime ? null : toTime;       OnPropertyChanged(nameof(ToDate)); }
+
+        ApplyFilters();
+        return TotalFilteredCount;
+    }
+
+    /// <summary>Look up one row by its stable <see cref="LogLine.RowId"/>, ignoring filter/sort/page.</summary>
+    public LogLine GetRecordByRowId(long rowId) => _source?.GetByRowId(rowId);
+
+    /// <summary>A read-only snapshot of the rows currently shown on the active page.</summary>
+    public IReadOnlyList<LogLine> CurrentPageRows() => Results;
+
+    /// <summary>An arbitrary [offset, offset+limit) slice of the current filtered/sorted result.</summary>
+    public List<LogLine> GetRows(int offset, int limit)
+        => _source == null ? new List<LogLine>()
+                           : _source.GetPage(BuildFilterSpec(), new SortSpec(_sortColumn, _sortDescending), offset, limit);
+
+    /// <summary>
+    /// Count rows in the current filtered set that also fall within [from, to] (for the MCP
+    /// <c>histogram</c>). Intersects with whatever time filter is already active.
+    /// </summary>
+    public int CountInTimeRange(DateTime? from, DateTime? to)
+    {
+        if (_source == null) return 0;
+        var f = BuildFilterSpec();
+        // Tighten the existing time bounds with the bucket bounds (keep the more restrictive).
+        DateTime? lo = Max(f.FromTime, from);
+        DateTime? hi = Min(f.ToTime, to);
+        return _source.GetFilteredCount(f with { FromTime = lo, ToTime = hi });
+    }
+
+    private static DateTime? Max(DateTime? a, DateTime? b)
+        => a is null ? b : b is null ? a : (a.Value >= b.Value ? a : b);
+    private static DateTime? Min(DateTime? a, DateTime? b)
+        => a is null ? b : b is null ? a : (a.Value <= b.Value ? a : b);
+
+    /// <summary>
+    /// Min/max LogTime over the current filtered set (for the MCP <c>summary</c>). Two single-row
+    /// queries via the source's sort, so it's cheap on any backend. Null when the set is empty.
+    /// </summary>
+    public (DateTime? min, DateTime? max) GetFilteredTimeRange()
+    {
+        if (_source == null) return (null, null);
+        var f = BuildFilterSpec();
+        var first = _source.GetPage(f, new SortSpec("Time", false), 0, 1);
+        var last  = _source.GetPage(f, new SortSpec("Time", true), 0, 1);
+        DateTime? min = first.Count > 0 ? first[0].LogTime : (DateTime?)null;
+        DateTime? max = last.Count > 0 ? last[0].LogTime : (DateTime?)null;
+        return (min, max);
+    }
+
+    /// <summary>Current level counts over the filtered set (for the MCP <c>summary</c>).</summary>
+    public Dictionary<string, int> GetFilteredLevelCounts()
+        => _source == null ? new Dictionary<string, int>() : new Dictionary<string, int>(_source.GetLevelCounts(BuildFilterSpec()));
+
     private void UpdateStatus()
     {
         StatusText = $"{_totalFilteredCount:N0} / {TotalCount:N0} results";

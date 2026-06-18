@@ -61,6 +61,13 @@ public interface IPagedLogSource : IDisposable
     /// </summary>
     List<FindNeedleUX.LogLine> GetPage(FilterSpec filters, SortSpec sort, int offset, int limit);
 
+    /// <summary>
+    /// Look up a single row by its stable <see cref="FindNeedleUX.LogLine.RowId"/>, independent of
+    /// the current filter/sort/paging. Returns null if no row with that id exists. Used for record
+    /// lookup (the MCP <c>get_record</c> tool) and tagging by stable id.
+    /// </summary>
+    FindNeedleUX.LogLine GetByRowId(long rowId);
+
     /// <summary>Distinct level names present anywhere in the store (for the filter dropdown).</summary>
     List<string> GetDistinctLevels();
 

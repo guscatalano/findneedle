@@ -64,6 +64,13 @@ public sealed class SqlitePagedSource : IPagedLogSource
         return list;
     }
 
+    public FindNeedleUX.LogLine GetByRowId(long rowId)
+    {
+        var r = _storage.GetById(rowId);
+        // Index is unknown out of paging context; -1 signals "no display position".
+        return r == null ? null : new FindNeedleUX.LogLine(r, -1);
+    }
+
     public List<string> GetDistinctLevels()
     {
         var ints = _storage.GetDistinctLevels();
