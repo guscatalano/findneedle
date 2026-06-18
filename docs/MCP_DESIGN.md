@@ -1,6 +1,6 @@
 # MCP Server Design — Live Viewer Control
 
-Status: **design only, not yet implemented.**
+Status: **implemented (v1).** See "Implementation" at the bottom for what shipped and how to use it.
 
 ## Goal
 
@@ -111,6 +111,43 @@ Compact (list / `get_page`):
   a "loading/indexing" status rather than block.
 - v1 is read-mostly for *internal* state: the agent drives via the same code paths the UI uses;
   it does not poke private fields.
+
+## Implementation (what shipped)
+
+Code lives in `FindNeedleUX/Services/Mcp/` plus a few touch points:
+
+- **`McpServer`** — minimal MCP JSON-RPC over the BCL `HttpListener`, bound to `http://127.0.0.1:{port}/`
+  (loopback-guarded; rejects non-loopback remotes). Implements `initialize`, `notifications/initialized`,
+  `ping`, `tools/list`, `tools/call`. This is the request/response path of MCP "Streamable HTTP"; it
+  does **not** push server-initiated messages, so a `GET` (SSE) is answered `405`. No ASP.NET Core /
+  MCP-SDK dependency (the app is self-contained MSIX + ILRepack, so a BCL-only server is the safe fit).
+- **`McpTools`** — the tool catalog (name + description + JSON schema + handler), each calling
+  `McpViewerBridge`. Workspace: `list_locations`, `list_rules`, `add_folder`, `add_kusto`,
+  `remove_location`, `run_search`, `cancel_search`. Viewer: `get_view`, `get_page`, `get_record`,
+  `summary`, `histogram`, `search`, `set_filter`, `clear_filters`, `set_sort`, `goto_page`,
+  `set_page_size`, `select_row`, `tag_row`, `clear_tag`, `set_details_mode`, `export`.
+- **`McpViewerBridge`** — single live workspace (no session); workspace ops via `MiddleLayerService`
+  marshaled to the UI thread, viewer ops delegated to the registered `IMcpViewerController`.
+- **`IMcpViewerController`** — implemented by `NativeResultsPage`; registers on load / unregisters on
+  unload; every method hops to the UI thread; returns plain DTOs.
+- **`McpServerHost`** — starts/stops the server from settings, reacts to `Changed`, surfaces status.
+- **Stable id** — `ISearchResult.GetRowId()` / `SqliteStorage.Id` / `LogLine.RowId`; row tags are now
+  keyed by `RowId`.
+- **Export** — `ResultExporter` (headless csv/json/xml) shared by the viewer's picker export and the
+  MCP `export` tool (writes to a path / temp file, returns `{path, rowCount}`).
+
+### Enabling / using it
+- Settings → Result viewer settings → **MCP server (experimental)**: tick "Enable", optionally change
+  the port (default **8765**). Off by default. App restart not required — the host starts/stops live.
+- Endpoint: `http://127.0.0.1:8765/` (POST JSON-RPC). Point an MCP client that supports Streamable
+  HTTP at it. Viewer tools need a result viewer open (run a search first), else they return a clear
+  "no active view" error.
+
+### Known limitations / follow-ups for v1
+- **Packaging:** works when the app runs **unpackaged** (running the exe directly). An MSIX /
+  AppContainer install blocks loopback by default and would need a loopback exemption.
+- No SSE / server push, no session-id enforcement, no auth token (localhost-only by design).
+- `select_row` only selects rows on the current page; `tag_row` re-publishes the page to show the glyph.
 
 ## Out of scope for v1 (possible follow-ups)
 
