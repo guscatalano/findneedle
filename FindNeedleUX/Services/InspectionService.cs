@@ -23,16 +23,14 @@ public static class InspectionService
     {
         showSpinner(true, "Inspecting ETL file...");
         var hWnd = WindowNative.GetWindowHandle(window);
-        var picker = new FileOpenPicker { ViewMode = PickerViewMode.List, FileTypeFilter = { ".etl" } };
-        InitializeWithWindow.Initialize(picker, hWnd);
-        var file = await picker.PickSingleFileAsync();
-        if (file == null) { showSpinner(false, null); return; }
+        var path = Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("ETL files", "*.etl") });
+        if (path == null) { showSpinner(false, null); return; }
 
         EtlInfo info = null!;
         string error = null!;
         await Task.Run(() =>
         {
-            try { info = EtlInfoExtractor.Inspect(file.Path); }
+            try { info = EtlInfoExtractor.Inspect(path); }
             catch (Exception ex) { error = ex.Message; }
         });
         showSpinner(false, null);
@@ -114,16 +112,14 @@ public static class InspectionService
 
         showSpinner(true, "Inspecting binary file...");
         var hWnd = WindowNative.GetWindowHandle(window);
-        var picker = new FileOpenPicker { ViewMode = PickerViewMode.List, FileTypeFilter = { ".exe", ".dll" } };
-        InitializeWithWindow.Initialize(picker, hWnd);
-        var file = await picker.PickSingleFileAsync();
-        if (file == null) { showSpinner(false, null); return; }
+        var path = Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("Binary files", "*.exe;*.dll"), ("All files", "*.*") });
+        if (path == null) { showSpinner(false, null); return; }
 
         List<(Guid guid, string? name)> providers = null!;
         string error = null!;
         await Task.Run(() =>
         {
-            try { providers = EtwNativeProviderScanner.ExtractNativeEtwProviders(file.Path); }
+            try { providers = EtwNativeProviderScanner.ExtractNativeEtwProviders(path); }
             catch (Exception ex) { error = ex.Message; }
         });
         showSpinner(false, null);

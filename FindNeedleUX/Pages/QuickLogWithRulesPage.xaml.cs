@@ -26,47 +26,33 @@ public sealed partial class QuickLogWithRulesPage : Page
         this.InitializeComponent();
     }
 
-    private async void BrowseLogButton_Click(object sender, RoutedEventArgs e)
+    private void BrowseLogButton_Click(object sender, RoutedEventArgs e)
     {
         var window = WindowUtil.GetWindowForElement(this);
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-
-        var picker = new FileOpenPicker()
+        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[]
         {
-            ViewMode = PickerViewMode.List,
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            FileTypeFilter = { ".txt", ".log", ".etl", ".evtx", ".zip" }
-        };
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
+            ("Log files", "*.txt;*.log;*.etl;*.evtx;*.zip"),
+            ("All files", "*.*"),
+        });
+        if (path != null)
         {
-            _logFilePath = file.Path;
-            LogFilePathTextBox.Text = file.Path;
+            _logFilePath = path;
+            LogFilePathTextBox.Text = path;
             UpdateGoButtonState();
         }
     }
 
-    private async void BrowseRulesButton_Click(object sender, RoutedEventArgs e)
+    private void BrowseRulesButton_Click(object sender, RoutedEventArgs e)
     {
         var window = WindowUtil.GetWindowForElement(this);
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-
-        var picker = new FileOpenPicker()
+        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("Rules JSON", "*.json") });
+        if (path != null)
         {
-            ViewMode = PickerViewMode.List,
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            FileTypeFilter = { ".json" }
-        };
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
-        {
-            _rulesFilePath = file.Path;
-            RulesFilePathTextBox.Text = file.Path;
-            ValidateRulesFile(file.Path);
+            _rulesFilePath = path;
+            RulesFilePathTextBox.Text = path;
+            ValidateRulesFile(path);
             UpdateGoButtonState();
         }
     }

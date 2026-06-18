@@ -401,15 +401,12 @@ public sealed partial class PluginsPage : Page
         }
     }
 
-    private async void PickPluginFile_Click(object sender, RoutedEventArgs e)
+    private void PickPluginFile_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: PluginConfigEntryViewModel entry }) return;
         var window = WindowUtil.GetWindowForElement(this);
         var hWnd = WindowNative.GetWindowHandle(window);
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        picker.FileTypeFilter.Add(".dll");
-        InitializeWithWindow.Initialize(picker, hWnd);
-        var file = await picker.PickSingleFileAsync();
-        if (file != null) entry.Path = file.Path;
+        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("Plugin DLL", "*.dll") });
+        if (path != null) entry.Path = path;
     }
 }

@@ -63,23 +63,12 @@ public sealed partial class SystemInfoPage : Page
     {
         var window = WindowUtil.GetWindowForElement(this);
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-        var picker = new FileOpenPicker();
-        picker.FileTypeFilter.Add(".jar");
-        picker.SuggestedStartLocation = PickerLocationId.Desktop;
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-        var fileOp = picker.PickSingleFileAsync();
-        fileOp.Completed = (op, status) =>
+        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("PlantUML JAR", "*.jar") });
+        if (path != null)
         {
-            var file = op.GetResults();
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                if (file != null)
-                {
-                    SystemInfoMiddleware.SetPlantUMLPath(file.Path);
-                    PlantUmlPathTextBlock.Text = file.Path;
-                    this.sysout.Text = SystemInfoMiddleware.GetPanelText();
-                }
-            });
-        };
+            SystemInfoMiddleware.SetPlantUMLPath(path);
+            PlantUmlPathTextBlock.Text = path;
+            this.sysout.Text = SystemInfoMiddleware.GetPanelText();
+        }
     }
 }

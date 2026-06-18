@@ -33,34 +33,29 @@ public sealed partial class SearchLocationsPage : Page
         }
     }
 
-    private async void Button_AddFolder(object sender, RoutedEventArgs e)
+    private void Button_AddFolder(object sender, RoutedEventArgs e)
     {
         var window = WindowUtil.GetWindowForElement(this);
         var hWnd = WindowNative.GetWindowHandle(window);
-        var picker = new FolderPicker { ViewMode = PickerViewMode.List };
-        picker.FileTypeFilter.Add("*");
-        InitializeWithWindow.Initialize(picker, hWnd);
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder != null)
+        var path = FindNeedleUX.Services.Win32FileDialog.PickFolder(hWnd);
+        if (path != null)
         {
-            _viewModel.AddLocation(folder.Path);
+            _viewModel.AddLocation(path);
         }
     }
 
-    private async void Button_AddFile(object sender, RoutedEventArgs e)
+    private void Button_AddFile(object sender, RoutedEventArgs e)
     {
         var window = WindowUtil.GetWindowForElement(this);
         var hWnd = WindowNative.GetWindowHandle(window);
-        var picker = new FileOpenPicker
+        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[]
         {
-            ViewMode = PickerViewMode.List,
-            FileTypeFilter = { ".txt", ".etl", ".log", ".zip", ".evtx" },
-        };
-        InitializeWithWindow.Initialize(picker, hWnd);
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
+            ("Log files", "*.txt;*.etl;*.log;*.zip;*.evtx"),
+            ("All files", "*.*"),
+        });
+        if (path != null)
         {
-            _viewModel.AddLocation(file.Path);
+            _viewModel.AddLocation(path);
         }
     }
 

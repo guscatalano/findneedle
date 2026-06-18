@@ -13,7 +13,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -81,13 +80,8 @@
             <TextBlock x:Name="StatusStrip" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Locations: 0 · Filters: 0 · Rules: 0 · Last run: —"/>
         </Border>
 
-        <!-- Elevation warning: file pickers can't run in an elevated process. Shown only when admin. -->
-        <InfoBar Grid.Row="2" x:Name="ElevationWarning" Severity="Warning" IsOpen="False" IsClosable="True"
-                 Title="Running as administrator"
-                 Message="File open/save dialogs (Open Log File/Folder, Export) don't work while elevated and may fail. Relaunch FindNeedle without administrator rights to browse for files, or pass a path on the command line."/>
-
         <!-- Main content area with overlay spinner -->
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="2">
             <Frame x:Name="contentFrame" />
             <!-- Full-window overlay spinner for ETL inspection and quick actions -->
             <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"

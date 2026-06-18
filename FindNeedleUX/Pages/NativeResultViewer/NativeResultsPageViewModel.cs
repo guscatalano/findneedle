@@ -645,14 +645,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 _                 => (".csv",  "CSV Files",  "CSV"),
             };
 
-            var picker = new global::Windows.Storage.Pickers.FileSavePicker();
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-            picker.SuggestedFileName = $"findneedle-results-{DateTime.Now:yyyyMMdd-HHmmss}{ext}";
-            picker.FileTypeChoices.Add(label, new[] { ext });
-
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return null;
+            var suggested = $"findneedle-results-{DateTime.Now:yyyyMMdd-HHmmss}{ext}";
+            var path = FindNeedleUX.Services.Win32FileDialog.SaveFile(
+                hWnd, suggested, new (string, string)[] { (label, "*" + ext) }, ext);
+            if (path == null) return null;
 
             var visibleNames = Columns.Where(c => c.IsVisible).Select(c => c.Name).ToList();
             var filters = BuildFilterSpec();
@@ -661,8 +658,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             var lines = FindNeedleUX.Services.ResultExporter.BuildLines(
                 _source, filters, sort, visibleNames, ToExporterFormat(format), out _);
 
-            await global::Windows.Storage.FileIO.WriteLinesAsync(file, lines);
-            return file.Path;
+            await System.IO.File.WriteAllLinesAsync(path, lines).ConfigureAwait(false);
+            return path;
         }
         catch (Exception ex)
         {

@@ -29,23 +29,14 @@ public sealed partial class SearchRulesPage : Page
     /// </summary>
     public void AddRuleFileByPath(string filePath) => _viewModel.LoadRuleFile(filePath);
 
-    private async void BrowseButton_Click(object sender, RoutedEventArgs e)
+    private void BrowseButton_Click(object sender, RoutedEventArgs e)
     {
         var window = WindowUtil.GetWindowForElement(this);
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-
-        var picker = new FileOpenPicker()
+        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("Rules JSON", "*.json") });
+        if (path != null)
         {
-            ViewMode = PickerViewMode.List,
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            FileTypeFilter = { ".json" }
-        };
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
-
-        var file = await picker.PickSingleFileAsync();
-        if (file != null)
-        {
-            _viewModel.LoadRuleFile(file.Path);
+            _viewModel.LoadRuleFile(path);
         }
     }
 
