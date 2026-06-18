@@ -108,6 +108,28 @@ public sealed partial class SearchLocationsPage : Page
             _ => KustoAuthMode.Interactive,
         };
 
+        // Row limit — Kusto caps results at 500k; raise or remove it (results stream to disk, so even
+        // millions stay low-memory, but a big pull takes longer and loads the cluster).
+        var rowLimit = new RadioButtons { Header = "Row limit", MaxColumns = 2 };
+        rowLimit.Items.Add("Default (500,000)");
+        rowLimit.Items.Add("Up to 1,000,000");
+        rowLimit.Items.Add("Up to 5,000,000");
+        rowLimit.Items.Add("All rows (no limit)");
+        rowLimit.SelectedIndex = existing == null ? 0 : existing.RowLimit switch
+        {
+            1_000_000 => 1,
+            5_000_000 => 2,
+            < 0 => 3,
+            _ => 0,
+        };
+        long SelectedRowLimit() => rowLimit.SelectedIndex switch
+        {
+            1 => 1_000_000,
+            2 => 5_000_000,
+            3 => -1,
+            _ => 0,
+        };
+
         Microsoft.UI.Xaml.Media.Brush Dim()
             => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
 
@@ -275,6 +297,7 @@ public sealed partial class SearchLocationsPage : Page
         var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
         panel.Children.Add(cluster);
         panel.Children.Add(auth);
+        panel.Children.Add(rowLimit);
         panel.Children.Add(dbGroup);
         panel.Children.Add(tablesGroup);
         panel.Children.Add(queryGroup);
@@ -304,6 +327,6 @@ public sealed partial class SearchLocationsPage : Page
             || string.IsNullOrWhiteSpace(query.Text))
             return null;
 
-        return new KustoLocation(cluster.Text, database, query.Text, Mode());
+        return new KustoLocation(cluster.Text, database, query.Text, Mode(), SelectedRowLimit());
     }
 }

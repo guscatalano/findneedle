@@ -37,18 +37,33 @@ public class KustoLocation : ISearchLocation
     public string Query { get; }
     public KustoAuthMode AuthMode { get; }
 
+    /// <summary>
+    /// Row cap for the query: 0 = Kusto's default (500k), a positive N raises it
+    /// (<c>set truncationmaxrecords=N</c>), and -1 removes it entirely (<c>set notruncation</c>).
+    /// </summary>
+    public long RowLimit { get; }
+
     private readonly List<ISearchResult> _results = new();
     private bool _loaded;
     private string? _error;
 
     public KustoLocation(string clusterUri, string database, string query,
-                         KustoAuthMode authMode = KustoAuthMode.Interactive)
+                         KustoAuthMode authMode = KustoAuthMode.Interactive, long rowLimit = 0)
     {
         ClusterUri = (clusterUri ?? string.Empty).Trim();
         Database = (database ?? string.Empty).Trim();
         Query = (query ?? string.Empty).Trim();
         AuthMode = authMode;
+        RowLimit = rowLimit;
     }
+
+    /// <summary>A leading "set" statement to raise/remove the result-row cap, or "" for default.</summary>
+    private string TruncationPrefix() => RowLimit switch
+    {
+        < 0 => "set notruncation;\n",
+        > 0 => $"set truncationmaxrecords={RowLimit};\n",
+        _   => string.Empty,
+    };
 
     // One credential instance per auth mode, reused across calls so the token is cached (in-memory,
     // plus an on-disk persistent cache for interactive/device) — sign in once, not on every button.
@@ -213,7 +228,7 @@ public class KustoLocation : ISearchLocation
         {
             var kcsb = BuildConnection();
             using var client = KustoClientFactory.CreateCslQueryProvider(kcsb);
-            using var reader = client.ExecuteQuery(Database, Query, RequestProps());
+            using var reader = client.ExecuteQuery(Database, TruncationPrefix() + Query, RequestProps());
 
             int cols = reader.FieldCount;
             var names = new string[cols];
@@ -231,8 +246,8 @@ public class KustoLocation : ISearchLocation
                 }
                 _results.Add(new KustoRowResult(map, label));
             }
-            // Hitting the cap means the service truncated the result set — load it, but flag it.
-            _truncated = _results.Count >= RowCap;
+            // Only the default cap truncates silently; a raised/removed cap doesn't (flag at default).
+            _truncated = RowLimit == 0 && _results.Count >= RowCap;
             Logger.Instance.Log($"Kusto query returned {_results.Count} rows from {ClusterUri}/{Database}{(_truncated ? " (TRUNCATED at cap)" : "")}");
         }
         catch (Exception ex)
