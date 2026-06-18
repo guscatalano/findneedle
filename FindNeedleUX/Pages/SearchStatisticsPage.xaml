@@ -18,13 +18,41 @@
                     <Button x:Name="CopyButton" Content="Copy" Click="Copy_Click"/>
                 </StackPanel>
             </Grid>
-            <TextBlock Text="Throughput and where the time went for the most recent search — rows, storage backend, cache hit/miss, and the slowest phases (load, scan, index, viewer)."
+            <TextBlock Text="Statistics from the most recent search — records loaded vs. matched, memory, time per phase, and a per-provider/per-file breakdown — plus the timing report (where the wall-clock went)."
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+
+            <!-- Summary: records / memory / time -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                     CornerRadius="6" Padding="16">
-                <TextBlock x:Name="ReportText" FontFamily="Consolas" FontSize="12"
-                           IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Summary" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="SummaryText" FontFamily="Consolas" FontSize="12"
+                               IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Per-component / provider / file breakdown -->
+            <Expander x:Name="BreakdownExpander" Header="Breakdown by component / provider / file"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                <TreeView x:Name="BreakdownTree" AllowDrop="False" SelectionMode="None">
+                    <TreeView.ItemTemplate>
+                        <DataTemplate>
+                            <TreeViewItem Content="{Binding Content}" IsExpanded="True"/>
+                        </DataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </Expander>
+
+            <!-- Timing report (why so slow?) -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Timing — where the wall-clock went (why so slow?)" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="PerfText" FontFamily="Consolas" FontSize="12"
+                               IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+                </StackPanel>
             </Border>
         </StackPanel>
     </ScrollViewer>

@@ -359,9 +359,10 @@ public class MiddleLayerService
 
     public static SearchStatistics GetStats()
     {
-        var query = SearchQueryUX.CurrentQuery;
-        var searchQueryConcrete = query as SearchQuery;
-        return searchQueryConcrete != null ? searchQueryConcrete.GetSearchStatistics() : null;
+        // GetSearchStatistics() is on ISearchQuery, so this works for both the legacy SearchQuery
+        // and the current NuSearchQuery. (The old `query as SearchQuery` cast returned null for
+        // NuSearchQuery — which is why the Statistics page used to render empty.)
+        return SearchQueryUX.CurrentQuery?.GetSearchStatistics();
     }
 
 
