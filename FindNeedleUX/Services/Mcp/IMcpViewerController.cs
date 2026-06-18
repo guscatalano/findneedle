@@ -40,7 +40,12 @@ public interface IMcpViewerController
 
     Task<bool> SelectRowAsync(long rowId);
 
-    Task<bool> TagRowAsync(long rowId, string tag);
+    /// <summary>
+    /// Tag a row. <paramref name="tag"/> is the category (null/blank keeps the row's existing
+    /// category). <paramref name="text"/> is a free-text note (null keeps the existing note; "" or a
+    /// value sets it). Returns false if there's no valid category to apply.
+    /// </summary>
+    Task<bool> TagRowAsync(long rowId, string tag, string text);
 
     Task<bool> ClearTagAsync(long rowId);
 

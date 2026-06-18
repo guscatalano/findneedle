@@ -19,7 +19,8 @@ public sealed class RecordDto
     public string TaskName { get; set; }
     public string Source { get; set; }
     public string Message { get; set; }
-    public string Tag { get; set; }
+    public string Tag { get; set; }      // tag category (Important/Question/Resolved/Note)
+    public string TagText { get; set; }  // free-text note attached to the tag, if any
 
     // Only populated for a full single-record fetch.
     public string MachineName { get; set; }

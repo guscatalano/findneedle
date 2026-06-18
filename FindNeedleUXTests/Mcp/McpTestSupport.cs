@@ -38,6 +38,7 @@ internal sealed class FakeViewerController : IMcpViewerController
     public int GetViewCalls;
     public long LastRecordId = long.MinValue;
     public string LastTag;
+    public string LastTagText;
     public long LastTagId = long.MinValue;
     public string LastSortColumn;
 
@@ -76,7 +77,7 @@ internal sealed class FakeViewerController : IMcpViewerController
     public Task GoToPageAsync(int page) => Task.CompletedTask;
     public Task SetPageSizeAsync(int pageSize) => Task.CompletedTask;
     public Task<bool> SelectRowAsync(long rowId) => Task.FromResult(true);
-    public Task<bool> TagRowAsync(long rowId, string tag) { LastTagId = rowId; LastTag = tag; return Task.FromResult(true); }
+    public Task<bool> TagRowAsync(long rowId, string tag, string text) { LastTagId = rowId; LastTag = tag; LastTagText = text; return Task.FromResult(true); }
     public Task<bool> ClearTagAsync(long rowId) => Task.FromResult(true);
     public Task SetDetailsModeAsync(string mode) => Task.CompletedTask;
     public Task<ExportResultDto> ExportAsync(string format, string destPath)

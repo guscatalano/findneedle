@@ -47,10 +47,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     };
     private static readonly Dictionary<string, string> _tagColors =
         TagOptions.ToDictionary(t => t.Name, t => t.Hex, StringComparer.OrdinalIgnoreCase);
+    // A row tag: a category (one of TagOptions, drives glyph color) plus an optional free-text note.
+    private readonly record struct RowTag(string Name, string Text);
+
     // Keyed by the row's stable LogLine.RowId (SQLite Id for disk-backed searches, load-order
     // position for in-memory) so a tag survives paging, sorting and re-filtering, and so the MCP
-    // bridge can tag/clear by the same id it hands an agent. In-memory for the viewer session.
-    private readonly Dictionary<long, string> _rowTags = new();
+    // bridge can tag/clear (and set the note) by the same id it hands an agent. In-memory for the
+    // viewer session.
+    private readonly Dictionary<long, RowTag> _rowTags = new();
     private bool _colorTaggedRows; // optional: also tint the whole row with the tag color
 
     public NativeResultsPage()
@@ -727,7 +731,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     }
 
     /// <summary>The (label, value) pairs shown for a row — shared by the panel and the popup.</summary>
-    private static System.Collections.Generic.IEnumerable<(string label, string value)> RowFields(LogLine line)
+    private System.Collections.Generic.IEnumerable<(string label, string value)> RowFields(LogLine line)
     {
         yield return ("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
         yield return ("Time",        line.Time);
@@ -739,6 +743,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         yield return ("MachineName", line.MachineName);
         yield return ("Username",    line.Username);
         yield return ("OpCode",      line.OpCode);
+        if (_rowTags.TryGetValue(line.RowId, out var rt))
+            yield return ("Tag", string.IsNullOrEmpty(rt.Text) ? rt.Name : $"{rt.Name} — {rt.Text}");
     }
 
     /// <summary>
@@ -746,7 +752,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// the double-click popup so both behave identically. Values wrap and are selectable; a very long
     /// value gets its own bounded scroller so one giant field can't dominate.
     /// </summary>
-    private static void PopulateDetailsGrid(Grid g, LogLine line)
+    private void PopulateDetailsGrid(Grid g, LogLine line)
     {
         g.Children.Clear();
         g.RowDefinitions.Clear();
@@ -1178,7 +1184,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         var levelHex = (!string.IsNullOrEmpty(line.Level) && _levelLookup.TryGetValue(line.Level, out var entry))
             ? entry.HexColor : null;
         string tagHex = null;
-        bool tagged = _rowTags.TryGetValue(line.RowId, out var tag) && _tagColors.TryGetValue(tag, out tagHex);
+        bool tagged = _rowTags.TryGetValue(line.RowId, out var rowTag) && _tagColors.TryGetValue(rowTag.Name, out tagHex);
+        var tag = rowTag.Name;
 
         // Background: tag tint (when the option is on) else the level tint. Rows recycle, so always set.
         Microsoft.UI.Xaml.Media.Brush bg;
@@ -1204,7 +1211,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            ToolTipService.SetToolTip(marker, $"Tag: {tag}");
+            ToolTipService.SetToolTip(marker,
+                string.IsNullOrEmpty(rowTag.Text) ? $"Tag: {tag}" : $"{tag}: {rowTag.Text}");
             rowEl.Header = marker;
         }
         else
@@ -1265,15 +1273,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // ----- Tag (mark this row) -----
         var key = row.RowId;
         var tagSub = new MenuFlyoutSubItem { Text = "Tag" };
+        _rowTags.TryGetValue(key, out var currentTag);
         foreach (var (name, _) in TagOptions)
         {
             var capturedName = name;
             var item = new MenuFlyoutItem { Text = name };
-            if (_rowTags.TryGetValue(key, out var current) && string.Equals(current, name, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(currentTag.Name) && string.Equals(currentTag.Name, name, StringComparison.OrdinalIgnoreCase))
                 item.Icon = new SymbolIcon(Symbol.Accept); // checkmark on the active tag
-            item.Click += (_, __) => { _rowTags[key] = capturedName; RefreshRow(); };
+            // Changing the category preserves any existing note.
+            item.Click += (_, __) =>
+            {
+                var note = _rowTags.TryGetValue(key, out var ex) ? ex.Text : null;
+                _rowTags[key] = new RowTag(capturedName, note);
+                RefreshRow();
+            };
             tagSub.Items.Add(item);
         }
+        tagSub.Items.Add(new MenuFlyoutSeparator());
+        var noteItem = new MenuFlyoutItem
+        {
+            Text = string.IsNullOrEmpty(currentTag.Text) ? "Add note…" : "Edit note…",
+            Icon = new SymbolIcon(Symbol.Edit),
+        };
+        noteItem.Click += async (_, __) => await EditTagNoteAsync(key, RefreshRow);
+        tagSub.Items.Add(noteItem);
         tagSub.Items.Add(new MenuFlyoutSeparator());
         var clearTag = new MenuFlyoutItem { Text = "Clear tag" };
         clearTag.Click += (_, __) => { _rowTags.Remove(key); RefreshRow(); };
@@ -1318,6 +1341,38 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// parent <c>DataGridColumnHeader</c> if reflection fails for whatever reason. Header
     /// strings are stable (we set them in XAML) and aren't likely to change at runtime.
     /// </summary>
+    /// <summary>
+    /// Prompt for a free-text note on a row's tag. If the row has no category yet, applies "Note"
+    /// so the tag (and its glyph) appears. Empty text is allowed (keeps the tag, clears the note).
+    /// </summary>
+    private async System.Threading.Tasks.Task EditTagNoteAsync(long rowId, Action refreshRow)
+    {
+        _rowTags.TryGetValue(rowId, out var existing);
+        var tb = new TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Width = 380,
+            Height = 120,
+            PlaceholderText = "Note for this row",
+            Text = existing.Text ?? "",
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "Tag note",
+            Content = tb,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            XamlRoot = this.XamlRoot,
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        {
+            var name = string.IsNullOrEmpty(existing.Name) ? TagOptions[3].Name : existing.Name; // default "Note"
+            _rowTags[rowId] = new RowTag(name, tb.Text);
+            refreshRow();
+        }
+    }
+
     private static string TryGetCellColumnHeader(CommunityToolkit.WinUI.UI.Controls.DataGridCell cell)
     {
         try
@@ -1445,11 +1500,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return tcs.Task;
     }
 
-    private string McpTagFor(long rowId) => _rowTags.TryGetValue(rowId, out var t) ? t : null;
-
     private FindNeedleUX.Services.Mcp.RecordDto McpToRecord(LogLine l, bool full)
     {
         if (l == null) return null;
+        bool tagged = _rowTags.TryGetValue(l.RowId, out var rt);
         var dto = new FindNeedleUX.Services.Mcp.RecordDto
         {
             RowId = l.RowId,
@@ -1460,7 +1514,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             TaskName = l.TaskName,
             Source = l.Source,
             Message = full ? l.Message : McpTruncate(l.Message, McpMessageCap),
-            Tag = McpTagFor(l.RowId),
+            Tag = tagged ? rt.Name : null,
+            TagText = tagged ? rt.Text : null,
         };
         if (full)
         {
@@ -1646,12 +1701,21 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return false; // not on the current page — agent can page/filter to it first
     });
 
-    public Task<bool> TagRowAsync(long rowId, string tag) => McpOnUiAsync(() =>
+    public Task<bool> TagRowAsync(long rowId, string tag, string text) => McpOnUiAsync(() =>
     {
-        if (string.IsNullOrWhiteSpace(tag)) return false;
-        if (!_tagColors.ContainsKey(tag)) return false; // unknown tag name
-        _rowTags[rowId] = tag;
-        ViewModel.RefreshCurrentPage(); // re-render so the tag glyph appears
+        _rowTags.TryGetValue(rowId, out var existing);
+        // Category: use the given one, else keep the row's existing category.
+        var name = string.IsNullOrWhiteSpace(tag) ? existing.Name : tag;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            if (text != null) name = TagOptions[3].Name; // note-only → default category "Note"
+            else return false;                            // nothing to tag with
+        }
+        if (!_tagColors.ContainsKey(name)) return false;         // unknown category
+        // Note: null = keep existing; "" or a value = set it.
+        var note = text ?? existing.Text;
+        _rowTags[rowId] = new RowTag(name, note);
+        ViewModel.RefreshCurrentPage(); // re-render so the tag glyph/tooltip updates
         return true;
     });
 

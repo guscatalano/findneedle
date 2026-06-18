@@ -81,7 +81,7 @@ public sealed class McpViewerBridge
     public Task GoToPageAsync(int page) => Viewer.GoToPageAsync(page);
     public Task SetPageSizeAsync(int pageSize) => Viewer.SetPageSizeAsync(pageSize);
     public Task<bool> SelectRowAsync(long rowId) => Viewer.SelectRowAsync(rowId);
-    public Task<bool> TagRowAsync(long rowId, string tag) => Viewer.TagRowAsync(rowId, tag);
+    public Task<bool> TagRowAsync(long rowId, string tag, string text) => Viewer.TagRowAsync(rowId, tag, text);
     public Task<bool> ClearTagAsync(long rowId) => Viewer.ClearTagAsync(rowId);
     public Task SetDetailsModeAsync(string mode) => Viewer.SetDetailsModeAsync(mode);
     public Task<ExportResultDto> ExportAsync(string format, string destPath) => Viewer.ExportAsync(format, destPath);

@@ -67,7 +67,9 @@ GUI immediately; the user's actions are visible to the agent on its next read.
 
 ### Drive + annotate
 - `select_row(id)`
-- `tag_row(id, tag)` / `clear_tag(id)`
+- `tag_row(id, tag, text?)` / `clear_tag(id)` — tag = category (Important/Question/Resolved/Note)
+  plus an optional free-text note the agent can set (shown in the row tooltip + details; note-only
+  defaults the category to "Note")
 - `set_details_mode(inrow | bottom | popup)`
 - `export(format = csv|json|xml)` → writes current filtered set, returns `{ path, rowCount }`
 

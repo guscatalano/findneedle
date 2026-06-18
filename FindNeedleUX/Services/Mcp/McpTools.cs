@@ -241,9 +241,14 @@ internal static class McpTools
         new ToolDef
         {
             Name = "tag_row",
-            Description = "Tag a row by stable id. Tag must be one of: Important, Question, Resolved, Note.",
-            InputSchema = Obj(new { id = I("Stable row id."), tag = S("Tag name.") }, "id", "tag"),
-            Invoke = async a => new { tagged = await B.TagRowAsync(Lng(a, "id", -1), Str(a, "tag")) },
+            Description = "Tag a row by stable id, with an optional free-text note. Category must be one of: Important, Question, Resolved, Note (omit to keep the row's existing category). The note is shown in the row tooltip and details.",
+            InputSchema = Obj(new
+            {
+                id = I("Stable row id."),
+                tag = S("Tag category: Important, Question, Resolved, or Note."),
+                text = S("Optional free-text note to attach to the tag."),
+            }, "id"),
+            Invoke = async a => new { tagged = await B.TagRowAsync(Lng(a, "id", -1), Str(a, "tag"), Str(a, "text")) },
         },
         new ToolDef
         {

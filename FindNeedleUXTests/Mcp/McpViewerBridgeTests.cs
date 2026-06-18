@@ -50,11 +50,12 @@ public class McpViewerBridgeTests
     {
         McpViewerBridge.Instance.RegisterViewer(_fake);
 
-        await McpViewerBridge.Instance.TagRowAsync(55, "Important");
+        await McpViewerBridge.Instance.TagRowAsync(55, "Important", "look at this");
         var rec = await McpViewerBridge.Instance.GetRecordAsync(123);
 
         Assert.AreEqual(55, _fake.LastTagId);
         Assert.AreEqual("Important", _fake.LastTag);
+        Assert.AreEqual("look at this", _fake.LastTagText);
         Assert.AreEqual(123, _fake.LastRecordId);
         Assert.AreEqual(123, rec.RowId);
     }
