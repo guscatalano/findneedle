@@ -56,6 +56,22 @@
             </MenuBarItem>
         </MenuBar>
 
+        <!-- Top-right: in-app MCP server toggle + config/help popout -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right"
+                    VerticalAlignment="Center" Spacing="2" Margin="0,0,8,0">
+            <ToggleButton x:Name="McpToggle" Click="McpToggle_Click" Padding="8,2" MinHeight="28"
+                          ToolTipService.ToolTip="In-app MCP server — lets an AI agent read &amp; drive the result viewer">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Ellipse x:Name="McpStatusDot" Width="9" Height="9" Fill="Gray"/>
+                    <TextBlock Text="MCP" FontSize="13"/>
+                </StackPanel>
+            </ToggleButton>
+            <Button x:Name="McpHelpButton" Click="McpHelpButton_Click" Padding="6,2" MinHeight="28"
+                    ToolTipService.ToolTip="MCP server configuration &amp; how to connect">
+                <FontIcon Glyph="&#xE946;" FontSize="14"/>
+            </Button>
+        </StackPanel>
+
         <!-- Status strip -->
         <Border Grid.Row="1" Background="{ThemeResource SystemControlBackgroundAltHighBrush}" BorderThickness="0,1,0,1" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}" Padding="12,4">
             <TextBlock x:Name="StatusStrip" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="Locations: 0 · Filters: 0 · Rules: 0 · Last run: —"/>

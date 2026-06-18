@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
         // Show WelcomePage on startup
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         RefreshStatusStrip();
+        InitMcpIndicator();
 
         // Pre-warm the heavy viewer pages on a low-priority dispatcher tick. Constructing the
         // page without attaching it to the visual tree primes the XAML parser cache, runs
@@ -61,6 +62,99 @@ public sealed partial class MainWindow : Window
     public void NavigateToQuickLogWithRules()
     {
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+    }
+
+    // ----- Top-right MCP server indicator -----
+
+    private void InitMcpIndicator()
+    {
+        McpToggle.IsChecked = ResultsViewerSettings.McpServerEnabled;
+        RefreshMcpDot();
+        FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += () => DispatcherQueue.TryEnqueue(RefreshMcpDot);
+    }
+
+    private void RefreshMcpDot()
+    {
+        bool running = FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.ServerPort > 0;
+        var color = running
+            ? global::Windows.UI.Color.FromArgb(0xFF, 0x2E, 0xA0, 0x43)   // green — listening
+            : global::Windows.UI.Color.FromArgb(0xFF, 0x9E, 0x9E, 0x9E);  // gray — off
+        McpStatusDot.Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(color);
+        ToolTipService.SetToolTip(McpToggle, "In-app MCP server — " + FindNeedleUX.Services.Mcp.McpServerHost.Status);
+        if (McpToggle.IsChecked != ResultsViewerSettings.McpServerEnabled)
+            McpToggle.IsChecked = ResultsViewerSettings.McpServerEnabled; // keep in sync if changed elsewhere
+    }
+
+    private void McpToggle_Click(object sender, RoutedEventArgs e)
+    {
+        // Setter broadcasts Changed → McpServerHost starts/stops the server; RefreshMcpDot follows.
+        ResultsViewerSettings.McpServerEnabled = McpToggle.IsChecked == true;
+        RefreshMcpDot();
+    }
+
+    private void McpHelpButton_Click(object sender, RoutedEventArgs e)
+    {
+        bool running = FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.ServerPort > 0;
+        int port = running ? FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.ServerPort
+                           : ResultsViewerSettings.McpServerPort;
+        var url = $"http://127.0.0.1:{port}/";
+        var config =
+            "{\n" +
+            "  \"mcpServers\": {\n" +
+            "    \"findneedle\": {\n" +
+            $"      \"url\": \"{url}\"\n" +
+            "    }\n" +
+            "  }\n" +
+            "}";
+
+        var panel = new StackPanel { Spacing = 8, MinWidth = 380, MaxWidth = 460 };
+        panel.Children.Add(new TextBlock { Text = "In-app MCP server", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 15 });
+        panel.Children.Add(new TextBlock
+        {
+            Text = running ? $"Running — listening on {url}" : "Stopped — enable the MCP toggle to start it.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            FontSize = 12,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Lets an AI agent read and drive the live result viewer (search, filter, page, tag, export). " +
+                   "Transport: Streamable HTTP (JSON-RPC), localhost only, no auth.",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+
+        panel.Children.Add(new TextBlock { Text = "MCP client config", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12, Margin = new Thickness(0, 4, 0, 0) });
+        panel.Children.Add(new Border
+        {
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(8),
+            Child = new TextBlock { Text = config, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 12, IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap },
+        });
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var copyEndpoint = new Button { Content = "Copy endpoint" };
+        copyEndpoint.Click += (_, __) => SetClipboard(url);
+        var copyConfig = new Button { Content = "Copy config" };
+        copyConfig.Click += (_, __) => SetClipboard(config);
+        buttons.Children.Add(copyEndpoint);
+        buttons.Children.Add(copyConfig);
+        panel.Children.Add(buttons);
+
+        var flyout = new Flyout { Content = panel };
+        var settingsLink = new HyperlinkButton { Content = "More settings…", Padding = new Thickness(0, 4, 0, 0) };
+        settingsLink.Click += (_, __) => { flyout.Hide(); contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage)); };
+        panel.Children.Add(settingsLink);
+
+        flyout.ShowAt(McpHelpButton);
+    }
+
+    private static void SetClipboard(string text)
+    {
+        var pkg = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
+        pkg.SetText(text ?? "");
+        global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
     }
 
     /// <summary>
