@@ -37,6 +37,13 @@ public sealed partial class MainWindow : Window
         RefreshStatusStrip();
         InitMcpIndicator();
 
+        // File pickers can't run in an elevated process — warn up front so it's not a mystery crash.
+        if (IsElevated())
+        {
+            ElevationWarning.IsOpen = true;
+            Logger.Instance.Log("Running elevated — file pickers disabled (would crash).");
+        }
+
         // Pre-warm the heavy viewer pages on a low-priority dispatcher tick. Constructing the
         // page without attaching it to the visual tree primes the XAML parser cache, runs
         // every type's static .cctor, and JITs the hot constructors — about half the cost of
@@ -62,6 +69,39 @@ public sealed partial class MainWindow : Window
     public void NavigateToQuickLogWithRules()
     {
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+    }
+
+    /// <summary>True if the process is running with administrator rights (where WinUI file pickers crash).</summary>
+    private static bool IsElevated()
+    {
+        try
+        {
+            using var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+            return new System.Security.Principal.WindowsPrincipal(id)
+                .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// When elevated, the file/folder pickers throw instead of opening. Returns true (and shows an
+    /// explanatory dialog) if a picker should be skipped; callers return early. Keeps the app from a
+    /// hard crash and tells the user what to do.
+    /// </summary>
+    private async Task<bool> BlockPickerIfElevatedAsync()
+    {
+        if (!IsElevated()) return false;
+        ElevationWarning.IsOpen = true;
+        var dlg = new ContentDialog
+        {
+            Title = "Can't open file dialog as administrator",
+            Content = "Windows blocks file open/save dialogs in an elevated app. Relaunch FindNeedle " +
+                      "without administrator rights to browse for files, or pass a file/folder path on the command line.",
+            CloseButtonText = "OK",
+            XamlRoot = this.Content.XamlRoot,
+        };
+        try { await dlg.ShowAsync(); } catch { /* dialog best-effort */ }
+        return true;
     }
 
     // ----- Top-right MCP server indicator -----
@@ -543,6 +583,7 @@ public sealed partial class MainWindow : Window
 
     public async void QuickFileOpen()
     {
+        if (await BlockPickerIfElevatedAsync()) return;
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var picker = new FileOpenPicker()
         {
@@ -564,6 +605,7 @@ public sealed partial class MainWindow : Window
 
     public async void QuickFolderOpen()
     {
+        if (await BlockPickerIfElevatedAsync()) return;
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var picker = new global::Windows.Storage.Pickers.FolderPicker();
         picker.FileTypeFilter.Add("*");
@@ -583,6 +625,7 @@ public sealed partial class MainWindow : Window
 
     private async void LoadCommand()
     {
+        if (await BlockPickerIfElevatedAsync()) return;
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var picker = new FileOpenPicker()
         {
@@ -601,6 +644,7 @@ public sealed partial class MainWindow : Window
 
     private async void SaveCommand()
     {
+        if (await BlockPickerIfElevatedAsync()) return;
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var picker = new FileSavePicker();
         picker.SuggestedStartLocation = PickerLocationId.Desktop;
