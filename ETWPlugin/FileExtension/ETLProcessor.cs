@@ -72,6 +72,74 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         inputfile = fileName;
     }
 
+    /// <summary>
+    /// Retain tracefmt's formatted output + a symbol-resolution log (search paths, outcome, missing
+    /// TMF GUIDs, tracefmt narration) outside the temp dir so the UI can show them. Source-keyed.
+    /// </summary>
+    private void RetainTracefmtArtifacts()
+    {
+        if (!_decodeMethod.StartsWith("tracefmt")
+            || currentResult?.outputfile == null
+            || !File.Exists(currentResult.outputfile)
+            || string.Equals(currentResult.outputfile, inputfile, StringComparison.OrdinalIgnoreCase))
+            return;
+        try
+        {
+            var dir = Path.Combine(FileIO.GetAppDataFindNeedlePluginFolder(), "tracefmt-output");
+            Directory.CreateDirectory(dir);
+            var stable = Path.Combine(dir, CachedStorage.GetCacheFileName(inputfile, ".tracefmt.txt"));
+            File.Copy(currentResult.outputfile, stable, overwrite: true);
+            _rawOutputPath = stable;
+
+            var rlog = new StringBuilder();
+            rlog.AppendLine($"WPP symbol resolution for: {inputfile}");
+            rlog.AppendLine($"Decoded: {DateTime.Now}");
+            rlog.AppendLine();
+            rlog.AppendLine("Search paths consulted:");
+            rlog.AppendLine($"  TRACE_FORMAT_SEARCH_PATH = {Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH")}");
+            rlog.AppendLine($"  _NT_SYMBOL_PATH          = {Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH")}");
+            rlog.AppendLine();
+            rlog.AppendLine("Outcome:");
+            rlog.AppendLine($"  events={currentResult.TotalEventsProcessed:N0}  formatErrors={currentResult.TotalFormatErrors:N0}  unknowns={currentResult.TotalFormatsUnknown:N0}");
+            rlog.AppendLine($"  {(currentResult.TotalFormatsUnknown == 0 ? "All events formatted — every required TMF was found." : "Some events couldn't be formatted — a TMF is missing. Add the matching PDB/symbol path and Build TMFs.")}");
+            if (_missingTmfGuids.Count > 0)
+            {
+                rlog.AppendLine();
+                rlog.AppendLine($"Missing TMFs ({_missingTmfGuids.Count}) — these message GUIDs had no format info; supply each TMF (or the PDB it comes from):");
+                foreach (var g in _missingTmfGuids)
+                    rlog.AppendLine($"  {g}   →  expected file {g}.tmf");
+            }
+            rlog.AppendLine();
+            rlog.AppendLine("----- tracefmt output -----");
+            rlog.AppendLine(currentResult.ConsoleOutput ?? "(none)");
+            var resolveStable = Path.Combine(dir, CachedStorage.GetCacheFileName(inputfile, ".resolve.txt"));
+            File.WriteAllText(resolveStable, rlog.ToString());
+            _resolveLogPath = resolveStable;
+            Logger.Instance.Log($"Retained tracefmt artifacts: {stable} + {resolveStable}");
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Could not retain tracefmt output: {ex.Message}"); }
+    }
+
+    /// <summary>Read just the first <paramref name="maxLines"/> of tracefmt's output to collect the
+    /// distinct missing message GUIDs (for the fast-fail path — no full multi-million-line parse).</summary>
+    private void SampleMissingGuids(string fmtFile, int maxLines)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(fmtFile) || !File.Exists(fmtFile)) return;
+            using var sr = new StreamReader(fmtFile);
+            string line; int n = 0;
+            while ((line = sr.ReadLine()) != null && n++ < maxLines)
+            {
+                if (!line.StartsWith("Unknown")) continue;
+                var gm = System.Text.RegularExpressions.Regex.Match(line,
+                    @"GUID=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
+                if (gm.Success) _missingTmfGuids.Add(gm.Groups[1].Value);
+            }
+        }
+        catch (Exception ex) { Logger.Instance.Log($"SampleMissingGuids failed: {ex.Message}"); }
+    }
+
     public Dictionary<string, int> GetProviderCount()
     {
         return providers;
@@ -91,6 +159,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         if (currentResult != null && _decodeMethod.StartsWith("tracefmt"))
         {
             info["eventsProcessed"] = currentResult.TotalEventsProcessed.ToString("N0");
+            if (currentResult.TotalEventsProcessed > 0)
+                info["decodable"] = $"{(currentResult.TotalEventsProcessed - currentResult.TotalFormatsUnknown) * 100.0 / currentResult.TotalEventsProcessed:0.#}%";
             info["eventsLost"] = currentResult.TotalEventsLost.ToString("N0");
             info["buffersProcessed"] = currentResult.TotalBuffersProcessed.ToString("N0");
             info["formatErrors"] = currentResult.TotalFormatErrors.ToString("N0");
@@ -152,6 +222,25 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 _progressSink?.NotifyProgress(100, $"TraceFmt not found or failed for {inputfile}, skipping ETL processing.");
                 return;
             }
+
+            // Fail fast: tracefmt's summary (already parsed) tells us how much is decodable BEFORE we
+            // grind line-by-line through the output. If (nearly) everything is unformattable, it's a
+            // missing-symbols problem — sample the missing GUIDs, report, and skip the multi-million-
+            // line parse + the (futile) TraceEvent fallback so the user can fix symbols and reopen.
+            long total = currentResult.TotalEventsProcessed;
+            long unknown = currentResult.TotalFormatsUnknown;
+            if (total > 0 && unknown >= total * 0.99)
+            {
+                _decodeMethod = "tracefmt (WPP) — symbols missing";
+                _lastDecodeRowCount = 0;
+                SampleMissingGuids(currentResult.outputfile, 200_000);
+                RetainTracefmtArtifacts();
+                var which = _missingTmfGuids.Count > 0 ? string.Join(", ", _missingTmfGuids.Take(5)) : "?";
+                Logger.Instance.Log($"Fail-fast: {inputfile} — {unknown:N0}/{total:N0} events unformattable (missing TMF). Skipping full parse. Missing: {which}");
+                _progressSink?.NotifyProgress(100,
+                    $"Can't decode: {unknown:N0} of {total:N0} events need WPP symbols (missing TMF for {which}). Set a symbol/TMF path in settings and reopen.");
+                return;
+            }
         }
         _progressSink?.NotifyProgress(20, "Parsing output file");
         while (getLock > 0)
@@ -188,6 +277,15 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                             var gm = System.Text.RegularExpressions.Regex.Match(line,
                                 @"GUID=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
                             if (gm.Success) _missingTmfGuids.Add(gm.Groups[1].Value);
+                            // Surface WHY this is slow: skipping millions of unformattable events
+                            // (these don't advance the "Processed N lines" counter, so without this the
+                            // status looks stuck). Names the missing GUID(s) so it's clearly a symbol issue.
+                            if (corruptCount % 50000 == 0)
+                            {
+                                var which = _missingTmfGuids.Count > 0 ? string.Join(", ", _missingTmfGuids.Take(3)) : "?";
+                                _progressSink?.NotifyProgress(
+                                    $"Missing WPP symbols — {corruptCount:N0} events can't be formatted (no TMF for {which}). Set a symbol/TMF path in settings.");
+                            }
                             continue;
                         }
                         //line is not complete!
@@ -233,53 +331,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             }
         }
 
-        // Retain tracefmt's formatted output outside the temp dir (which Dispose deletes) so the UI
-        // can offer "view raw tracefmt output". Keyed by source path so a re-decode overwrites it.
-        if (_decodeMethod == "tracefmt (WPP)"
-            && currentResult?.outputfile != null
-            && File.Exists(currentResult.outputfile)
-            && !string.Equals(currentResult.outputfile, inputfile, StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                var dir = Path.Combine(FileIO.GetAppDataFindNeedlePluginFolder(), "tracefmt-output");
-                Directory.CreateDirectory(dir);
-                var stable = Path.Combine(dir, CachedStorage.GetCacheFileName(inputfile, ".tracefmt.txt"));
-                File.Copy(currentResult.outputfile, stable, overwrite: true);
-                _rawOutputPath = stable;
-                Logger.Instance.Log($"Retained tracefmt output: {stable}");
-
-                // Symbol-resolution log: what we searched + tracefmt's narration ("Searching for TMF
-                // files on path…", "Examining <tmf>… N found") + the summary. Answers "what does the
-                // ETL need, where did we look, did we find it".
-                var rlog = new StringBuilder();
-                rlog.AppendLine($"WPP symbol resolution for: {inputfile}");
-                rlog.AppendLine($"Decoded: {DateTime.Now}");
-                rlog.AppendLine();
-                rlog.AppendLine("Search paths consulted:");
-                rlog.AppendLine($"  TRACE_FORMAT_SEARCH_PATH = {Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH")}");
-                rlog.AppendLine($"  _NT_SYMBOL_PATH          = {Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH")}");
-                rlog.AppendLine();
-                rlog.AppendLine("Outcome:");
-                rlog.AppendLine($"  events={currentResult.TotalEventsProcessed:N0}  formatErrors={currentResult.TotalFormatErrors:N0}  unknowns={currentResult.TotalFormatsUnknown:N0}");
-                rlog.AppendLine($"  {(currentResult.TotalFormatsUnknown == 0 ? "All events formatted — every required TMF was found." : "Some events couldn't be formatted — a TMF is missing. Add the matching PDB/symbol path and Build TMFs.")}");
-                if (_missingTmfGuids.Count > 0)
-                {
-                    rlog.AppendLine();
-                    rlog.AppendLine($"Missing TMFs ({_missingTmfGuids.Count}) — these message GUIDs had no format info; supply each TMF (or the PDB it comes from):");
-                    foreach (var g in _missingTmfGuids)
-                        rlog.AppendLine($"  {g}   →  expected file {g}.tmf");
-                }
-                rlog.AppendLine();
-                rlog.AppendLine("----- tracefmt output -----");
-                rlog.AppendLine(currentResult.ConsoleOutput ?? "(none)");
-                var resolveStable = Path.Combine(dir, CachedStorage.GetCacheFileName(inputfile, ".resolve.txt"));
-                File.WriteAllText(resolveStable, rlog.ToString());
-                _resolveLogPath = resolveStable;
-                Logger.Instance.Log($"Retained symbol-resolution log: {resolveStable}");
-            }
-            catch (Exception ex) { Logger.Instance.Log($"Could not retain tracefmt output: {ex.Message}"); }
-        }
+        RetainTracefmtArtifacts();
 
         // Fallback for non-WPP traces. tracefmt only formats WPP (driver/software) traces; for a
         // modern .etl (EventSource / manifest / kernel) it emits "Unknown" lines and we end up
