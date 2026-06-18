@@ -36,8 +36,7 @@
             <MenuBarItem Title="Run">
                 <MenuFlyoutItem Text="Run Search" Click="MenuFlyoutItem_Click" Name="results_get"/>
                 <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="Statistics" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
-                <MenuFlyoutItem Text="Performance Report (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_perfreport"/>
+                <MenuFlyoutItem Text="Statistics &amp; timing (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
             </MenuBarItem>
             <MenuBarItem Title="View Results">
                 <MenuFlyoutItem Text="Results" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>

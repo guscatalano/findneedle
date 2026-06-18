@@ -414,10 +414,6 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: SearchStatisticsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage));
                 break;
-            case "results_perfreport":
-                Logger.Instance.Log("Showed performance report");
-                await ShowPerfReportAsync();
-                break;
             case "results_processoroutput":
                 Logger.Instance.Log("Navigated: ProcessorOutputPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage));
@@ -476,42 +472,6 @@ public sealed partial class MainWindow : Window
     /// "why did this take so long" breakdown (phase timings, storage tier + reason, and plain-
     /// language hints). Selectable text plus a Copy button.
     /// </summary>
-    private async Task ShowPerfReportAsync()
-    {
-        var report = MiddleLayerService.GetLastPerfReport();
-        var text = report?.ToText() ?? "No search has run yet — run a search, then check back here.";
-
-        var stack = new StackPanel { Spacing = 12 };
-        stack.Children.Add(new TextBlock
-        {
-            Text = text,
-            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
-            FontSize = 12,
-            IsTextSelectionEnabled = true,
-            TextWrapping = TextWrapping.Wrap,
-        });
-
-        var dialog = new ContentDialog
-        {
-            Title = "Performance Report",
-            CloseButtonText = "Close",
-            PrimaryButtonText = report != null ? "Copy" : null,
-            MinWidth = 700,
-            XamlRoot = this.Content.XamlRoot,
-            Content = new ScrollViewer { Content = stack, MaxHeight = 520 },
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary && report != null)
-        {
-            try
-            {
-                var pkg = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
-                pkg.SetText(text);
-                global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
-            }
-            catch { /* clipboard contention — ignore */ }
-        }
-    }
-
     private readonly ObservableCollection<StepRow> _stepRows = new();
 
     private void OnFlowProgress(string label, int step, int total)

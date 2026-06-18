@@ -9,5 +9,23 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <TabView AddTabButtonClick="TabView_AddButtonClick" TabCloseRequested="TabView_TabCloseRequested" Loaded="TabView_Loaded" />
+    <ScrollViewer Padding="24">
+        <StackPanel MaxWidth="820" Spacing="12">
+            <Grid>
+                <TextBlock Text="Search statistics &amp; timing" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button x:Name="RefreshButton" Content="Refresh" Click="Refresh_Click"/>
+                    <Button x:Name="CopyButton" Content="Copy" Click="Copy_Click"/>
+                </StackPanel>
+            </Grid>
+            <TextBlock Text="Throughput and where the time went for the most recent search — rows, storage backend, cache hit/miss, and the slowest phases (load, scan, index, viewer)."
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <TextBlock x:Name="ReportText" FontFamily="Consolas" FontSize="12"
+                           IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
 </Page>
