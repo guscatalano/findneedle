@@ -80,3 +80,9 @@ public sealed class HistogramBucketDto
     public string Start { get; set; }
     public int Count { get; set; }
 }
+
+public sealed class ExportResultDto
+{
+    public string Path { get; set; }
+    public int RowCount { get; set; }
+}

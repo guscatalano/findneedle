@@ -187,6 +187,28 @@
                 </StackPanel>
             </Border>
 
+            <!-- MCP server -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="MCP server (experimental)" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Host a local Model Context Protocol endpoint so an AI agent can read and drive the live result viewer (search, filter, page, tag, export). Bound to 127.0.0.1 only — it exposes your loaded logs and lets an agent act in the app, so it is off by default."/>
+                    <CheckBox x:Name="McpEnabledCheck" Content="Enable the in-app MCP server"
+                              Checked="McpEnabledCheck_Changed" Unchecked="McpEnabledCheck_Changed"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Port" VerticalAlignment="Center"/>
+                        <TextBox x:Name="McpPortBox" Width="100" InputScope="Number"
+                                 LostFocus="McpPortBox_LostFocus"
+                                 AutomationProperties.Name="MCP server port"/>
+                    </StackPanel>
+                    <TextBlock x:Name="McpStatusText" FontFamily="Consolas" FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True"/>
+                </StackPanel>
+            </Border>
+
             <!-- Search storage backend -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

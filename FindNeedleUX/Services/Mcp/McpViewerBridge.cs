@@ -84,6 +84,7 @@ public sealed class McpViewerBridge
     public Task<bool> TagRowAsync(long rowId, string tag) => Viewer.TagRowAsync(rowId, tag);
     public Task<bool> ClearTagAsync(long rowId) => Viewer.ClearTagAsync(rowId);
     public Task SetDetailsModeAsync(string mode) => Viewer.SetDetailsModeAsync(mode);
+    public Task<ExportResultDto> ExportAsync(string format, string destPath) => Viewer.ExportAsync(format, destPath);
 
     // ----- workspace ops (MiddleLayerService, marshaled to the UI thread) -----
 

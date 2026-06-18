@@ -26,6 +26,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         this.InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += (_, _) => FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -60,6 +61,13 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- Row tags ---
             ColorTaggedRowsCheck.IsChecked = ResultsViewerSettings.ColorTaggedRows;
+
+            // --- MCP server ---
+            McpEnabledCheck.IsChecked = ResultsViewerSettings.McpServerEnabled;
+            McpPortBox.Text = ResultsViewerSettings.McpServerPort.ToString();
+            UpdateMcpStatus();
+            FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
+            FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += OnMcpStatusChanged;
 
             // --- Column defaults ---
             BuildColumnDefaultsCheckboxes();
@@ -295,6 +303,31 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (_suppressEvents) return;
         ResultsViewerSettings.ShowStepHistory = ShowStepHistoryCheck.IsChecked == true;
+    }
+
+    // ----- MCP server -----
+    private void McpEnabledCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        // Setter broadcasts Changed → McpServerHost starts/stops accordingly.
+        ResultsViewerSettings.McpServerEnabled = McpEnabledCheck.IsChecked == true;
+    }
+
+    private void McpPortBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (int.TryParse(McpPortBox.Text, out var port) && port > 0 && port <= 65535)
+            ResultsViewerSettings.McpServerPort = port;
+        else
+            McpPortBox.Text = ResultsViewerSettings.McpServerPort.ToString(); // revert invalid input
+    }
+
+    private void OnMcpStatusChanged() => DispatcherQueue.TryEnqueue(UpdateMcpStatus);
+
+    private void UpdateMcpStatus()
+    {
+        if (McpStatusText == null) return;
+        McpStatusText.Text = "Status: " + FindNeedleUX.Services.Mcp.McpServerHost.Status;
     }
 
     // ----- Storage backend -----

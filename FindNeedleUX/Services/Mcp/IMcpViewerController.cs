@@ -45,4 +45,11 @@ public interface IMcpViewerController
     Task<bool> ClearTagAsync(long rowId);
 
     Task SetDetailsModeAsync(string mode);
+
+    /// <summary>
+    /// Export the current filtered/sorted set (visible columns) to a file. <paramref name="format"/>
+    /// is csv/json/xml; null/blank <paramref name="destPath"/> writes to a timestamped temp file.
+    /// Returns the path written and the row count (Path null on failure).
+    /// </summary>
+    Task<ExportResultDto> ExportAsync(string format, string destPath);
 }

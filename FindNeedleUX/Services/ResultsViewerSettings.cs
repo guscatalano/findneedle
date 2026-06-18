@@ -194,6 +194,26 @@ public static class ResultsViewerSettings
         set { Data.ColorTaggedRows = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>
+    /// Whether the in-app MCP server is enabled. When on, the app hosts a localhost-only HTTP MCP
+    /// endpoint that lets an agent read and drive the live result viewer. Off by default (it exposes
+    /// loaded logs + lets an agent act in the app). Broadcasts Changed so the host starts/stops live.
+    /// </summary>
+    public const bool DefaultMcpServerEnabled = false;
+    public static bool McpServerEnabled
+    {
+        get => Data.McpServerEnabled ?? DefaultMcpServerEnabled;
+        set { Data.McpServerEnabled = value; Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>TCP port for the in-app MCP server (bound to 127.0.0.1 only).</summary>
+    public const int DefaultMcpServerPort = 8765;
+    public static int McpServerPort
+    {
+        get => Data.McpServerPort is int n && n > 0 && n <= 65535 ? n : DefaultMcpServerPort;
+        set { Data.McpServerPort = value > 0 && value <= 65535 ? value : DefaultMcpServerPort; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -355,6 +375,8 @@ public static class ResultsViewerSettings
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }
         public bool? ColorTaggedRows { get; set; }
+        public bool? McpServerEnabled { get; set; }
+        public int? McpServerPort { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }

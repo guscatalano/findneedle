@@ -658,59 +658,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             var filters = BuildFilterSpec();
             var sort = new SortSpec(_sortColumn, _sortDescending);
 
-            // Pre-size the line buffer (header + body + maybe footer) so AddRange-style growth
-            // doesn't double the underlying array ~20 times on a 500k-row export.
-            var lines = new List<string>(_totalFilteredCount + 4);
-
-            switch (format)
-            {
-                case ExportFormat.Csv:
-                    lines.Add(string.Join(",", visibleNames.Select(EscapeCsv)));
-                    _source.WalkAllFiltered(filters, sort, line =>
-                    {
-                        lines.Add(string.Join(",", visibleNames.Select(name => EscapeCsv(GetField(line, name)))));
-                    });
-                    break;
-
-                case ExportFormat.Json:
-                    // JSON array of objects. We emit one object per line + commas between them
-                    // ourselves rather than building a single giant string with JsonSerializer —
-                    // that would force the entire row collection into memory as a single string.
-                    lines.Add("[");
-                    bool first = true;
-                    var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = false };
-                    _source.WalkAllFiltered(filters, sort, line =>
-                    {
-                        var dict = new Dictionary<string, object>(visibleNames.Count);
-                        foreach (var name in visibleNames) dict[name] = GetField(line, name) ?? "";
-                        var entry = System.Text.Json.JsonSerializer.Serialize(dict, jsonOpts);
-                        lines.Add(first ? "  " + entry : ", " + entry);
-                        first = false;
-                    });
-                    lines.Add("]");
-                    break;
-
-                case ExportFormat.Xml:
-                    lines.Add("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-                    lines.Add("<rows>");
-                    var xmlSb = new System.Text.StringBuilder(256);
-                    _source.WalkAllFiltered(filters, sort, line =>
-                    {
-                        xmlSb.Clear();
-                        xmlSb.Append("  <row>");
-                        foreach (var name in visibleNames)
-                        {
-                            var val = GetField(line, name) ?? "";
-                            xmlSb.Append('<').Append(name).Append('>');
-                            xmlSb.Append(System.Security.SecurityElement.Escape(val));
-                            xmlSb.Append("</").Append(name).Append('>');
-                        }
-                        xmlSb.Append("</row>");
-                        lines.Add(xmlSb.ToString());
-                    });
-                    lines.Add("</rows>");
-                    break;
-            }
+            var lines = FindNeedleUX.Services.ResultExporter.BuildLines(
+                _source, filters, sort, visibleNames, ToExporterFormat(format), out _);
 
             await global::Windows.Storage.FileIO.WriteLinesAsync(file, lines);
             return file.Path;
@@ -722,25 +671,36 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         }
     }
 
-    private static string GetField(LogLine line, string columnName) => columnName switch
+    /// <summary>
+    /// Headless export: write the current filtered+sorted set (over the visible columns) to
+    /// <paramref name="path"/> with no file picker. Used by the MCP <c>export</c> tool. Returns the
+    /// number of data rows written, or -1 on error.
+    /// </summary>
+    public async Task<int> ExportToPathAsync(ExportFormat format, string path)
     {
-        "Index"    => line.Index.ToString(),
-        "Time"     => line.Time,
-        "Provider" => line.Provider,
-        "TaskName" => line.TaskName,
-        "Message"  => line.Message,
-        "Source"   => line.Source,
-        "Level"    => line.Level,
-        _          => ""
-    };
-
-    private static string EscapeCsv(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return "";
-        if (value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0)
-            return "\"" + value.Replace("\"", "\"\"") + "\"";
-        return value;
+        try
+        {
+            var visibleNames = Columns.Where(c => c.IsVisible).Select(c => c.Name).ToList();
+            var filters = BuildFilterSpec();
+            var sort = new SortSpec(_sortColumn, _sortDescending);
+            var lines = FindNeedleUX.Services.ResultExporter.BuildLines(
+                _source, filters, sort, visibleNames, ToExporterFormat(format), out var rowCount);
+            await System.IO.File.WriteAllLinesAsync(path, lines).ConfigureAwait(false);
+            return rowCount;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Export error: {ex.Message}");
+            return -1;
+        }
     }
+
+    private static FindNeedleUX.Services.ResultExporter.Format ToExporterFormat(ExportFormat f) => f switch
+    {
+        ExportFormat.Json => FindNeedleUX.Services.ResultExporter.Format.Json,
+        ExportFormat.Xml  => FindNeedleUX.Services.ResultExporter.Format.Xml,
+        _                 => FindNeedleUX.Services.ResultExporter.Format.Csv,
+    };
 
     // ----- INPC plumbing -----
     public event PropertyChangedEventHandler PropertyChanged;

@@ -46,6 +46,10 @@ public partial class App : Application
         m_window = new MainWindow();
         m_window.Activate();
 
+        // Start the in-app MCP server if the user enabled it (localhost-only; off by default).
+        try { FindNeedleUX.Services.Mcp.McpServerHost.Initialize(); }
+        catch (Exception ex) { Logger.Instance.Log($"MCP host init failed: {ex.Message}"); }
+
         // GUI equivalent of the findneedle.exe CLI: if a log file/folder was passed on the
         // command line, load it, run the search, and open straight to the viewer — no file
         // picker. Usage: FindNeedleUX.exe "C:\path\log.etl" [--rules=rules.json] [--viewer=native|web]

@@ -1673,6 +1673,34 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         SetDetailsMode(m);
     });
 
+    public async Task<FindNeedleUX.Services.Mcp.ExportResultDto> ExportAsync(string format, string destPath)
+    {
+        var vmFormat = (format ?? "").Trim().ToLowerInvariant() switch
+        {
+            "json" => NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Json,
+            "xml"  => NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Xml,
+            _      => NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Csv,
+        };
+        var (ext, _) = FindNeedleUX.Services.ResultExporter.FormatInfo(vmFormat switch
+        {
+            NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Json => FindNeedleUX.Services.ResultExporter.Format.Json,
+            NativeResultViewer.NativeResultsPageViewModel.ExportFormat.Xml  => FindNeedleUX.Services.ResultExporter.Format.Xml,
+            _ => FindNeedleUX.Services.ResultExporter.Format.Csv,
+        });
+        var path = string.IsNullOrWhiteSpace(destPath)
+            ? System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"findneedle-results-{DateTime.Now:yyyyMMdd-HHmmss}{ext}")
+            : destPath;
+
+        // Build + write off the UI thread (a large export streams many rows). Reads VM filter/sort as
+        // a snapshot; SQLite reads are lock-safe.
+        int count = await ViewModel.ExportToPathAsync(vmFormat, path).ConfigureAwait(false);
+        return new FindNeedleUX.Services.Mcp.ExportResultDto
+        {
+            Path = count >= 0 ? path : null,
+            RowCount = Math.Max(0, count),
+        };
+    }
+
     private static global::Windows.UI.Color ParseHex(string hex)
     {
         if (string.IsNullOrWhiteSpace(hex) || hex.Equals("Transparent", StringComparison.OrdinalIgnoreCase))
