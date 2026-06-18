@@ -50,6 +50,15 @@ public partial class App : Application
         try { FindNeedleUX.Services.Mcp.McpServerHost.Initialize(); }
         catch (Exception ex) { Logger.Instance.Log($"MCP host init failed: {ex.Message}"); }
 
+        // Feed the user's WPP TMF search path to tracefmt (via TRACE_FORMAT_SEARCH_PATH) so WPP ETLs
+        // decode without the user setting the env var by hand. Re-apply when settings change.
+        try
+        {
+            FindNeedleUX.Services.TraceFormatConfig.Apply();
+            FindNeedleUX.Services.ResultsViewerSettings.Changed += FindNeedleUX.Services.TraceFormatConfig.Apply;
+        }
+        catch (Exception ex) { Logger.Instance.Log($"TraceFormat config init failed: {ex.Message}"); }
+
         // GUI equivalent of the findneedle.exe CLI: if a log file/folder was passed on the
         // command line, load it, run the search, and open straight to the viewer — no file
         // picker. Usage: FindNeedleUX.exe "C:\path\log.etl" [--rules=rules.json] [--viewer=native|web]

@@ -214,6 +214,18 @@ public static class ResultsViewerSettings
         set { Data.McpServerPort = value > 0 && value <= 65535 ? value : DefaultMcpServerPort; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>
+    /// Folder(s) where tracefmt looks for WPP .tmf files (Trace Message Format, extracted from a
+    /// binary's PDB). Without this, WPP ETLs decode as "Unknown". Applied to the
+    /// <c>TRACE_FORMAT_SEARCH_PATH</c> env var, which the tracefmt child process inherits. Multiple
+    /// paths separated by ';'.
+    /// </summary>
+    public static string TraceFormatSearchPath
+    {
+        get => Data.TraceFormatSearchPath ?? "";
+        set { Data.TraceFormatSearchPath = value ?? ""; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -377,6 +389,7 @@ public static class ResultsViewerSettings
         public bool? ColorTaggedRows { get; set; }
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }
+        public string TraceFormatSearchPath { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }

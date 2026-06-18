@@ -66,6 +66,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             McpEnabledCheck.IsChecked = ResultsViewerSettings.McpServerEnabled;
             McpPortBox.Text = ResultsViewerSettings.McpServerPort.ToString();
             UpdateMcpStatus();
+
+            // --- WPP / tracefmt TMF path ---
+            TmfPathBox.Text = ResultsViewerSettings.TraceFormatSearchPath;
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += OnMcpStatusChanged;
 
@@ -320,6 +323,24 @@ public sealed partial class ResultsViewerSettingsPage : Page
             ResultsViewerSettings.McpServerPort = port;
         else
             McpPortBox.Text = ResultsViewerSettings.McpServerPort.ToString(); // revert invalid input
+    }
+
+    // ----- WPP / tracefmt TMF path -----
+    private void TmfPathBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.TraceFormatSearchPath = TmfPathBox.Text?.Trim() ?? "";
+    }
+
+    private void BrowseTmfPath_Click(object sender, RoutedEventArgs e)
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
+        var path = Win32FileDialog.PickFolder(hWnd);
+        if (path != null)
+        {
+            TmfPathBox.Text = path;
+            ResultsViewerSettings.TraceFormatSearchPath = path;
+        }
     }
 
     private void OnMcpStatusChanged() => DispatcherQueue.TryEnqueue(UpdateMcpStatus);
