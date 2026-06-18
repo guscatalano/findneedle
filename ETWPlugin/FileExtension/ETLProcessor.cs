@@ -46,6 +46,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private string _decodeMethod = "(pending)";
     private long _lastDecodeRowCount = 0;
 
+    // When tracefmt is used, the formatted text it produces is moved here (out of the temp dir, which
+    // is deleted on Dispose) so the UI can offer "view raw tracefmt output". Null otherwise.
+    private string _rawOutputPath = null;
+
     public ETLProcessor()
     {
         Logger.Instance.Log("ETLProcessor constructed");
@@ -84,8 +88,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         if (currentResult != null && _decodeMethod.StartsWith("tracefmt"))
         {
             info["eventsProcessed"] = currentResult.TotalEventsProcessed.ToString("N0");
+            info["eventsLost"] = currentResult.TotalEventsLost.ToString("N0");
+            info["buffersProcessed"] = currentResult.TotalBuffersProcessed.ToString("N0");
             info["formatErrors"] = currentResult.TotalFormatErrors.ToString("N0");
             info["unknowns"] = currentResult.TotalFormatsUnknown.ToString("N0");
+            if (!string.IsNullOrEmpty(currentResult.TotalElapsedTime)) info["elapsed"] = currentResult.TotalElapsedTime;
+            if (!string.IsNullOrEmpty(_rawOutputPath) && File.Exists(_rawOutputPath)) info["rawOutput"] = _rawOutputPath;
         }
         return info;
     }
@@ -211,6 +219,25 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 Thread.Sleep(100);
                 getLock--; // Sometimes tracefmt can hold the lock, wait until file is ready
             }
+        }
+
+        // Retain tracefmt's formatted output outside the temp dir (which Dispose deletes) so the UI
+        // can offer "view raw tracefmt output". Keyed by source path so a re-decode overwrites it.
+        if (_decodeMethod == "tracefmt (WPP)"
+            && currentResult?.outputfile != null
+            && File.Exists(currentResult.outputfile)
+            && !string.Equals(currentResult.outputfile, inputfile, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var dir = Path.Combine(FileIO.GetAppDataFindNeedlePluginFolder(), "tracefmt-output");
+                Directory.CreateDirectory(dir);
+                var stable = Path.Combine(dir, CachedStorage.GetCacheFileName(inputfile, ".tracefmt.txt"));
+                File.Copy(currentResult.outputfile, stable, overwrite: true);
+                _rawOutputPath = stable;
+                Logger.Instance.Log($"Retained tracefmt output: {stable}");
+            }
+            catch (Exception ex) { Logger.Instance.Log($"Could not retain tracefmt output: {ex.Message}"); }
         }
 
         // Fallback for non-WPP traces. tracefmt only formats WPP (driver/software) traces; for a

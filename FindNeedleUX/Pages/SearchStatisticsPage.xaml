@@ -19,6 +19,9 @@
                     <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="8">
+                    <Button x:Name="OpenRawOutputButton" Content="Raw tracefmt output" Visibility="Collapsed"
+                            Click="OpenRawOutput_Click"
+                            ToolTipService.ToolTip="Open the raw text tracefmt produced for the decoded ETL(s)"/>
                     <Button x:Name="RefreshButton" Content="Refresh" Click="Refresh_Click"/>
                     <Button x:Name="CopyButton" Content="Copy" Click="Copy_Click"/>
                 </StackPanel>

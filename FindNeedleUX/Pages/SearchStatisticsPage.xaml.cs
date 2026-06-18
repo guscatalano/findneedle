@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.IO;
 using System.Linq;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
@@ -20,6 +21,7 @@ namespace FindNeedleUX.Pages;
 public sealed partial class SearchStatisticsPage : Page
 {
     private string _copyText = "";
+    private readonly System.Collections.Generic.List<string> _rawOutputPaths = new();
 
     public SearchStatisticsPage()
     {
@@ -53,6 +55,7 @@ public sealed partial class SearchStatisticsPage : Page
         PerfText.Text = report?.ToText() ?? "(no timing report yet)";
         _copyText = SummaryText.Text + Environment.NewLine + Environment.NewLine + PerfText.Text;
         CopyButton.IsEnabled = any;
+        OpenRawOutputButton.Visibility = _rawOutputPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ----- stat cards -----
@@ -169,6 +172,8 @@ public sealed partial class SearchStatisticsPage : Page
     private void BuildBreakdown(SearchStatistics stats)
     {
         BreakdownTree.RootNodes.Clear();
+        _rawOutputPaths.Clear();
+        CollectRawOutputs(stats);
         if (stats?.componentReports == null || stats.componentReports.Count == 0)
         {
             BreakdownExpander.Visibility = Visibility.Collapsed;
@@ -192,6 +197,35 @@ public sealed partial class SearchStatisticsPage : Page
                 stepNode.Children.Add(compNode);
             }
             BreakdownTree.RootNodes.Add(stepNode);
+        }
+    }
+
+    /// <summary>Pull any "rawOutput" file paths out of the DecodeByFile reports (for the open button).</summary>
+    private void CollectRawOutputs(SearchStatistics stats)
+    {
+        if (stats?.componentReports == null) return;
+        foreach (var list in stats.componentReports.Values)
+            foreach (var report in list)
+            {
+                if (report?.summary != "DecodeByFile" || report.metric == null) continue;
+                foreach (var perFile in report.metric.Values)
+                {
+                    if (perFile is IDictionary dict && dict["rawOutput"] is string p
+                        && !string.IsNullOrEmpty(p) && File.Exists(p) && !_rawOutputPaths.Contains(p))
+                        _rawOutputPaths.Add(p);
+                }
+            }
+    }
+
+    private void OpenRawOutput_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var p in _rawOutputPaths)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = p, UseShellExecute = true });
+            }
+            catch { /* no handler / file gone — ignore */ }
         }
     }
 

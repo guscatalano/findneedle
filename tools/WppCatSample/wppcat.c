@@ -45,6 +45,10 @@ int main(int argc, char** argv)
         DoTraceMessage(CAT, "cat #%d breed=%s color=%s", i, breed, color);
         if (i == 1234567)
             DoTraceMessage(CAT, "cat #%d breed=%s color=%s NAME=Mittens", i, breed, color);
+        // Periodically yield so the ETW session can flush buffers — without this, emitting millions
+        // of messages in a tight loop overruns the buffers and the session drops a lot of events.
+        if ((i & 0x1FFFF) == 0x1FFFF)
+            Sleep(1);
     }
 
     WPP_CLEANUP();
