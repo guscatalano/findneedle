@@ -41,6 +41,11 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private bool _traceEventModern = false;
     private bool _decodedToList = false;
 
+    // How this file was decoded + the resulting row count, surfaced via GetDecodeInfo() for the
+    // Statistics "Decode by file" breakdown. Set as DoPreProcessing / the decoders run.
+    private string _decodeMethod = "(pending)";
+    private long _lastDecodeRowCount = 0;
+
     public ETLProcessor()
     {
         Logger.Instance.Log("ETLProcessor constructed");
@@ -65,6 +70,26 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         return providers;
     }
 
+    /// <summary>Per-file decode diagnostics for the Statistics "Decode by file" breakdown.</summary>
+    public Dictionary<string, string> GetDecodeInfo()
+    {
+        var info = new Dictionary<string, string>
+        {
+            ["method"] = _decodeMethod,
+            ["rows"] = _lastDecodeRowCount.ToString("N0"),
+            ["providers"] = providers.Count.ToString(),
+        };
+        if (_badlyFormattedCount > 0)
+            info["badlyFormatted"] = _badlyFormattedCount.ToString("N0");
+        if (currentResult != null && _decodeMethod.StartsWith("tracefmt"))
+        {
+            info["eventsProcessed"] = currentResult.TotalEventsProcessed.ToString("N0");
+            info["formatErrors"] = currentResult.TotalFormatErrors.ToString("N0");
+            info["unknowns"] = currentResult.TotalFormatsUnknown.ToString("N0");
+        }
+        return info;
+    }
+
     public string GetFileName()
     {
         return inputfile; 
@@ -84,6 +109,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         if (inputfile.EndsWith(".txt") || inputfile.EndsWith(".log"))
         {
             Logger.Instance.Log($"Input file is .txt or .log, skipping TraceFmt: {inputfile}");
+            _decodeMethod = "text (passthrough)";
             currentResult.ProcessedFile = inputfile;
             currentResult.outputfile = inputfile;
             currentResult.summaryfile = inputfile;
@@ -99,6 +125,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 // holding the whole trace in RAM. GetResults() decodes lazily for legacy callers.
                 Logger.Instance.Log($"{inputfile} is a modern (non-WPP) trace; will decode with TraceEvent on demand (deferred)");
                 _traceEventModern = true;
+                _decodeMethod = "TraceEvent (modern)";
                 _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile} (decode deferred)");
                 return;
             }
@@ -172,6 +199,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     Logger.Instance.Log($"Skipped {corruptCount} corrupted/unformattable lines in {inputfile} (tracefmt couldn't decode them)");
                 Logger.Instance.Log($"Finished reading output file for {inputfile}, total lines: {lineCount}");
                 _progressSink?.NotifyProgress(90, $"Finished reading output file, total lines: {lineCount}");
+                // Reaching here via the .etl branch means tracefmt formatted it (the text branch
+                // already set its method). Rows = what we parsed out of the formatted output.
+                if (_decodeMethod == "(pending)") _decodeMethod = "tracefmt (WPP)";
+                _lastDecodeRowCount = results.Count;
                 break;
             }
             catch (Exception ex)
@@ -195,9 +226,16 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         {
             Logger.Instance.Log($"tracefmt produced no rows for {inputfile}; falling back to TraceEvent decode");
             _progressSink?.NotifyProgress(50, "Decoding ETL with TraceEvent (non-WPP trace)");
+            _decodeMethod = "TraceEvent (fallback after tracefmt)";
             DecodeWithTraceEvent(cancellationToken);
         }
 
+        Logger.Instance.Log(
+            $"Decode summary {inputfile}: method={_decodeMethod} rows={_lastDecodeRowCount:N0} " +
+            $"providers={providers.Count}" +
+            (currentResult != null && _decodeMethod.StartsWith("tracefmt")
+                ? $" eventsProcessed={currentResult.TotalEventsProcessed} formatErrors={currentResult.TotalFormatErrors} unknowns={currentResult.TotalFormatsUnknown}"
+                : ""));
         Logger.Instance.Log($"DoPreProcessing complete for {inputfile}");
         _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
     }
@@ -313,6 +351,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             // ~97% (it never reaches 100 mid-decode, and post-decode Step 1 work keeps this phase up).
             if (reportFlow)
                 FindNeedlePluginLib.FlowProgress.Detail($"{produced:N0} events", 100, estimate: false);
+            _lastDecodeRowCount = produced;
             Logger.Instance.Log($"TraceEvent decode produced {produced} rows for {inputfile}");
         }
         catch (Exception ex)

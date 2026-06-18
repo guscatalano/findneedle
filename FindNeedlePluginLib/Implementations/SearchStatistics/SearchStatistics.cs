@@ -104,6 +104,17 @@ public class SearchStatistics
         atSearch.Snap();
     }
 
+    /// <summary>
+    /// Override the loaded/matched record counts with authoritative numbers (e.g. from the result
+    /// storage). The legacy per-location counters aren't populated by the streaming pipeline, so the
+    /// search owner sets these at completion.
+    /// </summary>
+    public void SetRecordCounts(int loaded, int searched)
+    {
+        totalRecordsLoaded = loaded;
+        totalRecordsSearch = searched;
+    }
+
     public int GetRecordsAtStep(SearchStep step)
     {
         switch (step)

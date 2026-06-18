@@ -235,8 +235,13 @@ public class MiddleLayerService
         {
             SearchResults = SearchQueryUX.GetSearchResults();
         }
+        // Capture stats (component/decode breakdown + storage-backed counts) before the next
+        // UpdateSearchQuery() swaps in a fresh query.
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
-        LastStats = x; // capture before the next UpdateSearchQuery() swaps in a fresh query
+        if (SearchQueryUX.CurrentQuery is NuSearchQuery nuDone)
+            CaptureStats(nuDone, GetSearchStorage());
+        else
+            LastStats = x;
         try { PerfReport.SetSource(string.Join(", ", Locations.Select(l => l.GetName()))); } catch { /* label only */ }
 
         // Background mode: Step2 skipped the FTS build so the viewer opens now; kick the batched
@@ -366,6 +371,51 @@ public class MiddleLayerService
     /// Statistics page reads it, the run's numbers are gone. Mirrors how <c>PerfReport.Last</c> works.
     /// </summary>
     public static SearchStatistics LastStats { get; private set; }
+
+    /// <summary>
+    /// Capture the just-completed search's statistics: collect each location's component reports
+    /// (provider/decode breakdown) into the stats, and set authoritative record counts from the
+    /// result storage (the legacy per-location counters are unused by the streaming pipeline). Runs
+    /// at search completion so per-file decode info (tracefmt vs TraceEvent, etc.) is fully populated.
+    /// </summary>
+    private static void CaptureStats(NuSearchQuery nu, FindNeedlePluginLib.Interfaces.ISearchStorage storage)
+    {
+        try
+        {
+            var stats = nu?.GetSearchStatistics();
+            if (stats == null) { LastStats = null; return; }
+
+            foreach (var loc in nu.GetLocations())
+            {
+                try
+                {
+                    var reports = loc.ReportStatistics();
+                    if (reports != null)
+                        foreach (var r in reports) stats.ReportFromComponent(r);
+                }
+                catch (Exception ex) { Logger.Instance.Log($"CaptureStats: {loc?.GetName()} reportstats failed: {ex.Message}"); }
+            }
+
+            try
+            {
+                if (storage != null)
+                {
+                    var s = storage.GetStatistics();
+                    // RawResults is unused by the streaming pipeline (rows go straight to Filtered),
+                    // so fall back to the filtered count for "loaded" when raw is 0.
+                    int loaded = s.rawRecordCount > 0 ? s.rawRecordCount : s.filteredRecordCount;
+                    stats.SetRecordCounts(loaded, s.filteredRecordCount);
+                }
+            }
+            catch (Exception ex) { Logger.Instance.Log($"CaptureStats: record counts failed: {ex.Message}"); }
+
+            LastStats = stats;
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"CaptureStats failed: {ex.Message}");
+        }
+    }
 
     public static SearchStatistics GetStats()
     {
@@ -552,7 +602,7 @@ public class MiddleLayerService
             try
             {
                 SearchResults = SearchQueryUX.GetSearchResults(cts.Token);
-                LastStats = nu.GetSearchStatistics(); // snapped during the steps above; capture it now
+                CaptureStats(nu, storage); // decode done now → per-file decode info + counts are complete
                 NotifyStateChanged();
 
                 // Background mode: now that all rows are in storage, build the FTS index off the

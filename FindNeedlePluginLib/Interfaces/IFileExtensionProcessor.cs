@@ -31,6 +31,13 @@ public interface IFileExtensionProcessor : IDisposable
     public string GetFileName();
     public Dictionary<string, int> GetProviderCount();
 
+    /// <summary>
+    /// Per-file decode diagnostics for the Statistics page (e.g. how an .etl was decoded and the
+    /// resulting counts). Default empty — processors that have nothing interesting can ignore it.
+    /// Keys are short labels (e.g. "method", "rows", "formatErrors"); values are display strings.
+    /// </summary>
+    public Dictionary<string, string> GetDecodeInfo() => new();
+
     // New: search performance estimate
     public (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(CancellationToken cancellationToken = default);
 }

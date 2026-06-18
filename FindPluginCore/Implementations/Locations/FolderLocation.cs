@@ -323,7 +323,17 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
            metric = new Dictionary<string, dynamic>()
         };
         reports.Add(ProviderByFileReport);
-      
+
+        // How each file was decoded (e.g. tracefmt vs TraceEvent) + per-file counts.
+        var DecodeByFileReport = new ReportFromComponent()
+        {
+           component = this.GetType().Name,
+           step = SearchStep.AtLoad,
+           summary = "DecodeByFile",
+           metric = new Dictionary<string, dynamic>()
+        };
+        reports.Add(DecodeByFileReport);
+
         
         foreach (var p in knownProcessors)
         {
@@ -351,6 +361,13 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 
                ProviderByFileReport.metric[provider].Add(p.GetFileName(), p.GetProviderCount()[provider]);
 
+            }
+
+            // Per-file decode method + counts (empty for processors that don't report any).
+            var decodeInfo = p.GetDecodeInfo();
+            if (decodeInfo != null && decodeInfo.Count > 0)
+            {
+               DecodeByFileReport.metric[p.GetFileName()] = new Dictionary<string, string>(decodeInfo);
             }
 
             if (!procStats.metric.ContainsKey(p.GetFileName()))
