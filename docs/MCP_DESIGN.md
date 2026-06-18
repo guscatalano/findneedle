@@ -125,7 +125,8 @@ Code lives in `FindNeedleUX/Services/Mcp/` plus a few touch points:
   MCP-SDK dependency (the app is self-contained MSIX + ILRepack, so a BCL-only server is the safe fit).
 - **`McpTools`** — the tool catalog (name + description + JSON schema + handler), each calling
   `McpViewerBridge`. Workspace: `list_locations`, `list_rules`, `add_folder`, `add_kusto`,
-  `remove_location`, `run_search`, `cancel_search`. Viewer: `get_view`, `get_page`, `get_record`,
+  `remove_location`, `run_search`, `cancel_search`. Readiness: `status` (server/viewer health +
+  counts, never errors), `wait_for_viewer` (block until a viewer registers). Viewer: `get_view`, `get_page`, `get_record`,
   `summary`, `histogram`, `search`, `set_filter`, `clear_filters`, `set_sort`, `goto_page`,
   `set_page_size`, `select_row`, `tag_row`, `clear_tag`, `set_details_mode`, `export`.
 - **`McpViewerBridge`** — single live workspace (no session); workspace ops via `MiddleLayerService`
@@ -150,6 +151,9 @@ Code lives in `FindNeedleUX/Services/Mcp/` plus a few touch points:
   AppContainer install blocks loopback by default and would need a loopback exemption.
 - No SSE / server push, no session-id enforcement, no auth token (localhost-only by design).
 - `select_row` only selects rows on the current page; `tag_row` re-publishes the page to show the glyph.
+- The HTTP server starts at app launch (if enabled) but a viewer registers only once a results page
+  loads, so there's a brief window where viewer tools return "no viewer". `status` / `wait_for_viewer`
+  cover it, and `run_search` waits (up to 8s) for a viewer when one isn't already open.
 
 ## Out of scope for v1 (possible follow-ups)
 

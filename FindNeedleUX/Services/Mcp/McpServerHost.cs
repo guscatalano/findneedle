@@ -61,6 +61,7 @@ public static class McpServerHost
             _server = new McpServer { Log = SetStatus };
             _server.Start(port);
             _runningPort = port;
+            McpViewerBridge.Instance.ServerPort = port;
             SetStatus($"Listening on http://127.0.0.1:{port}/");
         }
         catch (Exception ex)
@@ -75,6 +76,7 @@ public static class McpServerHost
         try { _server?.Stop(); } catch { }
         _server = null;
         _runningPort = 0;
+        McpViewerBridge.Instance.ServerPort = 0;
         SetStatus("Stopped");
     }
 

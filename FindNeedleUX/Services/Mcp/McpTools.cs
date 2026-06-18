@@ -116,6 +116,22 @@ internal static class McpTools
             Invoke = async _ => { await B.CancelSearchAsync(); return Ok(); },
         },
 
+        // ---------- status / readiness ----------
+        new ToolDef
+        {
+            Name = "status",
+            Description = "Health/orientation: whether the MCP server is running, its port, whether a result viewer is open (viewer tools usable), how many locations are loaded, and current row counts. Always succeeds.",
+            InputSchema = Obj(new { }),
+            Invoke = async _ => await B.GetStatusAsync(),
+        },
+        new ToolDef
+        {
+            Name = "wait_for_viewer",
+            Description = "Wait until a result viewer is open (e.g. just after app launch or a search), so viewer tools don't hit the 'no viewer' race. Returns whether one is ready.",
+            InputSchema = Obj(new { timeoutMs = I("Max time to wait in ms (default 10000, max 120000).") }),
+            Invoke = async a => new { ready = await B.WaitForViewerAsync(Int(a, "timeoutMs", 10_000)) },
+        },
+
         // ---------- viewer: read ----------
         new ToolDef
         {

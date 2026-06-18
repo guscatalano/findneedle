@@ -87,3 +87,17 @@ public sealed class ExportResultDto
     public string Path { get; set; }
     public int RowCount { get; set; }
 }
+
+/// <summary>
+/// Health / orientation snapshot. Always succeeds (works with or without an open viewer) so an agent
+/// can check what's available before calling viewer tools.
+/// </summary>
+public sealed class StatusDto
+{
+    public bool ServerRunning { get; set; }
+    public int Port { get; set; }
+    public bool HasViewer { get; set; }   // is a result viewer registered (viewer tools usable)?
+    public int Locations { get; set; }    // data sources loaded in the workspace
+    public int? Total { get; set; }        // total rows in the viewer (null if no viewer)
+    public int? TotalFiltered { get; set; } // rows matching the current filter (null if no viewer)
+}

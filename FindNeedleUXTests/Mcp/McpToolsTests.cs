@@ -36,7 +36,8 @@ public class McpToolsTests
         var names = McpTools.All.Select(t => t.Name).ToHashSet();
         foreach (var expected in new[]
         {
-            "list_locations", "run_search", "get_view", "get_page", "get_record",
+            "list_locations", "run_search", "status", "wait_for_viewer",
+            "get_view", "get_page", "get_record",
             "summary", "histogram", "search", "set_filter", "clear_filters",
             "set_sort", "goto_page", "set_page_size", "select_row", "tag_row",
             "clear_tag", "set_details_mode", "export",

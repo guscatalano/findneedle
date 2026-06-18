@@ -61,6 +61,30 @@ public class McpViewerBridgeTests
     }
 
     [TestMethod]
+    public async Task Status_ReportsHasViewer_BothWays()
+    {
+        McpViewerBridge.Instance.UnregisterViewer(_fake);
+        var before = await McpViewerBridge.Instance.GetStatusAsync();
+        Assert.IsFalse(before.HasViewer, "no viewer registered yet");
+        Assert.IsNull(before.Total, "no counts without a viewer");
+
+        McpViewerBridge.Instance.RegisterViewer(_fake);
+        var after = await McpViewerBridge.Instance.GetStatusAsync();
+        Assert.IsTrue(after.HasViewer);
+        Assert.AreEqual(9, after.Total, "counts come from the viewer when one is open");
+    }
+
+    [TestMethod]
+    public async Task WaitForViewer_TimesOutThenSucceeds()
+    {
+        McpViewerBridge.Instance.UnregisterViewer(_fake);
+        Assert.IsFalse(await McpViewerBridge.Instance.WaitForViewerAsync(200), "no viewer → returns false after the timeout");
+
+        McpViewerBridge.Instance.RegisterViewer(_fake);
+        Assert.IsTrue(await McpViewerBridge.Instance.WaitForViewerAsync(200), "viewer present → returns true immediately");
+    }
+
+    [TestMethod]
     public void Unregister_OtherController_DoesNotClearCurrent()
     {
         McpViewerBridge.Instance.RegisterViewer(_fake);

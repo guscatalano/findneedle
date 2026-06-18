@@ -33,6 +33,9 @@ public sealed class McpViewerBridge
     /// </summary>
     public Microsoft.UI.Dispatching.DispatcherQueue UiDispatcher { get; set; }
 
+    /// <summary>Port the MCP server is listening on (0 if stopped). Set by <c>McpServerHost</c>.</summary>
+    public int ServerPort { get; set; }
+
     /// <summary>
     /// Optional handler that runs a search the same way the Search button does (run + navigate to the
     /// viewer). Wired by the search page. When unset, <see cref="RunSearchAsync"/> falls back to a
@@ -53,6 +56,39 @@ public sealed class McpViewerBridge
     }
 
     public bool HasViewer { get { lock (_sync) return _controller != null; } }
+
+    /// <summary>
+    /// Wait up to <paramref name="timeoutMs"/> for a result viewer to register (e.g. just after app
+    /// launch or a search that opens the viewer). Returns true if one is registered by then. Lets an
+    /// agent avoid the "no viewer" race without polling.
+    /// </summary>
+    public async Task<bool> WaitForViewerAsync(int timeoutMs)
+    {
+        if (timeoutMs <= 0) timeoutMs = 10_000;
+        if (timeoutMs > 120_000) timeoutMs = 120_000;
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (!HasViewer && Environment.TickCount64 < deadline)
+            await Task.Delay(100).ConfigureAwait(false);
+        return HasViewer;
+    }
+
+    /// <summary>Health/orientation snapshot. Never throws on the no-viewer path.</summary>
+    public async Task<StatusDto> GetStatusAsync()
+    {
+        var dto = new StatusDto
+        {
+            ServerRunning = ServerPort > 0,
+            Port = ServerPort,
+            HasViewer = HasViewer,
+            Locations = await RunOnUiAsync(() => MiddleLayerService.Locations.Count).ConfigureAwait(false),
+        };
+        if (dto.HasViewer)
+        {
+            try { var v = await GetViewAsync().ConfigureAwait(false); dto.Total = v.Total; dto.TotalFiltered = v.TotalFiltered; }
+            catch (McpNoViewerException) { dto.HasViewer = false; } // viewer closed between the check and the call
+        }
+        return dto;
+    }
 
     private IMcpViewerController Viewer
     {
@@ -138,10 +174,16 @@ public sealed class McpViewerBridge
     public async Task RunSearchAsync()
     {
         var handler = RunSearchHandler;
-        if (handler != null) { await handler().ConfigureAwait(false); return; }
-        // Fallback: trigger a streaming search directly (no navigation). The active viewer, if any,
-        // picks up the new results on its next load.
-        await RunOnUiAsync(() => { MiddleLayerService.RunSearchStreaming(); }).ConfigureAwait(false);
+        if (handler != null) { await handler().ConfigureAwait(false); }
+        else
+        {
+            // Fallback: trigger a streaming search directly (no navigation). The active viewer, if
+            // any, picks up the new results on its next load.
+            await RunOnUiAsync(() => { MiddleLayerService.RunSearchStreaming(); }).ConfigureAwait(false);
+        }
+        // If a viewer isn't up yet (e.g. it's opening as part of this search), give it a moment to
+        // register so a follow-up viewer tool doesn't hit the "no viewer" race. No-op if one's open.
+        if (!HasViewer) await WaitForViewerAsync(8_000).ConfigureAwait(false);
     }
 
     public Task CancelSearchAsync() => RunOnUiAsync(() => MiddleLayerService.CurrentStreamingSearch?.Stop());
