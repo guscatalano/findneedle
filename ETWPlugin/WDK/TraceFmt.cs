@@ -20,6 +20,13 @@ public class TraceFmtResult
         get; set;
     }
 
+    /// <summary>tracefmt's own stdout/stderr — the "Searching for TMF files on path…" /
+    /// "Examining &lt;tmf&gt;… N found" narrative used for the symbol-resolution log.</summary>
+    public string? ConsoleOutput
+    {
+        get; set;
+    }
+
 
 
     public void ParseSummaryFile()
@@ -133,19 +140,28 @@ public class TraceFmt
             throw new Exception("Cant find etl");
         }
         TraceFmtResult result = new TraceFmtResult();
-        ProcessStartInfo st = new ProcessStartInfo();
-        st.FileName = traceFmtPath;
-        st.Arguments = etl;
-        st.WindowStyle = ProcessWindowStyle.Hidden;
-        st.WorkingDirectory = temppath;
+        ProcessStartInfo st = new ProcessStartInfo
+        {
+            FileName = traceFmtPath,
+            Arguments = etl,
+            WorkingDirectory = temppath,
+            // Capture tracefmt's narration (which TMF paths it searched, which TMFs it examined/found)
+            // for the symbol-resolution log surfaced in the UI.
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
         Process? p = Process.Start(st);
         if(p == null)
         {
             throw new Exception("???");
         }
-        p.Start();
         progressSink?.NotifyProgress(10, "TraceFmt process started");
+        string consoleOut = p.StandardOutput.ReadToEnd();
+        string consoleErr = p.StandardError.ReadToEnd();
         p.WaitForExit();
+        result.ConsoleOutput = string.IsNullOrWhiteSpace(consoleErr) ? consoleOut : (consoleOut + Environment.NewLine + consoleErr);
         progressSink?.NotifyProgress(80, "TraceFmt process finished");
         if(p.ExitCode != 0)
         {

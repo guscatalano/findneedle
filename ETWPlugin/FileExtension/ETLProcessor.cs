@@ -49,6 +49,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     // When tracefmt is used, the formatted text it produces is moved here (out of the temp dir, which
     // is deleted on Dispose) so the UI can offer "view raw tracefmt output". Null otherwise.
     private string _rawOutputPath = null;
+    private string _resolveLogPath = null;
 
     public ETLProcessor()
     {
@@ -94,6 +95,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             info["unknowns"] = currentResult.TotalFormatsUnknown.ToString("N0");
             if (!string.IsNullOrEmpty(currentResult.TotalElapsedTime)) info["elapsed"] = currentResult.TotalElapsedTime;
             if (!string.IsNullOrEmpty(_rawOutputPath) && File.Exists(_rawOutputPath)) info["rawOutput"] = _rawOutputPath;
+            if (!string.IsNullOrEmpty(_resolveLogPath) && File.Exists(_resolveLogPath)) info["resolveLog"] = _resolveLogPath;
         }
         return info;
     }
@@ -236,6 +238,28 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 File.Copy(currentResult.outputfile, stable, overwrite: true);
                 _rawOutputPath = stable;
                 Logger.Instance.Log($"Retained tracefmt output: {stable}");
+
+                // Symbol-resolution log: what we searched + tracefmt's narration ("Searching for TMF
+                // files on path…", "Examining <tmf>… N found") + the summary. Answers "what does the
+                // ETL need, where did we look, did we find it".
+                var rlog = new StringBuilder();
+                rlog.AppendLine($"WPP symbol resolution for: {inputfile}");
+                rlog.AppendLine($"Decoded: {DateTime.Now}");
+                rlog.AppendLine();
+                rlog.AppendLine("Search paths consulted:");
+                rlog.AppendLine($"  TRACE_FORMAT_SEARCH_PATH = {Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH")}");
+                rlog.AppendLine($"  _NT_SYMBOL_PATH          = {Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH")}");
+                rlog.AppendLine();
+                rlog.AppendLine("Outcome:");
+                rlog.AppendLine($"  events={currentResult.TotalEventsProcessed:N0}  formatErrors={currentResult.TotalFormatErrors:N0}  unknowns={currentResult.TotalFormatsUnknown:N0}");
+                rlog.AppendLine($"  {(currentResult.TotalFormatsUnknown == 0 ? "All events formatted — every required TMF was found." : "Some events couldn't be formatted — a TMF is missing. Add the matching PDB/symbol path and Build TMFs. (The unformatted 'Unknown(...)' lines in the raw output carry the message GUIDs.)")}");
+                rlog.AppendLine();
+                rlog.AppendLine("----- tracefmt output -----");
+                rlog.AppendLine(currentResult.ConsoleOutput ?? "(none)");
+                var resolveStable = Path.Combine(dir, CachedStorage.GetCacheFileName(inputfile, ".resolve.txt"));
+                File.WriteAllText(resolveStable, rlog.ToString());
+                _resolveLogPath = resolveStable;
+                Logger.Instance.Log($"Retained symbol-resolution log: {resolveStable}");
             }
             catch (Exception ex) { Logger.Instance.Log($"Could not retain tracefmt output: {ex.Message}"); }
         }

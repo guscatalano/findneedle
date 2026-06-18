@@ -22,6 +22,7 @@ public sealed partial class SearchStatisticsPage : Page
 {
     private string _copyText = "";
     private readonly System.Collections.Generic.List<string> _rawOutputPaths = new();
+    private readonly System.Collections.Generic.List<string> _resolveLogPaths = new();
 
     public SearchStatisticsPage()
     {
@@ -56,6 +57,7 @@ public sealed partial class SearchStatisticsPage : Page
         _copyText = SummaryText.Text + Environment.NewLine + Environment.NewLine + PerfText.Text;
         CopyButton.IsEnabled = any;
         OpenRawOutputButton.Visibility = _rawOutputPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        OpenResolveLogButton.Visibility = _resolveLogPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ----- stat cards -----
@@ -173,6 +175,7 @@ public sealed partial class SearchStatisticsPage : Page
     {
         BreakdownTree.RootNodes.Clear();
         _rawOutputPaths.Clear();
+        _resolveLogPaths.Clear();
         CollectRawOutputs(stats);
         if (stats?.componentReports == null || stats.componentReports.Count == 0)
         {
@@ -210,16 +213,21 @@ public sealed partial class SearchStatisticsPage : Page
                 if (report?.summary != "DecodeByFile" || report.metric == null) continue;
                 foreach (var perFile in report.metric.Values)
                 {
-                    if (perFile is IDictionary dict && dict["rawOutput"] is string p
-                        && !string.IsNullOrEmpty(p) && File.Exists(p) && !_rawOutputPaths.Contains(p))
+                    if (perFile is not IDictionary dict) continue;
+                    if (dict["rawOutput"] is string p && !string.IsNullOrEmpty(p) && File.Exists(p) && !_rawOutputPaths.Contains(p))
                         _rawOutputPaths.Add(p);
+                    if (dict["resolveLog"] is string r && !string.IsNullOrEmpty(r) && File.Exists(r) && !_resolveLogPaths.Contains(r))
+                        _resolveLogPaths.Add(r);
                 }
             }
     }
 
-    private void OpenRawOutput_Click(object sender, RoutedEventArgs e)
+    private void OpenRawOutput_Click(object sender, RoutedEventArgs e) => OpenFiles(_rawOutputPaths);
+    private void OpenResolveLog_Click(object sender, RoutedEventArgs e) => OpenFiles(_resolveLogPaths);
+
+    private static void OpenFiles(System.Collections.Generic.IEnumerable<string> paths)
     {
-        foreach (var p in _rawOutputPaths)
+        foreach (var p in paths)
         {
             try
             {

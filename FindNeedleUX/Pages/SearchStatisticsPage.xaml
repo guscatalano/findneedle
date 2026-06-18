@@ -19,6 +19,9 @@
                     <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="8">
+                    <Button x:Name="OpenResolveLogButton" Content="Symbol resolution log" Visibility="Collapsed"
+                            Click="OpenResolveLog_Click"
+                            ToolTipService.ToolTip="What the ETL needed, where we searched, and what tracefmt found"/>
                     <Button x:Name="OpenRawOutputButton" Content="Raw tracefmt output" Visibility="Collapsed"
                             Click="OpenRawOutput_Click"
                             ToolTipService.ToolTip="Open the raw text tracefmt produced for the decoded ETL(s)"/>
