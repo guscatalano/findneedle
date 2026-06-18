@@ -1,32 +1,43 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace FindNeedleUX.Services;
 
 /// <summary>
-/// Pushes the user's WPP TMF search path (<see cref="ResultsViewerSettings.TraceFormatSearchPath"/>)
-/// into the <c>TRACE_FORMAT_SEARCH_PATH</c> environment variable, which the <c>tracefmt.exe</c> child
-/// process FindNeedle spawns inherits. This is how WPP ETLs decode in a normal run without the user
-/// having to set the env var by hand. Call <see cref="Apply"/> at startup and on settings change.
+/// Exports the user's WPP symbol settings into the environment variables the WDK trace tools read,
+/// so WPP ETLs decode in a normal run without the user setting env vars by hand:
+///   • <c>TRACE_FORMAT_SEARCH_PATH</c> = the TMF folder setting + the managed TMF cache (built from
+///     symbols) + whatever was ambient at launch — tracefmt searches these for .tmf files.
+///   • <c>_NT_SYMBOL_PATH</c> = the symbol-path setting (PDB folders / symbol servers) + ambient.
+/// Call <see cref="Apply"/> at startup and on settings change. The child tracefmt/tracepdb processes
+/// inherit these.
 /// </summary>
 public static class TraceFormatConfig
 {
-    private const string EnvVar = "TRACE_FORMAT_SEARCH_PATH";
+    private const string TmfVar = "TRACE_FORMAT_SEARCH_PATH";
+    private const string SymVar = "_NT_SYMBOL_PATH";
 
-    // The ambient value present at launch (e.g. set by the dev environment). Captured once so that
-    // clearing the setting restores it rather than wiping it.
-    private static readonly string _original = Environment.GetEnvironmentVariable(EnvVar) ?? "";
+    // Ambient values at launch, captured once so clearing a setting restores them rather than wiping.
+    private static readonly string _origTmf = Environment.GetEnvironmentVariable(TmfVar) ?? "";
+    private static readonly string _origSym = Environment.GetEnvironmentVariable(SymVar) ?? "";
 
     public static void Apply()
     {
-        var configured = (ResultsViewerSettings.TraceFormatSearchPath ?? "").Trim();
-        string combined;
-        if (string.IsNullOrEmpty(configured))
-            combined = _original;                                   // nothing set → restore ambient
-        else if (string.IsNullOrEmpty(_original))
-            combined = configured;
-        else
-            combined = configured + ";" + _original;               // user path first, keep ambient
+        // TRACE_FORMAT_SEARCH_PATH: configured TMF folder, then the managed TMF cache, then ambient.
+        var tmfParts = new List<string>();
+        var tmfFolder = (ResultsViewerSettings.TraceFormatSearchPath ?? "").Trim();
+        if (!string.IsNullOrEmpty(tmfFolder)) tmfParts.Add(tmfFolder);
+        try { if (Directory.Exists(WppSymbolResolver.TmfCacheDir)) tmfParts.Add(WppSymbolResolver.TmfCacheDir); } catch { }
+        if (!string.IsNullOrEmpty(_origTmf)) tmfParts.Add(_origTmf);
+        Environment.SetEnvironmentVariable(TmfVar, string.Join(";", tmfParts.Distinct()));
 
-        Environment.SetEnvironmentVariable(EnvVar, combined);
+        // _NT_SYMBOL_PATH: configured symbol path (PDB folders / symbol servers), then ambient.
+        var sym = (ResultsViewerSettings.SymbolPath ?? "").Trim();
+        var symCombined = string.IsNullOrEmpty(sym) ? _origSym
+                        : string.IsNullOrEmpty(_origSym) ? sym
+                        : sym + ";" + _origSym;
+        Environment.SetEnvironmentVariable(SymVar, symCombined);
     }
 }

@@ -226,6 +226,27 @@ public static class ResultsViewerSettings
         set { Data.TraceFormatSearchPath = value ?? ""; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>
+    /// Symbol path in <c>_NT_SYMBOL_PATH</c> syntax — local PDB folders and/or symbol servers
+    /// (<c>srv*cache*https://…</c>). Used by tracepdb (<c>-r</c>) to resolve PDBs for binaries and
+    /// extract their TMFs, and exported as <c>_NT_SYMBOL_PATH</c>.
+    /// </summary>
+    public static string SymbolPath
+    {
+        get => Data.SymbolPath ?? "";
+        set { Data.SymbolPath = value ?? ""; Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>
+    /// Folder(s) (';'-separated) holding PDBs and/or binaries to extract WPP TMFs from (via the
+    /// "Build TMFs from symbols" action).
+    /// </summary>
+    public static string SymbolSourcePath
+    {
+        get => Data.SymbolSourcePath ?? "";
+        set { Data.SymbolSourcePath = value ?? ""; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -390,6 +411,8 @@ public static class ResultsViewerSettings
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }
         public string TraceFormatSearchPath { get; set; }
+        public string SymbolPath { get; set; }
+        public string SymbolSourcePath { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }

@@ -224,6 +224,24 @@
                                  AutomationProperties.Name="TMF search path"/>
                         <Button Content="Browse…" Click="BrowseTmfPath_Click"/>
                     </StackPanel>
+
+                    <TextBlock Text="…or build TMFs from symbols" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Point at a folder of PDBs and/or the binaries that produced the trace, plus a symbol path (PDB folders or a symbol server, srv*cache*https://…). 'Build TMFs' runs tracepdb to extract TMFs into a managed cache that's used automatically."/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBox x:Name="SymbolSourceBox" Width="460" PlaceholderText="PDBs / binaries folder"
+                                 LostFocus="SymbolSourceBox_LostFocus" AutomationProperties.Name="PDB or binary source folder"/>
+                        <Button Content="Browse…" Click="BrowseSymbolSource_Click"/>
+                    </StackPanel>
+                    <TextBox x:Name="SymbolPathBox" Width="560" HorizontalAlignment="Left"
+                             PlaceholderText="Symbol path, e.g. srv*C:\symcache*https://msdl.microsoft.com/download/symbols"
+                             LostFocus="SymbolPathBox_LostFocus" AutomationProperties.Name="Symbol path"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="BuildTmfsButton" Content="Build TMFs from symbols" Click="BuildTmfs_Click"/>
+                        <TextBlock x:Name="BuildTmfsStatus" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

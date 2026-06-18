@@ -69,6 +69,8 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- WPP / tracefmt TMF path ---
             TmfPathBox.Text = ResultsViewerSettings.TraceFormatSearchPath;
+            SymbolSourceBox.Text = ResultsViewerSettings.SymbolSourcePath;
+            SymbolPathBox.Text = ResultsViewerSettings.SymbolPath;
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += OnMcpStatusChanged;
 
@@ -341,6 +343,64 @@ public sealed partial class ResultsViewerSettingsPage : Page
             TmfPathBox.Text = path;
             ResultsViewerSettings.TraceFormatSearchPath = path;
         }
+    }
+
+    private void SymbolSourceBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.SymbolSourcePath = SymbolSourceBox.Text?.Trim() ?? "";
+    }
+
+    private void SymbolPathBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.SymbolPath = SymbolPathBox.Text?.Trim() ?? "";
+    }
+
+    private void BrowseSymbolSource_Click(object sender, RoutedEventArgs e)
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
+        var path = Win32FileDialog.PickFolder(hWnd);
+        if (path != null)
+        {
+            SymbolSourceBox.Text = path;
+            ResultsViewerSettings.SymbolSourcePath = path;
+        }
+    }
+
+    private async void BuildTmfs_Click(object sender, RoutedEventArgs e)
+    {
+        // Persist current text first (in case the user didn't tab out of the boxes).
+        ResultsViewerSettings.SymbolSourcePath = SymbolSourceBox.Text?.Trim() ?? "";
+        ResultsViewerSettings.SymbolPath = SymbolPathBox.Text?.Trim() ?? "";
+
+        BuildTmfsButton.IsEnabled = false;
+        BuildTmfsStatus.Text = "Building TMFs from symbols…";
+        var source = ResultsViewerSettings.SymbolSourcePath;
+        var symPath = ResultsViewerSettings.SymbolPath;
+        (int count, string log) result = (0, "");
+        try
+        {
+            result = await System.Threading.Tasks.Task.Run(() => WppSymbolResolver.BuildTmfs(source, symPath));
+        }
+        catch (Exception ex) { result = (0, ex.Message); }
+
+        // Re-apply env so the new TMF cache is on the search path immediately.
+        TraceFormatConfig.Apply();
+
+        BuildTmfsButton.IsEnabled = true;
+        BuildTmfsStatus.Text = $"{result.count} TMF(s) in cache";
+        _ = new ContentDialog
+        {
+            Title = "Build TMFs from symbols",
+            Content = new ScrollViewer
+            {
+                MaxHeight = 380,
+                Content = new TextBlock { Text = result.log, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 12, IsTextSelectionEnabled = true, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
+            },
+            CloseButtonText = "OK",
+            XamlRoot = this.XamlRoot,
+        }.ShowAsync();
     }
 
     private void OnMcpStatusChanged() => DispatcherQueue.TryEnqueue(UpdateMcpStatus);
