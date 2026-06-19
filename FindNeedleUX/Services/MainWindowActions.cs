@@ -54,4 +54,18 @@ public class MainWindowActions
         if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
             mw.HideNavigationSpinner();
     }
+
+    /// <summary>Switch to the result-viewer settings page (used by the "fix WPP symbols" banner action).</summary>
+    public static void NavigateToResultsViewerSettings()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.NavigateToResultsViewerSettings();
+    }
+
+    /// <summary>Force a full decode + reopen (the "Decode anyway" banner action).</summary>
+    public static void RerunWithFullDecode()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.RerunWithFullDecode();
+    }
 }

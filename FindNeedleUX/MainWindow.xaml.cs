@@ -289,6 +289,12 @@ public sealed partial class MainWindow : Window
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage)));
     }
 
+    public void NavigateToResultsViewerSettings()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage)));
+    }
+
     /// <summary>
     /// Show / hide a non-cancellable spinner used to give immediate feedback when switching to a
     /// page whose first construction is slow (e.g. the native viewer's DataGrid init). The
@@ -427,6 +433,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: SystemInfoPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SystemInfoPage));
                 break;
+            case "about":
+                Logger.Instance.Log("Navigated: AboutPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.AboutPage));
+                break;
             case "settings_resultviewer":
                 Logger.Instance.Log("Navigated: ResultsViewerSettingsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage));
@@ -539,6 +549,53 @@ public sealed partial class MainWindow : Window
             _quickActionCts?.Dispose();
             _quickActionCts = null;
             DispatcherQueue.TryEnqueue(RefreshStatusStrip);
+        }
+    }
+
+    /// <summary>
+    /// Re-run the current search forcing a full decode (no pre-scan/fail-fast) and bypassing the
+    /// cached empty result, then open the viewer. Uses the standard progress spinner so the user
+    /// gets live step status and a cancel button during the (slow) full decode. Backs the result
+    /// viewer's "Decode anyway" button.
+    /// </summary>
+    public async void RerunWithFullDecode()
+    {
+        FindNeedlePluginLib.DecodeOptions.ForceFullDecode = true;
+        var prevCacheMode = MiddleLayerService.CacheModeOverride;
+        MiddleLayerService.CacheModeOverride = FindPluginCore.Searching.CacheReuseMode.Never;
+        try
+        {
+            ShowSpinner(true, "Decoding anyway…", showCancel: true);
+            await RunSearchWithProgress();
+            ShowSpinner(false);
+            // If we're already on the viewer (the banner lives there), NavigationCacheMode.Required
+            // means re-navigating won't reload it — reload its data in place. Otherwise navigate.
+            if (contentFrame.Content is FindNeedleUX.Pages.NativeResultsPage viewer)
+                await viewer.ReloadResultsAsync();
+            else
+                contentFrame.Navigate(ResolveDefaultViewerType());
+        }
+        catch (Exception ex)
+        {
+            // Never let a decode failure crash the app (this runs in an async void). Surface it.
+            ShowSpinner(false);
+            Logger.Instance.Log($"Decode anyway failed: {ex}");
+            try
+            {
+                await new ContentDialog
+                {
+                    Title = "Decode anyway failed",
+                    Content = ex.Message,
+                    CloseButtonText = "OK",
+                    XamlRoot = this.Content.XamlRoot,
+                }.ShowAsync();
+            }
+            catch { /* dialog couldn't show — already logged */ }
+        }
+        finally
+        {
+            FindNeedlePluginLib.DecodeOptions.ForceFullDecode = false;
+            MiddleLayerService.CacheModeOverride = prevCacheMode;
         }
     }
 

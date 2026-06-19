@@ -51,8 +51,22 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Toolbar (full width) -->
+            <RowDefinition Height="Auto"/>  <!-- Decode/explain banner -->
             <RowDefinition Height="*"/>     <!-- Body: optional left filter pane + main content -->
         </Grid.RowDefinitions>
+
+        <!-- Why-is-this-empty banner (e.g. WPP ETL with missing symbols). Hidden unless set. -->
+        <InfoBar x:Name="DecodeBanner" Grid.Row="1" IsOpen="False" IsClosable="True"
+                 Severity="Warning" Margin="12,8,12,0">
+            <InfoBar.Content>
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
+                    <Button x:Name="DecodeBannerSettings" Content="Open WPP symbol settings"
+                            Click="DecodeBannerAction_Click"/>
+                    <Button x:Name="DecodeBannerForce" Content="Decode anyway" Click="DecodeAnyway_Click"
+                            ToolTipService.ToolTip="Decode whatever can be read, even if most events are unformatted garbage"/>
+                </StackPanel>
+            </InfoBar.Content>
+        </InfoBar>
 
         <!-- Toolbar -->
         <Border Grid.Row="0" Padding="12,8"
@@ -192,7 +206,7 @@
         <!-- Body: an optional left-docked filter pane (Column 0) beside the main content (Column 1).
              The single FiltersPanel is re-parented between LeftFilterHost and TopFilterHost in code
              (RefreshFilterLayout) per the dock setting; its inner rows switch horizontal/vertical. -->
-        <Grid Grid.Row="1" x:Name="BodyGrid">
+        <Grid Grid.Row="2" x:Name="BodyGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>  <!-- left filter pane (collapsed unless docked left) -->
                 <ColumnDefinition Width="*"/>     <!-- main content -->

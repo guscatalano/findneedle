@@ -91,6 +91,36 @@ public class ETLLogLine : ISearchResult
         return false;
     }
 
+    private ETLLogLine() { }
+
+    // Shared empty payload for unformatted rows (PreLoad/GetLevel only read it). Avoids allocating a
+    // Dictionary per row when "Decode anyway" emits millions of them.
+    private static readonly Dictionary<string, dynamic> SharedEmptyKeyJson = new();
+
+    /// <summary>
+    /// Build a single representative row for a distinct WPP message GUID that tracefmt could not format
+    /// (missing TMF). Used by the viewer's "Decode anyway", which de-dupes by GUID — so instead of
+    /// millions of identical unformatted events, the user sees one row per distinct missing symbol,
+    /// annotated with how many events collapsed into it.
+    /// </summary>
+    public static ETLLogLine Unformatted(string messageGuid, long eventCount, string filename)
+    {
+        var msg = $"Unknown WPP event ×{eventCount:N0} — GUID={messageGuid} (no format info; TMF/symbol missing)";
+        return new ETLLogLine
+        {
+            filename = filename,
+            eventtxt = msg,
+            json = msg,
+            originalLine = msg,
+            tasktxt = "Unformatted (missing WPP symbol)",
+            provider = "(unformatted WPP)",
+            metaprovider = string.Empty,
+            metadatetime = DateTime.MinValue,
+            parsedTime = DateTime.MinValue,
+            keyjson = SharedEmptyKeyJson,
+        };
+    }
+
     public ETLLogLine(Microsoft.Diagnostics.Tracing.TraceEvent obj)
     {
         this.filename = "LIVE";
@@ -280,8 +310,11 @@ public class ETLLogLine : ISearchResult
 
         if (parsedTime == DateTime.MinValue)
         {
-            datetime = datetime.Replace("-", " ");
-            parsedTime = DateTime.Parse(datetime);
+            // Be defensive: a line with no/blank or unparseable time (e.g. an unformatted "Decode
+            // anyway" row, or a badly-formatted event) must not throw here — that exception would be
+            // unhandled on the streaming thread and take the whole app down. Fall back to MinValue.
+            if (!DateTime.TryParse(datetime?.Replace("-", " "), out parsedTime))
+                return DateTime.MinValue;
         }
         return parsedTime;
     }

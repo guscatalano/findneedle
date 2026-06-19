@@ -155,9 +155,66 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Now that the row count is known, seed the adaptive search-submit mode.
         RefreshSearchSubmitMode();
 
+        // Explain an empty/partial result (e.g. a WPP ETL whose symbols are missing) instead of
+        // leaving the user staring at a blank grid.
+        UpdateDecodeBanner();
+
         // Become the live view the MCP bridge reads/drives. Last-loaded viewer wins.
         FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.UiDispatcher ??= DispatcherQueue;
         FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.RegisterViewer(this);
+    }
+
+    /// <summary>
+    /// Reload results from the current search storage. Needed when the viewer is already the active
+    /// page: with NavigationCacheMode.Required, re-navigating to it won't re-fire Loaded, so a fresh
+    /// search (e.g. "Decode anyway") would otherwise keep showing the old, empty result set.
+    /// </summary>
+    public async System.Threading.Tasks.Task ReloadResultsAsync()
+    {
+        LoadingOverlay.Visibility = Visibility.Visible;
+        await ViewModel.LoadResultsCommand.ExecuteAsync(null);
+        ApplyPersistedLevelOverrides();
+        LoadingOverlay.Visibility = Visibility.Collapsed;
+        ApplyAllColumnVisibility();
+        RebindGrid();
+        RefreshSearchSubmitMode();
+        UpdateDecodeBanner();
+    }
+
+    /// <summary>
+    /// Show/hide the warning banner that explains why results are empty or partial (currently:
+    /// WPP ETL with missing symbols/TMFs). Pulled from the last search's decode stats.
+    /// </summary>
+    private void UpdateDecodeBanner()
+    {
+        var warn = MiddleLayerService.GetDecodeWarning();
+        if (warn == null)
+        {
+            DecodeBanner.IsOpen = false;
+            return;
+        }
+        DecodeBanner.Title = warn.Value.headline;
+        DecodeBanner.Message = warn.Value.detail;
+        DecodeBanner.Severity = warn.Value.hardFailure
+            ? Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error
+            : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning;
+        // "Decode anyway" only makes sense when ~nothing decoded — a partial decode already shows rows.
+        DecodeBannerForce.Visibility = warn.Value.hardFailure ? Visibility.Visible : Visibility.Collapsed;
+        DecodeBanner.IsOpen = true;
+    }
+
+    private void DecodeBannerAction_Click(object sender, RoutedEventArgs e)
+    {
+        // Jump straight to the WPP symbol settings so the fix is one click away.
+        MainWindowActions.NavigateToResultsViewerSettings();
+    }
+
+    private void DecodeAnyway_Click(object sender, RoutedEventArgs e)
+    {
+        // Force a full decode (no pre-scan/fail-fast) and reopen. MainWindow drives this through the
+        // standard search-progress spinner, so the user gets live status + a cancel button.
+        DecodeBanner.IsOpen = false;
+        MainWindowActions.RerunWithFullDecode();
     }
 
     /// <summary>

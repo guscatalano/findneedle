@@ -115,6 +115,72 @@ public class TraceFmtResult
 
 public class TraceFmt
 {
+    /// <summary>
+    /// Fast decodability pre-scan: run tracefmt over just the first <paramref name="sampleBytes"/> of
+    /// the ETL (a copied prefix) instead of the whole file, to estimate how much is formattable BEFORE
+    /// committing to the full (slow) decode. tracefmt is processing-bound, so an 8 MB prefix returns in
+    /// a fraction of a second yet still reports the events/unknowns ratio and the missing message GUIDs.
+    /// Returns counts in the TraceFmtResult (sample-scoped), or null if tracefmt isn't available.
+    /// </summary>
+    public static TraceFmtResult PreScan(string etl, string temppath, SearchProgressSink? progressSink = null, long sampleBytes = 8L * 1024 * 1024)
+    {
+        string traceFmtPath;
+        try { traceFmtPath = WDKFinder.GetTraceFmtPath(); } catch { return null!; }
+        if (string.IsNullOrEmpty(traceFmtPath) || !File.Exists(traceFmtPath) || !File.Exists(etl)) return null!;
+
+        var dir = Path.Combine(temppath, "prescan");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var sample = Path.Combine(dir, "sample.etl");
+            using (var fs = File.OpenRead(etl))
+            {
+                long len = Math.Min(sampleBytes, fs.Length);
+                var buf = new byte[len];
+                int off = 0, r;
+                while (off < len && (r = fs.Read(buf, off, (int)(len - off))) > 0) off += r;
+                using var outfs = File.Create(sample);
+                outfs.Write(buf, 0, off);
+            }
+
+            // Don't let an unset symbol path fall back to "srv*" (network) during the quick pre-scan —
+            // pass an empty local dir as -r in that case. TMF search (TRACE_FORMAT_SEARCH_PATH) is
+            // inherited regardless, so a configured local TMF/symbol path still resolves.
+            var sym = Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH");
+            var rArg = string.IsNullOrWhiteSpace(sym) ? dir : sym;
+
+            var st = new ProcessStartInfo
+            {
+                FileName = traceFmtPath,
+                Arguments = $"\"{sample}\" -r \"{rArg}\"",
+                WorkingDirectory = dir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            var p = Process.Start(st);
+            if (p == null) return null!;
+            string o = p.StandardOutput.ReadToEnd();
+            string er = p.StandardError.ReadToEnd();
+            p.WaitForExit();
+
+            var result = new TraceFmtResult
+            {
+                ConsoleOutput = string.IsNullOrWhiteSpace(er) ? o : (o + Environment.NewLine + er),
+                outputfile = Path.Combine(dir, "FmtFile.txt"),
+                summaryfile = Path.Combine(dir, "FmtSum.txt"),
+            };
+            try { if (File.Exists(result.summaryfile)) result.ParseSummaryFile(); } catch { /* counts stay 0 */ }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"TraceFmt pre-scan failed for {etl}: {ex.Message}");
+            return null!;
+        }
+    }
+
     public static TraceFmtResult ParseSimpleETL(string etl, string temppath, SearchProgressSink? progressSink = null)
     {
         progressSink?.NotifyProgress(0, $"Starting TraceFmt for {etl}");

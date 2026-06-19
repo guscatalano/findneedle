@@ -23,6 +23,8 @@ public sealed partial class SearchStatisticsPage : Page
     private string _copyText = "";
     private readonly System.Collections.Generic.List<string> _rawOutputPaths = new();
     private readonly System.Collections.Generic.List<string> _resolveLogPaths = new();
+    private SearchStatistics _statsCache;
+    private string _breakdownFilter = "";
 
     public SearchStatisticsPage()
     {
@@ -47,6 +49,7 @@ public sealed partial class SearchStatisticsPage : Page
             ? $"Most recent search · {report.StartedUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}"
             : "Most recent search";
 
+        _statsCache = stats;
         BuildCards(report, stats);
         BuildPhaseBars(report);
         BuildNotes(report);
@@ -170,6 +173,73 @@ public sealed partial class SearchStatisticsPage : Page
             Notes.Children.Add(new TextBlock { Text = "• " + h, TextWrapping = TextWrapping.Wrap, FontSize = 12 });
     }
 
+    // ----- "how each source decoded" (readable, per-file) -----
+    private void BuildDecode(SearchStatistics stats)
+    {
+        DecodeList.Children.Clear();
+        bool any = false;
+        if (stats?.componentReports != null)
+            foreach (var list in stats.componentReports.Values)
+                foreach (var report in list)
+                {
+                    if (report?.summary != "DecodeByFile" || report.metric == null) continue;
+                    foreach (var kv in report.metric)
+                    {
+                        if (kv.Value is not IDictionary d) continue;
+                        DecodeList.Children.Add(DecodeRow(Path.GetFileName(kv.Key), d));
+                        any = true;
+                    }
+                }
+        DecodeCard.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private FrameworkElement DecodeRow(string file, IDictionary d)
+    {
+        string Get(string k) => d.Contains(k) ? d[k]?.ToString() : null;
+        var sp = new StackPanel { Spacing = 4 };
+        sp.Children.Add(new TextBlock { Text = file, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+
+        var method = Get("method") ?? "(unknown)";
+        bool bad = method.Contains("missing", StringComparison.OrdinalIgnoreCase);
+        sp.Children.Add(new TextBlock
+        {
+            Text = method,
+            FontSize = 12,
+            Foreground = bad ? (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] : Secondary,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var bits = new System.Collections.Generic.List<string>();
+        void Bit(string label, string key) { var v = Get(key); if (!string.IsNullOrEmpty(v)) bits.Add($"{label} {v}"); }
+        Bit("rows", "rows");
+        Bit("decodable", "decodable");
+        Bit("events", "eventsProcessed");
+        Bit("unknown", "unknowns");
+        Bit("lost", "eventsLost");
+        Bit("errors", "formatErrors");
+        Bit("time", "elapsed");
+        if (bits.Count > 0)
+            sp.Children.Add(new TextBlock { Text = string.Join("  ·  ", bits), FontSize = 12, Foreground = Secondary, TextWrapping = TextWrapping.Wrap });
+
+        var providers = Get("providers");
+        if (!string.IsNullOrEmpty(providers))
+            sp.Children.Add(new TextBlock { Text = "providers: " + providers, FontSize = 12, Foreground = Secondary, TextWrapping = TextWrapping.Wrap });
+
+        var missing = Get("missingTmfs");
+        if (!string.IsNullOrEmpty(missing))
+            sp.Children.Add(new TextBlock { Text = "missing TMF: " + missing, FontSize = 12, FontFamily = new FontFamily("Consolas"), TextWrapping = TextWrapping.Wrap });
+
+        return new Border
+        {
+            Background = CardBg,
+            BorderBrush = CardStroke,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 8, 12, 8),
+            Child = sp,
+        };
+    }
+
     // ----- component breakdown tree -----
     private void BuildBreakdown(SearchStatistics stats)
     {
@@ -177,6 +247,7 @@ public sealed partial class SearchStatisticsPage : Page
         _rawOutputPaths.Clear();
         _resolveLogPaths.Clear();
         CollectRawOutputs(stats);
+        BuildDecode(stats);
         if (stats?.componentReports == null || stats.componentReports.Count == 0)
         {
             BreakdownExpander.Visibility = Visibility.Collapsed;
@@ -184,22 +255,45 @@ public sealed partial class SearchStatisticsPage : Page
         }
         BreakdownExpander.Visibility = Visibility.Visible;
 
+        string f = _breakdownFilter;
         foreach (var step in stats.componentReports.Keys.OrderBy(k => k.ToString()))
         {
             var stepNode = new TreeViewNode { Content = $"Step: {step}", IsExpanded = true };
             foreach (var report in stats.componentReports[step])
             {
-                var compNode = new TreeViewNode
-                {
-                    Content = string.IsNullOrEmpty(report.component) ? report.summary : $"{report.summary} — {report.component}",
-                    IsExpanded = true,
-                };
+                var title = string.IsNullOrEmpty(report.component) ? report.summary : $"{report.summary} — {report.component}";
+                var compNode = new TreeViewNode { Content = title, IsExpanded = true };
                 if (report.metric != null)
                     foreach (var kv in report.metric)
-                        AddMetric(compNode, kv.Key, (object)kv.Value);
-                stepNode.Children.Add(compNode);
+                    {
+                        var child = BuildMetricNode(kv.Key, (object)kv.Value, f);
+                        if (child != null) compNode.Children.Add(child);
+                    }
+                if (string.IsNullOrEmpty(f) || compNode.Children.Count > 0 || Match(title, f))
+                    stepNode.Children.Add(compNode);
             }
-            BreakdownTree.RootNodes.Add(stepNode);
+            if (stepNode.Children.Count > 0)
+                BreakdownTree.RootNodes.Add(stepNode);
+        }
+    }
+
+    private static bool Match(string s, string f) => s != null && s.Contains(f, StringComparison.OrdinalIgnoreCase);
+
+    private void BreakdownFilter_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _breakdownFilter = BreakdownFilter.Text?.Trim() ?? "";
+        BuildBreakdown(_statsCache);
+    }
+
+    private void ExpandAll_Click(object sender, RoutedEventArgs e) => SetExpanded(BreakdownTree.RootNodes, true);
+    private void CollapseAll_Click(object sender, RoutedEventArgs e) => SetExpanded(BreakdownTree.RootNodes, false);
+
+    private static void SetExpanded(System.Collections.Generic.IList<TreeViewNode> nodes, bool expanded)
+    {
+        foreach (var n in nodes)
+        {
+            n.IsExpanded = expanded;
+            SetExpanded(n.Children, expanded);
         }
     }
 
@@ -237,19 +331,29 @@ public sealed partial class SearchStatisticsPage : Page
         }
     }
 
-    private static void AddMetric(TreeViewNode parent, string key, object value)
+    /// <summary>
+    /// Build a tree node for one metric (recursing into nested dictionaries). When a filter is set,
+    /// returns null for branches that neither match nor contain a match, and auto-expands what's left.
+    /// </summary>
+    private static TreeViewNode BuildMetricNode(string key, object value, string filter)
     {
         if (value is IDictionary dict)
         {
-            var node = new TreeViewNode { Content = key };
+            var node = new TreeViewNode { Content = key, IsExpanded = !string.IsNullOrEmpty(filter) };
             foreach (DictionaryEntry e in dict)
-                AddMetric(node, e.Key?.ToString() ?? "", e.Value);
-            parent.Children.Add(node);
+            {
+                var child = BuildMetricNode(e.Key?.ToString() ?? "", e.Value, filter);
+                if (child != null) node.Children.Add(child);
+            }
+            if (string.IsNullOrEmpty(filter) || node.Children.Count > 0 || Match(key, filter))
+                return node;
+            return null;
         }
-        else
-        {
-            parent.Children.Add(new TreeViewNode { Content = $"{key} → {value}" });
-        }
+
+        var text = $"{key} → {value}";
+        if (string.IsNullOrEmpty(filter) || Match(text, filter))
+            return new TreeViewNode { Content = text };
+        return null;
     }
 
     // ----- helpers -----

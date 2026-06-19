@@ -86,6 +86,57 @@ public class SystemInfoMiddleware
         return $"{dotnetInfo}\n{osVersion}\n{wdkRootPath}\n{tracefmtPath}\n{defaultViewer}\n{plantumlPath}\n{versionLine}\n{versionSourceLine}\n{msStoreVersionLine}\n{buildTimeLine}\n{storeLine}\n{msStoreLine}\n{githubReleasesLine}\n{githubLine}";
     }
 
+    /// <summary>One environment/health-check row. <c>Ok</c> null = informational (no pass/fail).</summary>
+    public record HealthItem(string Name, string Detail, bool? Ok);
+
+    /// <summary>
+    /// Structured environment health for the System Check page: informational rows (.NET, OS, viewer)
+    /// plus pass/fail rows for the external tools FindNeedle depends on (tracefmt for ETL/WPP decode,
+    /// WDK root, PlantUML for diagrams).
+    /// </summary>
+    public static System.Collections.Generic.List<HealthItem> GetHealthChecks()
+    {
+        var list = new System.Collections.Generic.List<HealthItem>
+        {
+            new(".NET runtime", RuntimeInformation.FrameworkDescription, null),
+            new("Windows", GetWindowsVersion(), null),
+            new("Default result viewer", FindNeedleUX.Services.ResultsViewerSettings.DefaultResultViewer.ToString(), null),
+        };
+
+        string? wdkRoot = null, tracefmt = null;
+        try
+        {
+            var wdkType = Type.GetType("findneedle.WDK.WDKFinder, ETWPlugin", throwOnError: false);
+            if (wdkType != null)
+            {
+                try { wdkRoot = wdkType.GetMethod("GetPathOfWDKRoot", BindingFlags.NonPublic | BindingFlags.Static)?.Invoke(null, null)?.ToString(); }
+                catch { /* not found */ }
+                try { tracefmt = wdkType.GetMethod("GetTraceFmtPath", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null)?.ToString(); }
+                catch { /* not found */ }
+            }
+        }
+        catch { /* ETWPlugin not loaded */ }
+
+        bool wdkOk = !string.IsNullOrWhiteSpace(wdkRoot) && Directory.Exists(wdkRoot);
+        list.Add(new("WDK root", wdkOk ? wdkRoot! : "not found", wdkOk));
+
+        bool tracefmtOk = !string.IsNullOrWhiteSpace(tracefmt) && File.Exists(tracefmt);
+        list.Add(new("tracefmt (ETL / WPP decode)", tracefmtOk ? tracefmt! : "not found — WPP/.etl traces can't be decoded", tracefmtOk));
+
+        var plantuml = GetPlantUMLPath();
+        bool plantOk = !string.IsNullOrWhiteSpace(plantuml) && File.Exists(plantuml);
+        list.Add(new("PlantUML (UML diagrams)", plantOk ? plantuml : "not set — configure under Diagram Tools", plantOk));
+
+        return list;
+    }
+
+    /// <summary>App version / build metadata for the About page.</summary>
+    public static (string version, string source, string buildTime, string storeVersion) GetAboutInfo()
+    {
+        var (v, src) = GetAppVersionAndSource();
+        return (v, src, GetBuildTime(), GetMsStoreVersion());
+    }
+
     public static string GetPlantUMLPath()
     {
         var mgr = PluginManager.GetSingleton();

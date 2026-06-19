@@ -90,6 +90,22 @@
                 </Grid>
             </Border>
 
+            <!-- Custom PlantUML JAR path (moved here from System Check) -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8" Padding="15" Margin="0,0,0,15">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Custom PlantUML JAR path" FontWeight="SemiBold"/>
+                    <TextBlock Text="Point at a specific plantuml.jar to override the bundled/installed copy. Leave unset to use the install above."
+                               Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock x:Name="PlantUmlCustomPathText" VerticalAlignment="Center" Width="460"
+                                   TextTrimming="CharacterEllipsis" FontFamily="Consolas" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <Button Content="Change…" Click="ChangePlantUmlPath_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Mermaid Section -->
             <TextBlock Text="Mermaid CLI" FontWeight="SemiBold" FontSize="18" Margin="0,10,0,5"/>
             <TextBlock Text="Generates diagrams using Node.js. Great for web-friendly output and simpler diagrams." 

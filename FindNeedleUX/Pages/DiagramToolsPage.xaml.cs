@@ -139,6 +139,18 @@ public sealed partial class DiagramToolsPage : Page
         FindNeedlePluginLib.Logger.Instance.Log($"[DiagramToolsPage] Output format changed to: {_preferredOutputType}");
     }
 
+    private void ChangePlantUmlPath_Click(object sender, RoutedEventArgs e)
+    {
+        var window = WindowUtil.GetWindowForElement(this);
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("PlantUML JAR", "*.jar") });
+        if (path != null)
+        {
+            SystemInfoMiddleware.SetPlantUMLPath(path);
+            RefreshStatus();
+        }
+    }
+
     private void RefreshStatus()
     {
         // Update PlantUML status
@@ -149,9 +161,12 @@ public sealed partial class DiagramToolsPage : Page
             : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
         PlantUmlStatusText.Text = plantUmlStatus.IsInstalled ? "Installed" : "Not installed";
         PlantUmlPathDisplay.Text = plantUmlStatus.InstalledPath ?? "Not found";
-        PlantUmlVersionDisplay.Text = !string.IsNullOrEmpty(plantUmlStatus.InstalledVersion) 
+        PlantUmlVersionDisplay.Text = !string.IsNullOrEmpty(plantUmlStatus.InstalledVersion)
             ? $"Version: {plantUmlStatus.InstalledVersion}" : "";
         InstallPlantUmlButton.Content = plantUmlStatus.IsInstalled ? "Reinstall" : "Install";
+
+        var customPath = SystemInfoMiddleware.GetPlantUMLPath();
+        PlantUmlCustomPathText.Text = string.IsNullOrWhiteSpace(customPath) ? "(not set)" : customPath;
 
         // Update Mermaid status
         var mermaidStatus = SystemInfoMiddleware.GetMermaidStatus();

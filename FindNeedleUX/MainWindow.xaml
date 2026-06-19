@@ -51,11 +51,13 @@
             </MenuBarItem>
 
             <MenuBarItem Title="Settings">
-                <MenuFlyoutItem Text="Result Viewer..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
-                <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
+                <MenuFlyoutItem Text="Preferences..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
                 <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
                 <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
                 <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
+                <MenuFlyoutItem Text="About" Click="MenuFlyoutItem_Click" Name="about"/>
             </MenuBarItem>
         </MenuBar>
 

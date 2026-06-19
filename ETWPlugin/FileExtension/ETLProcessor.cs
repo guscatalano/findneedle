@@ -52,6 +52,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private string _resolveLogPath = null;
     // Distinct message GUIDs tracefmt couldn't format (missing TMF) — the "requires symbol XYZ" list.
     private readonly HashSet<string> _missingTmfGuids = new(StringComparer.OrdinalIgnoreCase);
+    // True when we bailed from the fast pre-scan (counts are sample-scoped, full file not decoded).
+    private bool _prescanFailFast = false;
+
+    // "Decode anyway" de-dupes unformattable events by message GUID — this tallies how many events
+    // each distinct GUID had, so the single emitted row can show the collapsed count.
+    private readonly Dictionary<string, long> _forcedGuidCounts = new(StringComparer.OrdinalIgnoreCase);
 
     public ETLProcessor()
     {
@@ -100,6 +106,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             rlog.AppendLine($"  _NT_SYMBOL_PATH          = {Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH")}");
             rlog.AppendLine();
             rlog.AppendLine("Outcome:");
+            if (_prescanFailFast)
+                rlog.AppendLine("  (Fast pre-scan of the first ~8 MB only — the full file was NOT decoded. Counts are sample-scoped.)");
             rlog.AppendLine($"  events={currentResult.TotalEventsProcessed:N0}  formatErrors={currentResult.TotalFormatErrors:N0}  unknowns={currentResult.TotalFormatsUnknown:N0}");
             rlog.AppendLine($"  {(currentResult.TotalFormatsUnknown == 0 ? "All events formatted — every required TMF was found." : "Some events couldn't be formatted — a TMF is missing. Add the matching PDB/symbol path and Build TMFs.")}");
             if (_missingTmfGuids.Count > 0)
@@ -190,6 +198,15 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         _progressSink?.NotifyProgress(0, $"Preprocessing {inputfile}");
         var getLock = 50;
 
+        // Reset per-run decode state. This processor instance can be reused across searches (e.g. the
+        // fail-fast open followed by "Decode anyway"); without this, stale values like _decodeMethod
+        // leak from the previous run (so the forced-decode label/banner would be wrong).
+        _decodeMethod = "(pending)";
+        _lastDecodeRowCount = 0;
+        _forcedGuidCounts.Clear();
+        _prescanFailFast = false;
+        _missingTmfGuids.Clear();
+
         if (inputfile.EndsWith(".txt") || inputfile.EndsWith(".log"))
         {
             Logger.Instance.Log($"Input file is .txt or .log, skipping TraceFmt: {inputfile}");
@@ -214,6 +231,29 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 return;
             }
 
+            // Fast pre-scan: decode only the first few MB to estimate decodability before the full
+            // (slow, processing-bound) run. If the sample is ~all unformattable, it's a missing-symbols
+            // problem — bail in well under a second with the missing GUIDs instead of grinding the
+            // whole file. Skipped entirely when the user chose "Decode anyway" (force full decode).
+            var pre = DecodeOptions.ForceFullDecode ? null : TraceFmt.PreScan(inputfile, tempPath, _progressSink);
+            if (!DecodeOptions.ForceFullDecode)
+                _progressSink?.NotifyProgress(5, "Pre-scanning ETL for decodability…");
+            if (pre != null && pre.TotalEventsProcessed > 0
+                && pre.TotalFormatsUnknown >= pre.TotalEventsProcessed * 0.99)
+            {
+                currentResult = pre;
+                _prescanFailFast = true;
+                _decodeMethod = "tracefmt (WPP) — symbols missing";
+                _lastDecodeRowCount = 0;
+                SampleMissingGuids(pre.outputfile, 200_000);
+                RetainTracefmtArtifacts();
+                var which = _missingTmfGuids.Count > 0 ? string.Join(", ", _missingTmfGuids.Take(5)) : "?";
+                Logger.Instance.Log($"Pre-scan fail-fast: {inputfile} — sample {pre.TotalFormatsUnknown:N0}/{pre.TotalEventsProcessed:N0} unformattable. Missing: {which}");
+                _progressSink?.NotifyProgress(100,
+                    $"Pre-scan: ~0% of events decodable — missing WPP symbols (TMF for {which}). Set a symbol/TMF path in settings and reopen.");
+                return;
+            }
+
             Logger.Instance.Log($"Calling TraceFmt.ParseSimpleETL for file: {inputfile}");
             currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath, _progressSink);
             if (currentResult == null)
@@ -229,7 +269,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             // line parse + the (futile) TraceEvent fallback so the user can fix symbols and reopen.
             long total = currentResult.TotalEventsProcessed;
             long unknown = currentResult.TotalFormatsUnknown;
-            if (total > 0 && unknown >= total * 0.99)
+            if (!DecodeOptions.ForceFullDecode && total > 0 && unknown >= total * 0.99)
             {
                 _decodeMethod = "tracefmt (WPP) — symbols missing";
                 _lastDecodeRowCount = 0;
@@ -276,7 +316,13 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                             // the resolution log can say exactly which TMFs/symbols are needed.
                             var gm = System.Text.RegularExpressions.Regex.Match(line,
                                 @"GUID=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
-                            if (gm.Success) _missingTmfGuids.Add(gm.Groups[1].Value);
+                            var guid = gm.Success ? gm.Groups[1].Value : "unknown";
+                            if (gm.Success) _missingTmfGuids.Add(guid);
+                            // "Decode anyway": de-dupe by GUID — just tally per-GUID event counts here;
+                            // one representative row per distinct GUID (with its collapsed count) is
+                            // emitted after the read loop.
+                            if (DecodeOptions.ForceFullDecode)
+                                _forcedGuidCounts[guid] = _forcedGuidCounts.TryGetValue(guid, out var c) ? c + 1 : 1;
                             // Surface WHY this is slow: skipping millions of unformattable events
                             // (these don't advance the "Processed N lines" counter, so without this the
                             // status looks stuck). Names the missing GUID(s) so it's clearly a symbol issue.
@@ -315,11 +361,25 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 }
                 if (corruptCount > 0)
                     Logger.Instance.Log($"Skipped {corruptCount} corrupted/unformattable lines in {inputfile} (tracefmt couldn't decode them)");
+                // "Decode anyway": emit one representative row per distinct unformattable GUID, annotated
+                // with how many events collapsed into it.
+                if (DecodeOptions.ForceFullDecode && _forcedGuidCounts.Count > 0)
+                {
+                    foreach (var kv in _forcedGuidCounts.OrderByDescending(kv => kv.Value))
+                    {
+                        results.Add(ETLLogLine.Unformatted(kv.Key, kv.Value, inputfile));
+                        lineCount++;
+                    }
+                    providers["(unformatted WPP)"] = checked((int)Math.Min(int.MaxValue, _forcedGuidCounts.Values.Sum()));
+                }
                 Logger.Instance.Log($"Finished reading output file for {inputfile}, total lines: {lineCount}");
                 _progressSink?.NotifyProgress(90, $"Finished reading output file, total lines: {lineCount}");
                 // Reaching here via the .etl branch means tracefmt formatted it (the text branch
                 // already set its method). Rows = what we parsed out of the formatted output.
-                if (_decodeMethod == "(pending)") _decodeMethod = "tracefmt (WPP)";
+                if (_decodeMethod == "(pending)")
+                    _decodeMethod = DecodeOptions.ForceFullDecode && corruptCount > 0
+                        ? $"tracefmt (WPP) — forced; {corruptCount:N0} events unformatted across {_forcedGuidCounts.Count} GUID(s)"
+                        : "tracefmt (WPP)";
                 _lastDecodeRowCount = results.Count;
                 break;
             }
@@ -337,9 +397,14 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         // modern .etl (EventSource / manifest / kernel) it emits "Unknown" lines and we end up
         // with zero rows. In that case decode the .etl directly with the TraceEvent library — the
         // same source LiveCollector uses for real-time — which understands those event kinds.
-        // Gated on results.Count == 0 so the existing WPP path (e.g. the sample test.etl) is
-        // untouched; this only rescues traces tracefmt couldn't read.
+        //
+        // Only fall back when tracefmt itself processed ~no events: that signals a non-WPP trace it
+        // couldn't read. If tracefmt DID process events (a WPP trace) but we got no rows, it's a
+        // missing-symbols problem — TraceEvent can't decode WPP either, so the fallback would just
+        // burn time for nothing. (The fail-fast normally catches this; "Decode anyway" reaches here.)
+        bool tracefmtProcessedEvents = currentResult != null && currentResult.TotalEventsProcessed > 0;
         if (results.Count == 0
+            && !tracefmtProcessedEvents
             && !inputfile.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
             && !inputfile.EndsWith(".log", StringComparison.OrdinalIgnoreCase)
             && File.Exists(inputfile))

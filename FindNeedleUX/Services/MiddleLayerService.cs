@@ -424,6 +424,54 @@ public class MiddleLayerService
         return LastStats ?? SearchQueryUX.CurrentQuery?.GetSearchStatistics();
     }
 
+    /// <summary>
+    /// If the most recent search hit a decode problem (e.g. a WPP ETL whose symbols/TMFs are missing),
+    /// returns a human-readable headline + detail explaining WHY results are empty/partial, plus whether
+    /// it was a hard failure (nothing decoded). Returns null when nothing's wrong. Drives the viewer's
+    /// "why is this empty?" banner.
+    /// </summary>
+    public static (string headline, string detail, bool hardFailure)? GetDecodeWarning()
+    {
+        var stats = GetStats();
+        if (stats?.componentReports == null) return null;
+
+        foreach (var list in stats.componentReports.Values)
+        {
+            foreach (var report in list)
+            {
+                if (report?.summary != "DecodeByFile" || report.metric == null) continue;
+                foreach (var kv in report.metric)
+                {
+                    if (kv.Value is not IDictionary d) continue;
+                    var method = (d.Contains("method") ? d["method"]?.ToString() : null) ?? "";
+                    var missing = d.Contains("missingTmfs") ? d["missingTmfs"]?.ToString() : null;
+                    var file = Path.GetFileName(kv.Key);
+
+                    if (method.Contains("symbols missing", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var detail =
+                            $"“{file}” is a WPP trace, and the formatting symbols (TMF files) needed to turn its " +
+                            "events into readable text aren't available — so almost nothing could be decoded.";
+                        if (!string.IsNullOrEmpty(missing))
+                            detail += $"\n\nNeeds TMF: {missing}";
+                        detail +=
+                            "\n\nTo fix: open WPP symbol settings below, point it at the folder with the matching PDBs " +
+                            "(or a symbol path / symbol server), click “Build TMFs from symbols,” then reopen this file.";
+                        return ("Couldn’t decode this ETL — missing WPP symbols", detail, true);
+                    }
+                    if (!string.IsNullOrEmpty(missing))
+                    {
+                        return ("Some events couldn’t be decoded — missing WPP symbols",
+                            $"“{file}” has events with no matching WPP symbols (TMF), so they show as raw/unformatted.\n\n" +
+                            $"Needs TMF: {missing}\n\nSet a symbol/TMF path in WPP symbol settings below and reopen for full text.",
+                            false);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
 
 
     public static void OpenWorkspace(string filename)

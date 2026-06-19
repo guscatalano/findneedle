@@ -58,16 +58,40 @@
                 </StackPanel>
             </Border>
 
+            <!-- How each source decoded (readable, per-file) -->
+            <Border x:Name="DecodeCard" Visibility="Collapsed"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="How each source decoded" FontWeight="SemiBold"/>
+                    <StackPanel x:Name="DecodeList" Spacing="10"/>
+                </StackPanel>
+            </Border>
+
             <!-- Breakdown -->
-            <Expander x:Name="BreakdownExpander" Header="Breakdown by component / provider / file"
+            <Expander x:Name="BreakdownExpander" Header="Full breakdown by component / provider / file"
                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <TreeView x:Name="BreakdownTree" AllowDrop="False" SelectionMode="None">
-                    <TreeView.ItemTemplate>
-                        <DataTemplate>
-                            <TreeViewItem Content="{Binding Content}" IsExpanded="True"/>
-                        </DataTemplate>
-                    </TreeView.ItemTemplate>
-                </TreeView>
+                <StackPanel Spacing="8">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="BreakdownFilter" Grid.Column="0" PlaceholderText="Filter… (e.g. a provider or file name)"
+                                 TextChanged="BreakdownFilter_TextChanged"/>
+                        <Button x:Name="ExpandAllButton" Grid.Column="1" Content="Expand all" Click="ExpandAll_Click"/>
+                        <Button x:Name="CollapseAllButton" Grid.Column="2" Content="Collapse all" Click="CollapseAll_Click"/>
+                    </Grid>
+                    <TreeView x:Name="BreakdownTree" AllowDrop="False" SelectionMode="None">
+                        <TreeView.ItemTemplate>
+                            <DataTemplate>
+                                <TreeViewItem Content="{Binding Content}" IsExpanded="True"/>
+                            </DataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </StackPanel>
             </Expander>
 
             <!-- Raw report (text) -->

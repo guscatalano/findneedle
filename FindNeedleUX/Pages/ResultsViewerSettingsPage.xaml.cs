@@ -29,6 +29,31 @@ public sealed partial class ResultsViewerSettingsPage : Page
         Unloaded += (_, _) => FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
     }
 
+    /// <summary>Left-nav category switch: show only the selected category's panel.</summary>
+    private void SettingsNav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        // Panels may not exist yet if this fires during initial parse (IsSelected="True").
+        if (PanelAppearance == null) return;
+
+        bool all = tag == "all";
+        PanelAppearance.Visibility   = all || tag == "appearance"   ? Visibility.Visible : Visibility.Collapsed;
+        PanelSearch.Visibility       = all || tag == "search"       ? Visibility.Visible : Visibility.Collapsed;
+        PanelColumns.Visibility      = all || tag == "columns"      ? Visibility.Visible : Visibility.Collapsed;
+        PanelDecoding.Visibility     = all || tag == "decoding"     ? Visibility.Visible : Visibility.Collapsed;
+        PanelIntegrations.Visibility = all || tag == "integrations" ? Visibility.Visible : Visibility.Collapsed;
+
+        CategoryTitle.Text = tag switch
+        {
+            "all"          => "All settings",
+            "search"       => "Search",
+            "columns"      => "Columns",
+            "decoding"     => "Decoding (WPP symbols)",
+            "integrations" => "Integrations",
+            _              => "Appearance",
+        };
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _suppressEvents = true;
