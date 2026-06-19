@@ -43,11 +43,11 @@
                     CornerRadius="6" Padding="4">
                 <TreeView x:Name="PluginTree" SelectionMode="Single" ItemInvoked="PluginTree_ItemInvoked">
                     <TreeView.ItemTemplate>
-                        <DataTemplate x:DataType="local:PluginTreeNode">
+                        <DataTemplate>
                             <TreeViewItem IsExpanded="True">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="{x:Bind Glyph}" Foreground="{x:Bind GlyphBrush}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{x:Bind Text}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Content.Glyph}" Foreground="{Binding Content.GlyphBrush}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Content.Text}" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                             </TreeViewItem>
                         </DataTemplate>
