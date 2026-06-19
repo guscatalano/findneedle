@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "ETW crash / fault highlighter",
+  "description": "Tags lines that look like crashes, faults, or unhandled exceptions so they're easy to spot in ETW traces.",
+  "sections": [
+    {
+      "name": "CrashDetection",
+      "description": "Surface crash / fault / exception lines",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "keep-crashes",
+          "match": "crash|fault|unhandled exception|access violation|0xc0000005|stowed exception",
+          "enabled": true,
+          "action": { "type": "include" }
+        }
+      ]
+    }
+  ]
+}

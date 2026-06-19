@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Hide debug / verbose noise",
+  "description": "Excludes DEBUG / TRACE / VERBOSE lines (but keeps anything that also looks like an error) to cut routine noise from any log.",
+  "sections": [
+    {
+      "name": "NoiseFilter",
+      "description": "Filter out debug and verbose logs",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "exclude-debug",
+          "match": "DEBUG|TRACE|VERBOSE",
+          "unmatch": "ERROR|CRITICAL|FATAL",
+          "enabled": true,
+          "action": { "type": "exclude" }
+        }
+      ]
+    }
+  ]
+}

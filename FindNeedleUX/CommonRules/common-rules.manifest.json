@@ -1,0 +1,12 @@
+[
+  {
+    "File": "noise-filter.rules.json",
+    "Name": "Hide debug / verbose noise",
+    "Condition": { "Always": true }
+  },
+  {
+    "File": "etw-crash-detection.rules.json",
+    "Name": "ETW crash / fault highlighter",
+    "Condition": { "Extensions": [".etl"], "SourceTypes": ["ETW"] }
+  }
+]

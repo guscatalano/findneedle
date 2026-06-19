@@ -76,6 +76,47 @@ public class MiddleLayerService
 
     private static List<ISearchResult> SearchResults = new();
 
+    /// <summary>Opt out of auto-adding rules for just the next search (reset after one run). The
+    /// global on/off lives in <see cref="FindPluginCore.Searching.AutoRules.AutoRulesStore.Enabled"/>.</summary>
+    public static bool SkipAutoRulesForNextSearch { get; set; }
+
+    /// <summary>Rule paths that were auto-added to the most recent search (for the Rules page to show
+    /// "these were added automatically").</summary>
+    public static List<string> LastAutoAddedRules { get; private set; } = new();
+
+    /// <summary>Build the auto-rule matching context from the current locations: their paths, the
+    /// source kinds present (by location type + file extension). Provider/build metadata is left empty
+    /// here (not known before a scan) — conditions that need it simply won't match.</summary>
+    private static FindPluginCore.Searching.AutoRules.AutoRuleContext BuildAutoRuleContext(
+        IEnumerable<ISearchLocation> locations)
+    {
+        var ctx = new FindPluginCore.Searching.AutoRules.AutoRuleContext();
+        if (locations == null) return ctx;
+        foreach (var loc in locations)
+        {
+            if (loc == null) continue;
+            string name = "";
+            try { name = loc.GetName() ?? ""; } catch { }
+            if (!string.IsNullOrEmpty(name)) ctx.Paths.Add(name);
+
+            var typeName = loc.GetType().Name;
+            if (typeName.Contains("EventLog", StringComparison.OrdinalIgnoreCase))
+                ctx.SourceTypes.Add(FindPluginCore.Searching.AutoRules.AutoRuleSourceKinds.EventLog);
+            else if (typeName.Contains("Folder", StringComparison.OrdinalIgnoreCase))
+                ctx.SourceTypes.Add(FindPluginCore.Searching.AutoRules.AutoRuleSourceKinds.Folder);
+
+            // Refine by extension so ETW/EventLog/Zip files loaded via a folder location are detected.
+            var ext = System.IO.Path.GetExtension(name);
+            if (ext.Equals(".etl", StringComparison.OrdinalIgnoreCase))
+                ctx.SourceTypes.Add(FindPluginCore.Searching.AutoRules.AutoRuleSourceKinds.Etw);
+            else if (ext.Equals(".evtx", StringComparison.OrdinalIgnoreCase))
+                ctx.SourceTypes.Add(FindPluginCore.Searching.AutoRules.AutoRuleSourceKinds.EventLog);
+            else if (ext.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                ctx.SourceTypes.Add(FindPluginCore.Searching.AutoRules.AutoRuleSourceKinds.Zip);
+        }
+        return ctx;
+    }
+
     public static void UpdateSearchQuery()
     {
         // Update the processor list in the query based on the current plugin config
@@ -102,6 +143,25 @@ public class MiddleLayerService
         var query = SearchQueryUX.CurrentQuery;
         if (query != null)
         {
+            // Auto-add rules: fold in any registered auto-rules whose condition matches the current
+            // locations (unless globally disabled or skipped for this one search). They're merged into
+            // RulesConfigPaths so they flow through the normal rules→processors path below and show up
+            // in the Rules page; LastAutoAddedRules records which ones were added (for the UI).
+            query.RulesConfigPaths ??= new List<string>();
+            var ctx = BuildAutoRuleContext(Locations);
+            var autoPaths = FindPluginCore.Searching.AutoRules.AutoRulesStore
+                .ResolveForSearch(ctx, SkipAutoRulesForNextSearch);
+            LastAutoAddedRules = new List<string>();
+            foreach (var p in autoPaths)
+            {
+                if (!query.RulesConfigPaths.Any(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase)))
+                {
+                    query.RulesConfigPaths.Add(p);
+                    LastAutoAddedRules.Add(p);
+                }
+            }
+            SkipAutoRulesForNextSearch = false; // one-shot opt-out
+
             // Add RuleDSL processors for each rules config file
             if (query.RulesConfigPaths != null && query.RulesConfigPaths.Count > 0)
             {
