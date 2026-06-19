@@ -9,8 +9,12 @@ using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
 
 namespace findneedle.Implementations.FileExtensions;
-public class ZipProcessor : IFileExtensionProcessor
+public class ZipProcessor : IFileExtensionProcessor, IPluginDescription
 {
+    public string GetPluginTextDescription() => "Extracts .zip archives and parses the logs inside";
+    public string GetPluginFriendlyName() => "Zip Archive Processor";
+    public string GetPluginClassName() => IPluginDescription.GetPluginClassNameBase(this);
+
     private string inputfile = "";
     Action<string>? newFolderCallback = null;
     private string newTempFolder = "";

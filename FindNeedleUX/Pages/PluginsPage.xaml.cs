@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindPluginCore.PluginSubsystem;
@@ -52,12 +53,7 @@ public class PluginTreeNode
 
 public sealed partial class PluginsPage : Page
 {
-    public ObservableCollection<PluginConfigEntryViewModel> PluginConfigEntries { get; set; } = new();
-    public PluginConfigEntryViewModel SelectedPluginConfigEntry { get; set; }
     public ObservableCollection<ModuleViewModel> ModulesFound { get; set; } = new();
-
-    private PluginConfig loadedConfig;
-    private string loadedConfigPath = "";
 
     private static Brush Ok => (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
     private static Brush Bad => (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
@@ -90,7 +86,6 @@ public sealed partial class PluginsPage : Page
                 try
                 {
                     PopulateModulesFromManager(findneedle.PluginSubsystem.PluginManager.GetSingleton());
-                    LoadPluginConfig();
                 }
                 catch (Exception ex)
                 {
@@ -114,6 +109,13 @@ public sealed partial class PluginsPage : Page
         BodyGrid.Opacity = enabled ? 1.0 : 0.5;
     }
 
+    // A type is an actual plugin only if it implements one of these roles. Everything else in a plugin
+    // DLL (native wrappers, result rows, helpers) is internal and auto-ignored so it doesn't show as
+    // a bogus "invalid plugin".
+    private static readonly System.Collections.Generic.HashSet<string> PluginRoleInterfaces =
+        new(StringComparer.OrdinalIgnoreCase)
+        { "ISearchLocation", "IFileExtensionProcessor", "ISearchFilter", "IResultProcessor", "ISearchOutput" };
+
     // ----- master: build the modules → plugins tree -----
     private void PopulateModulesFromManager(findneedle.PluginSubsystem.PluginManager manager)
     {
@@ -130,6 +132,10 @@ public sealed partial class PluginsPage : Page
             };
             foreach (var plugin in module.description)
             {
+                var ifaces = plugin.ImplementedInterfacesShort ?? new System.Collections.Generic.List<string>();
+                // Skip internal/helper classes — only list types that fill a plugin role.
+                if (!ifaces.Any(i => PluginRoleInterfaces.Contains(i)))
+                    continue;
                 moduleVM.Plugins.Add(new PluginListItemViewModel
                 {
                     Name = plugin.FriendlyName,
@@ -137,7 +143,7 @@ public sealed partial class PluginsPage : Page
                     ModulePath = modulePath,
                     ClassName = plugin.ClassName,
                     Plugin = plugin,
-                    ImplementedInterfaces = plugin.ImplementedInterfacesShort,
+                    ImplementedInterfaces = ifaces,
                 });
             }
             if (moduleVM.Plugins.Count > 0)
@@ -254,54 +260,8 @@ public sealed partial class PluginsPage : Page
         return null;
     }
 
-    // ----- plugin config -----
-    private void LoadPluginConfig()
-    {
-        try
-        {
-            var manager = findneedle.PluginSubsystem.PluginManager.GetSingleton();
-            loadedConfig = manager.config;
-            loadedConfigPath = typeof(findneedle.PluginSubsystem.PluginManager)
-                .GetField("loadedConfig", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(manager)?.ToString() ?? "PluginConfig.json";
-            PluginConfigEntries.Clear();
-            if (loadedConfig != null)
-                foreach (var entry in loadedConfig.entries)
-                    PluginConfigEntries.Add(new PluginConfigEntryViewModel { Name = entry.name, Path = entry.path, Enabled = entry.enabled });
-        }
-        catch (Exception ex)
-        {
-            Logger.Instance.Log($"Exception in LoadPluginConfig: {ex}");
-        }
-    }
-
-    private void AddPluginConfigEntry_Click(object sender, RoutedEventArgs e)
-        => PluginConfigEntries.Add(new PluginConfigEntryViewModel { Name = "", Path = "", Enabled = true });
-
-    private void RemovePluginConfigEntry_Click(object sender, RoutedEventArgs e)
-    {
-        if (SelectedPluginConfigEntry != null)
-        {
-            PluginConfigEntries.Remove(SelectedPluginConfigEntry);
-            SelectedPluginConfigEntry = null;
-        }
-    }
-
-    private void SavePluginConfig_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (loadedConfig == null) return;
-            loadedConfig.entries.Clear();
-            foreach (var vm in PluginConfigEntries)
-                loadedConfig.entries.Add(new PluginConfigEntry { name = vm.Name, path = vm.Path, enabled = vm.Enabled });
-            findneedle.PluginSubsystem.PluginManager.GetSingleton().SaveToFile(loadedConfigPath);
-        }
-        catch (Exception ex)
-        {
-            Logger.Instance.Log($"Exception in SavePluginConfig_Click: {ex}");
-        }
-    }
+    private void ConfigureDlls_Click(object sender, RoutedEventArgs e)
+        => Frame?.Navigate(typeof(PluginConfigPage));
 
     private void ReloadAllPlugins_Click(object sender, RoutedEventArgs e)
     {
@@ -316,14 +276,5 @@ public sealed partial class PluginsPage : Page
         {
             Logger.Instance.Log($"Exception in ReloadAllPlugins_Click: {ex}");
         }
-    }
-
-    private void PickPluginFile_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: PluginConfigEntryViewModel entry }) return;
-        var window = WindowUtil.GetWindowForElement(this);
-        var hWnd = WindowNative.GetWindowHandle(window);
-        var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("Plugin DLL", "*.dll") });
-        if (path != null) entry.Path = path;
     }
 }

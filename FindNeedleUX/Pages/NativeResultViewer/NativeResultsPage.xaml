@@ -55,18 +55,42 @@
             <RowDefinition Height="*"/>     <!-- Body: optional left filter pane + main content -->
         </Grid.RowDefinitions>
 
-        <!-- Why-is-this-empty banner (e.g. WPP ETL with missing symbols). Hidden unless set. -->
-        <InfoBar x:Name="DecodeBanner" Grid.Row="1" IsOpen="False" IsClosable="True"
-                 Severity="Warning" Margin="12,8,12,0">
-            <InfoBar.Content>
-                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
-                    <Button x:Name="DecodeBannerSettings" Content="Open WPP symbol settings"
-                            Click="DecodeBannerAction_Click"/>
-                    <Button x:Name="DecodeBannerForce" Content="Decode anyway" Click="DecodeAnyway_Click"
-                            ToolTipService.ToolTip="Decode whatever can be read, even if most events are unformatted garbage"/>
-                </StackPanel>
-            </InfoBar.Content>
-        </InfoBar>
+        <!-- Banners (Grid.Row 1): streaming "still loading" + the why-is-this-empty decode banner. -->
+        <StackPanel Grid.Row="1">
+            <!-- Shown while a streaming search is still producing rows; count keeps rising. -->
+            <InfoBar x:Name="StreamingBanner" IsClosable="False" Severity="Informational"
+                     IsIconVisible="False" Margin="12,8,12,0"
+                     IsOpen="{x:Bind ViewModel.IsStreaming, Mode=OneWay}">
+                <InfoBar.Content>
+                    <!-- Single compact row: animated loader icon · status text · Stop. -->
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2,0,6">
+                        <Grid Width="28" Height="28" VerticalAlignment="Center">
+                            <Image x:Name="StreamGif" Stretch="Uniform" Visibility="Collapsed"/>
+                            <ProgressRing x:Name="StreamRing" Width="20" Height="20" IsActive="True" Visibility="Collapsed"/>
+                        </Grid>
+                        <TextBlock Text="{x:Bind ViewModel.StreamingBannerText, Mode=OneWay}"
+                                   VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                        <Button Content="Refresh results" Click="RefreshResults_Click" VerticalAlignment="Center"
+                                Visibility="{x:Bind ViewModel.PendingRowsVisibility, Mode=OneWay}"
+                                ToolTipService.ToolTip="Fold newly-loaded rows into your filtered view (paused while searching during load)"/>
+                        <Button Content="Stop loading" Click="StopStreamingButton_Click" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </InfoBar.Content>
+            </InfoBar>
+
+            <!-- Why-is-this-empty banner (e.g. WPP ETL with missing symbols). Hidden unless set. -->
+            <InfoBar x:Name="DecodeBanner" IsOpen="False" IsClosable="True"
+                     Severity="Warning" Margin="12,8,12,0">
+                <InfoBar.Content>
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
+                        <Button x:Name="DecodeBannerSettings" Content="Open WPP symbol settings"
+                                Click="DecodeBannerAction_Click"/>
+                        <Button x:Name="DecodeBannerForce" Content="Decode anyway" Click="DecodeAnyway_Click"
+                                ToolTipService.ToolTip="Decode whatever can be read, even if most events are unformatted garbage"/>
+                    </StackPanel>
+                </InfoBar.Content>
+            </InfoBar>
+        </StackPanel>
 
         <!-- Toolbar -->
         <Border Grid.Row="0" Padding="12,8"
@@ -175,6 +199,25 @@
                 <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
                            VerticalAlignment="Center" Margin="16,0,0,0"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                <!-- Filter performance breakdown (what made the last filter/search slow). -->
+                <Button x:Name="FilterPerfButton" Height="32" Margin="8,0,0,0" Padding="8,0,8,0"
+                        Content="{x:Bind ViewModel.LastFilterSummary, Mode=OneWay}"
+                        ToolTipService.ToolTip="Filter performance breakdown">
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel Spacing="6" MinWidth="300">
+                                <TextBlock Text="Filter performance" FontWeight="SemiBold"/>
+                                <TextBlock Text="{x:Bind ViewModel.LastFilterBreakdown, Mode=OneWay}"
+                                           FontFamily="Consolas" FontSize="12" IsTextSelectionEnabled="True"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="Tip: if the index is still building, text search uses a slower scan until it finishes."
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
 
                 <!-- Streaming indicator + Stop button. Visible only while the source's producer
                      (the running search task) is still writing rows. Collapses cleanly when the

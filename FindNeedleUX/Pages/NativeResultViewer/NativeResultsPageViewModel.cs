@@ -155,6 +155,19 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private string _statusText = "0 / 0 results";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
 
+    // Timing breakdown of the most recent filter/query (count + level counts + page fetch).
+    private string _lastFilterSummary = "⏱";
+    public string LastFilterSummary { get => _lastFilterSummary; set => Set(ref _lastFilterSummary, value); }
+    private string _lastFilterBreakdown = "Apply a filter or search to see timing.";
+    public string LastFilterBreakdown { get => _lastFilterBreakdown; set => Set(ref _lastFilterBreakdown, value); }
+
+    // Prominent "still loading" banner shown while a streaming search produces rows.
+    private string _streamingBannerText = "Loading logs…";
+    public string StreamingBannerText { get => _streamingBannerText; set => Set(ref _streamingBannerText, value); }
+
+    private string ComposeStreamBanner() =>
+        $"Loading logs — {_source?.TotalCount ?? TotalCount:N0} rows so far and rising. You can search and scroll now; results keep filling in.";
+
     // True while the substring-search (FTS) index is being built (lazy/background modes). Bound to a
     // toolbar indicator + Cancel button. Substring search uses the slower scan until it clears.
     private bool _isIndexing;
@@ -199,6 +212,54 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             { "Info",         "Transparent" },
             { "Verbose",      "#F1F1F1" }, { "Debug",    "#EEF3FF" }
         },
+        // The familiar log/console look: red errors, yellow warnings, cyan/gray for trace levels.
+        ["Classic"] = new Dictionary<string, string>
+        {
+            { "Catastrophic", "#66B71C1C" }, { "Critical", "#55D32F2F" },
+            { "Error",        "#44F44336" }, { "Warning",  "#44FFEB3B" },
+            { "Info",         "Transparent" },
+            { "Verbose",      "#1F9E9E9E" }, { "Debug",    "#2200BCD4" }
+        },
+        // Stronger translucent semantic tints (red/amber) — same meaning as Subtle, more presence.
+        ["Bold"] = new Dictionary<string, string>
+        {
+            { "Catastrophic", "#59D50000" }, { "Critical", "#44D32F2F" },
+            { "Error",        "#33F44336" }, { "Warning",  "#3DFF9800" },
+            { "Info",         "Transparent" },
+            { "Verbose",      "#1F607D8B" }, { "Debug",    "#24455A64" }
+        },
+        // Cool blue/teal palette (aesthetic, translucent — works on light or dark).
+        ["Ocean"] = new Dictionary<string, string>
+        {
+            { "Catastrophic", "#4601579B" }, { "Critical", "#3A0277BD" },
+            { "Error",        "#300288D1" }, { "Warning",  "#2A26A69A" },
+            { "Info",         "Transparent" },
+            { "Verbose",      "#1F4DD0E1" }, { "Debug",    "#18B3E5FC" }
+        },
+        // Green / earth palette.
+        ["Forest"] = new Dictionary<string, string>
+        {
+            { "Catastrophic", "#461B5E20" }, { "Critical", "#3A2E7D32" },
+            { "Error",        "#30388E3C" }, { "Warning",  "#2A9E9D24" },
+            { "Info",         "Transparent" },
+            { "Verbose",      "#1F689F38" }, { "Debug",    "#18AED581" }
+        },
+        // Warm purple → orange palette.
+        ["Sunset"] = new Dictionary<string, string>
+        {
+            { "Catastrophic", "#464A148C" }, { "Critical", "#3A6A1B9A" },
+            { "Error",        "#30AD1457" }, { "Warning",  "#2AEF6C00" },
+            { "Info",         "Transparent" },
+            { "Verbose",      "#1FF06292" }, { "Debug",    "#18FFCC80" }
+        },
+        // Neutral grayscale intensity ramp.
+        ["Grayscale"] = new Dictionary<string, string>
+        {
+            { "Catastrophic", "#44424242" }, { "Critical", "#38616161" },
+            { "Error",        "#2C757575" }, { "Warning",  "#249E9E9E" },
+            { "Info",         "Transparent" },
+            { "Verbose",      "#16BDBDBD" }, { "Debug",    "#10E0E0E0" }
+        },
         ["None"] = new Dictionary<string, string>
         {
             { "Catastrophic", "Transparent" }, { "Critical", "Transparent" },
@@ -224,6 +285,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         IsLoading = true;
         bool streaming = false;
+        // Capture the UI dispatcher + create the live-refresh timer here, on the UI thread. The
+        // streaming RowsAvailable callback runs on the producer (background) thread where
+        // DispatcherQueue.GetForCurrentThread() is null — so without this the count would freeze at
+        // the first page.
+        EnsureRefreshTimer();
         using var perfScope = PerfLog.Scope("viewer.native.load");
         try
         {
@@ -304,6 +370,12 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             using (PerfLog.Scope("viewer.native.first_page"))
                 ReloadFromSource();
             IsStreaming = streaming;
+            if (streaming)
+            {
+                StreamingBannerText = ComposeStreamBanner();
+                EnsureRefreshTimer();
+                _refreshTimer?.Start(); // tick periodically through the load (don't wait for the first batch event)
+            }
         }
         finally
         {
@@ -324,41 +396,128 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         if (_refreshTimer == null && _dispatcher != null)
         {
             _refreshTimer = _dispatcher.CreateTimer();
-            _refreshTimer.Interval = TimeSpan.FromMilliseconds(250);
-            _refreshTimer.IsRepeating = false;
+            _refreshTimer.Interval = TimeSpan.FromMilliseconds(300);
+            // Repeating, NOT debounced. A debounced (restart-on-every-row) timer never fires while
+            // rows pour in faster than the interval — the count froze mid-load (e.g. stuck at 18k)
+            // and only jumped to the total at the end. A repeating tick refreshes periodically
+            // throughout the load and stops itself once the producer finishes.
+            _refreshTimer.IsRepeating = true;
             _refreshTimer.Tick += (_, _) => OnLiveRefreshTick();
         }
     }
 
     /// <summary>
-    /// Called from the SQLite writer thread when a batch lands. We marshal to the UI thread
-    /// and (re)start a 250 ms timer; the timer's Tick handler does the actual refresh.
-    /// Effect: a burst of rapid commits collapses into a single refresh after a quiet moment.
+    /// Called from the SQLite writer thread when a batch lands. Ensure the repeating refresh timer is
+    /// running (it ticks on the UI thread until the producer signals completion). We do NOT restart it
+    /// per batch — that would debounce it into never firing during a continuous load.
     /// </summary>
     private void OnStreamingRowsAvailable()
     {
         EnsureRefreshTimer();
         _dispatcher?.TryEnqueue(() =>
         {
-            _refreshTimer?.Stop();
-            _refreshTimer?.Start();
+            if (_refreshTimer != null && !_refreshTimer.IsRunning) _refreshTimer.Start();
         });
     }
 
-    private void OnLiveRefreshTick()
+    private bool _liveRefreshInFlight;
+
+    /// <summary>True when any filter/search is narrowing the view.</summary>
+    private bool HasActiveFilter() =>
+        !string.IsNullOrEmpty(_searchText) || !string.IsNullOrEmpty(_providerFilter) ||
+        !string.IsNullOrEmpty(_taskNameFilter) || !string.IsNullOrEmpty(_messageFilter) ||
+        !string.IsNullOrEmpty(_sourceFilter) || !string.IsNullOrEmpty(_levelFilter) ||
+        _fromDate.HasValue || _toDate.HasValue;
+
+    // Shown while streaming with a filter active: the live re-filter is paused (so the app isn't
+    // constantly re-searching the growing table); the user clicks Refresh to fold in new matches.
+    private bool _hasPendingRows;
+    public bool HasPendingRows
+    {
+        get => _hasPendingRows;
+        set { if (Set(ref _hasPendingRows, value)) OnPropertyChanged(nameof(PendingRowsVisibility)); }
+    }
+    public Microsoft.UI.Xaml.Visibility PendingRowsVisibility =>
+        _hasPendingRows ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    private async void OnLiveRefreshTick()
     {
         if (_source == null) return;
         var stillLoading = _source.IsLoading;
-        // Re-query count and the visible page. If the user is on page 1 with default sort,
-        // they see new rows immediately; otherwise just the count badge / level chips update.
-        TotalCount = _source.TotalCount;
-        ReloadFromSource();
-        if (!stillLoading)
+        TotalCount = _source.TotalCount; // O(1) running counter — cheap on the UI thread
+
+        if (stillLoading)
         {
-            // Producer finished — final refresh, drop the spinner + Stop button.
+            StreamingBannerText = ComposeStreamBanner();
+            // With a filter active, DON'T keep re-running the (expensive) search as rows stream in —
+            // that's the "constantly searching/reloading" churn. Pause and offer a manual Refresh.
+            if (HasActiveFilter())
+            {
+                HasPendingRows = true;
+                return;
+            }
+        }
+        else
+        {
+            // Producer finished — stop the timer, do one final refresh below, drop spinner/Stop.
+            _refreshTimer?.Stop();
             IsLoading = false;
             IsStreaming = false;
         }
+
+        // No filter (or load just finished): refresh the visible page + counts OFF the UI thread so a
+        // re-query during a heavy load never freezes the UI. Skip overlapping refreshes.
+        if (_liveRefreshInFlight) return;
+        _liveRefreshInFlight = true;
+        try { await ReloadFromSourceAsyncCore(); HasPendingRows = false; }
+        catch { /* transient read during a concurrent write — the next tick (or completion) retries */ }
+        finally { _liveRefreshInFlight = false; }
+    }
+
+    /// <summary>Manually fold newly-loaded rows into the current (filtered) view, then keep streaming.</summary>
+    public async void RefreshNow()
+    {
+        if (_liveRefreshInFlight) { HasPendingRows = false; return; }
+        _liveRefreshInFlight = true;
+        try { await ReloadFromSourceAsyncCore(); HasPendingRows = false; }
+        catch { /* transient — user can click again */ }
+        finally { _liveRefreshInFlight = false; }
+    }
+
+    /// <summary>Re-run the current filter (count + level counts + visible page) off the UI thread,
+    /// preserving the current page, then publish on the UI thread. Used by the live streaming refresh.</summary>
+    private async Task ReloadFromSourceAsyncCore()
+    {
+        if (_source == null) return;
+        var filters = BuildFilterSpec();
+        var sort = new SortSpec(_sortColumn, _sortDescending);
+        int pageSize = _pageSize;
+        int curPage = _currentPage;
+
+        var r = await Task.Run(() =>
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            int total = _source.GetFilteredCount(filters); long tc = sw.ElapsedMilliseconds; sw.Restart();
+            var levels = _source.GetLevelCounts(filters); long tl = sw.ElapsedMilliseconds; sw.Restart();
+            int pages = Math.Max(1, (int)Math.Ceiling(total / (double)Math.Max(1, pageSize)));
+            int page = Math.Clamp(curPage, 1, pages);
+            var rows = _source.GetPage(filters, sort, (page - 1) * pageSize, pageSize);
+            long tp = sw.ElapsedMilliseconds;
+            return (total, levels, rows, page, tc, tl, tp);
+        }).ConfigureAwait(false);
+
+        await RunOnUiAsync(() =>
+        {
+            TotalFilteredCount = r.total;
+            UpdateLevelCountsFrom(r.levels);
+            _currentPage = r.page;
+            Results.ReplaceAll(r.rows);
+            UpdateFilterTiming(r.tc, r.tl, r.tp);
+            OnPropertyChanged(nameof(CurrentPage));
+            OnPropertyChanged(nameof(TotalPages));
+            OnPropertyChanged(nameof(PageRangeText));
+            UpdateStatus();
+        });
     }
 
     /// <summary>
@@ -412,6 +571,30 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         _currentPage = 1;
         ReloadFromSource();
+    }
+
+    /// <summary>Reset filters to defaults without re-querying — the caller reloads. Used when a new file
+    /// is opened so its results aren't hidden by the previous file's filter.</summary>
+    public void ClearFiltersNoReload()
+    {
+        _searchText = "";
+        _providerFilter = "";
+        _taskNameFilter = "";
+        _messageFilter = "";
+        _sourceFilter = "";
+        _levelFilter = "";
+        _fromDate = null;
+        _toDate = null;
+        _currentPage = 1;
+        HasPendingRows = false;
+        OnPropertyChanged(nameof(SearchText));
+        OnPropertyChanged(nameof(ProviderFilter));
+        OnPropertyChanged(nameof(TaskNameFilter));
+        OnPropertyChanged(nameof(MessageFilter));
+        OnPropertyChanged(nameof(SourceFilter));
+        OnPropertyChanged(nameof(LevelFilter));
+        OnPropertyChanged(nameof(FromDate));
+        OnPropertyChanged(nameof(ToDate));
     }
 
     /// <summary>
@@ -486,8 +669,12 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         var filters = BuildFilterSpec();
         var sort = new SortSpec(_sortColumn, _sortDescending);
 
+        // Time each stage so the user can see what made a filter slow (count vs level chips vs page).
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         TotalFilteredCount = _source.GetFilteredCount(filters);
+        long tCount = sw.ElapsedMilliseconds; sw.Restart();
         UpdateLevelCountsFrom(_source.GetLevelCounts(filters));
+        long tLevels = sw.ElapsedMilliseconds; sw.Restart();
 
         // Clamp page to valid range after filter changed total.
         if (_currentPage > TotalPages && TotalPages > 0) _currentPage = TotalPages;
@@ -495,12 +682,42 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
         var offset = (_currentPage - 1) * _pageSize;
         var page = _source.GetPage(filters, sort, offset, _pageSize);
+        long tPage = sw.ElapsedMilliseconds;
         Results.ReplaceAll(page);
+
+        UpdateFilterTiming(tCount, tLevels, tPage);
 
         OnPropertyChanged(nameof(CurrentPage));
         OnPropertyChanged(nameof(TotalPages));
         OnPropertyChanged(nameof(PageRangeText));
         UpdateStatus();
+    }
+
+    private void UpdateFilterTiming(long tCount, long tLevels, long tPage)
+    {
+        long total = tCount + tLevels + tPage;
+        LastFilterSummary = $"⏱ {total} ms";
+
+        var active = new List<string>();
+        if (!string.IsNullOrEmpty(_searchText)) active.Add($"search \"{_searchText}\"");
+        if (!string.IsNullOrEmpty(_providerFilter)) active.Add("provider");
+        if (!string.IsNullOrEmpty(_taskNameFilter)) active.Add("task");
+        if (!string.IsNullOrEmpty(_messageFilter)) active.Add("message");
+        if (!string.IsNullOrEmpty(_sourceFilter)) active.Add("source");
+        if (!string.IsNullOrEmpty(_levelFilter)) active.Add("level");
+        if (_fromDate.HasValue || _toDate.HasValue) active.Add("time range");
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Last filter: {total} ms total");
+        sb.AppendLine($"  • Count query:   {tCount} ms");
+        sb.AppendLine($"  • Level counts:  {tLevels} ms");
+        sb.AppendLine($"  • Page fetch:    {tPage} ms");
+        sb.AppendLine($"  • Rows matched:  {TotalFilteredCount:N0}");
+        sb.AppendLine(!string.IsNullOrEmpty(_searchText)
+            ? $"  • Text search:   on ({(IsIndexing ? "index still building — slower LIKE scan" : "using full-text index")})"
+            : "  • Text search:   off");
+        sb.Append($"  • Active filters: {(active.Count > 0 ? string.Join(", ", active) : "none")}");
+        LastFilterBreakdown = sb.ToString();
     }
 
     private FilterSpec BuildFilterSpec() => new(

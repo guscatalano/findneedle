@@ -10,8 +10,12 @@ using FindNeedlePluginLib;
 using FindNeedleCoreUtils;
 
 namespace findneedle.Implementations.FileExtensions;
-public class EVTXProcessor : IFileExtensionProcessor, IReportProgress
+public class EVTXProcessor : IFileExtensionProcessor, IReportProgress, IPluginDescription
 {
+    public string GetPluginTextDescription() => "Parses Windows Event Log files (.evtx) into search results";
+    public string GetPluginFriendlyName() => "Event Log (.evtx) Processor";
+    public string GetPluginClassName() => IPluginDescription.GetPluginClassNameBase(this);
+
     private string inputfile = "";
     private FileEventLogQueryLocation? loc;
     private SearchProgressSink? _progressSink;

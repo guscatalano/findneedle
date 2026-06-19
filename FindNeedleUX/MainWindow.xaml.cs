@@ -295,6 +295,7 @@ public sealed partial class MainWindow : Window
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage)));
     }
 
+
     /// <summary>
     /// Show / hide a non-cancellable spinner used to give immediate feedback when switching to a
     /// page whose first construction is slow (e.g. the native viewer's DataGrid init). The
@@ -575,12 +576,7 @@ public sealed partial class MainWindow : Window
             ShowSpinner(true, "Decoding anyway…", showCancel: true);
             await RunSearchWithProgress();
             ShowSpinner(false);
-            // If we're already on the viewer (the banner lives there), NavigationCacheMode.Required
-            // means re-navigating won't reload it — reload its data in place. Otherwise navigate.
-            if (contentFrame.Content is FindNeedleUX.Pages.NativeResultsPage viewer)
-                await viewer.ReloadResultsAsync();
-            else
-                contentFrame.Navigate(ResolveDefaultViewerType());
+            await OpenViewerAsync();
         }
         catch (Exception ex)
         {
@@ -618,10 +614,7 @@ public sealed partial class MainWindow : Window
         {
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(file);
-            ShowSpinner(true, "Opening file...", showCancel:true);
-            await RunSearchWithProgress();
-            ShowSpinner(false);
-            contentFrame.Navigate(ResolveDefaultViewerType());
+            await OpenWithOptionalStreamingAsync("Opening file...");
         }
     }
 
@@ -633,11 +626,65 @@ public sealed partial class MainWindow : Window
         {
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(folderPath);
-            ShowSpinner(true, "Opening folder...", showCancel:true);
+            await OpenWithOptionalStreamingAsync("Opening folder...");
+        }
+    }
+
+    /// <summary>
+    /// Run the search and show the viewer. When "open progressively" is enabled, start a streaming
+    /// search and open the viewer as soon as the first page is ready (it keeps filling in the
+    /// background with a banner); otherwise run the full search behind the spinner, then open.
+    /// </summary>
+    private async System.Threading.Tasks.Task OpenWithOptionalStreamingAsync(string label)
+    {
+        if (ResultsViewerSettings.StreamWhileLoading)
+        {
+            ShowSpinner(true, label);
+            var handle = MiddleLayerService.RunSearchStreaming();
+            await WaitForFirstRowsAsync(handle);
+            ShowSpinner(false);
+            await OpenViewerAsync();
+        }
+        else
+        {
+            ShowSpinner(true, label, showCancel: true);
             await RunSearchWithProgress();
             ShowSpinner(false);
-            contentFrame.Navigate(ResolveDefaultViewerType());
+            await OpenViewerAsync();
         }
+    }
+
+    /// <summary>Wait until a streaming search has produced its first rows (or finished / timed out),
+    /// so the viewer opens with content instead of an empty grid.</summary>
+    private static async System.Threading.Tasks.Task WaitForFirstRowsAsync(
+        MiddleLayerService.StreamingSearchHandle handle, int timeoutMs = 8000)
+    {
+        var src = handle?.Source;
+        if (src == null) return;
+        var tcs = new System.Threading.Tasks.TaskCompletionSource();
+        void OnRows() { if (src.TotalCount > 0) tcs.TrySetResult(); }
+        src.RowsAvailable += OnRows;
+        try
+        {
+            if (src.TotalCount > 0) tcs.TrySetResult();
+            if (handle.SearchTask != null)
+                _ = handle.SearchTask.ContinueWith(_ => tcs.TrySetResult());
+            await System.Threading.Tasks.Task.WhenAny(tcs.Task, System.Threading.Tasks.Task.Delay(timeoutMs));
+        }
+        finally { src.RowsAvailable -= OnRows; }
+    }
+
+    /// <summary>
+    /// Show the result viewer for a freshly-completed search. If the viewer is already the current page,
+    /// NavigationCacheMode.Required means a re-navigation won't reload it — so refresh it in place;
+    /// otherwise navigate to it normally.
+    /// </summary>
+    private async System.Threading.Tasks.Task OpenViewerAsync()
+    {
+        if (contentFrame.Content is FindNeedleUX.Pages.NativeResultsPage viewer)
+            await viewer.ReloadResultsAsync();
+        else
+            contentFrame.Navigate(ResolveDefaultViewerType());
     }
 
     private void LoadCommand()
@@ -668,7 +715,7 @@ public sealed partial class MainWindow : Window
     // Step-aware robot loader: sweep → scan → papers → shelve → sort → type (see RobotLoader).
     private int _currentRobotIndex = -1;
 
-    private static bool UseRobotLoader => ResultsViewerSettings.LoadingAnimation == "Robot";
+    private static bool UseRobotLoader => RobotLoader.IsAnimated(ResultsViewerSettings.LoadingAnimation);
 
     /// <summary>Point the robot Image at the GIF for the given step (0-based, clamped). Only swaps the
     /// source when the step actually changes, so the animation isn't restarted on every progress tick.</summary>
@@ -685,20 +732,20 @@ public sealed partial class MainWindow : Window
     {
         SpinnerPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
 
-        bool robot = UseRobotLoader;
-        if (show && robot)
+        var mode = ResultsViewerSettings.LoadingAnimation;
+        bool animated = RobotLoader.IsAnimated(mode);
+        bool bar = mode == "Bar";
+
+        SpinnerGifBorder.Visibility = (show && animated) ? Visibility.Visible : Visibility.Collapsed;
+        SpinnerBar.Visibility = (show && bar) ? Visibility.Visible : Visibility.Collapsed;
+        SpinnerBar.IsIndeterminate = show && bar;
+        bool ring = show && !animated && !bar;
+        EtlSpinner.Visibility = ring ? Visibility.Visible : Visibility.Collapsed;
+        EtlSpinner.IsActive = ring;
+        if (show && animated)
         {
-            EtlSpinner.IsActive = false;
-            EtlSpinner.Visibility = Visibility.Collapsed;
-            SpinnerGif.Visibility = Visibility.Visible;
             _currentRobotIndex = -1;   // force a fresh frame for this run
             SetRobotFrame(0);          // start on "sweep"
-        }
-        else
-        {
-            SpinnerGif.Visibility = Visibility.Collapsed;
-            EtlSpinner.Visibility = Visibility.Visible;
-            EtlSpinner.IsActive = show;
         }
         if (text != null)
             SpinnerText.Text = text;

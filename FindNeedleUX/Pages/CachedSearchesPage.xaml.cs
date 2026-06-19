@@ -37,11 +37,26 @@ public sealed partial class CachedSearchesPage : Page
     private readonly List<CachedSearchItem> _all = new();
     private int _totalFiles;
 
+    private bool _initing;
+
     public CachedSearchesPage()
     {
         this.InitializeComponent();
         CacheList.ItemsSource = _items;
+        // Reflect the current cache-reuse preference without firing the change handler.
+        _initing = true;
+        IgnoreCachesCheck.IsChecked = ResultsViewerSettings.CacheReuseMode == FindPluginCore.Searching.CacheReuseMode.Never;
+        _initing = false;
         Loaded += (_, _) => Load();
+    }
+
+    private void IgnoreCaches_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_initing) return;
+        // Checked → never reuse a cache (always rescan); unchecked → back to the default (ask).
+        ResultsViewerSettings.CacheReuseMode = IgnoreCachesCheck.IsChecked == true
+            ? FindPluginCore.Searching.CacheReuseMode.Never
+            : FindPluginCore.Searching.CacheReuseMode.Prompt;
     }
 
     private async void Load()

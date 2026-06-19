@@ -374,3 +374,7 @@ WritePerformance_Comparison*.html
 
 # Large, locally-generated test fixtures (see ETWPluginTests/LargeFixtureGenerator.cs)
 LargeSamples/
+
+# Scratch ETL-decode dumps from tracefmt (can be hundreds of MB)
+FmtFile.txt
+FmtSum.txt

@@ -23,8 +23,10 @@
                 <TextBlock Text="Loaded plugin DLLs and the plugins they provide. ✓ loaded · ✗ failed to load · ⚠ invalid"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
             </StackPanel>
-            <Button x:Name="ReloadButton" Content="Reload all plugins" Click="ReloadAllPlugins_Click"
-                    HorizontalAlignment="Right" VerticalAlignment="Top"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <Button x:Name="ConfigureButton" Content="Configure DLLs…" Click="ConfigureDlls_Click"/>
+                <Button x:Name="ReloadButton" Content="Reload all plugins" Click="ReloadAllPlugins_Click"/>
+            </StackPanel>
         </Grid>
 
         <ProgressBar Grid.Row="1" x:Name="InitProgressBar" IsIndeterminate="True" Visibility="Collapsed" Height="4"/>
@@ -89,32 +91,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Plugin configuration (was the second tab) -->
-                    <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                              Header="Plugin configuration (DLLs)">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="DLLs FindNeedle loads at startup. Edit, enable/disable, or add new plugin assemblies, then Save."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ListView x:Name="PluginConfigListView" ItemsSource="{x:Bind PluginConfigEntries, Mode=TwoWay}"
-                                      SelectionMode="Single" SelectedItem="{x:Bind SelectedPluginConfigEntry, Mode=TwoWay}">
-                                <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="local:PluginConfigEntryViewModel">
-                                        <StackPanel Orientation="Horizontal" Spacing="4" Padding="0,2,0,2">
-                                            <TextBox Text="{x:Bind Name, Mode=TwoWay}" Width="160" PlaceholderText="Name"/>
-                                            <TextBox Text="{x:Bind Path, Mode=TwoWay}" Width="280" PlaceholderText="Path to .dll"/>
-                                            <Button Content="…" Width="32" Click="PickPluginFile_Click" Tag="{x:Bind}"/>
-                                            <CheckBox IsChecked="{x:Bind Enabled, Mode=TwoWay}" Content="Enabled" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="Add" Click="AddPluginConfigEntry_Click"/>
-                                <Button Content="Remove" Click="RemovePluginConfigEntry_Click"/>
-                                <Button Content="Save" Click="SavePluginConfig_Click" Style="{ThemeResource AccentButtonStyle}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Expander>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

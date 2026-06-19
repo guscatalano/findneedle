@@ -25,6 +25,7 @@ public sealed partial class SearchStatisticsPage : Page
     private readonly System.Collections.Generic.List<string> _resolveLogPaths = new();
     private SearchStatistics _statsCache;
     private string _breakdownFilter = "";
+    private readonly System.Collections.Generic.List<(string key, string val)> _traceInfo = new();
 
     public SearchStatisticsPage()
     {
@@ -53,11 +54,14 @@ public sealed partial class SearchStatisticsPage : Page
         BuildCards(report, stats);
         BuildPhaseBars(report);
         BuildNotes(report);
+        BuildTraceInfo();
+        EtlInspectText.Text = "";
+        EtlInspectExpander.Visibility = LoadedEtlPaths().Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         BuildBreakdown(stats);
 
         SummaryText.Text = stats != null ? stats.GetSummaryReport().TrimEnd() : "(no statistics)";
         PerfText.Text = report?.ToText() ?? "(no timing report yet)";
-        _copyText = SummaryText.Text + Environment.NewLine + Environment.NewLine + PerfText.Text;
+        _copyText = BuildCopyText(report, stats);
         CopyButton.IsEnabled = any;
         OpenRawOutputButton.Visibility = _rawOutputPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         OpenResolveLogButton.Visibility = _resolveLogPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -171,6 +175,79 @@ public sealed partial class SearchStatisticsPage : Page
         NotesCard.Visibility = Visibility.Visible;
         foreach (var h in report.BuildHints())
             Notes.Children.Add(new TextBlock { Text = "• " + h, TextWrapping = TextWrapping.Wrap, FontSize = 12 });
+    }
+
+    // ----- ETW trace session header (EventTrace) -----
+    private void BuildTraceInfo()
+    {
+        TraceInfoList.Children.Clear();
+        TraceInfoCard.Visibility = Visibility.Collapsed;
+        _traceInfo.Clear();
+
+        var storage = MiddleLayerService.GetSearchStorage();
+        if (storage == null) return;
+
+        FindNeedlePluginLib.ISearchResult header = null;
+        try
+        {
+            // The EventTrace header is the very first event — read only the first batch, then stop.
+            using var cts = new System.Threading.CancellationTokenSource();
+            storage.GetFilteredResultsInBatches(batch =>
+            {
+                foreach (var r in batch)
+                    if (header == null && IsTraceHeader(r)) { header = r; break; }
+                cts.Cancel();
+            }, batchSize: 64, cts.Token);
+        }
+        catch { /* storage busy / not available — skip */ }
+
+        if (header == null) return;
+
+        foreach (var (key, val) in ParseTraceHeader(header.GetMessage()))
+            _traceInfo.Add((key, val));
+        foreach (var (key, val) in _traceInfo)
+            TraceInfoList.Children.Add(KeyValueRow(key, val));
+
+        TraceInfoCard.Visibility = _traceInfo.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static bool IsTraceHeader(FindNeedlePluginLib.ISearchResult r)
+    {
+        try
+        {
+            if (string.Equals(r.GetTaskName(), "EventTrace", StringComparison.OrdinalIgnoreCase)) return true;
+            var m = r.GetMessage();
+            return m != null && m.TrimStart().StartsWith("EventTrace ==", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Split "EventTrace == Key: Value | Key: Value | …" into ordered pairs.</summary>
+    private static System.Collections.Generic.IEnumerable<(string key, string val)> ParseTraceHeader(string msg)
+    {
+        if (string.IsNullOrEmpty(msg)) yield break;
+        int eq = msg.IndexOf("==", StringComparison.Ordinal);
+        var body = eq >= 0 ? msg[(eq + 2)..] : msg;
+        foreach (var part in body.Split(" | ", StringSplitOptions.RemoveEmptyEntries))
+        {
+            int c = part.IndexOf(": ", StringComparison.Ordinal);
+            if (c <= 0) continue;
+            var key = part[..c].Trim();
+            var val = part[(c + 2)..].Trim();
+            if (key.Length > 0 && val.Length > 0) yield return (key, val);
+        }
+    }
+
+    private FrameworkElement KeyValueRow(string key, string val)
+    {
+        var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(0, 1, 0, 1) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.Children.Add(new TextBlock { Text = key, FontSize = 12, Foreground = Secondary });
+        var v = new TextBlock { Text = val, FontSize = 12, FontFamily = new FontFamily("Consolas"), TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+        Grid.SetColumn(v, 1);
+        grid.Children.Add(v);
+        return grid;
     }
 
     // ----- "how each source decoded" (readable, per-file) -----
@@ -363,6 +440,150 @@ public sealed partial class SearchStatisticsPage : Page
     {
         if (string.IsNullOrEmpty(s)) return "—";
         return s.Replace("Storage", "");
+    }
+
+    /// <summary>Assemble the full page as text for the Copy button — every section, not just the raw report.</summary>
+    private string BuildCopyText(SearchRunReport report, SearchStatistics stats)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Search statistics & timing");
+        if (!string.IsNullOrEmpty(SubtitleText.Text)) sb.AppendLine(SubtitleText.Text);
+        sb.AppendLine();
+
+        // Counts + headline cards
+        long matched = report?.StoredRows ?? 0;
+        long scanned = report?.RawRows ?? 0;
+        try
+        {
+            var s = MiddleLayerService.GetSearchStorage()?.GetStatistics();
+            if (s.HasValue)
+            {
+                if (matched == 0) matched = s.Value.filteredRecordCount;
+                if (scanned == 0) scanned = s.Value.rawRecordCount;
+            }
+        }
+        catch { /* storage not available */ }
+
+        sb.AppendLine($"Rows matched: {matched:N0}");
+        if (scanned > 0 && scanned != matched) sb.AppendLine($"Rows scanned: {scanned:N0}");
+        if (report != null)
+        {
+            sb.AppendLine($"Total time: {FmtMs(report.TotalMs)} (search {FmtMs(report.SearchMs)}, viewer {FmtMs(report.ViewerMs)})");
+            sb.AppendLine($"Storage: {ShortStorage(report.StorageType)} {report.StorageMode}".TrimEnd());
+            sb.AppendLine($"Cache: {(report.CacheHit ? "HIT" : report.CacheWritten ? "written" : "—")}");
+        }
+        long mem = stats?.GetPrivateBytes(SearchStep.AtSearch) ?? 0;
+        if (mem <= 0) mem = stats?.GetPrivateBytes(SearchStep.AtLoad) ?? 0;
+        if (mem > 0) sb.AppendLine($"Memory: {ByteUtils.BytesToFriendlyString(mem)} (private, at search)");
+
+        // Where the time went
+        if (report != null)
+        {
+            var phases = report.TopPhases(8).Where(p => p.ElapsedMs > 0).ToList();
+            if (phases.Count > 0)
+            {
+                sb.AppendLine().AppendLine("Where the time went:");
+                foreach (var p in phases) sb.AppendLine($"  {p.Name}: {FmtMs(p.ElapsedMs)}");
+            }
+
+            var hints = report.BuildHints().ToList();
+            if (hints.Count > 0)
+            {
+                sb.AppendLine().AppendLine("Notes:");
+                foreach (var h in hints) sb.AppendLine($"  • {h}");
+            }
+        }
+
+        // Trace session info
+        if (_traceInfo.Count > 0)
+        {
+            sb.AppendLine().AppendLine("Trace session info:");
+            foreach (var (k, v) in _traceInfo) sb.AppendLine($"  {k}: {v}");
+        }
+
+        // How each source decoded
+        var decodeLines = DecodeTextLines(stats);
+        if (decodeLines.Count > 0)
+        {
+            sb.AppendLine().AppendLine("How each source decoded:");
+            foreach (var l in decodeLines) sb.AppendLine("  " + l);
+        }
+
+        // Raw summary + timing report
+        sb.AppendLine().AppendLine(stats != null ? stats.GetSummaryReport().TrimEnd() : "(no statistics)");
+        sb.AppendLine().AppendLine(report?.ToText() ?? "(no timing report yet)");
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private System.Collections.Generic.List<string> DecodeTextLines(SearchStatistics stats)
+    {
+        var lines = new System.Collections.Generic.List<string>();
+        if (stats?.componentReports == null) return lines;
+        foreach (var list in stats.componentReports.Values)
+            foreach (var report in list)
+            {
+                if (report?.summary != "DecodeByFile" || report.metric == null) continue;
+                foreach (var kv in report.metric)
+                {
+                    if (kv.Value is not IDictionary d) continue;
+                    string Get(string k) => d.Contains(k) ? d[k]?.ToString() : null;
+                    var bits = new System.Collections.Generic.List<string>();
+                    void Bit(string label, string key) { var v = Get(key); if (!string.IsNullOrEmpty(v)) bits.Add($"{label} {v}"); }
+                    Bit("method", "method"); Bit("rows", "rows"); Bit("decodable", "decodable");
+                    Bit("unknown", "unknowns"); Bit("missing TMF", "missingTmfs");
+                    lines.Add($"{Path.GetFileName(kv.Key)}: {string.Join(" · ", bits)}");
+                }
+            }
+        return lines;
+    }
+
+    // ----- full ETL inspection (on demand) -----
+    private static System.Collections.Generic.List<string> LoadedEtlPaths()
+    {
+        var paths = new System.Collections.Generic.List<string>();
+        try
+        {
+            var locs = MiddleLayerService.Locations;
+            if (locs != null)
+                foreach (var l in locs)
+                {
+                    var n = l?.GetName();
+                    if (!string.IsNullOrEmpty(n) && n.EndsWith(".etl", StringComparison.OrdinalIgnoreCase) && File.Exists(n))
+                        paths.Add(n);
+                }
+        }
+        catch { /* locations unavailable */ }
+        return paths.Distinct().ToList();
+    }
+
+    private async void EtlInspect_Click(object sender, RoutedEventArgs e)
+    {
+        var paths = LoadedEtlPaths();
+        if (paths.Count == 0) return;
+        EtlInspectButton.IsEnabled = false;
+        EtlInspectText.Text = "Inspecting…";
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            await System.Threading.Tasks.Task.Run(() =>
+            {
+                foreach (var p in paths)
+                {
+                    try
+                    {
+                        var info = findneedle.ETWPlugin.EtlInfoExtractor.Inspect(p);
+                        sb.AppendLine(findneedle.ETWPlugin.EtlInfoExtractor.Format(info)).AppendLine();
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine($"{Path.GetFileName(p)}: inspection failed — {ex.Message}").AppendLine();
+                    }
+                }
+            });
+            EtlInspectText.Text = sb.ToString().TrimEnd();
+        }
+        finally { EtlInspectButton.IsEnabled = true; }
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => Render();

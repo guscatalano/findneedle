@@ -90,10 +90,21 @@
                   AutomationProperties.Name="Operation in progress" AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
                     <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False" AutomationProperties.Name="Working"/>
+                    <ProgressBar x:Name="SpinnerBar" Width="320" IsIndeterminate="False" Visibility="Collapsed"
+                                 AutomationProperties.Name="Working"/>
                     <!-- Animated robot loader (alternative to the spinner; chosen in settings). The
-                         frame shown tracks the current search step. Box scales both square + wide art. -->
-                    <Image x:Name="SpinnerGif" MaxWidth="360" MaxHeight="240" Stretch="Uniform"
-                           Visibility="Collapsed" AutomationProperties.Name="Working"/>
+                         frame shown tracks the current search step. Box scales both square + wide art.
+                         Wrapped in a framed card so it reads as an immersive panel. -->
+                    <Border x:Name="SpinnerGifBorder" Visibility="Collapsed"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="12" Padding="16" Translation="0,0,32">
+                        <Border.Shadow>
+                            <ThemeShadow/>
+                        </Border.Shadow>
+                        <Image x:Name="SpinnerGif" MaxWidth="360" MaxHeight="240" Stretch="Uniform"
+                               AutomationProperties.Name="Working"/>
+                    </Border>
 
                     <!-- Structured step checklist (search→view flow). Fixed columns so the name,
                          metric, and percent line up across every step. -->

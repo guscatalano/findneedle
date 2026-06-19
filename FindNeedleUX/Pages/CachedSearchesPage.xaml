@@ -22,6 +22,9 @@
                 <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="8">
+                <CheckBox x:Name="IgnoreCachesCheck" Content="Ignore caches when loading" VerticalAlignment="Center"
+                          Checked="IgnoreCaches_Changed" Unchecked="IgnoreCaches_Changed"
+                          ToolTipService.ToolTip="Always rescan the source on open — never reuse a cached result"/>
                 <CheckBox x:Name="ShowUnnamedCheck" Content="Show unnamed" VerticalAlignment="Center"
                           Checked="ShowUnnamed_Changed" Unchecked="ShowUnnamed_Changed"
                           ToolTipService.ToolTip="Caches with no recorded source (usually test runs)"/>

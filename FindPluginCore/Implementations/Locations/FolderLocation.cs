@@ -97,7 +97,12 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         Logger.Instance.Log($"SetExtensionProcessorList called with {processors.Count} processors for FolderLocation: {path}");
         lock (_knownProcessorsLock)
         {
-            knownProcessors = processors ?? throw new ArgumentNullException(nameof(processors), "Processors list cannot be null");
+            // These are TEMPLATES: one instance per registered processor type. Each file gets its own
+            // fresh instance cloned from the matching template (see ProcessFile) so multiple files —
+            // especially several of the same extension — never share one processor's mutable state.
+            templateProcessors = processors ?? throw new ArgumentNullException(nameof(processors), "Processors list cannot be null");
+            extToProcessor.Clear();
+            knownProcessors.Clear();
             foreach (var processor in processors)
             {
                 if (processor == null)
@@ -117,6 +122,9 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             }
         }
     }
+    // Templates (one per registered type); the actual per-file instances live in knownProcessors.
+    List<IFileExtensionProcessor> templateProcessors = [];
+    // Per-file loaded processor instances — what Search/SearchWithCallback/ReportStatistics read.
     List<IFileExtensionProcessor> knownProcessors = [];
     private readonly Dictionary<string, List<IFileExtensionProcessor>> extToProcessor = new();
 
@@ -124,6 +132,9 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
     public override void LoadInMemory(System.Threading.CancellationToken cancellationToken = default)
     {
         Logger.Instance.Log($"LoadInMemory started for FolderLocation: {path}");
+        // Fresh load — drop any per-file instances from a previous LoadInMemory so re-loads don't
+        // accumulate (which would double-count rows).
+        lock (_knownProcessorsLock) { knownProcessors.Clear(); }
         procStats = new ReportFromComponent()
         {
             component = this.GetType().Name,
@@ -213,14 +224,31 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 
         if (extToProcessor.ContainsKey(ext))
         {
-            foreach(var processor in extToProcessor[ext])
+            foreach(var template in extToProcessor[ext])
             {
                 if (cancellationToken.IsCancellationRequested) return;
-                if (processor == null)
+                if (template == null)
                 {
                     Logger.Instance.Log($"Null processor found for extension {ext} in ProcessFile");
                     throw new Exception("null?");
                 }
+
+                // A fresh instance per file — processors hold per-file state (file path, parsed rows),
+                // so the registered template can't be shared across files (especially several of the
+                // same extension processed concurrently).
+                IFileExtensionProcessor processor;
+                try
+                {
+                    processor = (IFileExtensionProcessor)Activator.CreateInstance(template.GetType());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Instance.Log($"Could not create a per-file instance of {template.GetType().Name}: {ex.Message}");
+                    continue;
+                }
+                if (_progressSink != null && processor is IReportProgress reportable)
+                    reportable.SetProgressSink(_progressSink);
+
                 Logger.Instance.Log($"Opening file {file} with processor {processor.GetType().Name}");
                 processor.OpenFile(file);
                 if (cancellationToken.IsCancellationRequested) return;
@@ -230,6 +258,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                     processor.DoPreProcessing(cancellationToken);
                     if (cancellationToken.IsCancellationRequested) return;
                     processor.LoadInMemory(cancellationToken);
+                    lock (_knownProcessorsLock) { knownProcessors.Add(processor); }
                 }
                 else
                 {
@@ -385,31 +414,35 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 
     public override async Task SearchWithCallback(Action<List<ISearchResult>> onBatch, System.Threading.CancellationToken cancellationToken = default, int batchSize = 1000)
     {
-        // Use GetResultsWithCallback for each processor
-        var batch = new List<ISearchResult>(batchSize);
-        List<Task> processorTasks = new();
+        // Process the folder's files one at a time. Running the per-file processors in parallel and
+        // feeding a single shared accumulator raced badly (corrupted batches → insert crashes, and
+        // dropped rows), and the downstream storage write is serialized anyway — so parallelism bought
+        // little. Sequential is correct and each file still streams its batches as it's read.
+        List<IFileExtensionProcessor> processors;
         lock (knownProcessors)
         {
-            foreach (var processor in knownProcessors)
-            {
-                if (processor == null) continue;
-                var task = processor.GetResultsWithCallback(results =>
-                {
-                    if (cancellationToken.IsCancellationRequested) return;
-                    foreach (var result in results)
-                    {
-                        batch.Add(result);
-                        if (batch.Count == batchSize)
-                        {
-                            onBatch(batch);
-                            batch = new List<ISearchResult>(batchSize);
-                        }
-                    }
-                }, cancellationToken, batchSize);
-                processorTasks.Add(task);
-            }
+            processors = new List<IFileExtensionProcessor>();
+            foreach (var p in knownProcessors) if (p != null) processors.Add(p);
         }
-        await Task.WhenAll(processorTasks);
+
+        var batch = new List<ISearchResult>(batchSize);
+        foreach (var processor in processors)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            await processor.GetResultsWithCallback(results =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                foreach (var result in results)
+                {
+                    batch.Add(result);
+                    if (batch.Count == batchSize)
+                    {
+                        onBatch(batch);
+                        batch = new List<ISearchResult>(batchSize);
+                    }
+                }
+            }, cancellationToken, batchSize);
+        }
         if (batch.Count > 0)
         {
             onBatch(batch);

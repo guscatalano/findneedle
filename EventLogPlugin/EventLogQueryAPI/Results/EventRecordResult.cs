@@ -183,7 +183,12 @@ public class EventRecordResult : ISearchResult
 
     public string GetMessage()
     {
-        return eventdata;
+        // Prefer the rendered, human-readable description (FormatDescription). Fall back to the raw
+        // <EventData> and then <System> XML — many providers use <UserData> (no <EventData>), so
+        // returning eventdata alone dropped their message entirely.
+        if (!string.IsNullOrWhiteSpace(formattedevent)) return formattedevent;
+        if (!string.IsNullOrWhiteSpace(eventdata)) return eventdata;
+        return systemdata;
     }
 
     //This is usually the message, but it can be more. This is likely not readable

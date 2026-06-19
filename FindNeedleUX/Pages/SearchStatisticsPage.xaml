@@ -58,6 +58,32 @@
                 </StackPanel>
             </Border>
 
+            <!-- ETW trace session header (from the first events, when present) -->
+            <Border x:Name="TraceInfoCard" Visibility="Collapsed"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Trace session info" FontWeight="SemiBold"/>
+                    <TextBlock Text="From the ETW EventTrace header at the start of the trace."
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap"/>
+                    <StackPanel x:Name="TraceInfoList" Spacing="2"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Full ETL inspection (same as Settings → Inspect ETL), on demand -->
+            <Expander x:Name="EtlInspectExpander" Visibility="Collapsed"
+                      Header="ETL details (full inspection)"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Runs the same inspection as Settings → Inspect ETL on the loaded .etl file(s) — Windows build, capture window, event/lost counts, format breakdown, and providers. Can take a few seconds on large traces."
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                    <Button x:Name="EtlInspectButton" Content="Run inspection" Click="EtlInspect_Click"/>
+                    <TextBlock x:Name="EtlInspectText" FontFamily="Consolas" FontSize="12"
+                               IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Expander>
+
             <!-- How each source decoded (readable, per-file) -->
             <Border x:Name="DecodeCard" Visibility="Collapsed"
                     Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"

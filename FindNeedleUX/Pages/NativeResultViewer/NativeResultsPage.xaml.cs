@@ -123,6 +123,12 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ResultsViewerSettings.Changed -= OnSettingsChanged;
         ResultsViewerSettings.Changed += OnSettingsChanged;
 
+        // Re-evaluate the decode banner when a streaming load finishes — by then the new file's stats
+        // are captured, so a stale "missing symbols" warning from a previous bad file clears (or the
+        // new file's own warning appears).
+        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+
         // Apply persisted prefs BEFORE rendering so the first paint already has the user's choices.
         ApplyPersistedSettings();
         ApplyPersistedColumnDefaults();
@@ -158,6 +164,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Explain an empty/partial result (e.g. a WPP ETL whose symbols are missing) instead of
         // leaving the user staring at a blank grid.
         UpdateDecodeBanner();
+        UpdateStreamingIcon();
 
         // Become the live view the MCP bridge reads/drives. Last-loaded viewer wins.
         FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.UiDispatcher ??= DispatcherQueue;
@@ -171,6 +178,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// </summary>
     public async System.Threading.Tasks.Task ReloadResultsAsync()
     {
+        // A new file/search is replacing the current results — clear any filters from the previous file
+        // so the new content isn't hidden by them.
+        ResetFiltersForNewFile();
         LoadingOverlay.Visibility = Visibility.Visible;
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
         ApplyPersistedLevelOverrides();
@@ -179,6 +189,43 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         RebindGrid();
         RefreshSearchSubmitMode();
         UpdateDecodeBanner();
+        UpdateStreamingIcon();
+    }
+
+    /// <summary>Pick the inline progressive-loading indicator: the small animated theme gif, or a
+    /// ProgressRing when the loader is the plain Spinner/Bar.</summary>
+    /// <summary>Clear the filter inputs + VM filters when a new file loads. Order matters: reset the VM
+    /// first so clearing each input sees "no change" and doesn't kick off a search.</summary>
+    private void ResetFiltersForNewFile()
+    {
+        ViewModel.ClearFiltersNoReload();
+        if (SearchBox != null) SearchBox.Text = "";
+        if (ProviderFilterBox != null) ProviderFilterBox.Text = "";
+        if (TaskNameFilterBox != null) TaskNameFilterBox.Text = "";
+        if (MessageFilterBox != null) MessageFilterBox.Text = "";
+        if (SourceFilterBox != null) SourceFilterBox.Text = "";
+        if (LevelFilterCombo != null) LevelFilterCombo.SelectedItem = null;
+        if (FromDatePicker != null) FromDatePicker.Date = null;
+        if (ToDatePicker != null) ToDatePicker.Date = null;
+    }
+
+    private void UpdateStreamingIcon()
+    {
+        var mode = ResultsViewerSettings.LoadingAnimation;
+        if (RobotLoader.IsAnimated(mode))
+        {
+            StreamGif.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri(RobotLoader.SmallUri(0, mode)));
+            StreamGif.Visibility = Visibility.Visible;
+            StreamRing.Visibility = Visibility.Collapsed;
+            StreamRing.IsActive = false;
+        }
+        else
+        {
+            StreamGif.Visibility = Visibility.Collapsed;
+            StreamRing.Visibility = Visibility.Visible;
+            StreamRing.IsActive = true;
+        }
     }
 
     /// <summary>
@@ -491,6 +538,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         ResultsViewerSettings.Changed -= OnSettingsChanged;
+        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         MiddleLayerService.StateChanged -= OnMiddleLayerStateChanged;
         FindNeedlePluginLib.FlowProgress.Updated -= OnFlowProgress;
         _lazyIndexTimer.Stop();
@@ -579,6 +627,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void StopStreamingButton_Click(object sender, RoutedEventArgs e)
     {
         ViewModel.StopStreaming();
+    }
+
+    private void RefreshResults_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.RefreshNow();
     }
 
     private void OnSettingsChanged()
@@ -1096,6 +1149,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalCount))
             DispatcherQueue.TryEnqueue(RefreshSearchSubmitMode);
+        // When a streaming load finishes, re-check the decode banner — the new file's stats are now
+        // captured, so a stale "missing symbols" warning clears (or the new file's own appears).
+        else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming) && !ViewModel.IsStreaming)
+            DispatcherQueue.TryEnqueue(UpdateDecodeBanner);
     }
     private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
     private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;

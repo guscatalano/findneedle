@@ -61,8 +61,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
         try
         {
             // --- Loading animation ---
-            SelectComboItemByTag(LoadingAnimationCombo, ResultsViewerSettings.LoadingAnimation);
-            SelectComboItemByTag(RobotIntensityCombo, ResultsViewerSettings.RobotIntensity);
+            PopulateLoaderCombos();
             SelectComboItemByTag(RobotWidthCombo, ResultsViewerSettings.RobotWide ? "Wide" : "Narrow");
             UpdateRobotOptionsVisibility();
             ShowPreviewFrame(0);
@@ -88,6 +87,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- Search submit mode ---
             SelectSearchSubmitMode();
+
+            // --- Progressive loading ---
+            StreamWhileLoadingCheck.IsChecked = ResultsViewerSettings.StreamWhileLoading;
 
             // --- Search progress ---
             ShowStepHistoryCheck.IsChecked = ResultsViewerSettings.ShowStepHistory;
@@ -343,20 +345,81 @@ public sealed partial class ResultsViewerSettingsPage : Page
         ResultsViewerSettings.ShowStepHistory = ShowStepHistoryCheck.IsChecked == true;
     }
 
-    private void LoadingAnimationCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void StreamWhileLoadingCheck_Changed(object sender, RoutedEventArgs e)
     {
         if (_suppressEvents) return;
-        if (LoadingAnimationCombo.SelectedItem is ComboBoxItem item && item.Tag is string mode)
-            ResultsViewerSettings.LoadingAnimation = mode;
-        UpdateRobotOptionsVisibility();
+        ResultsViewerSettings.StreamWhileLoading = StreamWhileLoadingCheck.IsChecked == true;
     }
 
-    private void RobotIntensityCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    // Loading-animation choices grouped into categories so the dropdown stays short.
+    private static readonly (string cat, (string tag, string label)[] items)[] LoaderCatalog =
+    {
+        ("Classic",    new[] { ("Spinner", "Spinner — ring"), ("Bar", "Progress bar") }),
+        ("Industrial", new[] { ("Robot", "Robot"), ("Forge", "Forge"), ("Warehouse", "Warehouse"), ("Laundromat", "Laundromat") }),
+        ("Nature",     new[] { ("Greenhouse", "Greenhouse"), ("Sea", "Sea"), ("Arctic", "Arctic"), ("Bio", "Bio"), ("Zen", "Zen") }),
+        ("Cosmic",     new[] { ("Cosmic", "Cosmic"), ("Crystal", "Crystal") }),
+        ("Other",      new[] { ("Haunted", "Haunted"), ("Library", "Library") }),
+    };
+
+    private void PopulateLoaderCombos()
+    {
+        _suppressEvents = true;
+        try
+        {
+            LoaderCategoryCombo.Items.Clear();
+            foreach (var (cat, _) in LoaderCatalog)
+                LoaderCategoryCombo.Items.Add(new ComboBoxItem { Content = cat, Tag = cat });
+
+            var current = ResultsViewerSettings.LoadingAnimation;
+            int catIdx = 0;
+            for (int i = 0; i < LoaderCatalog.Length; i++)
+                if (LoaderCatalog[i].items.Any(it => string.Equals(it.tag, current, StringComparison.OrdinalIgnoreCase)))
+                { catIdx = i; break; }
+
+            LoaderCategoryCombo.SelectedIndex = catIdx;
+            PopulateItemCombo(catIdx, current);
+        }
+        finally { _suppressEvents = false; }
+    }
+
+    private void PopulateItemCombo(int catIdx, string selectTag)
+    {
+        LoaderItemCombo.Items.Clear();
+        var items = LoaderCatalog[catIdx].items;
+        int sel = 0;
+        for (int i = 0; i < items.Length; i++)
+        {
+            LoaderItemCombo.Items.Add(new ComboBoxItem { Content = items[i].label, Tag = items[i].tag });
+            if (string.Equals(items[i].tag, selectTag, StringComparison.OrdinalIgnoreCase)) sel = i;
+        }
+        LoaderItemCombo.SelectedIndex = sel;
+    }
+
+    private void LoaderCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressEvents) return;
-        if (RobotIntensityCombo.SelectedItem is ComboBoxItem item && item.Tag is string v)
-            ResultsViewerSettings.RobotIntensity = v;
-        ShowPreviewFrame(_previewStep);
+        int idx = LoaderCategoryCombo.SelectedIndex;
+        if (idx < 0) return;
+        _suppressEvents = true;
+        try { PopulateItemCombo(idx, LoaderCatalog[idx].items[0].tag); }
+        finally { _suppressEvents = false; }
+        ApplySelectedLoaderItem();
+    }
+
+    private void LoaderItemCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ApplySelectedLoaderItem();
+    }
+
+    private void ApplySelectedLoaderItem()
+    {
+        if (LoaderItemCombo.SelectedItem is ComboBoxItem it && it.Tag is string tag)
+        {
+            ResultsViewerSettings.LoadingAnimation = tag;
+            UpdateRobotOptionsVisibility();
+            if (RobotLoader.IsAnimated(tag)) ShowPreviewFrame(0);
+        }
     }
 
     private void RobotWidthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -370,22 +433,32 @@ public sealed partial class ResultsViewerSettingsPage : Page
     private void UpdateRobotOptionsVisibility()
     {
         if (RobotOptionsPanel == null) return;
-        bool robot = ResultsViewerSettings.LoadingAnimation == "Robot";
-        RobotOptionsPanel.Visibility = robot ? Visibility.Visible : Visibility.Collapsed;
-        RobotPreviewBox.Visibility = robot ? Visibility.Visible : Visibility.Collapsed;
-        SpinnerPreviewRing.Visibility = robot ? Visibility.Collapsed : Visibility.Visible;
-        SpinnerPreviewRing.IsActive = !robot;
+        var mode = ResultsViewerSettings.LoadingAnimation;
+        bool animated = RobotLoader.IsAnimated(mode);
+        bool bar = mode == "Bar";
+
+        // Theme options (shape + preview) for any animated theme.
+        RobotOptionsPanel.Visibility = animated ? Visibility.Visible : Visibility.Collapsed;
+        RobotPreviewBox.Visibility = animated ? Visibility.Visible : Visibility.Collapsed;
+        if (animated) ShowPreviewFrame(_previewStep);   // refresh art for the newly-selected theme
+
+        SpinnerPreviewRing.Visibility = (!animated && !bar) ? Visibility.Visible : Visibility.Collapsed;
+        SpinnerPreviewRing.IsActive = (!animated && !bar);
+
+        BarPreview.Visibility = bar ? Visibility.Visible : Visibility.Collapsed;
+        BarPreview.IsIndeterminate = bar;
     }
 
     // ----- robot preview (step through manually with Prev/Next) -----
     private void ShowPreviewFrame(int step)
     {
         if (RobotPreviewImage == null) return;
-        int n = RobotLoader.Steps.Length;
+        var frames = RobotLoader.FramesFor(ResultsViewerSettings.LoadingAnimation);
+        int n = frames.Length;
         _previewStep = ((step % n) + n) % n; // wrap both directions
         RobotPreviewImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
             new Uri(RobotLoader.Uri(_previewStep)));
-        RobotPreviewStepText.Text = $"Step {_previewStep + 1}/{n}: {RobotLoader.Steps[_previewStep]}";
+        RobotPreviewStepText.Text = $"Step {_previewStep + 1}/{n}: {frames[_previewStep]}";
     }
 
     private void RobotPreviewPrev_Click(object sender, RoutedEventArgs e) => ShowPreviewFrame(_previewStep - 1);

@@ -211,6 +211,7 @@ public class MiddleLayerService
         try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
         CurrentStreamingSearch = null;
         ClearOverrideStorage(); // a real search supersedes any cache being viewed
+        LastStats = null;        // drop the previous file's decode/stats so its warning banner clears
         // Stop any background index build from a previous search before we wipe/replace storage.
         CancelBackgroundIndexBuild();
 
@@ -638,6 +639,7 @@ public class MiddleLayerService
         // wasting CPU + disk and racing with the new search for the result handle.
         try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
         ClearOverrideStorage(); // a real search supersedes any cache being viewed
+        LastStats = null;        // drop the previous file's decode/stats so its warning banner clears
 
         UpdateSearchQuery();
         if (SearchQueryUX.CurrentQuery is not NuSearchQuery nu)

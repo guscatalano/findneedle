@@ -53,35 +53,31 @@
                             <TextBlock Text="Loading animation" FontWeight="SemiBold"/>
                             <TextBlock Text="What the full-window loading overlay shows during searches and file opens."
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="LoadingAnimationCombo" Width="340"
-                                      SelectionChanged="LoadingAnimationCombo_SelectionChanged"
-                                      AutomationProperties.Name="Loading animation">
-                                <ComboBoxItem Content="Robot — animated, follows the search steps" Tag="Robot"/>
-                                <ComboBoxItem Content="Spinner — classic ring"                    Tag="Spinner"/>
-                            </ComboBox>
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Category" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <ComboBox x:Name="LoaderCategoryCombo" Width="170"
+                                              SelectionChanged="LoaderCategoryCombo_SelectionChanged"
+                                              AutomationProperties.Name="Loading animation category"/>
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Style" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <ComboBox x:Name="LoaderItemCombo" Width="220"
+                                              SelectionChanged="LoaderItemCombo_SelectionChanged"
+                                              AutomationProperties.Name="Loading animation style"/>
+                                </StackPanel>
+                            </StackPanel>
 
                             <!-- Robot-specific options -->
                             <StackPanel x:Name="RobotOptionsPanel" Spacing="8" Margin="0,4,0,0">
-                                <StackPanel Orientation="Horizontal" Spacing="16">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="Intensity" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        <ComboBox x:Name="RobotIntensityCombo" Width="160"
-                                                  SelectionChanged="RobotIntensityCombo_SelectionChanged"
-                                                  AutomationProperties.Name="Robot intensity">
-                                            <ComboBoxItem Content="Busy"   Tag="Busy"/>
-                                            <ComboBoxItem Content="Normal" Tag="Normal"/>
-                                            <ComboBoxItem Content="Calm"   Tag="Calm"/>
-                                        </ComboBox>
-                                    </StackPanel>
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="Shape" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        <ComboBox x:Name="RobotWidthCombo" Width="160"
-                                                  SelectionChanged="RobotWidthCombo_SelectionChanged"
-                                                  AutomationProperties.Name="Robot shape">
-                                            <ComboBoxItem Content="Wide"   Tag="Wide"/>
-                                            <ComboBoxItem Content="Square" Tag="Narrow"/>
-                                        </ComboBox>
-                                    </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Shape" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <ComboBox x:Name="RobotWidthCombo" Width="160"
+                                              SelectionChanged="RobotWidthCombo_SelectionChanged"
+                                              AutomationProperties.Name="Robot shape">
+                                        <ComboBoxItem Content="Wide"   Tag="Wide"/>
+                                        <ComboBoxItem Content="Square" Tag="Narrow"/>
+                                    </ComboBox>
                                 </StackPanel>
                             </StackPanel>
 
@@ -93,9 +89,16 @@
                                     <ProgressRing x:Name="SpinnerPreviewRing" Width="56" Height="56"
                                                   IsActive="False" Visibility="Collapsed"
                                                   VerticalAlignment="Center"/>
+                                    <!-- Progress-bar preview -->
+                                    <ProgressBar x:Name="BarPreview" Width="240" IsIndeterminate="False"
+                                                 Visibility="Collapsed" VerticalAlignment="Center"/>
                                     <!-- Robot preview -->
                                     <StackPanel x:Name="RobotPreviewBox" Spacing="8" HorizontalAlignment="Center">
-                                        <Image x:Name="RobotPreviewImage" MaxWidth="320" MaxHeight="200" Stretch="Uniform"/>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                                CornerRadius="12" Padding="12" HorizontalAlignment="Center">
+                                            <Image x:Name="RobotPreviewImage" MaxWidth="320" MaxHeight="200" Stretch="Uniform"/>
+                                        </Border>
                                         <TextBlock x:Name="RobotPreviewStepText" HorizontalAlignment="Center" FontSize="12"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
@@ -146,6 +149,12 @@
                                       AutomationProperties.Name="Color theme">
                                 <ComboBoxItem Content="Subtle (default)" Tag="Subtle"/>
                                 <ComboBoxItem Content="Vivid"            Tag="Vivid"/>
+                                <ComboBoxItem Content="Classic (red/yellow)" Tag="Classic"/>
+                                <ComboBoxItem Content="Bold"             Tag="Bold"/>
+                                <ComboBoxItem Content="Ocean"            Tag="Ocean"/>
+                                <ComboBoxItem Content="Forest"           Tag="Forest"/>
+                                <ComboBoxItem Content="Sunset"           Tag="Sunset"/>
+                                <ComboBoxItem Content="Grayscale"        Tag="Grayscale"/>
                                 <ComboBoxItem Content="None"             Tag="None"/>
                             </ComboBox>
                         </StackPanel>
@@ -210,6 +219,21 @@
 
                 <!-- ============================ SEARCH ============================ -->
                 <StackPanel x:Name="PanelSearch" Spacing="16" Visibility="Collapsed">
+
+                    <!-- Progressive loading -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Progressive loading" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="StreamWhileLoadingCheck"
+                                      Content="Open logs as they load"
+                                      Checked="StreamWhileLoadingCheck_Changed" Unchecked="StreamWhileLoadingCheck_Changed"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Shows the viewer as soon as the first page is ready and keeps filling rows in the background (with a banner and a live, rising count). Turn off to wait for the full scan before the viewer opens."/>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Cache reuse -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"

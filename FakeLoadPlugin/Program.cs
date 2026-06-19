@@ -73,6 +73,20 @@ public class Program
     public static List<PluginDescription> LoadPluginModule(string file)
     {
         WriteToConsoleAndFile("Attempting to load: " + file);
+
+        // Resolve the plugin's own dependencies (e.g. System.Diagnostics.EventLog) from its folder —
+        // Assembly.LoadFile doesn't probe there, so instantiating a plugin would otherwise fail.
+        var pluginDir = Path.GetDirectoryName(Path.GetFullPath(file)) ?? "";
+        System.Runtime.Loader.AssemblyLoadContext.Default.Resolving += (ctx, name) =>
+        {
+            try
+            {
+                var cand = Path.Combine(pluginDir, name.Name + ".dll");
+                return File.Exists(cand) ? ctx.LoadFromAssemblyPath(cand) : null;
+            }
+            catch { return null; }
+        };
+
         var dll = Assembly.LoadFile(file);
         var types = dll.GetTypes();
         List<PluginDescription> foundTypes = new List<PluginDescription>();
@@ -102,7 +116,11 @@ public class Program
                 }
 
                 WriteToConsoleAndFile("Found interface: " + possibleInterface.FullName + " of type " + possibleInterface.BaseType);
-                if (possibleInterface.FullName.Equals("FindNeedlePluginLib.Interfaces.IPluginDescription"))
+                // Match by full name (not typeof) — the plugin is loaded via Assembly.LoadFile, so its
+                // IPluginDescription may be a different Type identity than ours. The interface lives in
+                // namespace FindNeedlePluginLib; the old "…Interfaces.IPluginDescription" string was wrong
+                // (it never matched), so every plugin was reported invalid.
+                if (possibleInterface.FullName.Equals("FindNeedlePluginLib.IPluginDescription"))
                 {
                     instantiate = true;
                     WriteToConsoleAndFile("Found potential plugin, loading...");
@@ -119,21 +137,31 @@ public class Program
 
             if (instantiate)
             {
-                var Plugin = dll.CreateInstance(type.FullName);
-               
-                
-                if (Plugin != null)
+                // Isolate per-plugin instantiation failures — one plugin that throws in its ctor (e.g. a
+                // missing dependency) must not abort descriptor generation for the whole module.
+                try
                 {
-                    WriteToConsoleAndFile("Friendly Name: " + ((IPluginDescription)Plugin).GetPluginFriendlyName());
-                    WriteToConsoleAndFile("Description: " + ((IPluginDescription)Plugin).GetPluginTextDescription());
-                    foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, baseType,
-                        file, implementedInterfaces, implementedInterfacesShort));
+                    var Plugin = dll.CreateInstance(type.FullName);
+                    if (Plugin != null)
+                    {
+                        WriteToConsoleAndFile("Friendly Name: " + ((IPluginDescription)Plugin).GetPluginFriendlyName());
+                        WriteToConsoleAndFile("Description: " + ((IPluginDescription)Plugin).GetPluginTextDescription());
+                        foundTypes.Add(IPluginDescription.GetPluginDescription((IPluginDescription)Plugin, baseType,
+                            file, implementedInterfaces, implementedInterfacesShort));
+                    }
+                    else
+                    {
+                        WriteToConsoleAndFile("Failed to create instance of " + type.FullName);
+                        foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName, baseType,
+                        file, implementedInterfaces, implementedInterfacesShort, "Could not instantiate (missing binary?)"));
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    WriteToConsoleAndFile("Failed to create instance of " + type.FullName);
+                    var msg = (ex.InnerException ?? ex).Message;
+                    WriteToConsoleAndFile("Exception instantiating " + type.FullName + ": " + msg);
                     foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName, baseType,
-                    file, implementedInterfaces, implementedInterfacesShort, "Could not instantiate (missing binary?)"));
+                        file, implementedInterfaces, implementedInterfacesShort, "Instantiation failed: " + msg));
                 }
             }
             else
