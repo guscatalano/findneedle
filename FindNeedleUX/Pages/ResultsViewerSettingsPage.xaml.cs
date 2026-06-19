@@ -73,6 +73,10 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Theme ---
             SelectComboItemByTag(ThemeCombo, ResultsViewerSettings.ThemeName);
 
+            // --- Scrollbar size ---
+            SelectComboItemByTag(ScrollBarSizeCombo,
+                ((int)ResultsViewerSettings.ScrollBarSize).ToString());
+
             // --- Levels: start from the active theme preset, then layer per-level overrides. ---
             RebuildLevelEditor();
 
@@ -209,6 +213,15 @@ public sealed partial class ResultsViewerSettingsPage : Page
             ResultsViewerSettings.ThemeName = themeName;
             RebuildLevelEditor();
         }
+    }
+
+    // ----- Scrollbar size -----
+    private void ScrollBarSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (ScrollBarSizeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && double.TryParse(tag, out var size))
+            ResultsViewerSettings.ScrollBarSize = size;
     }
 
     // ----- Per-level color editor -----

@@ -61,6 +61,12 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         this.InitializeComponent();
 
+        // Make the result-grid scrollbar as thick as the user configured. Override the WinUI
+        // ScrollBarSize resource at page scope *before* the DataGrid realizes its template so its
+        // scrollbars pick it up; MouseIndicator keeps the (thicker) bar shown rather than collapsing
+        // to the thin auto-hide line. Re-applied live via OnSettingsChanged for an open viewer.
+        ApplyScrollBarSize();
+
         // Keep this page instance alive across Frame navigations. First switch from another
         // viewer still pays the construction cost (XAML + DataGrid init), but every subsequent
         // switch reuses the cached instance and feels instant. The page's Loaded event still
@@ -169,6 +175,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Become the live view the MCP bridge reads/drives. Last-loaded viewer wins.
         FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.UiDispatcher ??= DispatcherQueue;
         FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.RegisterViewer(this);
+
+        // The grid's scrollbars exist in the visual tree now, so push the configured thickness onto
+        // them (the constructor only set the resource, before the template realized).
+        ApplyScrollBarSize();
     }
 
     /// <summary>
@@ -641,8 +651,40 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             ApplyPersistedSettings();
             ApplyPersistedLevelOverrides();
+            ApplyScrollBarSize();
             RebindGrid();
         });
+    }
+
+    /// <summary>Apply the user's configured scrollbar thickness. Overrides the WinUI
+    /// <c>ScrollBarSize</c> resource at page scope (picked up when scrollbars (re)template) and, for an
+    /// already-realized grid, pushes the size onto the live scrollbars so the change shows immediately.</summary>
+    private void ApplyScrollBarSize()
+    {
+        double size = ResultsViewerSettings.ScrollBarSize;
+        Resources["ScrollBarSize"] = size;
+        if (ResultsGrid == null) return;
+        try
+        {
+            foreach (var sb in FindDescendants<Microsoft.UI.Xaml.Controls.Primitives.ScrollBar>(ResultsGrid))
+            {
+                if (sb.Orientation == Orientation.Vertical) { sb.Width = size; sb.MinWidth = size; }
+                else { sb.Height = size; sb.MinHeight = size; }
+                sb.IndicatorMode = Microsoft.UI.Xaml.Controls.Primitives.ScrollingIndicatorMode.MouseIndicator;
+            }
+        }
+        catch { /* visual tree not realized yet — the resource override covers the next template pass */ }
+    }
+
+    private static IEnumerable<T> FindDescendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        int n = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < n; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var d in FindDescendants<T>(child)) yield return d;
+        }
     }
 
     private void ApplyPersistedSettings()

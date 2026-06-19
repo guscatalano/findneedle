@@ -456,6 +456,19 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 HasPendingRows = true;
                 return;
             }
+
+            // Once the visible page is full, newly-streamed rows land *past* it, so the on-screen rows
+            // don't change — rebuilding them every tick only steals the DataGrid's selection/focus and
+            // makes rows "glitch" while you click. Keep just the running total/page count fresh; leave
+            // the visible rows alone until the load finishes (or the user pages/refreshes).
+            if (Results.Count >= _pageSize)
+            {
+                TotalFilteredCount = TotalCount;
+                OnPropertyChanged(nameof(TotalPages));
+                OnPropertyChanged(nameof(PageRangeText));
+                UpdateStatus();
+                return;
+            }
         }
         else
         {

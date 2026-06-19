@@ -160,6 +160,25 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Scrollbar -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Scrollbar" FontWeight="SemiBold"/>
+                            <TextBlock Text="How thick the result grid's scrollbar is. Larger sizes are easier to see and grab."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="ScrollBarSizeCombo" Width="220"
+                                      SelectionChanged="ScrollBarSizeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Scrollbar size">
+                                <ComboBoxItem Content="Default (thin)" Tag="12"/>
+                                <ComboBoxItem Content="Medium"        Tag="18"/>
+                                <ComboBoxItem Content="Large"         Tag="24"/>
+                                <ComboBoxItem Content="Extra large"   Tag="32"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Per-level colors -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

@@ -364,6 +364,23 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Thickness (in px) of the result grid's scrollbars. WinUI's default is a thin auto-hiding bar
+    /// (~12px); bumping this makes the scrollbar easier to see and grab. Clamped to a sane range so a
+    /// corrupt value can't make the bar invisible or eat the grid. Applied as a <c>ScrollBarSize</c>
+    /// resource override when the viewer page is built. Broadcasts Changed.
+    /// </summary>
+    public const double DefaultScrollBarSize = 12;
+    public const double MinScrollBarSize = 8;
+    public const double MaxScrollBarSize = 32;
+    public static double ClampScrollBarSize(double v) =>
+        v < MinScrollBarSize ? MinScrollBarSize : v > MaxScrollBarSize ? MaxScrollBarSize : v;
+    public static double ScrollBarSize
+    {
+        get => ClampScrollBarSize(Data.ScrollBarSize ?? DefaultScrollBarSize);
+        set { Data.ScrollBarSize = ClampScrollBarSize(value); Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>
     /// Per-level hex color overrides ("#AARRGGBB" / "#RRGGBB" / "Transparent").
     /// Returns a copy; mutate via <see cref="SetLevelColor"/> or <see cref="ClearLevelColors"/>.
     /// </summary>
@@ -444,5 +461,6 @@ public static class ResultsViewerSettings
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }
+        public double? ScrollBarSize { get; set; }
     }
 }
