@@ -256,6 +256,30 @@ public static class ResultsViewerSettings
         set { Data.ShowStepHistory = value; Save(); }
     }
 
+    /// <summary>Loading overlay style: "Robot" (animated step-aware GIF) or "Spinner" (classic ring).</summary>
+    public const string DefaultLoadingAnimation = "Robot";
+    public static string LoadingAnimation
+    {
+        get => string.IsNullOrEmpty(Data.LoadingAnimation) ? DefaultLoadingAnimation : Data.LoadingAnimation;
+        set { Data.LoadingAnimation = value; Save(); }
+    }
+
+    /// <summary>Robot loader intensity: "Busy", "Normal", or "Calm".</summary>
+    public const string DefaultRobotIntensity = "Normal";
+    public static string RobotIntensity
+    {
+        get => string.IsNullOrEmpty(Data.RobotIntensity) ? DefaultRobotIntensity : Data.RobotIntensity;
+        set { Data.RobotIntensity = value; Save(); }
+    }
+
+    /// <summary>Robot loader uses the wide (landscape) art when true; the square 256 art when false.</summary>
+    public const bool DefaultRobotWide = true;
+    public static bool RobotWide
+    {
+        get => Data.RobotWide ?? DefaultRobotWide;
+        set { Data.RobotWide = value; Save(); }
+    }
+
     public const FindPluginCore.Searching.CacheReuseMode DefaultCacheReuseMode = FindPluginCore.Searching.CacheReuseMode.Prompt;
     public static FindPluginCore.Searching.CacheReuseMode CacheReuseMode
     {
@@ -407,6 +431,9 @@ public static class ResultsViewerSettings
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }
+        public string LoadingAnimation { get; set; }
+        public string RobotIntensity { get; set; }
+        public bool? RobotWide { get; set; }
         public bool? ColorTaggedRows { get; set; }
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }

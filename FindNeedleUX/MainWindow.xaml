@@ -90,6 +90,10 @@
                   AutomationProperties.Name="Operation in progress" AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
                     <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False" AutomationProperties.Name="Working"/>
+                    <!-- Animated robot loader (alternative to the spinner; chosen in settings). The
+                         frame shown tracks the current search step. Box scales both square + wide art. -->
+                    <Image x:Name="SpinnerGif" MaxWidth="360" MaxHeight="240" Stretch="Uniform"
+                           Visibility="Collapsed" AutomationProperties.Name="Working"/>
 
                     <!-- Structured step checklist (search→view flow). Fixed columns so the name,
                          metric, and percent line up across every step. -->

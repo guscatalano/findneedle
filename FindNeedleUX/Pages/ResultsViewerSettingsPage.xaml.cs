@@ -21,6 +21,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
     public ObservableCollection<LevelEntry> Levels { get; } = new();
 
     private bool _suppressEvents;
+    private int _previewStep;
 
     public ResultsViewerSettingsPage()
     {
@@ -59,6 +60,13 @@ public sealed partial class ResultsViewerSettingsPage : Page
         _suppressEvents = true;
         try
         {
+            // --- Loading animation ---
+            SelectComboItemByTag(LoadingAnimationCombo, ResultsViewerSettings.LoadingAnimation);
+            SelectComboItemByTag(RobotIntensityCombo, ResultsViewerSettings.RobotIntensity);
+            SelectComboItemByTag(RobotWidthCombo, ResultsViewerSettings.RobotWide ? "Wide" : "Narrow");
+            UpdateRobotOptionsVisibility();
+            ShowPreviewFrame(0);
+
             // --- Time format ---
             SelectComboItemByTag(TimeFormatCombo, ResultsViewerSettings.TimeFormat);
             UpdateTimeFormatPreview();
@@ -334,6 +342,54 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (_suppressEvents) return;
         ResultsViewerSettings.ShowStepHistory = ShowStepHistoryCheck.IsChecked == true;
     }
+
+    private void LoadingAnimationCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (LoadingAnimationCombo.SelectedItem is ComboBoxItem item && item.Tag is string mode)
+            ResultsViewerSettings.LoadingAnimation = mode;
+        UpdateRobotOptionsVisibility();
+    }
+
+    private void RobotIntensityCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (RobotIntensityCombo.SelectedItem is ComboBoxItem item && item.Tag is string v)
+            ResultsViewerSettings.RobotIntensity = v;
+        ShowPreviewFrame(_previewStep);
+    }
+
+    private void RobotWidthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (RobotWidthCombo.SelectedItem is ComboBoxItem item && item.Tag is string v)
+            ResultsViewerSettings.RobotWide = v == "Wide";
+        ShowPreviewFrame(_previewStep);
+    }
+
+    private void UpdateRobotOptionsVisibility()
+    {
+        if (RobotOptionsPanel == null) return;
+        bool robot = ResultsViewerSettings.LoadingAnimation == "Robot";
+        RobotOptionsPanel.Visibility = robot ? Visibility.Visible : Visibility.Collapsed;
+        RobotPreviewBox.Visibility = robot ? Visibility.Visible : Visibility.Collapsed;
+        SpinnerPreviewRing.Visibility = robot ? Visibility.Collapsed : Visibility.Visible;
+        SpinnerPreviewRing.IsActive = !robot;
+    }
+
+    // ----- robot preview (step through manually with Prev/Next) -----
+    private void ShowPreviewFrame(int step)
+    {
+        if (RobotPreviewImage == null) return;
+        int n = RobotLoader.Steps.Length;
+        _previewStep = ((step % n) + n) % n; // wrap both directions
+        RobotPreviewImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
+            new Uri(RobotLoader.Uri(_previewStep)));
+        RobotPreviewStepText.Text = $"Step {_previewStep + 1}/{n}: {RobotLoader.Steps[_previewStep]}";
+    }
+
+    private void RobotPreviewPrev_Click(object sender, RoutedEventArgs e) => ShowPreviewFrame(_previewStep - 1);
+    private void RobotPreviewNext_Click(object sender, RoutedEventArgs e) => ShowPreviewFrame(_previewStep + 1);
 
     // ----- MCP server -----
     private void McpEnabledCheck_Changed(object sender, RoutedEventArgs e)

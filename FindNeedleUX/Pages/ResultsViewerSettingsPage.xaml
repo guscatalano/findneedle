@@ -45,6 +45,69 @@
                 <!-- ============================ APPEARANCE ============================ -->
                 <StackPanel x:Name="PanelAppearance" Spacing="16">
 
+                    <!-- Loading animation -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Loading animation" FontWeight="SemiBold"/>
+                            <TextBlock Text="What the full-window loading overlay shows during searches and file opens."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="LoadingAnimationCombo" Width="340"
+                                      SelectionChanged="LoadingAnimationCombo_SelectionChanged"
+                                      AutomationProperties.Name="Loading animation">
+                                <ComboBoxItem Content="Robot — animated, follows the search steps" Tag="Robot"/>
+                                <ComboBoxItem Content="Spinner — classic ring"                    Tag="Spinner"/>
+                            </ComboBox>
+
+                            <!-- Robot-specific options -->
+                            <StackPanel x:Name="RobotOptionsPanel" Spacing="8" Margin="0,4,0,0">
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Intensity" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <ComboBox x:Name="RobotIntensityCombo" Width="160"
+                                                  SelectionChanged="RobotIntensityCombo_SelectionChanged"
+                                                  AutomationProperties.Name="Robot intensity">
+                                            <ComboBoxItem Content="Busy"   Tag="Busy"/>
+                                            <ComboBoxItem Content="Normal" Tag="Normal"/>
+                                            <ComboBoxItem Content="Calm"   Tag="Calm"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Shape" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <ComboBox x:Name="RobotWidthCombo" Width="160"
+                                                  SelectionChanged="RobotWidthCombo_SelectionChanged"
+                                                  AutomationProperties.Name="Robot shape">
+                                            <ComboBoxItem Content="Wide"   Tag="Wide"/>
+                                            <ComboBoxItem Content="Square" Tag="Narrow"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Preview (both modes) -->
+                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                    CornerRadius="6" Padding="12" Margin="0,4,0,0">
+                                <StackPanel Spacing="8" HorizontalAlignment="Center" MinHeight="120">
+                                    <!-- Spinner preview -->
+                                    <ProgressRing x:Name="SpinnerPreviewRing" Width="56" Height="56"
+                                                  IsActive="False" Visibility="Collapsed"
+                                                  VerticalAlignment="Center"/>
+                                    <!-- Robot preview -->
+                                    <StackPanel x:Name="RobotPreviewBox" Spacing="8" HorizontalAlignment="Center">
+                                        <Image x:Name="RobotPreviewImage" MaxWidth="320" MaxHeight="200" Stretch="Uniform"/>
+                                        <TextBlock x:Name="RobotPreviewStepText" HorizontalAlignment="Center" FontSize="12"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                            <Button x:Name="RobotPrevButton" Content="← Prev" Click="RobotPreviewPrev_Click"/>
+                                            <Button x:Name="RobotNextButton" Content="Next →" Click="RobotPreviewNext_Click"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Time format -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

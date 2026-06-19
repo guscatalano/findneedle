@@ -497,6 +497,13 @@ public sealed partial class MainWindow : Window
             var steps = FindNeedlePluginLib.FlowProgress.Steps();
             if (steps.Count == 0) { StepList.Visibility = Visibility.Collapsed; return; }
 
+            // Advance the robot loader to the frame for the current step (sweep→papers→shelves→sort).
+            if (UseRobotLoader)
+            {
+                var cur = steps.FirstOrDefault(s => s.Current);
+                if (cur != null) SetRobotFrame(cur.Number - 1);
+            }
+
             // "Show completed steps" off → only the current step row; on → the whole checklist.
             var view = ResultsViewerSettings.ShowStepHistory ? steps : steps.Where(s => s.Current).ToList();
             while (_stepRows.Count > view.Count) _stepRows.RemoveAt(_stepRows.Count - 1);
@@ -658,16 +665,53 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // Step-aware robot loader: sweep → scan → papers → shelve → sort → type (see RobotLoader).
+    private int _currentRobotIndex = -1;
+
+    private static bool UseRobotLoader => ResultsViewerSettings.LoadingAnimation == "Robot";
+
+    /// <summary>Point the robot Image at the GIF for the given step (0-based, clamped). Only swaps the
+    /// source when the step actually changes, so the animation isn't restarted on every progress tick.</summary>
+    private void SetRobotFrame(int stepIndex)
+    {
+        if (SpinnerGif == null) return;
+        int idx = Math.Clamp(stepIndex, 0, RobotLoader.Steps.Length - 1);
+        if (idx == _currentRobotIndex) return;
+        _currentRobotIndex = idx;
+        SpinnerGif.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(RobotLoader.Uri(idx)));
+    }
+
     private void ShowSpinner(bool show, string text = null, bool showCancel = false)
     {
         SpinnerPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        EtlSpinner.IsActive = show;
+
+        bool robot = UseRobotLoader;
+        if (show && robot)
+        {
+            EtlSpinner.IsActive = false;
+            EtlSpinner.Visibility = Visibility.Collapsed;
+            SpinnerGif.Visibility = Visibility.Visible;
+            _currentRobotIndex = -1;   // force a fresh frame for this run
+            SetRobotFrame(0);          // start on "sweep"
+        }
+        else
+        {
+            SpinnerGif.Visibility = Visibility.Collapsed;
+            EtlSpinner.Visibility = Visibility.Visible;
+            EtlSpinner.IsActive = show;
+        }
         if (text != null)
             SpinnerText.Text = text;
         // Non-flow spinners (ETL inspect, workspace load) show the plain text line; the structured
         // step checklist is hidden until a search flow drives it via OnFlowProgress.
         StepList.Visibility = Visibility.Collapsed;
         SpinnerText.Visibility = Visibility.Visible;
+        if (show && showCancel)
+        {
+            // Reset the button for a fresh operation.
+            CancelQuickActionButton.IsEnabled = true;
+            CancelQuickActionButton.Content = "Cancel";
+        }
         CancelQuickActionButton.Visibility = show && showCancel ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -675,8 +719,12 @@ public sealed partial class MainWindow : Window
     {
         if (_quickActionCts != null && !_quickActionCts.IsCancellationRequested)
         {
+            // Cancellation only takes effect at the next checkpoint in the worker, which can be a
+            // moment away — give immediate visual confirmation that the click registered.
+            CancelQuickActionButton.IsEnabled = false;
+            CancelQuickActionButton.Content = "Cancelling…";
+            SpinnerText.Text = "Cancelling…";
             _quickActionCts.Cancel();
-            SpinnerText.Text = "Cancelling...";
         }
     }
 }
