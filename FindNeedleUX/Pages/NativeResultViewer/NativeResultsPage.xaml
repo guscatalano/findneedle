@@ -127,7 +127,12 @@
         <Border Grid.Row="0" Padding="12,8"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <TextBox x:Name="SearchBox" Width="280" Height="32"
                          PlaceholderText="Search all columns... (Ctrl+F)"
                          TextChanged="SearchBox_TextChanged"
@@ -185,10 +190,6 @@
                         <TextBlock Text="Sources"/>
                     </StackPanel>
                 </Button>
-                <Button Content="Help" Click="HelpButton_Click" Height="32"/>
-                <Button Content="Settings…" Click="SettingsButton_Click" Height="32"
-                        AutomationProperties.Name="Open viewer settings"/>
-
                 <ToggleButton x:Name="FiltersToggle" Height="32"
                               IsChecked="True"
                               Click="FiltersToggle_Click"
@@ -199,49 +200,24 @@
                     </StackPanel>
                 </ToggleButton>
 
-                <!-- Hide rows excluded by the active RuleDSL filter rules (opt-in; disabled when no
-                     rules are active). Builds a filtered view of the current results. -->
-                <ToggleButton x:Name="RuleFilterToggle" Height="32" Margin="8,0,0,0"
-                              IsEnabled="False" Click="RuleFilterToggle_Click"
-                              ToolTipService.ToolTip="Hide rows excluded by the active rules"
-                              AutomationProperties.Name="Apply rule filters to this view">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
-                        <TextBlock Text="Rule filter"/>
-                    </StackPanel>
-                </ToggleButton>
-
-                <!-- Choose where the filter pane sits: across the top, or down the left side. -->
-                <Button x:Name="FilterDockButton" Height="32"
-                        AutomationProperties.Name="Filter pane position"
-                        ToolTipService.ToolTip="Dock the filter pane on top or on the left">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock x:Name="FilterDockGlyph" Text="&#xE7A0;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
-                        <TextBlock x:Name="FilterDockLabel" Text="Dock"/>
-                    </StackPanel>
+                <!-- View: rule-filter toggle, row-detail mode, and filter-pane dock, grouped. -->
+                <Button Content="View ▾" Height="32" AutomationProperties.Name="View options"
+                        ToolTipService.ToolTip="Row details, filter pane position, and rule filtering">
                     <Button.Flyout>
                         <MenuFlyout>
-                            <RadioMenuFlyoutItem x:Name="DockTopItem"  Text="Filters on top"  GroupName="filterDock" Click="FilterDockTop_Click"/>
-                            <RadioMenuFlyoutItem x:Name="DockLeftItem" Text="Filters on left" GroupName="filterDock" Click="FilterDockLeft_Click"/>
-                        </MenuFlyout>
-                    </Button.Flyout>
-                </Button>
-
-                <!-- Row details: three modes — inline expand, bottom panel, or double-click popup. -->
-                <Button x:Name="DetailsModeButton" Height="32"
-                        AutomationProperties.Name="Row details mode"
-                        ToolTipService.ToolTip="How a row's full details are shown">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="Details"/>
-                        <TextBlock x:Name="DetailsModeLabel" Text=": Inrow"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="▾" FontSize="11"/>
-                    </StackPanel>
-                    <Button.Flyout>
-                        <MenuFlyout>
-                            <RadioMenuFlyoutItem x:Name="DetailsInrowItem"  Text="Inrow — click a row to expand"          GroupName="detailsMode" Click="DetailsModeInrow_Click"/>
-                            <RadioMenuFlyoutItem x:Name="DetailsPanelItem"  Text="Bottom panel — docked below the grid"   GroupName="detailsMode" Click="DetailsModeBottomPanel_Click"/>
-                            <RadioMenuFlyoutItem x:Name="DetailsPopupItem"  Text="Popup — double-click a row for a dialog" GroupName="detailsMode" Click="DetailsModePopup_Click"/>
+                            <ToggleMenuFlyoutItem x:Name="RuleFilterToggle"
+                                                  Text="Rule filter — hide rows excluded by active rules"
+                                                  IsEnabled="False" Click="RuleFilterToggle_Click"/>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutSubItem Text="Row details">
+                                <RadioMenuFlyoutItem x:Name="DetailsInrowItem"  Text="Inrow — click a row to expand"          GroupName="detailsMode" Click="DetailsModeInrow_Click"/>
+                                <RadioMenuFlyoutItem x:Name="DetailsPanelItem"  Text="Bottom panel — docked below the grid"   GroupName="detailsMode" Click="DetailsModeBottomPanel_Click"/>
+                                <RadioMenuFlyoutItem x:Name="DetailsPopupItem"  Text="Popup — double-click a row for a dialog" GroupName="detailsMode" Click="DetailsModePopup_Click"/>
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSubItem Text="Filter pane">
+                                <RadioMenuFlyoutItem x:Name="DockTopItem"  Text="Filters on top"  GroupName="filterDock" Click="FilterDockTop_Click"/>
+                                <RadioMenuFlyoutItem x:Name="DockLeftItem" Text="Filters on left" GroupName="filterDock" Click="FilterDockLeft_Click"/>
+                            </MenuFlyoutSubItem>
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
@@ -294,6 +270,19 @@
                             AutomationProperties.Name="Cancel building search index"/>
                 </StackPanel>
             </StackPanel>
+
+            <!-- Overflow: rarely-used Help + Settings, pinned right. -->
+            <Button Grid.Column="1" x:Name="OverflowButton" Height="32" VerticalAlignment="Center"
+                    AutomationProperties.Name="More" ToolTipService.ToolTip="More">
+                <FontIcon Glyph="&#xE712;" FontSize="14"/>
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                        <MenuFlyoutItem Text="Help" Click="HelpButton_Click"/>
+                        <MenuFlyoutItem Text="Settings…" Click="SettingsButton_Click"/>
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
+          </Grid>
         </Border>
 
         <!-- Body: an optional left-docked filter pane (Column 0) beside the main content (Column 1).

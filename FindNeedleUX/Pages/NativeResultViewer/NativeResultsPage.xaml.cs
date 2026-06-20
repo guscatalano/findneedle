@@ -465,7 +465,6 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Toolbar reflection.
         if (DockTopItem  != null) DockTopItem.IsChecked  = !left;
         if (DockLeftItem != null) DockLeftItem.IsChecked = left;
-        if (FilterDockLabel != null) FilterDockLabel.Text = left ? "Left" : "Top";
     }
 
     private DetailsMode _detailsMode = DetailsMode.Inrow;
@@ -495,13 +494,6 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (DetailsInrowItem != null) DetailsInrowItem.IsChecked = mode == DetailsMode.Inrow;
         if (DetailsPanelItem != null) DetailsPanelItem.IsChecked = mode == DetailsMode.BottomPanel;
         if (DetailsPopupItem != null) DetailsPopupItem.IsChecked = mode == DetailsMode.Popup;
-        if (DetailsModeLabel != null)
-            DetailsModeLabel.Text = mode switch
-            {
-                DetailsMode.BottomPanel => ": Bottom",
-                DetailsMode.Popup       => ": Popup",
-                _                       => ": Inrow",
-            };
     }
 
     private void SetDetailsMode(DetailsMode mode)
