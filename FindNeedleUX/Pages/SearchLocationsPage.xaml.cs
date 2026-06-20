@@ -142,36 +142,39 @@ public sealed partial class SearchLocationsPage : Page
     /// query or an explicit list of work item ids.</summary>
     private async Task<AdoLocation> ShowAdoDialogAsync(AdoLocation existing)
     {
+        // When adding a new one, pre-fill from the last values the user entered.
         var org = new TextBox
         {
             Header = "Organization URL",
             PlaceholderText = "https://dev.azure.com/org  or  https://org.visualstudio.com",
-            Text = existing?.OrganizationUrl ?? "",
+            Text = existing?.OrganizationUrl ?? OnlineSourceSettings.AdoOrg,
         };
-        var project = new TextBox { Header = "Project", PlaceholderText = "MyProject", Text = existing?.Project ?? "" };
+        var project = new TextBox { Header = "Project", PlaceholderText = "MyProject",
+            Text = existing?.Project ?? OnlineSourceSettings.AdoProject };
 
         var auth = new RadioButtons { Header = "Sign-in", MaxColumns = 1 };
         auth.Items.Add("Personal Access Token (PAT)");
         auth.Items.Add("Azure AD interactive sign-in");
-        auth.SelectedIndex = existing != null ? (int)existing.AuthMode : 0;
+        auth.SelectedIndex = existing != null ? (int)existing.AuthMode : OnlineSourceSettings.AdoAuthMode;
         AdoAuthMode Mode() => auth.SelectedIndex == 1 ? AdoAuthMode.Interactive : AdoAuthMode.Pat;
 
-        var pat = new PasswordBox { Header = "PAT (needs Work Items: Read)", Password = existing?.Pat ?? "" };
+        var pat = new PasswordBox { Header = "PAT (needs Work Items: Read)",
+            Password = existing?.Pat ?? OnlineSourceSettings.AdoPat };
         var ids = new TextBox
         {
             Header = "Work item IDs (optional, comma-separated)",
-            PlaceholderText = "e.g. 1, 2", Text = existing?.Ids ?? "",
+            PlaceholderText = "e.g. 1, 2", Text = existing?.Ids ?? OnlineSourceSettings.AdoIds,
         };
         var wiql = new TextBox
         {
             Header = "WIQL query (used when no IDs given; blank = recently changed)",
             AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 60,
-            Text = existing?.Wiql ?? "",
+            Text = existing?.Wiql ?? OnlineSourceSettings.AdoWiql,
         };
         var attach = new CheckBox
         {
             Content = "Open the work items' log attachments (download & parse the files)",
-            IsChecked = existing?.OpenAttachments ?? false,
+            IsChecked = existing?.OpenAttachments ?? OnlineSourceSettings.AdoOpenAttachments,
         };
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 480 };
@@ -196,6 +199,15 @@ public sealed partial class SearchLocationsPage : Page
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
         if (string.IsNullOrWhiteSpace(org.Text) || string.IsNullOrWhiteSpace(project.Text)) return null;
 
+        // Remember these for next time.
+        OnlineSourceSettings.AdoOrg = org.Text;
+        OnlineSourceSettings.AdoProject = project.Text;
+        OnlineSourceSettings.AdoAuthMode = auth.SelectedIndex;
+        OnlineSourceSettings.AdoPat = pat.Password;
+        OnlineSourceSettings.AdoWiql = wiql.Text;
+        OnlineSourceSettings.AdoIds = ids.Text;
+        OnlineSourceSettings.AdoOpenAttachments = attach.IsChecked == true;
+
         return new AdoLocation(org.Text, project.Text, Mode(), pat.Password, wiql.Text, ids.Text,
             top: 200, openAttachments: attach.IsChecked == true);
     }
@@ -207,20 +219,23 @@ public sealed partial class SearchLocationsPage : Page
         {
             Header = "Repository (URL or owner/repo)",
             PlaceholderText = "https://github.com/owner/repo  or  owner/repo",
-            Text = existing == null ? "" : $"{existing.Owner}/{existing.Repo}",
+            Text = existing == null ? OnlineSourceSettings.GithubRepo : $"{existing.Owner}/{existing.Repo}",
         };
-        var token = new PasswordBox { Header = "Token (optional; for private repos / higher rate limit)", Password = existing?.Token ?? "" };
+        var token = new PasswordBox { Header = "Token (optional; for private repos / higher rate limit)",
+            Password = existing?.Token ?? OnlineSourceSettings.GithubToken };
         var issue = new TextBox
         {
             Header = "Issue number — open its log attachments (blank = list issues)",
             PlaceholderText = "e.g. 3",
-            Text = existing != null && existing.IssueNumber > 0 ? existing.IssueNumber.ToString() : "",
+            Text = existing != null && existing.IssueNumber > 0 ? existing.IssueNumber.ToString()
+                 : (existing == null ? OnlineSourceSettings.GithubIssue : ""),
         };
         var state = new RadioButtons { Header = "Issue state (when listing)", MaxColumns = 3 };
         state.Items.Add("all");
         state.Items.Add("open");
         state.Items.Add("closed");
-        state.SelectedIndex = existing?.State switch { "open" => 1, "closed" => 2, _ => 0 };
+        var stateSeed = existing?.State ?? (existing == null ? OnlineSourceSettings.GithubState : "all");
+        state.SelectedIndex = stateSeed switch { "open" => 1, "closed" => 2, _ => 0 };
         string State() => state.SelectedIndex switch { 1 => "open", 2 => "closed", _ => "all" };
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
@@ -241,6 +256,11 @@ public sealed partial class SearchLocationsPage : Page
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
         if (string.IsNullOrWhiteSpace(repo.Text)) return null;
+
+        OnlineSourceSettings.GithubRepo = repo.Text;
+        OnlineSourceSettings.GithubToken = token.Password;
+        OnlineSourceSettings.GithubState = State();
+        OnlineSourceSettings.GithubIssue = issue.Text?.Trim() ?? "";
 
         int.TryParse(issue.Text?.Trim(), out var issueNum);
         return new GithubIssuesLocation(repo.Text, token.Password, State(), 500, issueNum);
