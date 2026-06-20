@@ -472,6 +472,9 @@
                                VerticalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" Spacing="6"
                                 HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button x:Name="DetailsFieldsButton" Content="Fields ▾" Click="DetailsFields_Click"
+                                Height="28" FontSize="12"
+                                ToolTipService.ToolTip="Choose which fields are shown"/>
                         <Button Content="Copy as JSON" Click="DetailsPanelCopyJson_Click"
                                 Height="28" FontSize="12"/>
                         <Button Content="Copy as CSV"  Click="DetailsPanelCopyCsv_Click"

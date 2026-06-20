@@ -357,6 +357,36 @@ public static class ResultsViewerSettings
         Changed?.Invoke();
     }
 
+    /// <summary>Canonical ordered set of fields the row-details panel can show.</summary>
+    public static readonly IReadOnlyList<string> DetailFieldNames = new[]
+    {
+        "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
+        "MachineName", "Username", "OpCode", "Tag",
+    };
+
+    /// <summary>Per-field visibility for the row-details panel (all shown by default). Merged with the
+    /// defaults so a field the user hasn't touched shows.</summary>
+    public static IReadOnlyDictionary<string, bool> DetailFieldVisibility
+    {
+        get
+        {
+            var merged = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in DetailFieldNames) merged[f] = true;
+            if (Data.DetailFieldVisibility != null)
+                foreach (var kv in Data.DetailFieldVisibility) merged[kv.Key] = kv.Value;
+            return merged;
+        }
+    }
+
+    public static void SetDetailFieldVisibility(string field, bool visible)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        Data.DetailFieldVisibility ??= new Dictionary<string, bool>();
+        Data.DetailFieldVisibility[field] = visible;
+        Save();
+        Changed?.Invoke();
+    }
+
     public static string ThemeName
     {
         get => string.IsNullOrEmpty(Data.ThemeName) ? DefaultThemeName : Data.ThemeName;
@@ -462,5 +492,6 @@ public static class ResultsViewerSettings
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }
         public double? ScrollBarSize { get; set; }
+        public Dictionary<string, bool> DetailFieldVisibility { get; set; }
     }
 }

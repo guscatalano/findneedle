@@ -937,17 +937,20 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// <summary>The (label, value) pairs shown for a row — shared by the panel and the popup.</summary>
     private System.Collections.Generic.IEnumerable<(string label, string value)> RowFields(LogLine line)
     {
-        yield return ("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        yield return ("Time",        line.Time);
-        yield return ("Provider",    line.Provider);
-        yield return ("TaskName",    line.TaskName);
-        yield return ("Message",     line.Message);
-        yield return ("Source",      line.Source);
-        yield return ("Level",       line.Level);
-        yield return ("MachineName", line.MachineName);
-        yield return ("Username",    line.Username);
-        yield return ("OpCode",      line.OpCode);
-        if (_rowTags.TryGetValue(line.RowId, out var rt))
+        var vis = ResultsViewerSettings.DetailFieldVisibility;
+        bool Show(string f) => !vis.TryGetValue(f, out var b) || b;
+
+        if (Show("Index"))       yield return ("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (Show("Time"))        yield return ("Time",        line.Time);
+        if (Show("Provider"))    yield return ("Provider",    line.Provider);
+        if (Show("TaskName"))    yield return ("TaskName",    line.TaskName);
+        if (Show("Message"))     yield return ("Message",     line.Message);
+        if (Show("Source"))      yield return ("Source",      line.Source);
+        if (Show("Level"))       yield return ("Level",       line.Level);
+        if (Show("MachineName")) yield return ("MachineName", line.MachineName);
+        if (Show("Username"))    yield return ("Username",    line.Username);
+        if (Show("OpCode"))      yield return ("OpCode",      line.OpCode);
+        if (Show("Tag") && _rowTags.TryGetValue(line.RowId, out var rt))
             yield return ("Tag", string.IsNullOrEmpty(rt.Text) ? rt.Name : $"{rt.Name} — {rt.Text}");
     }
 
@@ -1013,6 +1016,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             Grid.SetRow(valueElement, row); Grid.SetColumn(valueElement, 2);
             g.Children.Add(valueElement);
         }
+    }
+
+    /// <summary>Show a flyout of checkboxes to pick which fields the details panel displays. The choice
+    /// is persisted (ResultsViewerSettings) and shared with the double-click popup via RowFields.</summary>
+    private void DetailsFields_Click(object sender, RoutedEventArgs e)
+    {
+        var vis = ResultsViewerSettings.DetailFieldVisibility;
+        var flyout = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+        foreach (var field in ResultsViewerSettings.DetailFieldNames)
+        {
+            var item = new ToggleMenuFlyoutItem
+            {
+                Text = field,
+                IsChecked = !vis.TryGetValue(field, out var b) || b,
+            };
+            var captured = field;
+            item.Click += (_, __) =>
+            {
+                ResultsViewerSettings.SetDetailFieldVisibility(captured, item.IsChecked);
+                RefreshDetailsPanel();
+            };
+            flyout.Items.Add(item);
+        }
+        flyout.ShowAt(DetailsFieldsButton);
     }
 
     private void DetailsPanelCopyJson_Click(object sender, RoutedEventArgs e)
@@ -1244,9 +1271,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalCount))
             DispatcherQueue.TryEnqueue(RefreshSearchSubmitMode);
         // When a streaming load finishes, re-check the decode banner — the new file's stats are now
-        // captured, so a stale "missing symbols" warning clears (or the new file's own appears).
+        // captured, so a stale "missing symbols" warning clears (or the new file's own appears) — and
+        // enable the Rule filter toggle (it was disabled while the load was still streaming).
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming) && !ViewModel.IsStreaming)
-            DispatcherQueue.TryEnqueue(UpdateDecodeBanner);
+            DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); });
     }
     private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
     private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;
