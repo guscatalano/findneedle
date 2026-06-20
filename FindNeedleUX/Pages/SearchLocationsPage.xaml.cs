@@ -127,6 +127,11 @@ public sealed partial class SearchLocationsPage : Page
             AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 60,
             Text = existing?.Wiql ?? "",
         };
+        var attach = new CheckBox
+        {
+            Content = "Open the work items' log attachments (download & parse the files)",
+            IsChecked = existing?.OpenAttachments ?? false,
+        };
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 480 };
         panel.Children.Add(org);
@@ -135,6 +140,7 @@ public sealed partial class SearchLocationsPage : Page
         panel.Children.Add(pat);
         panel.Children.Add(ids);
         panel.Children.Add(wiql);
+        panel.Children.Add(attach);
 
         var dialog = new ContentDialog
         {
@@ -149,7 +155,8 @@ public sealed partial class SearchLocationsPage : Page
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
         if (string.IsNullOrWhiteSpace(org.Text) || string.IsNullOrWhiteSpace(project.Text)) return null;
 
-        return new AdoLocation(org.Text, project.Text, Mode(), pat.Password, wiql.Text, ids.Text);
+        return new AdoLocation(org.Text, project.Text, Mode(), pat.Password, wiql.Text, ids.Text,
+            top: 200, openAttachments: attach.IsChecked == true);
     }
 
     /// <summary>GitHub issues location dialog: repo (URL or owner/repo), optional token, state.</summary>
@@ -162,7 +169,13 @@ public sealed partial class SearchLocationsPage : Page
             Text = existing == null ? "" : $"{existing.Owner}/{existing.Repo}",
         };
         var token = new PasswordBox { Header = "Token (optional; for private repos / higher rate limit)", Password = existing?.Token ?? "" };
-        var state = new RadioButtons { Header = "Issue state", MaxColumns = 3 };
+        var issue = new TextBox
+        {
+            Header = "Issue number — open its log attachments (blank = list issues)",
+            PlaceholderText = "e.g. 3",
+            Text = existing != null && existing.IssueNumber > 0 ? existing.IssueNumber.ToString() : "",
+        };
+        var state = new RadioButtons { Header = "Issue state (when listing)", MaxColumns = 3 };
         state.Items.Add("all");
         state.Items.Add("open");
         state.Items.Add("closed");
@@ -172,6 +185,7 @@ public sealed partial class SearchLocationsPage : Page
         var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
         panel.Children.Add(repo);
         panel.Children.Add(token);
+        panel.Children.Add(issue);
         panel.Children.Add(state);
 
         var dialog = new ContentDialog
@@ -187,7 +201,8 @@ public sealed partial class SearchLocationsPage : Page
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
         if (string.IsNullOrWhiteSpace(repo.Text)) return null;
 
-        return new GithubIssuesLocation(repo.Text, token.Password, State());
+        int.TryParse(issue.Text?.Trim(), out var issueNum);
+        return new GithubIssuesLocation(repo.Text, token.Password, State(), 500, issueNum);
     }
 
     /// <summary>

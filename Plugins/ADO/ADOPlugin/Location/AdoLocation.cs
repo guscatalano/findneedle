@@ -7,8 +7,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 using Azure.Core;
 using Azure.Identity;
+using findneedle.Implementations;
+using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 
 namespace ADOPlugin.Location;
@@ -41,6 +44,8 @@ public class AdoLocation : ISearchLocation
     /// <summary>WIQL query. Empty = recently-changed default.</summary>
     public string Wiql { get; }
     public int Top { get; }
+    /// <summary>When true, download + parse the work items' file attachments instead of listing them.</summary>
+    public bool OpenAttachments { get; }
 
     private const string ApiVersion = "7.0";
     private const string DefaultWiql =
@@ -51,7 +56,8 @@ public class AdoLocation : ISearchLocation
     private string? _error;
 
     public AdoLocation(string organizationUrl, string project, AdoAuthMode authMode,
-                       string pat = "", string wiql = "", string ids = "", int top = 200)
+                       string pat = "", string wiql = "", string ids = "", int top = 200,
+                       bool openAttachments = false)
     {
         OrganizationUrl = (organizationUrl ?? "").Trim().TrimEnd('/');
         Project = (project ?? "").Trim();
@@ -60,6 +66,7 @@ public class AdoLocation : ISearchLocation
         Wiql = (wiql ?? "").Trim();
         Ids = (ids ?? "").Trim();
         Top = top <= 0 ? 200 : top;
+        OpenAttachments = openAttachments;
     }
 
     // ----- HTTP / auth -----
@@ -142,6 +149,49 @@ public class AdoLocation : ISearchLocation
         }
     }
 
+    /// <summary>Download the work items' file attachments (relations with rel "AttachedFile") to a temp
+    /// folder, then parse them through the normal file pipeline.</summary>
+    private void LoadAttachments(HttpClient http, List<int> ids, CancellationToken ct)
+    {
+        var temp = TempStorage.GetNewTempPath("adowi");
+        int saved = 0, links = 0;
+        foreach (var id in ids)
+        {
+            if (ct.IsCancellationRequested) break;
+            var url = $"{OrganizationUrl}/_apis/wit/workitems/{id}?$expand=relations&api-version={ApiVersion}";
+            using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
+            EnsureOk(resp);
+            using var doc = JsonDocument.Parse(resp.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult());
+            if (!doc.RootElement.TryGetProperty("relations", out var rels)) continue;
+            foreach (var rel in rels.EnumerateArray())
+            {
+                if (!rel.TryGetProperty("rel", out var relType)
+                    || !string.Equals(relType.GetString(), "AttachedFile", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                links++;
+                var attUrl = rel.TryGetProperty("url", out var u) ? u.GetString() : null;
+                if (string.IsNullOrEmpty(attUrl)) continue;
+                var name = rel.TryGetProperty("attributes", out var at) && at.TryGetProperty("name", out var nm)
+                    ? nm.GetString() : null;
+                if (string.IsNullOrWhiteSpace(name)) name = $"attachment_{saved}";
+                foreach (var c in Path.GetInvalidFileNameChars()) name = name!.Replace(c, '_');
+                try
+                {
+                    using var dl = http.GetAsync(attUrl, ct).GetAwaiter().GetResult();
+                    if (!dl.IsSuccessStatusCode) continue;
+                    File.WriteAllBytes(Path.Combine(temp, $"wi{id}_{name}"),
+                        dl.Content.ReadAsByteArrayAsync(ct).GetAwaiter().GetResult());
+                    saved++;
+                }
+                catch (Exception ex) { Logger.Instance.Log($"ADO attachment download failed ({attUrl}): {ex.Message}"); }
+            }
+        }
+        if (links == 0) _error = "the selected work item(s) have no file attachments to open.";
+        else if (saved == 0) _error = $"found {links} attachment(s) but none downloaded.";
+        else _results.AddRange(AttachmentFolderProcessor.ProcessFolder(temp, ct));
+        Logger.Instance.Log($"ADO attachments: downloaded {saved} file(s), parsed {_results.Count} rows");
+    }
+
     /// <summary>ADO field values are strings/numbers/identity-objects; flatten to a display string.</summary>
     private static string FlattenValue(JsonElement v)
     {
@@ -190,8 +240,9 @@ public class AdoLocation : ISearchLocation
             using var http = CreateClient();
             var ids = ResolveIds(http, cancellationToken);
             var label = GetName();
-            if (ids.Count > 0) FetchWorkItems(http, ids, label, cancellationToken);
-            Logger.Instance.Log($"ADO loaded {_results.Count} work items from {OrganizationUrl}/{Project}");
+            if (OpenAttachments) LoadAttachments(http, ids, cancellationToken);
+            else if (ids.Count > 0) FetchWorkItems(http, ids, label, cancellationToken);
+            Logger.Instance.Log($"ADO loaded {_results.Count} {(OpenAttachments ? "attachment rows" : "work items")} from {OrganizationUrl}/{Project}");
         }
         catch (Exception ex)
         {
@@ -236,14 +287,17 @@ public class AdoLocation : ISearchLocation
         catch { return OrganizationUrl; }
     }
 
-    public override string GetName() => $"ADO: {ShortOrg()}/{Project}";
+    public override string GetName()
+        => OpenAttachments ? $"ADO: {ShortOrg()}/{Project} attachments" : $"ADO: {ShortOrg()}/{Project}";
 
     public override string GetDescription()
     {
         if (_error != null) return $"ADO {ShortOrg()}/{Project} — ERROR: {_error}";
         var what = !string.IsNullOrWhiteSpace(Ids) ? $"ids {Ids}"
                  : (string.IsNullOrWhiteSpace(Wiql) ? "recently-changed work items" : "WIQL query");
-        return $"Azure DevOps {OrganizationUrl}, project {Project}, {what}";
+        return OpenAttachments
+            ? $"Log attachments from Azure DevOps {OrganizationUrl}, project {Project}, {what}"
+            : $"Azure DevOps {OrganizationUrl}, project {Project}, {what}";
     }
 
     public string? LastError => _error;

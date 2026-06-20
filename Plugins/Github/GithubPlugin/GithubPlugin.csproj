@@ -15,6 +15,7 @@
       <ReferenceOutputAssembly>True</ReferenceOutputAssembly>
     </ProjectReference>
     <ProjectReference Include="..\..\..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+    <ProjectReference Include="..\..\..\FindPluginCore\FindPluginCore.csproj" />
   </ItemGroup>
 
 </Project>
