@@ -267,55 +267,46 @@ public sealed partial class ProcessorOutputPage : Page
         actions.Children.Add(openBtn);
         actions.Children.Add(revealBtn);
 
-        // --- Visual (diagram / image): fill the pane, with zoom/pan inside the WebView ---
+        // --- Visual (diagram / image): a scrollable column (title, actions, rules-used, diagram) so
+        // the whole pane scrolls together. The diagram has a fixed height (zoom/pan lives inside the
+        // WebView), so expanding the rules panel never hides it — you just scroll down. ---
         if (IsMermaid(path) || IsImageFile(path))
         {
-            var grid = new Grid();
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0 title
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 1 actions
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2 rules-used
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3 view
+            var col = new StackPanel { Spacing = 6 };
 
             if (includeTitle)
-            {
-                var title = new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
-                grid.Children.Add(title);
-                Grid.SetRow(title, 0);
-            }
+                col.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
 
             actions.Margin = new Thickness(0, 0, 0, 8);
-            grid.Children.Add(actions);
-            Grid.SetRow(actions, 1);
+            col.Children.Add(actions);
 
             var rulesPanel = BuildRulesUsedPanel(path);
-            if (rulesPanel != null)
-            {
-                grid.Children.Add(rulesPanel);
-                Grid.SetRow(rulesPanel, 2);
-            }
+            if (rulesPanel != null) col.Children.Add(rulesPanel);
 
-            UIElement view;
             try
             {
-                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
+                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 560 };
                 var htmlPath = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
                 wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
-                view = new Border
+                col.Children.Add(new Border
                 {
                     BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(6),
-                    MinHeight = 300, // keep the diagram visible even when the rules panel is expanded
                     Child = wv,
-                };
+                });
             }
             catch (Exception ex)
             {
-                view = new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) };
+                col.Children.Add(new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) });
             }
-            grid.Children.Add(view);
-            Grid.SetRow((FrameworkElement)view, 3);
-            return grid;
+
+            return new ScrollViewer
+            {
+                Content = col,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            };
         }
 
         // --- Text file: scrollable ---
@@ -403,8 +394,8 @@ public sealed partial class ProcessorOutputPage : Page
             list.Children.Add(row);
         }
 
-        // Cap the panel's height and let it scroll internally, so expanding rules (and their lines)
-        // never squeezes the diagram below it off-screen.
+        // The whole detail pane scrolls, so the panel can grow naturally (no inner scroll cap —
+        // a nested scrollbar inside the outer one is awkward).
         return new Expander
         {
             Header = $"Rules used: {used.Count} of {usage.Rules.Count}",
@@ -412,13 +403,7 @@ public sealed partial class ProcessorOutputPage : Page
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 8),
-            Content = new ScrollViewer
-            {
-                MaxHeight = 260,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Content = list,
-            },
+            Content = list,
         };
     }
 
