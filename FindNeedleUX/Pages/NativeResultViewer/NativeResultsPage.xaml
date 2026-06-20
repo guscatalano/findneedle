@@ -161,6 +161,18 @@
                     </StackPanel>
                 </ToggleButton>
 
+                <!-- Hide rows excluded by the active RuleDSL filter rules (opt-in; disabled when no
+                     rules are active). Builds a filtered view of the current results. -->
+                <ToggleButton x:Name="RuleFilterToggle" Height="32" Margin="8,0,0,0"
+                              IsEnabled="False" Click="RuleFilterToggle_Click"
+                              ToolTipService.ToolTip="Hide rows excluded by the active rules"
+                              AutomationProperties.Name="Apply rule filters to this view">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                        <TextBlock Text="Rule filter"/>
+                    </StackPanel>
+                </ToggleButton>
+
                 <!-- Choose where the filter pane sits: across the top, or down the left side. -->
                 <Button x:Name="FilterDockButton" Height="32"
                         AutomationProperties.Name="Filter pane position"

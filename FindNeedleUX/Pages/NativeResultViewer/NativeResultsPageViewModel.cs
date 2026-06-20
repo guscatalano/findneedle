@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
+using FindNeedleRuleDSL;
 using FindNeedleUX;
 using FindNeedleUX.Services;
 using FindNeedleUX.Services.PagedLogSource;
@@ -40,6 +43,143 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     /// <summary>Test seam: inject a paged source directly (no MiddleLayerService/search needed).</summary>
     internal void SetSourceForTests(IPagedLogSource source) => _source = source;
+
+    // ----- Rule view filter (opt-in): hide rows the active RuleDSL filter rules exclude -----
+    // The native viewer normally shows the raw scanned rows; RuleDSL filter rules only gate the
+    // pipeline's consolidated list. This toggle builds a one-off SQLite store containing just the rows
+    // that pass the rules and points the viewer at it (so paging/counts/search all stay correct), and
+    // reverts to the original storage when turned off.
+    private FindPluginCore.Implementations.Storage.SqliteStorage _ruleFilteredStorage;
+    private readonly List<(Regex match, Regex unmatch)> _excludeRules = new();
+    private readonly List<(Regex match, Regex unmatch)> _includeRules = new();
+
+    /// <summary>True while the viewer is showing the rule-filtered subset.</summary>
+    public bool RuleFilterActive { get; private set; }
+
+    /// <summary>
+    /// Turn the rule view filter on/off. When on, builds a filtered store from the current results and
+    /// swaps the viewer onto it; returns the kept row count, or -1 if the active rules contain no
+    /// filter (exclude/include) rules to apply. Must be called on the UI thread.
+    /// </summary>
+    public async Task<int> SetRuleViewFilterAsync(bool on, IReadOnlyList<string> ruleFiles)
+    {
+        if (!on)
+        {
+            // Revert by re-running the normal load: it disposes the filtered store (via
+            // ResetRuleViewFilter), rebuilds the source over the real search storage with the correct
+            // in-memory/SQLite fallback, and re-derives levels — all the things a manual swap would miss.
+            _currentPage = 1;
+            await LoadResultsAsync();
+            return -1;
+        }
+
+        CompileRuleFilters(ruleFiles);
+        if (_excludeRules.Count == 0 && _includeRules.Count == 0) return -1;
+
+        var orig = MiddleLayerService.GetSearchStorage();
+        var built = await Task.Run(() =>
+        {
+            var tmp = Path.Combine(Path.GetTempPath(), $"FN_ruleview_{Guid.NewGuid():N}.log");
+            var store = new FindPluginCore.Implementations.Storage.SqliteStorage(tmp);
+            int kept = 0;
+            orig.GetFilteredResultsInBatches(batch =>
+            {
+                var keep = batch.Where(r => RulePass(r.GetSearchableData())).ToList();
+                if (keep.Count > 0) { store.AddFilteredBatch(keep); kept += keep.Count; }
+            });
+            return (store, kept);
+        });
+
+        try { _source?.Dispose(); } catch { /* ignore */ }
+        _ruleFilteredStorage = built.store;
+        _source = PagedLogSourceFactory.Create(built.store, Array.Empty<LogLine>());
+        RuleFilterActive = true;
+        _currentPage = 1;
+        await AfterSourceSwapAsync();
+        return built.kept;
+    }
+
+    private async Task AfterSourceSwapAsync()
+    {
+        TotalCount = _source.TotalCount;
+        await ReloadFromSourceAsyncCore();
+    }
+
+    /// <summary>Drop any built rule-filtered store (called when a fresh search/load replaces results).</summary>
+    private void ResetRuleViewFilter()
+    {
+        if (_ruleFilteredStorage != null)
+        {
+            try { _ruleFilteredStorage.Dispose(); } catch { /* ignore */ }
+            _ruleFilteredStorage = null;
+        }
+        RuleFilterActive = false;
+    }
+
+    private void CompileRuleFilters(IEnumerable<string> ruleFiles)
+    {
+        _excludeRules.Clear();
+        _includeRules.Clear();
+        var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        foreach (var file in ruleFiles ?? Enumerable.Empty<string>())
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(file) || !File.Exists(file)) continue;
+                var set = System.Text.Json.JsonSerializer.Deserialize<UnifiedRuleSet>(File.ReadAllText(file), opts);
+                if (set?.Sections == null) continue;
+                foreach (var section in set.Sections)
+                    foreach (var rule in section.Rules ?? new())
+                    {
+                        if (!rule.Enabled || string.IsNullOrEmpty(rule.Match)) continue;
+                        var type = rule.Action?.Type?.ToLowerInvariant();
+                        if (type != "exclude" && type != "include") continue;
+
+                        Regex m;
+                        try { m = CompileRule(rule.Match); } catch { continue; }
+                        Regex u = null;
+                        if (!string.IsNullOrEmpty(rule.Unmatch))
+                            try { u = CompileRule(rule.Unmatch); } catch { u = null; }
+
+                        (type == "exclude" ? _excludeRules : _includeRules).Add((m, u));
+                    }
+            }
+            catch { /* skip an unparseable rule file */ }
+        }
+    }
+
+    private static Regex CompileRule(string pattern) =>
+        new(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    /// <summary>Blacklist-then-whitelist: a row is hidden if it matches any exclude rule, or (when
+    /// include rules exist) if it matches none of them.</summary>
+    private bool RulePass(string data)
+    {
+        data ??= "";
+        foreach (var (m, u) in _excludeRules)
+            if (RuleHit(m, u, data)) return false;
+
+        if (_includeRules.Count > 0)
+        {
+            bool any = false;
+            foreach (var (m, u) in _includeRules)
+                if (RuleHit(m, u, data)) { any = true; break; }
+            if (!any) return false;
+        }
+        return true;
+    }
+
+    private static bool RuleHit(Regex match, Regex unmatch, string data)
+    {
+        try { if (match != null && !match.IsMatch(data)) return false; }
+        catch (RegexMatchTimeoutException) { return false; }
+        if (unmatch != null)
+        {
+            try { if (unmatch.IsMatch(data)) return false; }
+            catch (RegexMatchTimeoutException) { /* treat as not-unmatched */ }
+        }
+        return true;
+    }
 
     public RangeObservableCollection<LogLine> Results { get; } = new();
 
@@ -285,6 +425,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         IsLoading = true;
         bool streaming = false;
+        // A fresh search/load supersedes any rule-filtered view from the previous result set.
+        ResetRuleViewFilter();
         // Capture the UI dispatcher + create the live-refresh timer here, on the UI thread. The
         // streaming RowsAvailable callback runs on the producer (background) thread where
         // DispatcherQueue.GetForCurrentThread() is null — so without this the count would freeze at

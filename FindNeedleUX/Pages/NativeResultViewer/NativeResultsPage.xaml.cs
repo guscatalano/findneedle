@@ -179,6 +179,45 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // The grid's scrollbars exist in the visual tree now, so push the configured thickness onto
         // them (the constructor only set the resource, before the template realized).
         ApplyScrollBarSize();
+
+        UpdateRuleFilterToggleState();
+    }
+
+    /// <summary>Enable the "Rule filter" toggle only when the last search applied rules and isn't still
+    /// streaming, and reflect whether the filtered view is currently active.</summary>
+    private void UpdateRuleFilterToggleState()
+    {
+        if (RuleFilterToggle == null) return;
+        bool hasRules = (MiddleLayerService.LastRuleProcessors?.Count ?? 0) > 0;
+        RuleFilterToggle.IsEnabled = hasRules && !ViewModel.IsStreaming;
+        RuleFilterToggle.IsChecked = ViewModel.RuleFilterActive;
+    }
+
+    private async void RuleFilterToggle_Click(object sender, RoutedEventArgs e)
+    {
+        bool on = RuleFilterToggle.IsChecked == true;
+        var ruleFiles = MiddleLayerService.LastRuleProcessors?
+            .Select(p => p.RulesFilePath)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new System.Collections.Generic.List<string>();
+
+        if (on && ruleFiles.Count == 0) { RuleFilterToggle.IsChecked = false; return; }
+
+        RuleFilterToggle.IsEnabled = false;
+        LoadingOverlay.Visibility = Visibility.Visible;
+        try
+        {
+            int kept = await ViewModel.SetRuleViewFilterAsync(on, ruleFiles);
+            // No exclude/include rules among the active set — nothing to filter; revert the toggle.
+            if (on && kept < 0) RuleFilterToggle.IsChecked = false;
+        }
+        finally
+        {
+            LoadingOverlay.Visibility = Visibility.Collapsed;
+            RuleFilterToggle.IsEnabled = (MiddleLayerService.LastRuleProcessors?.Count ?? 0) > 0;
+            RebindGrid();
+        }
     }
 
     /// <summary>
