@@ -36,20 +36,24 @@ public class SampleLogRulesIntegrationTests
 
     private static string FindExamplesDirectory(string startDir)
     {
-        // Navigate up from test output directory to find the repo root
+        // Prefer the source tree (so local snapshot/example edits are picked up)...
         var current = new DirectoryInfo(startDir);
-        
         while (current != null)
         {
             var examplesPath = Path.Combine(current.FullName, "FindNeedleRuleDSL", "Examples");
             if (Directory.Exists(examplesPath))
                 return examplesPath;
-            
             current = current.Parent;
         }
 
+        // ...otherwise fall back to the copy deployed next to the test assembly (CI runs tests against
+        // built artifacts where the source tree isn't present).
+        var deployed = Path.Combine(AppContext.BaseDirectory, "Examples");
+        if (Directory.Exists(deployed))
+            return deployed;
+
         throw new DirectoryNotFoundException(
-            $"Could not find FindNeedleRuleDSL/Examples directory. Started from: {startDir}");
+            $"Could not find FindNeedleRuleDSL/Examples (source) or {deployed} (deployed). Started from: {startDir}");
     }
 
     private static List<ISearchResult> LoadLogFileAsResults(string logPath)

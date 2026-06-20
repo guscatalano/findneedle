@@ -36,5 +36,12 @@
     <None Update="TestData\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Copy the RuleDSL example rule files + sample log into the test output so data-driven tests
+         (snapshots, sample-log integration) work when run against built artifacts (e.g. CI's
+         test-publish job that skips rebuild), not just from the source tree. -->
+    <None Include="..\FindNeedleRuleDSL\Examples\**\*">
+      <Link>Examples\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

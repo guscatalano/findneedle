@@ -718,6 +718,11 @@ public class SystemConfigTests
             current = current.Parent;
         }
 
+        // Fall back to the copy deployed next to the test assembly (CI runs against built artifacts).
+        var deployed = Path.Combine(baseDir, "Examples");
+        if (Directory.Exists(deployed))
+            return deployed;
+
         throw new DirectoryNotFoundException("Could not find FindNeedleRuleDSL/Examples directory");
     }
 

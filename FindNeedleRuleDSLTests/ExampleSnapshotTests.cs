@@ -142,8 +142,7 @@ public class ExampleSnapshotTests
 
     private static string LocateRepoFolder(params string[] segments)
     {
-        // Walk up from the test bin directory until we find the requested folder
-        // alongside the repo root (the directory tree above the bin folder).
+        // Prefer the source tree (so snapshot updates land in the repo for `git diff`)...
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null)
         {
@@ -152,8 +151,15 @@ public class ExampleSnapshotTests
                 return candidate;
             dir = dir.Parent;
         }
+
+        // ...otherwise fall back to the copy deployed next to the test assembly (Examples\, TestData\),
+        // so tests run against built artifacts (CI's test-publish job) still find their data.
+        var deployed = Path.Combine(AppContext.BaseDirectory, segments[segments.Length - 1]);
+        if (Directory.Exists(deployed))
+            return deployed;
+
         throw new DirectoryNotFoundException(
-            $"Could not locate repo folder '{Path.Combine(segments)}' starting from {AppContext.BaseDirectory}");
+            $"Could not locate '{Path.Combine(segments)}' in the source tree or as a deployed copy ({deployed}), starting from {AppContext.BaseDirectory}");
     }
 
     private static string NormalizeNewlines(string s) => s.Replace("\r\n", "\n");
