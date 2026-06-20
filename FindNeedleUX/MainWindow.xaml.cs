@@ -68,6 +68,28 @@ public sealed partial class MainWindow : Window
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
     }
 
+    /// <summary>Run a welcome-page quick action by its catalog id (see QuickActionCatalog). Maps to the
+    /// same navigation/commands the menus use, so the welcome page can be customized freely.</summary>
+    public async void RunQuickAction(string id)
+    {
+        switch (id)
+        {
+            case "open_file":         QuickFileOpen(); break;
+            case "open_folder":       QuickFolderOpen(); break;
+            case "open_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage)); break;
+            case "cached":            contentFrame.Navigate(typeof(FindNeedleUX.Pages.CachedSearchesPage)); break;
+            case "locations":         contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)); break;
+            case "rules_config":      contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage)); break;
+            case "auto_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.AutoAddRulesPage)); break;
+            case "run_search":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage)); break;
+            case "results":           NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage)); break;
+            case "processor_output":  contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)); break;
+            case "diagram":           contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage)); break;
+            case "inspect_etl":       await InspectionService.InspectEtlAsync(this, (show, text) => ShowSpinner(show, text)); break;
+            default: Logger.Instance.Log($"RunQuickAction: unknown id {id}"); break;
+        }
+    }
+
 
     // ----- Top-right MCP server indicator -----
 

@@ -33,28 +33,24 @@
                 </StackPanel>
             </Border>
 
-            <!-- Quick Actions -->
-            <TextBlock Text="Quick Actions" FontWeight="SemiBold" FontSize="18"/>
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button Content="📁 Open Log File" Click="OpenLogFileButton_Click" Height="80" HorizontalAlignment="Left"
-                        AutomationProperties.Name="Open log file">
-                    <Button.Background>
-                        <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
-                    </Button.Background>
+            <!-- Quick Actions (customizable) -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Quick Actions" FontWeight="SemiBold" FontSize="18" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" x:Name="EditQuickActionsButton" Click="EditQuickActions_Click"
+                        Background="Transparent" BorderThickness="0" Padding="8,4">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <SymbolIcon x:Name="EditQuickActionsIcon" Symbol="Edit"/>
+                        <TextBlock x:Name="EditQuickActionsLabel" Text="Edit"/>
+                    </StackPanel>
                 </Button>
-                <Button Content="📂 Open Folder" Click="OpenFolderButton_Click" Height="80" HorizontalAlignment="Left"
-                        AutomationProperties.Name="Open folder of logs">
-                    <Button.Background>
-                        <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
-                    </Button.Background>
-                </Button>
-                <Button Content="📝 Open Log with Rules" Click="OpenLogWithRulesButton_Click" Height="80" HorizontalAlignment="Left"
-                        AutomationProperties.Name="Open log with rules">
-                    <Button.Background>
-                        <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.1"/>
-                    </Button.Background>
-                </Button>
-            </StackPanel>
+            </Grid>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="QuickActionsHost" Orientation="Horizontal" Spacing="12"/>
+            </ScrollViewer>
 
             <!-- Features -->
             <TextBlock Text="Key Features" FontWeight="SemiBold" FontSize="18"/>
