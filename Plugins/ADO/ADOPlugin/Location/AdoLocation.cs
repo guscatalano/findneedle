@@ -194,8 +194,9 @@ public class AdoLocation : ISearchLocation
         foreach (var chunk in Chunk(ids, 200))
         {
             if (ct.IsCancellationRequested) break;
+            // errorPolicy=Omit: skip ids that don't exist instead of 404-ing the whole batch.
             var url = $"{OrganizationUrl}/_apis/wit/workitems?ids={string.Join(",", chunk)}"
-                      + $"&$expand=Fields&api-version={ApiVersion}";
+                      + $"&$expand=Fields&errorPolicy=Omit&api-version={ApiVersion}";
             using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
             EnsureOk(resp);
             using var doc = ReadJson(resp, ct);
@@ -217,11 +218,18 @@ public class AdoLocation : ISearchLocation
     {
         var temp = TempStorage.GetNewTempPath("adowi");
         int saved = 0, links = 0;
+        var missing = new List<int>();
         foreach (var id in ids)
         {
             if (ct.IsCancellationRequested) break;
             var url = $"{OrganizationUrl}/_apis/wit/workitems/{id}?$expand=relations&api-version={ApiVersion}";
             using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
+            if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                missing.Add(id); // a single missing id shouldn't fail the whole load
+                Logger.Instance.Log($"ADO work item #{id} not found — skipping");
+                continue;
+            }
             EnsureOk(resp);
             using var doc = ReadJson(resp, ct);
             if (!doc.RootElement.TryGetProperty("relations", out var rels)) continue;
@@ -248,8 +256,11 @@ public class AdoLocation : ISearchLocation
                 catch (Exception ex) { Logger.Instance.Log($"ADO attachment download failed ({attUrl}): {ex.Message}"); }
             }
         }
-        if (links == 0) _error = "the selected work item(s) have no file attachments to open.";
-        else if (saved == 0) _error = $"found {links} attachment(s) but none downloaded.";
+        var miss = missing.Count > 0 ? $" (work item(s) not found: {string.Join(", ", missing)})" : "";
+        if (links == 0 && missing.Count == ids.Count && ids.Count > 0)
+            _error = $"work item(s) not found: {string.Join(", ", missing)} — check the IDs exist in this project.";
+        else if (links == 0) _error = $"the selected work item(s) have no file attachments to open.{miss}";
+        else if (saved == 0) _error = $"found {links} attachment(s) but none downloaded.{miss}";
         else _results.AddRange(AttachmentFolderProcessor.ProcessFolder(temp, ct,
             friendlySource: $"ADO {ShortOrg()}/{Project}"));
         Logger.Instance.Log($"ADO attachments: downloaded {saved} file(s), parsed {_results.Count} rows");
@@ -278,7 +289,7 @@ public class AdoLocation : ISearchLocation
         var hint = (int)resp.StatusCode switch
         {
             401 or 203 => "authentication failed — check your PAT / sign-in and that it has Work Items (Read) scope.",
-            404 => "not found — check the organization URL and project name.",
+            404 => "not found — check the organization URL, project name, or that the work item id(s) exist.",
             _ => resp.ReasonPhrase ?? "request failed",
         };
         // Include the exact request URL so a 404 is diagnosable (wrong org/project/api path/id).
