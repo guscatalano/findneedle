@@ -97,9 +97,9 @@ public sealed partial class WelcomePage : Page
         stack.Children.Add(new TextBlock { Text = action.Label, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap });
 
         var controls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
-        controls.Children.Add(MiniButton(Symbol.Back, "Move left",  () => Move(index, -1), enabled: index > 0));
+        controls.Children.Add(MiniButton(Symbol.Back, "Move left",  () => Move(action.Id, -1), enabled: index > 0));
         controls.Children.Add(MiniButton(Symbol.Cancel, "Remove",     () => Remove(action.Id)));
-        controls.Children.Add(MiniButton(Symbol.Forward, "Move right", () => Move(index, +1), enabled: index < count - 1));
+        controls.Children.Add(MiniButton(Symbol.Forward, "Move right", () => Move(action.Id, +1), enabled: index < count - 1));
         stack.Children.Add(controls);
 
         return new Border
@@ -125,7 +125,7 @@ public sealed partial class WelcomePage : Page
         var btn = new Button { Content = content, Height = 88, MinWidth = 90 };
 
         var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
-        var available = QuickActionCatalog.All.Where(a => !selected.Contains(a.Id)).ToList();
+        var available = QuickActionCatalog.Available();
         if (available.Count == 0)
             menu.Items.Add(new MenuFlyoutItem { Text = "All actions added", IsEnabled = false });
         else
@@ -163,30 +163,8 @@ public sealed partial class WelcomePage : Page
         return Color.FromArgb((byte)(opacity * 255), a.R, a.G, a.B);
     }
 
-    // --- mutations ---
-    private void Move(int index, int delta)
-    {
-        var ids = QuickActionCatalog.GetSelectedIds();
-        int target = index + delta;
-        if (index < 0 || index >= ids.Count || target < 0 || target >= ids.Count) return;
-        (ids[index], ids[target]) = (ids[target], ids[index]);
-        QuickActionCatalog.SetSelectedIds(ids);
-        RenderQuickActions();
-    }
-
-    private void Remove(string id)
-    {
-        var ids = QuickActionCatalog.GetSelectedIds();
-        ids.Remove(id);
-        QuickActionCatalog.SetSelectedIds(ids);
-        RenderQuickActions();
-    }
-
-    private void Add(string id)
-    {
-        var ids = QuickActionCatalog.GetSelectedIds();
-        if (!ids.Contains(id)) ids.Add(id);
-        QuickActionCatalog.SetSelectedIds(ids);
-        RenderQuickActions();
-    }
+    // --- mutations (persist via the catalog, then re-render) ---
+    private void Move(string id, int delta) { QuickActionCatalog.Move(id, delta); RenderQuickActions(); }
+    private void Remove(string id) { QuickActionCatalog.Remove(id); RenderQuickActions(); }
+    private void Add(string id) { QuickActionCatalog.Add(id); RenderQuickActions(); }
 }
