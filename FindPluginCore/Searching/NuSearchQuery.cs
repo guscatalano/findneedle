@@ -96,6 +96,10 @@ public class NuSearchQuery : ISearchQuery
     /// UI can show which rules contributed to each generated diagram.</summary>
     public IReadOnlyList<FindNeedleRuleDSL.UmlDiagramUsage> GeneratedDiagramUsages => _outputProcessor.GeneratedDiagrams;
 
+    /// <summary>Source rows used by UML diagrams in this search (row id → matching rule), so the
+    /// results viewer can tag the rows that fed a diagram.</summary>
+    public IReadOnlyList<FindNeedleRuleDSL.UmlRowTag> UmlMatchedRows => _outputProcessor.UmlMatchedRows;
+
     public SearchStepNotificationSink SearchStepNotificationSink
     {
         get => _stepnotifysink;

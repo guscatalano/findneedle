@@ -16,6 +16,10 @@ public class UmlRuleProcessor
     /// order. Lets callers report which rules actually contributed to the diagram (and which never fired).</summary>
     public List<UmlRuleUsage> LastUsage { get; private set; } = new();
 
+    /// <summary>Source rows that matched a rule during the most recent <see cref="ProcessMessages"/>
+    /// call, paired with the rule that matched. Lets the results viewer tag the rows used by the diagram.</summary>
+    public List<UmlRowMatch> LastMatchedRows { get; private set; } = new();
+
     public UmlRuleProcessor(IUmlSyntaxTranslator translator)
     {
         _translator = translator;
@@ -47,6 +51,7 @@ public class UmlRuleProcessor
 
         // Per-rule match counts so callers can show which rules were actually used.
         var counts = new int[_definition.Rules.Count];
+        var matchedRows = new List<UmlRowMatch>();
 
         foreach (var message in messages)
         {
@@ -57,6 +62,12 @@ public class UmlRuleProcessor
                     continue;
 
                 counts[ruleIndex]++;
+                if (message.RowId >= 0)
+                    matchedRows.Add(new UmlRowMatch
+                    {
+                        RowId = message.RowId,
+                        RuleName = string.IsNullOrWhiteSpace(rule.Name) ? $"rule {ruleIndex + 1}" : rule.Name,
+                    });
                 var element = ResolveElement(message, rule);
                 var type = (element.Type ?? string.Empty).Trim().ToLowerInvariant();
 
@@ -106,6 +117,7 @@ public class UmlRuleProcessor
         var footer = _translator.GenerateFooter();
         if (!string.IsNullOrEmpty(footer)) sb.AppendLine(footer);
 
+        LastMatchedRows = matchedRows;
         LastUsage = new List<UmlRuleUsage>(_definition.Rules.Count);
         for (var i = 0; i < _definition.Rules.Count; i++)
         {
@@ -244,4 +256,7 @@ public class LogMessage
     public string Content { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public DateTime? Timestamp { get; set; }
+    /// <summary>Stable id of the source result row (so callers can map a diagram match back to the
+    /// row in the results viewer). -1 when unknown.</summary>
+    public long RowId { get; set; } = -1;
 }

@@ -44,6 +44,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ("Question",  "#FB8C00"), // orange
         ("Resolved",  "#43A047"), // green
         ("Note",      "#3949AB"), // indigo
+        ("UML",       "#00897B"), // teal — auto-applied to rows that fed a UML diagram
     };
     private static readonly Dictionary<string, string> _tagColors =
         TagOptions.ToDictionary(t => t.Name, t => t.Hex, StringComparer.OrdinalIgnoreCase);
@@ -115,6 +116,25 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// <summary>Whether the current mode means "don't search until Enter".</summary>
     private bool RequireEnterToSearch() => SearchSubmitPolicy.RequireEnter(_searchSubmitMode, _autoEnterActive);
 
+    /// <summary>Auto-tag rows that fed a UML diagram in the last search (row id → matching rule),
+    /// so "which event-log lines did the diagram use" is visible right in the results grid. Never
+    /// clobbers a user's own tag on the same row.</summary>
+    private void SeedUmlRowTags()
+    {
+        try
+        {
+            var q = MiddleLayerService.SearchQueryUX.CurrentQuery as FindPluginCore.Searching.NuSearchQuery;
+            var matched = q?.UmlMatchedRows;
+            if (matched == null) return;
+            foreach (var m in matched)
+            {
+                if (_rowTags.ContainsKey(m.RowId)) continue;
+                _rowTags[m.RowId] = new RowTag("UML", string.IsNullOrWhiteSpace(m.RuleName) ? "used in diagram" : $"UML: {m.RuleName}");
+            }
+        }
+        catch { /* tagging is best-effort */ }
+    }
+
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         LoadingOverlay.Visibility = Visibility.Visible;
@@ -146,6 +166,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // After load, re-apply persisted level color overrides — LoadResultsAsync() repopulates
         // ViewModel.Levels from the theme defaults, which would clobber overrides otherwise.
         ApplyPersistedLevelOverrides();
+        SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
         ApplyAllColumnVisibility();
         RebindGrid();
@@ -234,6 +255,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         LoadingOverlay.Visibility = Visibility.Visible;
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
         ApplyPersistedLevelOverrides();
+        SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
         ApplyAllColumnVisibility();
         RebindGrid();

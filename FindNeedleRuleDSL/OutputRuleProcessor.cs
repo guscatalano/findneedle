@@ -32,6 +32,10 @@ public class OutputRuleProcessor
     /// Lets the UI show which UML rules actually contributed to each generated diagram.</summary>
     public List<UmlDiagramUsage> GeneratedDiagrams { get; } = new();
 
+    /// <summary>Source rows that fed a UML diagram in the last run (row id → matching rule name).
+    /// The results viewer uses this to tag the rows that were actually used by the diagram.</summary>
+    public List<UmlRowTag> UmlMatchedRows { get; } = new();
+
     private void RecordGeneratedFile(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
@@ -322,25 +326,45 @@ public class OutputRuleProcessor
                             }
                         }
 
-                        // Build list of LogMessage instances
+                        // Build list of LogMessage instances. Carry each row's stable id so matches can
+                        // be mapped back to the results viewer. Mirror LogLine's id rule: the real row
+                        // id when the result has one (>=0), else the load-order index.
                         var msgList = new List<LogMessage>();
+                        var idx = 0;
                         foreach (var r in results)
                         {
                             try
                             {
+                                long rid;
+                                try { rid = r.GetRowId(); } catch { rid = -1; }
+                                if (rid < 0) rid = idx;
                                 var msg = new LogMessage
                                 {
                                     Content = r.GetSearchableData() ?? r.GetMessage() ?? string.Empty,
                                     Source = r.GetResultSource() ?? r.GetSource() ?? string.Empty,
-                                    Timestamp = r.GetLogTime()
+                                    Timestamp = r.GetLogTime(),
+                                    RowId = rid,
                                 };
                                 msgList.Add(msg);
                             }
                             catch { }
+                            idx++;
                         }
 
                         // Call ProcessMessages
                         var umlText = proc.ProcessMessages(msgList);
+
+                        // Record which source rows fed the diagram (keep the first rule that matched
+                        // each row, so a row gets one clear tag).
+                        try
+                        {
+                            foreach (var m in proc.LastMatchedRows ?? new List<UmlRowMatch>())
+                            {
+                                if (UmlMatchedRows.Any(x => x.RowId == m.RowId)) continue;
+                                UmlMatchedRows.Add(new UmlRowTag { RowId = m.RowId, RuleName = m.RuleName });
+                            }
+                        }
+                        catch { }
 
                         try
                         {
@@ -831,4 +855,11 @@ public sealed class UmlRuleHit
     public string Name { get; set; } = string.Empty;
     public string Match { get; set; } = string.Empty;
     public int Count { get; set; }
+}
+
+/// <summary>A results-viewer row that fed a UML diagram (stable row id + the rule that matched it).</summary>
+public sealed class UmlRowTag
+{
+    public long RowId { get; set; }
+    public string RuleName { get; set; } = string.Empty;
 }

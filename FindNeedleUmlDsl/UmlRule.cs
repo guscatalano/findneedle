@@ -65,6 +65,13 @@ public class UmlRuleUsage
     public int Count { get; set; }
 }
 
+/// <summary>A source row that matched a UML rule, with the rule that matched it.</summary>
+public class UmlRowMatch
+{
+    public long RowId { get; set; }
+    public string RuleName { get; set; } = string.Empty;
+}
+
 public class UmlParticipant
 {
     [JsonPropertyName("id")]
