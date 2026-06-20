@@ -324,9 +324,16 @@ public static class ResultsViewerSettings
             { "Message",  true  },
             { "Source",   false }, // hidden by default
             { "Level",    true  },
-            { "ProcessId",  false }, // correlation columns hidden by default (opt-in via Columns ▾)
+            { "ProcessId",  false }, // correlation/detail columns hidden by default (opt-in via Columns ▾)
             { "ThreadId",   false },
-            { "ActivityId", false }
+            { "ActivityId", false },
+            { "EventId",           false },
+            { "OpCode",            false },
+            { "Keywords",          false },
+            { "RelatedActivityId", false },
+            { "Channel",           false },
+            { "ProviderGuid",      false },
+            { "RecordId",          false }
         };
 
     /// <summary>
@@ -364,7 +371,8 @@ public static class ResultsViewerSettings
     public static readonly IReadOnlyList<string> DetailFieldNames = new[]
     {
         "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
-        "MachineName", "Username", "OpCode", "ProcessId", "ThreadId", "ActivityId", "Tag",
+        "MachineName", "Username", "OpCode", "ProcessId", "ThreadId", "ActivityId",
+        "EventId", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId", "Tag",
     };
 
     /// <summary>Per-field visibility for the row-details panel (all shown by default). Merged with the

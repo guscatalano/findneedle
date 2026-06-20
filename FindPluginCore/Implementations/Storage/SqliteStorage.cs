@@ -45,8 +45,9 @@ namespace FindPluginCore.Implementations.Storage
         /// a way that makes existing caches incompatible. Cache reuse checks this against the
         /// value stored in the <c>_meta</c> table on the cached DB.
         /// </summary>
-        // v2: added ProcessId / ThreadId / ActivityId columns — old caches rescan once.
-        public const int CacheSchemaVersion = 2;
+        // v2: added ProcessId/ThreadId/ActivityId. v3: added EventId/Keywords/RelatedActivityId/
+        // Channel/ProviderGuid/RecordId. Old caches rescan once; EnsureColumns migrates in place.
+        public const int CacheSchemaVersion = 3;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -225,7 +226,13 @@ namespace FindPluginCore.Implementations.Storage
                     ResultSource TEXT,
                     ProcessId TEXT,
                     ThreadId TEXT,
-                    ActivityId TEXT
+                    ActivityId TEXT,
+                    EventId TEXT,
+                    Keywords TEXT,
+                    RelatedActivityId TEXT,
+                    Channel TEXT,
+                    ProviderGuid TEXT,
+                    RecordId TEXT
                 );
                 CREATE TABLE IF NOT EXISTS FilteredResults (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,7 +248,13 @@ namespace FindPluginCore.Implementations.Storage
                     ResultSource TEXT,
                     ProcessId TEXT,
                     ThreadId TEXT,
-                    ActivityId TEXT
+                    ActivityId TEXT,
+                    EventId TEXT,
+                    Keywords TEXT,
+                    RelatedActivityId TEXT,
+                    Channel TEXT,
+                    ProviderGuid TEXT,
+                    RecordId TEXT
                 );
                 -- Indexes for the result viewer's most common filter/sort columns.
                 CREATE INDEX IF NOT EXISTS IX_FilteredResults_Level    ON FilteredResults(Level);
@@ -270,7 +283,8 @@ namespace FindPluginCore.Implementations.Storage
                 using var r = q.ExecuteReader();
                 while (r.Read()) existing.Add(r.GetString(1)); // col 1 = name
             }
-            foreach (var col in new[] { "ProcessId", "ThreadId", "ActivityId" })
+            foreach (var col in new[] { "ProcessId", "ThreadId", "ActivityId",
+                                        "EventId", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId" })
             {
                 if (existing.Contains(col)) continue;
                 using var a = _connection.CreateCommand();
@@ -878,7 +892,8 @@ namespace FindPluginCore.Implementations.Storage
         {
             public SqliteParameter LogTime, MachineName, Level, Username, TaskName,
                                    OpCode, Source, SearchableData, Message, ResultSource,
-                                   ProcessId, ThreadId, ActivityId;
+                                   ProcessId, ThreadId, ActivityId,
+                                   EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId;
         }
 
         /// <summary>
@@ -892,8 +907,8 @@ namespace FindPluginCore.Implementations.Storage
             cmd.Transaction = tx;
             cmd.CommandText = $@"
                 INSERT INTO {table}
-                (LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, ProcessId, ThreadId, ActivityId)
-                VALUES (@LogTime, @MachineName, @Level, @Username, @TaskName, @OpCode, @Source, @SearchableData, @Message, @ResultSource, @ProcessId, @ThreadId, @ActivityId)";
+                (LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId)
+                VALUES (@LogTime, @MachineName, @Level, @Username, @TaskName, @OpCode, @Source, @SearchableData, @Message, @ResultSource, @ProcessId, @ThreadId, @ActivityId, @EventId, @Keywords, @RelatedActivityId, @Channel, @ProviderGuid, @RecordId)";
 
             p = new InsertParams
             {
@@ -910,6 +925,12 @@ namespace FindPluginCore.Implementations.Storage
                 ProcessId      = cmd.Parameters.Add("@ProcessId",      SqliteType.Text),
                 ThreadId       = cmd.Parameters.Add("@ThreadId",       SqliteType.Text),
                 ActivityId     = cmd.Parameters.Add("@ActivityId",     SqliteType.Text),
+                EventId           = cmd.Parameters.Add("@EventId",           SqliteType.Text),
+                Keywords          = cmd.Parameters.Add("@Keywords",          SqliteType.Text),
+                RelatedActivityId = cmd.Parameters.Add("@RelatedActivityId", SqliteType.Text),
+                Channel           = cmd.Parameters.Add("@Channel",           SqliteType.Text),
+                ProviderGuid      = cmd.Parameters.Add("@ProviderGuid",      SqliteType.Text),
+                RecordId          = cmd.Parameters.Add("@RecordId",          SqliteType.Text),
             };
             cmd.Prepare();
             return cmd;
@@ -930,6 +951,12 @@ namespace FindPluginCore.Implementations.Storage
             p.ProcessId.Value      = r.GetProcessId() ?? "";
             p.ThreadId.Value       = r.GetThreadId() ?? "";
             p.ActivityId.Value     = r.GetActivityId() ?? "";
+            p.EventId.Value           = r.GetEventId() ?? "";
+            p.Keywords.Value          = r.GetKeywords() ?? "";
+            p.RelatedActivityId.Value = r.GetRelatedActivityId() ?? "";
+            p.Channel.Value           = r.GetChannel() ?? "";
+            p.ProviderGuid.Value      = r.GetProviderGuid() ?? "";
+            p.RecordId.Value          = r.GetRecordId() ?? "";
             cmd.ExecuteNonQuery();
         }
 
@@ -948,7 +975,7 @@ namespace FindPluginCore.Implementations.Storage
             lock (_sync)
             {
                 var cmd = _connection.CreateCommand();
-                cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId FROM {table}";
+                cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId FROM {table}";
                 using var reader = cmd.ExecuteReader();
                 var batch = new List<ISearchResult>(batchSize);
                 while (reader.Read())
@@ -1027,7 +1054,8 @@ namespace FindPluginCore.Implementations.Storage
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText =
                     "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
-                    "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId FROM FilteredResults " +
+                    "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, " +
+                    "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId FROM FilteredResults " +
                     $"{where} {orderBy} LIMIT @limit OFFSET @offset";
                 BindParams(cmd, ps);
                 cmd.Parameters.AddWithValue("@limit", limit);
@@ -1090,7 +1118,8 @@ namespace FindPluginCore.Implementations.Storage
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText =
                     "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
-                    "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId FROM FilteredResults WHERE Id = @id LIMIT 1";
+                    "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, " +
+                    "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId FROM FilteredResults WHERE Id = @id LIMIT 1";
                 cmd.Parameters.AddWithValue("@id", id);
                 using var reader = cmd.ExecuteReader();
                 return reader.Read() ? new SqliteSearchResult(reader) : null;
@@ -1315,6 +1344,12 @@ namespace FindPluginCore.Implementations.Storage
             private readonly string _processId;
             private readonly string _threadId;
             private readonly string _activityId;
+            private readonly string _eventId;
+            private readonly string _keywords;
+            private readonly string _relatedActivityId;
+            private readonly string _channel;
+            private readonly string _providerGuid;
+            private readonly string _recordId;
 
             public SqliteSearchResult(IDataRecord record)
             {
@@ -1334,6 +1369,12 @@ namespace FindPluginCore.Implementations.Storage
                 _processId  = record.FieldCount > 11 && !record.IsDBNull(11) ? record.GetString(11) : "";
                 _threadId   = record.FieldCount > 12 && !record.IsDBNull(12) ? record.GetString(12) : "";
                 _activityId = record.FieldCount > 13 && !record.IsDBNull(13) ? record.GetString(13) : "";
+                _eventId           = record.FieldCount > 14 && !record.IsDBNull(14) ? record.GetString(14) : "";
+                _keywords          = record.FieldCount > 15 && !record.IsDBNull(15) ? record.GetString(15) : "";
+                _relatedActivityId = record.FieldCount > 16 && !record.IsDBNull(16) ? record.GetString(16) : "";
+                _channel           = record.FieldCount > 17 && !record.IsDBNull(17) ? record.GetString(17) : "";
+                _providerGuid      = record.FieldCount > 18 && !record.IsDBNull(18) ? record.GetString(18) : "";
+                _recordId          = record.FieldCount > 19 && !record.IsDBNull(19) ? record.GetString(19) : "";
             }
 
             public DateTime GetLogTime() => _logTime;
@@ -1351,6 +1392,12 @@ namespace FindPluginCore.Implementations.Storage
             public string GetProcessId() => _processId;
             public string GetThreadId() => _threadId;
             public string GetActivityId() => _activityId;
+            public string GetEventId() => _eventId;
+            public string GetKeywords() => _keywords;
+            public string GetRelatedActivityId() => _relatedActivityId;
+            public string GetChannel() => _channel;
+            public string GetProviderGuid() => _providerGuid;
+            public string GetRecordId() => _recordId;
         }
     }
 }

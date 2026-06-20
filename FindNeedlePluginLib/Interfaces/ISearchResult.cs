@@ -56,4 +56,22 @@ public interface ISearchResult
 
     /// <summary>Correlation / activity id (ETW ActivityId, EventLog Correlation ActivityID), or "".</summary>
     public string GetActivityId() => "";
+
+    /// <summary>Numeric event id (EventRecord.Id / TraceEvent.ID), or "" if not applicable.</summary>
+    public string GetEventId() => "";
+
+    /// <summary>Event keywords (display names), or "".</summary>
+    public string GetKeywords() => "";
+
+    /// <summary>Related/parent activity id for causality correlation, or "".</summary>
+    public string GetRelatedActivityId() => "";
+
+    /// <summary>Channel / log name the event came from (Application/System/…, ETW channel), or "".</summary>
+    public string GetChannel() => "";
+
+    /// <summary>Provider GUID (vs the friendly provider name), or "".</summary>
+    public string GetProviderGuid() => "";
+
+    /// <summary>The source log's own record sequence number (EventLog EventRecordID), or "".</summary>
+    public string GetRecordId() => "";
 }

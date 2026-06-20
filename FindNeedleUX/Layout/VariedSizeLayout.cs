@@ -41,6 +41,12 @@ public class LogLine
         ProcessId = NormalizeMissing(searchResult.GetProcessId());
         ThreadId = NormalizeMissing(searchResult.GetThreadId());
         ActivityId = NormalizeMissing(searchResult.GetActivityId());
+        EventId = NormalizeMissing(searchResult.GetEventId());
+        Keywords = NormalizeMissing(searchResult.GetKeywords());
+        RelatedActivityId = NormalizeMissing(searchResult.GetRelatedActivityId());
+        Channel = NormalizeMissing(searchResult.GetChannel());
+        ProviderGuid = NormalizeMissing(searchResult.GetProviderGuid());
+        RecordId = NormalizeMissing(searchResult.GetRecordId());
         SearchableData = searchResult.GetSearchableData(); // unmodified original; used for filtering fallback
         Message = CleanMessage(searchResult.GetMessage(), LogTime, Level);
     }
@@ -169,6 +175,30 @@ public class LogLine
         get; set;
     }
     public string ActivityId
+    {
+        get; set;
+    }
+    public string EventId
+    {
+        get; set;
+    }
+    public string Keywords
+    {
+        get; set;
+    }
+    public string RelatedActivityId
+    {
+        get; set;
+    }
+    public string Channel
+    {
+        get; set;
+    }
+    public string ProviderGuid
+    {
+        get; set;
+    }
+    public string RecordId
     {
         get; set;
     }

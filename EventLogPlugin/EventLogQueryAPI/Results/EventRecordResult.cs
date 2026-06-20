@@ -141,8 +141,7 @@ public class EventRecordResult : ISearchResult
 
     public string GetOpCode()
     {
-        // EventRecordResult doesn't carry OpCode — return empty so consumers treat it as missing.
-        return string.Empty;
+        try { return entry.OpcodeDisplayName ?? ""; } catch { return ""; }
     }
 
     public string GetSource()
@@ -184,6 +183,37 @@ public class EventRecordResult : ISearchResult
     public string GetProcessId()
     {
         try { return entry.ProcessId?.ToString() ?? ""; } catch { return ""; }
+    }
+
+    public string GetEventId()
+    {
+        try { return entry.Id.ToString(); } catch { return ""; }
+    }
+
+    public string GetKeywords()
+    {
+        try { return entry.KeywordsDisplayNames != null ? string.Join(", ", entry.KeywordsDisplayNames) : ""; }
+        catch { return ""; }
+    }
+
+    public string GetRelatedActivityId()
+    {
+        try { return entry.RelatedActivityId?.ToString() ?? ""; } catch { return ""; }
+    }
+
+    public string GetChannel()
+    {
+        try { return entry.LogName ?? ""; } catch { return ""; }
+    }
+
+    public string GetProviderGuid()
+    {
+        try { return entry.ProviderId?.ToString() ?? ""; } catch { return ""; }
+    }
+
+    public string GetRecordId()
+    {
+        try { return entry.RecordId?.ToString() ?? ""; } catch { return ""; }
     }
 
     public string GetThreadId()

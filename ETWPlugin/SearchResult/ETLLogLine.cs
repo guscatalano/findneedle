@@ -20,6 +20,11 @@ public class ETLLogLine : ISearchResult
     public string hexPid = string.Empty;
     public string hexTid = string.Empty;
     public string activityId = string.Empty;
+    public string eventId = string.Empty;
+    public string keywords = string.Empty;
+    public string relatedActivityId = string.Empty;
+    public string providerGuid = string.Empty;
+    public string opcodeName = string.Empty;
     public string datetime = string.Empty;
     public DateTime parsedTime = DateTime.MinValue;
     public string json = string.Empty;
@@ -150,6 +155,11 @@ public class ETLLogLine : ISearchResult
         this.hexPid = obj.ProcessID.ToString("X");
         this.hexTid = obj.ThreadID.ToString("X");
         try { this.activityId = obj.ActivityID == Guid.Empty ? "" : obj.ActivityID.ToString(); } catch { }
+        try { this.eventId = ((int)obj.ID).ToString(System.Globalization.CultureInfo.InvariantCulture); } catch { }
+        try { this.keywords = obj.Keywords == 0 ? "" : obj.Keywords.ToString(); } catch { }
+        try { this.relatedActivityId = obj.RelatedActivityID == Guid.Empty ? "" : obj.RelatedActivityID.ToString(); } catch { }
+        try { this.providerGuid = obj.ProviderGuid == Guid.Empty ? "" : obj.ProviderGuid.ToString(); } catch { }
+        try { this.opcodeName = obj.OpcodeName ?? ""; } catch { }
     }
 
     public ETLLogLine(string textline, string filename)
@@ -420,16 +430,17 @@ public class ETLLogLine : ISearchResult
     {
         return eventtxt.ToString();
     }
-    public string GetOpCode()
-    {
-        // ETL log lines don't carry OpCode — return empty so consumers treat it as missing.
-        return string.Empty;
-    }
+    public string GetOpCode() => opcodeName;
     // ETW stores PID/TID as hex (both the tracefmt text and the TraceEvent path); surface them as
-    // decimal to match what users expect. ActivityId is a GUID (TraceEvent path only).
+    // decimal to match what users expect. The rest come from the TraceEvent path (empty for tracefmt
+    // text, which doesn't carry them). ETW has no per-record id, so RecordId stays "".
     public string GetProcessId() => HexToDecimal(hexPid);
     public string GetThreadId() => HexToDecimal(hexTid);
     public string GetActivityId() => activityId;
+    public string GetEventId() => eventId;
+    public string GetKeywords() => keywords;
+    public string GetRelatedActivityId() => relatedActivityId;
+    public string GetProviderGuid() => providerGuid;
 
     private static string HexToDecimal(string hex)
     {

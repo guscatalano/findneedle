@@ -39,7 +39,9 @@ public class CorrelationFieldsStorageTests
         s.ClearTables();
         s.AddFilteredBatch(new List<ISearchResult>
         {
-            new R("alpha") { Pid = "4120", Tid = "7880", Act = "{11111111-1111-1111-1111-111111111111}" },
+            new R("alpha") { Pid = "4120", Tid = "7880", Act = "{11111111-1111-1111-1111-111111111111}",
+                Eid = "1003", Kw = "Audit Success", Rel = "{22222222-2222-2222-2222-222222222222}",
+                Chan = "Application", PGuid = "{33333333-3333-3333-3333-333333333333}", Rec = "106936" },
             new R("beta")  { Pid = "", Tid = "", Act = "" }, // a source without correlation fields
         });
 
@@ -51,6 +53,12 @@ public class CorrelationFieldsStorageTests
         Assert.AreEqual("4120", alpha.GetProcessId());
         Assert.AreEqual("7880", alpha.GetThreadId());
         Assert.AreEqual("{11111111-1111-1111-1111-111111111111}", alpha.GetActivityId());
+        Assert.AreEqual("1003", alpha.GetEventId());
+        Assert.AreEqual("Audit Success", alpha.GetKeywords());
+        Assert.AreEqual("{22222222-2222-2222-2222-222222222222}", alpha.GetRelatedActivityId());
+        Assert.AreEqual("Application", alpha.GetChannel());
+        Assert.AreEqual("{33333333-3333-3333-3333-333333333333}", alpha.GetProviderGuid());
+        Assert.AreEqual("106936", alpha.GetRecordId());
 
         var beta = all.First(r => r.GetMessage() == "beta");
         Assert.AreEqual("", beta.GetProcessId());
@@ -68,6 +76,7 @@ public class CorrelationFieldsStorageTests
         private readonly string _m;
         public R(string m) { _m = m; }
         public string Pid = "", Tid = "", Act = "";
+        public string Eid = "", Kw = "", Rel = "", Chan = "", PGuid = "", Rec = "";
         public DateTime GetLogTime() => new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         public string GetMachineName() => "M";
         public void WriteToConsole() { }
@@ -82,5 +91,11 @@ public class CorrelationFieldsStorageTests
         public string GetProcessId() => Pid;
         public string GetThreadId() => Tid;
         public string GetActivityId() => Act;
+        public string GetEventId() => Eid;
+        public string GetKeywords() => Kw;
+        public string GetRelatedActivityId() => Rel;
+        public string GetChannel() => Chan;
+        public string GetProviderGuid() => PGuid;
+        public string GetRecordId() => Rec;
     }
 }

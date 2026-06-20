@@ -953,6 +953,12 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (Show("ProcessId"))   yield return ("ProcessId",   line.ProcessId);
         if (Show("ThreadId"))    yield return ("ThreadId",    line.ThreadId);
         if (Show("ActivityId"))  yield return ("ActivityId",  line.ActivityId);
+        if (Show("EventId"))     yield return ("EventId",     line.EventId);
+        if (Show("Keywords"))    yield return ("Keywords",    line.Keywords);
+        if (Show("RelatedActivityId")) yield return ("RelatedActivityId", line.RelatedActivityId);
+        if (Show("Channel"))     yield return ("Channel",     line.Channel);
+        if (Show("ProviderGuid")) yield return ("ProviderGuid", line.ProviderGuid);
+        if (Show("RecordId"))    yield return ("RecordId",    line.RecordId);
         if (Show("Tag") && _rowTags.TryGetValue(line.RowId, out var rt))
             yield return ("Tag", string.IsNullOrEmpty(rt.Text) ? rt.Name : $"{rt.Name} — {rt.Text}");
     }
