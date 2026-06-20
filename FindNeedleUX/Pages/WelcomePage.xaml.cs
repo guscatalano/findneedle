@@ -48,19 +48,26 @@ public sealed partial class WelcomePage : Page
     private void RenderQuickActions()
     {
         if (QuickActionsHost == null) return;
-        QuickActionsHost.Children.Clear();
-
-        var ids = QuickActionCatalog.GetSelectedIds();
-        for (int i = 0; i < ids.Count; i++)
+        try
         {
-            var action = QuickActionCatalog.Find(ids[i]);
-            if (action == null) continue;
-            QuickActionsHost.Children.Add(_editMode
-                ? BuildEditTile(action, i, ids.Count)
-                : BuildActionTile(action));
-        }
+            QuickActionsHost.Children.Clear();
 
-        if (_editMode) QuickActionsHost.Children.Add(BuildAddTile(ids));
+            var ids = QuickActionCatalog.GetSelectedIds();
+            for (int i = 0; i < ids.Count; i++)
+            {
+                var action = QuickActionCatalog.Find(ids[i]);
+                if (action == null) continue;
+                QuickActionsHost.Children.Add(_editMode
+                    ? BuildEditTile(action, i, ids.Count)
+                    : BuildActionTile(action));
+            }
+
+            if (_editMode) QuickActionsHost.Children.Add(BuildAddTile(ids));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"RenderQuickActions failed: {ex}");
+        }
     }
 
     /// <summary>Normal tile: click runs the action.</summary>
@@ -150,7 +157,9 @@ public sealed partial class WelcomePage : Page
 
     private static Color AccentTint(double opacity)
     {
-        var a = (Color)Application.Current.Resources["SystemAccentColor"];
+        Color a;
+        try { a = new global::Windows.UI.ViewManagement.UISettings().GetColorValue(global::Windows.UI.ViewManagement.UIColorType.Accent); }
+        catch { a = Color.FromArgb(255, 0, 120, 215); } // Windows default accent
         return Color.FromArgb((byte)(opacity * 255), a.R, a.G, a.B);
     }
 
