@@ -170,6 +170,16 @@ public sealed partial class ProcessorOutputPage : Page
 
     // ---------- selection ----------
 
+    private bool _listCollapsed;
+
+    private void ToggleList_Click(object sender, RoutedEventArgs e)
+    {
+        _listCollapsed = !_listCollapsed;
+        ListBorder.Visibility = _listCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        ListColumn.Width = _listCollapsed ? new GridLength(0) : new GridLength(300);
+        // (icon stays the hamburger in both states)
+    }
+
     private void OutputList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (OutputList.SelectedItem is ListViewItem lvi && lvi.Tag is OutputEntry entry)
@@ -379,8 +389,8 @@ public sealed partial class ProcessorOutputPage : Page
         if (IsMermaid(path) || IsImageFile(path))
         {
             var grid = new Grid();
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 0: scrollable metadata (gets remaining space)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 1: fixed-size diagram
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 0: metadata (natural size, scrolls past a cap)
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: diagram fills the rest
 
             var meta = new StackPanel { Spacing = 6 };
             if (includeTitle)
@@ -390,9 +400,13 @@ public sealed partial class ProcessorOutputPage : Page
             var rulesPanel = BuildRulesUsedPanel(path);
             if (rulesPanel != null) meta.Children.Add(rulesPanel);
 
+            // Metadata takes its natural height (so the rule list is fully visible when expanded) but
+            // can't grow past ~half a typical pane — past that it scrolls, so the diagram below keeps
+            // a usable minimum. WebView is NOT inside this ScrollViewer (airspace).
             var metaScroll = new ScrollViewer
             {
                 Content = meta,
+                MaxHeight = 420,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 Margin = new Thickness(0, 0, 0, 8),
@@ -403,10 +417,9 @@ public sealed partial class ProcessorOutputPage : Page
             UIElement view;
             try
             {
-                // Fixed, modest height (the diagram has its own zoom/pan), so it doesn't dominate the
-                // pane and the metadata above gets the rest. WebView is NOT inside a ScrollViewer
-                // (airspace: it would render over the scrollbar).
-                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 420 };
+                // Diagram fills the remaining space (it has its own zoom/pan). NOT inside a
+                // ScrollViewer (airspace: it would render over the scrollbar).
+                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
                 var htmlPath = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
                 wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
                 view = new Border
@@ -414,6 +427,7 @@ public sealed partial class ProcessorOutputPage : Page
                     BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(6),
+                    MinHeight = 240,
                     Child = wv,
                 };
             }
