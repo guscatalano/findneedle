@@ -1,133 +1,122 @@
-using Microsoft.UI.Xaml.Controls;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using Microsoft.UI.Xaml;
-using findneedle.PluginSubsystem;
-using FindNeedlePluginLib;
 using System.Collections.ObjectModel;
-using FindPluginCore.PluginSubsystem;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using FindNeedleRuleDSL;
 using FindNeedleUX.Services;
-using FindNeedlePluginLib;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 
 namespace FindNeedleUX.Pages;
+
+/// <summary>A row in the "Active rules" list: one RuleDSL rule set applied to the current search,
+/// with its static structure and per-run match stats.</summary>
+public sealed class ActiveRuleRow
+{
+    public string Title { get; init; } = "";
+    public string FilePath { get; init; } = "";
+    public bool AutoAdded { get; init; }
+    public string MatchedSummary { get; init; } = "";
+    public string StructureSummary { get; init; } = "";
+    public string TagSummary { get; init; } = "";
+    public Visibility AutoAddedVisibility => AutoAdded ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TagVisibility => string.IsNullOrEmpty(TagSummary) ? Visibility.Collapsed : Visibility.Visible;
+}
+
 /// <summary>
-/// An empty page that can be used on its own or navigated to within a Frame.
+/// "Active rules" — repurposed from the old (now-defunct) processor toggle page. Shows the RuleDSL
+/// rule sets processing the current search: where each came from (manual vs auto-added), what it
+/// contains (sections + rules broken down by action), and how many results it matched at run time.
 /// </summary>
 public sealed partial class SearchProcessorsPage : Page
 {
-    public class ProcessorDisplayItem
-    {
-        public string Name { get; set; } = string.Empty;
-        public bool Enabled { get; set; }
-        public string ConfigKey { get; set; } // Used to update config
-    }
-
-    public ObservableCollection<ProcessorDisplayItem> Processors { get; set; } = new();
-
-    private static bool pluginsLoaded = false;
+    private readonly ObservableCollection<ActiveRuleRow> _rows = new();
 
     public SearchProcessorsPage()
     {
         this.InitializeComponent();
-        this.Loaded += SearchProcessorsPage_Loaded;
+        RulesList.ItemsSource = _rows;
+        this.Loaded += (_, _) => Build();
     }
 
-    private void SearchProcessorsPage_Loaded(object sender, RoutedEventArgs e)
+    private void Refresh_Click(object sender, RoutedEventArgs e) => Build();
+
+    private void Build()
     {
-        var pluginManager = PluginManager.GetSingleton();
-        // Only load plugins if not already loaded in this session
-        if (!pluginsLoaded && (pluginManager.loadedPluginsModules == null || pluginManager.loadedPluginsModules.Count == 0))
+        _rows.Clear();
+
+        var processors = MiddleLayerService.LastRuleProcessors ?? new List<FindNeedleRuleDSLPlugin>();
+        var autoAdded = new HashSet<string>(
+            MiddleLayerService.LastAutoAddedRules ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+
+        if (processors.Count == 0)
         {
-            pluginManager.LoadAllPlugins();
-            pluginsLoaded = true;
+            EmptyBar.Title = "No active rules";
+            EmptyBar.Message = "The current search isn't applying any RuleDSL rules. Add rules in "
+                + "Configure ▸ Rules, or enable Auto-add rules, then run a search.";
+            EmptyBar.IsOpen = true;
+            SubtitleText.Text = "The RuleDSL rule sets processing the current search.";
+            return;
         }
-        LoadProcessors();
-        ProcessorsListView.ItemsSource = Processors;
-    }
 
-    private void LoadProcessors()
-    {
-        Processors.Clear();
-        var pluginManager = PluginManager.GetSingleton();
-        var config = pluginManager.config;
-        var enabledDict = new Dictionary<string, bool>();
-        if (config != null)
+        EmptyBar.IsOpen = false;
+        int totalMatched = 0;
+
+        foreach (var p in processors)
         {
-            foreach (var entry in config.entries)
+            var path = p.RulesFilePath ?? "(built-in default)";
+            var (title, structure) = ParseStructure(path);
+            int matched = p.MatchedCount;
+            totalMatched += matched;
+
+            var tags = p.TagCounts;
+            string tagSummary = tags.Count > 0
+                ? "Tags: " + string.Join(", ", tags.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:N0}"))
+                : "";
+
+            _rows.Add(new ActiveRuleRow
             {
-                // Use ClassName or Name as key
-                var key = entry.name;
-                enabledDict[key] = entry.enabled;
-            }
+                Title = string.IsNullOrWhiteSpace(title) ? Path.GetFileName(path) : title,
+                FilePath = path,
+                AutoAdded = autoAdded.Contains(path),
+                MatchedSummary = $"Matched {matched:N0} result{(matched == 1 ? "" : "s")}",
+                StructureSummary = structure,
+                TagSummary = tagSummary,
+            });
         }
-        foreach (var module in pluginManager.loadedPluginsModules)
+
+        SubtitleText.Text = $"{processors.Count} rule set{(processors.Count == 1 ? "" : "s")} active · "
+            + $"{totalMatched:N0} total matches in the last search.";
+    }
+
+    /// <summary>Parse a rule file for its title + a structure summary (sections, enabled rule count,
+    /// and a breakdown by action type). Best-effort — a parse failure yields an empty summary.</summary>
+    private static (string title, string structure) ParseStructure(string path)
+    {
+        try
         {
-            foreach (var desc in module.description)
-            {
-                if (desc.ImplementedInterfacesShort.Contains("IResultProcessor"))
-                {
-                    var name = !string.IsNullOrEmpty(desc.FriendlyName) ? desc.FriendlyName : desc.ClassName;
-                    var configKey = desc.FriendlyName ?? desc.ClassName;
-                    bool enabled = true;
-                    string matchedKey = null;
-                    if (enabledDict.TryGetValue(desc.FriendlyName ?? desc.ClassName, out var isEnabled))
-                    {
-                        enabled = isEnabled;
-                        matchedKey = desc.FriendlyName ?? desc.ClassName;
-                    }
-                    else if (enabledDict.TryGetValue(desc.ClassName, out isEnabled))
-                    {
-                        enabled = isEnabled;
-                        matchedKey = desc.ClassName;
-                    }
-                    else if (enabledDict.TryGetValue(desc.SourceFile, out isEnabled))
-                    {
-                        enabled = isEnabled;
-                        matchedKey = desc.SourceFile;
-                    }
-                    else
-                    {
-                        enabled = true; // default to true if not found
-                    }
-                    // Log the matching process for debugging
-                    Logger.Instance.Log($"Processor: {name}, ConfigKey: {configKey}, Enabled: {enabled}, MatchedKey: {matchedKey}, ConfigEntryFound: {matchedKey != null}");
-                    Processors.Add(new ProcessorDisplayItem { Name = name, Enabled = enabled, ConfigKey = configKey });
-                }
-            }
+            if (!File.Exists(path)) return ("", "(rule file not found)");
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var set = JsonSerializer.Deserialize<UnifiedRuleSet>(File.ReadAllText(path), opts);
+            if (set == null) return ("", "(could not parse rule file)");
+
+            int sectionCount = set.Sections?.Count ?? 0;
+            var rules = (set.Sections ?? new()).SelectMany(s => s.Rules ?? new()).Where(r => r.Enabled).ToList();
+            var byAction = rules
+                .GroupBy(r => string.IsNullOrEmpty(r.Action?.Type) ? "other" : r.Action.Type)
+                .OrderByDescending(g => g.Count())
+                .Select(g => $"{g.Count()} {g.Key}");
+
+            var summary = $"{sectionCount} section{(sectionCount == 1 ? "" : "s")} · "
+                + $"{rules.Count} rule{(rules.Count == 1 ? "" : "s")}"
+                + (byAction.Any() ? " (" + string.Join(", ", byAction) + ")" : "");
+            return (set.Title ?? "", summary);
         }
-    }
-
-    private void CheckBox_Checked(object sender, RoutedEventArgs e)
-    {
-        UpdateProcessorEnabledState(sender, true);
-    }
-
-    private void CheckBox_Unchecked(object sender, RoutedEventArgs e)
-    {
-        UpdateProcessorEnabledState(sender, false);
-    }
-
-    private void UpdateProcessorEnabledState(object sender, bool enabled)
-    {
-        if (sender is CheckBox cb && cb.DataContext is ProcessorDisplayItem item && item.ConfigKey != null)
+        catch (Exception ex)
         {
-            var pluginManager = PluginManager.GetSingleton();
-            var config = pluginManager.config;
-            if (config != null)
-            {
-                var entry = config.entries.FirstOrDefault(e => e.name == item.ConfigKey);
-                if (entry != null)
-                {
-                    entry.enabled = enabled;
-                    item.Enabled = enabled;
-                    pluginManager.SaveToFile();
-                }
-            }
+            return ("", $"(parse error: {ex.Message})");
         }
-        // Always refresh the search query so processor list is up to date
-        MiddleLayerService.UpdateSearchQuery();
     }
 }

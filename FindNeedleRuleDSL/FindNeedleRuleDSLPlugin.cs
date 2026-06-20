@@ -151,6 +151,18 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
         return Path.Combine(appDir, "rules", "default.rules.json");
     }
 
+    /// <summary>The rules file this processor instance is driven by (null = built-in default).</summary>
+    public string? RulesFilePath => _rulesFilePath;
+
+    /// <summary>The provider scope this processor was created for ("*" = all).</summary>
+    public string Provider => _provider;
+
+    /// <summary>Number of results this rule set matched in the last run (0 until ProcessResults runs).</summary>
+    public int MatchedCount => _matchedResults.Count;
+
+    /// <summary>Per-tag match counts from the last run (read-only snapshot).</summary>
+    public IReadOnlyDictionary<string, int> TagCounts => new Dictionary<string, int>(_tagCounts);
+
     /// <summary>
     /// Gets the count of results matching a specific tag.
     /// </summary>

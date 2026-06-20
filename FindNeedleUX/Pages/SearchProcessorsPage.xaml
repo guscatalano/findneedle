@@ -9,19 +9,70 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid>
-        <ListView x:Name="ProcessorsListView" Margin="16" SelectionMode="None">
-            <ListView.Header>
-                <TextBlock Text="Loaded Search Processors" FontWeight="Bold" FontSize="20" Margin="0,0,0,8"/>
-            </ListView.Header>
-            <ListView.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Width="300"/>
-                        <CheckBox Content="Enabled" IsChecked="{Binding Enabled, Mode=TwoWay}" Checked="CheckBox_Checked" Unchecked="CheckBox_Unchecked"/>
-                    </StackPanel>
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
+    <Grid Margin="24" RowSpacing="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock Text="Active rules" FontSize="24" FontWeight="SemiBold"/>
+                <TextBlock x:Name="SubtitleText" TextWrapping="Wrap"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="The RuleDSL rule sets processing the current search, with what each one contains and how many results it matched."/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Refresh" Click="Refresh_Click" VerticalAlignment="Top"/>
+        </Grid>
+
+        <InfoBar x:Name="EmptyBar" Grid.Row="1" IsOpen="False" IsClosable="False"
+                 Severity="Informational"/>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="RulesList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="local:ActiveRuleRow">
+                        <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                CornerRadius="6" Padding="16" Margin="0,0,0,12">
+                            <StackPanel Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
+                                    <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}"
+                                            CornerRadius="3" Padding="6,1" VerticalAlignment="Center"
+                                            Visibility="{x:Bind AutoAddedVisibility}">
+                                        <TextBlock Text="auto-added" FontSize="11"/>
+                                    </Border>
+                                </StackPanel>
+
+                                <TextBlock Text="{x:Bind FilePath}" FontSize="11" FontFamily="Consolas"
+                                           TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+
+                                <!-- Runtime matched count -->
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                    <FontIcon Glyph="&#xE9D2;" FontSize="14" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{x:Bind MatchedSummary}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Static structure -->
+                                <TextBlock Text="{x:Bind StructureSummary}" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                                <!-- Tags found at runtime -->
+                                <TextBlock Text="{x:Bind TagSummary}" FontSize="12" TextWrapping="Wrap"
+                                           Visibility="{x:Bind TagVisibility}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </Grid>
 </Page>

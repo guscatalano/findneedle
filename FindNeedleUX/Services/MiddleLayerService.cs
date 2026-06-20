@@ -84,6 +84,10 @@ public class MiddleLayerService
     /// "these were added automatically").</summary>
     public static List<string> LastAutoAddedRules { get; private set; } = new();
 
+    /// <summary>The RuleDSL processor instances applied in the most recent search. The "Active rules"
+    /// page reads their per-run stats (matched count + tag counts) after the search completes.</summary>
+    public static List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin> LastRuleProcessors { get; private set; } = new();
+
     // Provider/build metadata pre-scanned for the current search (populated by
     // PreparePendingAutoRuleMetadata before UpdateSearchQuery, cleared right after). Only computed when
     // an enabled auto-rule actually needs it, so the common case pays nothing.
@@ -251,7 +255,9 @@ public class MiddleLayerService
             }
             SkipAutoRulesForNextSearch = false; // one-shot opt-out
 
-            // Add RuleDSL processors for each rules config file
+            // Add RuleDSL processors for each rules config file. Keep references to the instances so the
+            // "Active rules" page can read their per-run stats (matched count + tag counts) after search.
+            LastRuleProcessors = new List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin>();
             if (query.RulesConfigPaths != null && query.RulesConfigPaths.Count > 0)
             {
                 foreach (var rulesPath in query.RulesConfigPaths)
@@ -260,6 +266,7 @@ public class MiddleLayerService
                     {
                         var ruleDslProcessor = new FindNeedleRuleDSL.FindNeedleRuleDSLPlugin("*", rulesPath);
                         enabledProcessors.Add(ruleDslProcessor);
+                        LastRuleProcessors.Add(ruleDslProcessor);
                         System.Diagnostics.Debug.WriteLine($"Added RuleDSL processor for: {rulesPath}");
                     }
                 }
