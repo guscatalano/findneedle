@@ -69,6 +69,26 @@
                 </StackPanel>
             </Border>
 
+            <!-- Recently used file/folder locations — one click to re-add. -->
+            <StackPanel x:Name="RecentSection" Spacing="8" Visibility="Collapsed">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Recently used" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="Keep" VerticalAlignment="Center" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <NumberBox Grid.Column="2" x:Name="RecentMaxBox" Minimum="1" Maximum="50" SpinButtonPlacementMode="Compact"
+                               Width="96" SmallChange="1" ValueChanged="RecentMax_ValueChanged"
+                               AutomationProperties.Name="How many recent locations to keep"/>
+                    <Button Grid.Column="3" Content="Clear" Click="RecentClear_Click"/>
+                </Grid>
+                <StackPanel x:Name="RecentHost" Spacing="4"/>
+            </StackPanel>
+
             <StackPanel Spacing="8">
                 <TextBlock Text="Configured Locations" FontWeight="SemiBold"/>
                 <ItemsRepeaterScrollHost>

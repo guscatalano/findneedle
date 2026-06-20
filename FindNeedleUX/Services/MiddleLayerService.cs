@@ -58,6 +58,7 @@ public class MiddleLayerService
 
         folderloc.SetExtensionProcessorList(extensions);
         Locations.Add(folderloc);
+        try { RecentLocationsStore.Record(location); } catch { /* recents are best-effort */ }
         NotifyStateChanged();
     }
 

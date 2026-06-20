@@ -29,7 +29,64 @@ public sealed partial class SearchLocationsPage : Page
         CheckOtherDLLs.AreWeInstalledOk();
         // Bind the repeater once; the VM refreshes its collection in place.
         VariedImageSizeRepeater.ItemsSource = _viewModel.Locations;
-        Loaded += (_, _) => OpenPendingOnlineDialog();
+        Loaded += (_, _) => { OpenPendingOnlineDialog(); RenderRecent(); };
+    }
+
+    private bool _suppressRecentMax;
+
+    /// <summary>Show the "Recently used" file/folder paths as one-click re-add chips.</summary>
+    private void RenderRecent()
+    {
+        if (RecentHost == null) return;
+        _suppressRecentMax = true;
+        RecentMaxBox.Value = RecentLocationsStore.MaxRecent;
+        _suppressRecentMax = false;
+
+        RecentHost.Children.Clear();
+        var recents = RecentLocationsStore.Get();
+        RecentSection.Visibility = recents.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var path in recents)
+        {
+            var row = new Grid { ColumnSpacing = 8 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var add = new Button
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+            };
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            content.Children.Add(new SymbolIcon { Symbol = System.IO.Path.HasExtension(path) ? Symbol.Document : Symbol.Folder });
+            content.Children.Add(new TextBlock { Text = path, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+            add.Content = content;
+            ToolTipService.SetToolTip(add, $"Add {path}");
+            var p = path;
+            add.Click += (_, _) => { _viewModel.AddLocation(p); RenderRecent(); };
+            Grid.SetColumn(add, 0); row.Children.Add(add);
+
+            var remove = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
+            ToolTipService.SetToolTip(remove, "Remove from recents");
+            remove.Click += (_, _) => { RecentLocationsStore.Remove(p); RenderRecent(); };
+            Grid.SetColumn(remove, 1); row.Children.Add(remove);
+
+            RecentHost.Children.Add(row);
+        }
+    }
+
+    private void RecentMax_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_suppressRecentMax) return;
+        if (double.IsNaN(args.NewValue)) return;
+        RecentLocationsStore.MaxRecent = (int)args.NewValue;
+        RenderRecent();
+    }
+
+    private void RecentClear_Click(object sender, RoutedEventArgs e)
+    {
+        RecentLocationsStore.Clear();
+        RenderRecent();
     }
 
     /// <summary>When navigated with a source-kind string ("ado"/"github"/"kusto"), remember it and open
@@ -74,6 +131,7 @@ public sealed partial class SearchLocationsPage : Page
         if (path != null)
         {
             _viewModel.AddLocation(path);
+            RenderRecent();
         }
     }
 
@@ -89,6 +147,7 @@ public sealed partial class SearchLocationsPage : Page
         if (path != null)
         {
             _viewModel.AddLocation(path);
+            RenderRecent();
         }
     }
 
