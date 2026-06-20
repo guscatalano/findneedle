@@ -421,6 +421,20 @@ public sealed partial class MainWindow : Window
         var lastRunColor = hasResults ? Color.FromArgb(255, 46, 160, 67) : (Color?)null;
         StatusSegments.Children.Add(MakeStatusSegment(Symbol.Clock, "Last run", lastRun,
             "Open the results viewer", lastRunColor, () => NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage))));
+
+        // Output files (diagrams/exports) → Processor Output page. Only when the last run produced any.
+        var outFiles = new List<string>();
+        if (MiddleLayerService.LastRuleOutputFiles != null) outFiles.AddRange(MiddleLayerService.LastRuleOutputFiles);
+        if (query is FindPluginCore.Searching.NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null) outFiles.AddRange(nq.GeneratedRuleOutputFiles);
+        var outCount = outFiles.Where(System.IO.File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        if (outCount > 0)
+        {
+            var fileTip = string.Join("\n", outFiles.Where(System.IO.File.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Select(System.IO.Path.GetFileName));
+            StatusSegments.Children.Add(MakeStatusSegment(Symbol.Document, "Output files", outCount.ToString(),
+                fileTip, Color.FromArgb(255, 46, 160, 67),
+                () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage))));
+        }
     }
 
     /// <summary>A flat, clickable status-bar segment: icon + "Label: value", with a tooltip and an
