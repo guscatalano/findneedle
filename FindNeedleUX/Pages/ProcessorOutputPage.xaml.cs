@@ -379,8 +379,8 @@ public sealed partial class ProcessorOutputPage : Page
         if (IsMermaid(path) || IsImageFile(path))
         {
             var grid = new Grid();
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });               // 0: scrollable metadata
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: diagram
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 0: scrollable metadata (gets remaining space)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 1: fixed-size diagram
 
             var meta = new StackPanel { Spacing = 6 };
             if (includeTitle)
@@ -393,7 +393,6 @@ public sealed partial class ProcessorOutputPage : Page
             var metaScroll = new ScrollViewer
             {
                 Content = meta,
-                MaxHeight = 280, // cap the metadata; the diagram below always stays visible
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 Margin = new Thickness(0, 0, 0, 8),
@@ -404,7 +403,10 @@ public sealed partial class ProcessorOutputPage : Page
             UIElement view;
             try
             {
-                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
+                // Fixed, modest height (the diagram has its own zoom/pan), so it doesn't dominate the
+                // pane and the metadata above gets the rest. WebView is NOT inside a ScrollViewer
+                // (airspace: it would render over the scrollbar).
+                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 420 };
                 var htmlPath = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
                 wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
                 view = new Border
@@ -412,7 +414,6 @@ public sealed partial class ProcessorOutputPage : Page
                     BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(6),
-                    MinHeight = 280,
                     Child = wv,
                 };
             }
