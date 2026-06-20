@@ -335,10 +335,25 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 }
             }
 
-            // Discover levels and seed Levels/KnownLevelNames.
+            // Discover levels (+ a small sample for AutoHide) OFF the UI thread. On a multi-million-row
+            // SQLite table GetDistinctLevels is a full scan; running it (and the first-page reload
+            // below) on the UI thread froze the viewer for several seconds on navigation-back — the
+            // loading spinner's gif couldn't even animate. Query on the threadpool, publish on the UI.
+            List<string> distinct;
+            List<LogLine> sample = null;
             using (PerfLog.Scope("viewer.native.levels"))
             {
-                var distinct = _source.GetDistinctLevels();
+                var src = _source;
+                bool needSample = !streaming;
+                var r = await Task.Run(() =>
+                {
+                    var d = src.GetDistinctLevels();
+                    var s = needSample ? src.GetPage(FilterSpec.Empty, SortSpec.None, 0, 1000) : null;
+                    return (d, s);
+                });
+                distinct = r.d;
+                sample = r.s;
+
                 var levelSet = new HashSet<string>(distinct, StringComparer.OrdinalIgnoreCase);
                 foreach (var def in DefaultLevelColors.Keys) levelSet.Add(def);
 
@@ -355,20 +370,16 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 TotalCount = _source.TotalCount;
             }
 
-            // AutoHide needs to inspect a small sample of rows. Pull just the first page from the
-            // source — for SQLite this is a single LIMIT 1000 query; for in-memory it's a cheap
-            // slice. Either way, the cost is bounded regardless of total row count.
-            if (!streaming)
+            if (sample != null)
             {
                 using (PerfLog.Scope("viewer.native.autohide_sample"))
-                {
-                    var sample = _source.GetPage(FilterSpec.Empty, SortSpec.None, 0, 1000);
                     AutoHideEmptyColumnsFromSample(sample);
-                }
             }
 
+            // ReloadFromSourceAsyncCore runs the count/level/page queries on the threadpool (vs the
+            // synchronous ReloadFromSource) so the first page lands without blocking the UI thread.
             using (PerfLog.Scope("viewer.native.first_page"))
-                ReloadFromSource();
+                await ReloadFromSourceAsyncCore();
             IsStreaming = streaming;
             if (streaming)
             {

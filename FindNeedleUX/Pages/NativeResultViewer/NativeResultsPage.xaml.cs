@@ -732,17 +732,26 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             try { desc = loc.GetDescription(); } catch { desc = ""; }
             locInfo.Add((name, desc));
         }
-        var rules = MiddleLayerService.SearchQueryUX?.CurrentQuery?.RulesConfigPaths
-                    ?? new System.Collections.Generic.List<string>();
+        // Auto-added rules are recorded at search time (independent of the query's RulesConfigPaths,
+        // which can be reset) — so they show reliably even when the query lists none. Merge them in and
+        // tag which ones were applied automatically.
+        var autoAdded = new System.Collections.Generic.HashSet<string>(
+            MiddleLayerService.LastAutoAddedRules ?? new System.Collections.Generic.List<string>(),
+            StringComparer.OrdinalIgnoreCase);
+        var rules = new System.Collections.Generic.List<string>(
+            MiddleLayerService.SearchQueryUX?.CurrentQuery?.RulesConfigPaths
+            ?? new System.Collections.Generic.List<string>());
+        foreach (var a in autoAdded)
+            if (!rules.Any(x => string.Equals(x, a, StringComparison.OrdinalIgnoreCase))) rules.Add(a);
 
         var panel = new StackPanel { Spacing = 10 };
 
         // Copy buttons (kept inside the content so the dialog stays open after copying).
         var copyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         var copyText = new Button { Content = "Copy as text" };
-        copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules));
+        copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules, autoAdded));
         var copyJson = new Button { Content = "Copy as JSON" };
-        copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules));
+        copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules, autoAdded));
         copyRow.Children.Add(copyText);
         copyRow.Children.Add(copyJson);
         panel.Children.Add(copyRow);
@@ -759,7 +768,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             panel.Children.Add(SourcesNote("No rule files loaded."));
         else
             foreach (var r in rules)
-                panel.Children.Add(SourcesItem(System.IO.Path.GetFileName(r), r));
+                panel.Children.Add(SourcesItem(
+                    System.IO.Path.GetFileName(r) + (autoAdded.Contains(r) ? "   — auto-added" : ""), r));
 
         var dialog = new ContentDialog
         {
@@ -779,7 +789,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private static string SourcesAsText(
         System.Collections.Generic.List<(string name, string description)> locs,
-        System.Collections.Generic.List<string> rules)
+        System.Collections.Generic.List<string> rules,
+        System.Collections.Generic.HashSet<string> autoAdded)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Locations ({locs.Count}):");
@@ -791,18 +802,20 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
         sb.AppendLine($"Rules ({rules.Count}):");
         if (rules.Count == 0) sb.AppendLine("  (none)");
-        foreach (var r in rules) sb.AppendLine($"  - {r}");
+        foreach (var r in rules)
+            sb.AppendLine($"  - {r}{(autoAdded.Contains(r) ? "   (auto-added)" : "")}");
         return sb.ToString();
     }
 
     private static string SourcesAsJson(
         System.Collections.Generic.List<(string name, string description)> locs,
-        System.Collections.Generic.List<string> rules)
+        System.Collections.Generic.List<string> rules,
+        System.Collections.Generic.HashSet<string> autoAdded)
     {
         var payload = new
         {
             locations = locs.ConvertAll(l => new { name = l.name, description = l.description }),
-            rules,
+            rules = rules.ConvertAll(r => new { path = r, autoAdded = autoAdded.Contains(r) }),
         };
         return System.Text.Json.JsonSerializer.Serialize(payload,
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
