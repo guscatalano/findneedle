@@ -537,6 +537,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: SearchLocationsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
                 break;
+            case "connections":
+                Logger.Instance.Log("Navigated: ConnectionsPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ConnectionsPage));
+                break;
             case "search_rules":
                 Logger.Instance.Log("Navigated: SearchRulesPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage));

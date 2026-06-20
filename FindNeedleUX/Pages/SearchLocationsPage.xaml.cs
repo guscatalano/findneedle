@@ -184,137 +184,109 @@ public sealed partial class SearchLocationsPage : Page
         _viewModel.Refresh();
     }
 
-    /// <summary>Azure DevOps location dialog: org URL, project, auth (PAT or AAD), and either a WIQL
-    /// query or an explicit list of work item ids.</summary>
+    /// <summary>Azure DevOps location dialog: pick a saved connection, then the (required) work-item IDs.
+    /// Connection setup lives on the Connections page.</summary>
     private async Task<AdoLocation> ShowAdoDialogAsync(AdoLocation existing)
     {
-        // When adding a new one, pre-fill from the last values the user entered.
-        var org = new TextBox
-        {
-            Header = "Organization URL",
-            PlaceholderText = "https://dev.azure.com/org  or  https://org.visualstudio.com",
-            Text = existing?.OrganizationUrl ?? OnlineSourceSettings.AdoOrg,
-        };
-        var project = new TextBox { Header = "Project", PlaceholderText = "MyProject",
-            Text = existing?.Project ?? OnlineSourceSettings.AdoProject };
+        var conns = ConnectionStore.GetAll("ado");
+        if (conns.Count == 0) { await PromptNoConnectionsAsync("Azure DevOps"); return null; }
 
-        var auth = new RadioButtons { Header = "Sign-in", MaxColumns = 1 };
-        auth.Items.Add("Personal Access Token (PAT)");
-        auth.Items.Add("Azure AD interactive sign-in");
-        auth.SelectedIndex = existing != null ? (int)existing.AuthMode : OnlineSourceSettings.AdoAuthMode;
-        AdoAuthMode Mode() => auth.SelectedIndex == 1 ? AdoAuthMode.Interactive : AdoAuthMode.Pat;
-
-        var pat = new PasswordBox { Header = "PAT (needs Work Items: Read)",
-            Password = existing?.Pat ?? OnlineSourceSettings.AdoPat };
-
-        // ── Saved-connection picker: pick a saved org/project/auth to refill, so you only enter the
-        //    connection once and then just type the work-item IDs. ──
-        var connBox = new StackPanel { Spacing = 4 };
-        connBox.Children.Add(org); connBox.Children.Add(project); connBox.Children.Add(auth); connBox.Children.Add(pat);
-        var (connCombo, connPanel) = BuildConnectionPicker("ado", connBox, sel =>
-        {
-            org.Text = sel.AdoOrg; project.Text = sel.AdoProject;
-            auth.SelectedIndex = sel.AdoAuthMode; pat.Password = sel.AdoPat;
-        });
+        var connCombo = new ComboBox { Header = "Connection", HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var c in conns) connCombo.Items.Add(c.Name);
+        connCombo.SelectedIndex = existing == null ? 0 : Math.Max(0, conns.FindIndex(c =>
+            string.Equals(c.AdoOrg?.TrimEnd('/'), existing.OrganizationUrl?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(c.AdoProject, existing.Project, StringComparison.OrdinalIgnoreCase)));
 
         var ids = new TextBox
         {
             Header = "Work item IDs (comma-separated, required)",
             PlaceholderText = "e.g. 1, 2", Text = existing?.Ids ?? OnlineSourceSettings.AdoIds,
         };
-        var error = new TextBlock
-        {
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
-            Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap,
-        };
+        var error = ErrorBlock();
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 480 };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Opens the log attachments of the chosen work items.",
-            FontSize = 12, TextWrapping = TextWrapping.Wrap,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-        });
-        panel.Children.Add(connPanel);
+        panel.Children.Add(HintBlock("Opens the log attachments of the chosen work items."));
+        panel.Children.Add(connCombo);
+        var manage = ManageConnectionsLink();
+        panel.Children.Add(manage);
         panel.Children.Add(ids);
         panel.Children.Add(error);
 
-        var dialog = new ContentDialog
-        {
-            Title = existing == null ? "Add Azure DevOps location" : "Edit Azure DevOps location",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 560,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) },
-            PrimaryButtonText = existing == null ? "Add" : "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = this.XamlRoot,
-        };
-        // Validate before closing: org/project and at least one work-item ID are required (no blank).
+        var dialog = MakeLocationDialog(existing == null ? "Add Azure DevOps location" : "Edit Azure DevOps location",
+            panel, existing == null ? "Add" : "Save");
+        WireManageLink(manage, dialog);
         dialog.PrimaryButtonClick += (_, args) =>
         {
-            if (string.IsNullOrWhiteSpace(org.Text) || string.IsNullOrWhiteSpace(project.Text))
-            { error.Text = "Organization URL and project are required."; error.Visibility = Visibility.Visible; args.Cancel = true; return; }
             if (string.IsNullOrWhiteSpace(ids.Text) || !ids.Text.Any(char.IsDigit))
             { error.Text = "Enter at least one work item ID."; error.Visibility = Visibility.Visible; args.Cancel = true; }
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
 
-        // Save the connection (reused next time) + remember the last IDs.
-        UpsertAdoConnection(org.Text, project.Text, auth.SelectedIndex, pat.Password);
-        OnlineSourceSettings.AdoOrg = org.Text;
-        OnlineSourceSettings.AdoProject = project.Text;
-        OnlineSourceSettings.AdoAuthMode = auth.SelectedIndex;
-        OnlineSourceSettings.AdoPat = pat.Password;
+        var conn = conns[connCombo.SelectedIndex];
         OnlineSourceSettings.AdoIds = ids.Text;
-
-        return new AdoLocation(org.Text, project.Text, Mode(), pat.Password, wiql: "", ids: ids.Text);
+        return new AdoLocation(conn.AdoOrg, conn.AdoProject, (AdoAuthMode)conn.AdoAuthMode, conn.AdoPat, wiql: "", ids: ids.Text);
     }
 
-    /// <summary>Build a "Connection" ComboBox above <paramref name="fields"/>: lists saved connections
-    /// of <paramref name="kind"/> plus "New connection…". Selecting a saved one calls
-    /// <paramref name="onPick"/> to refill the fields. Returns the combo + a panel wrapping combo+fields.</summary>
-    private (ComboBox combo, StackPanel panel) BuildConnectionPicker(string kind, FrameworkElement fields, Action<SavedConnection> onPick)
+    // ── shared helpers for the connection-backed location dialogs ──
+
+    private static TextBlock HintBlock(string text) => new()
     {
-        var saved = ConnectionStore.GetAll(kind);
-        var combo = new ComboBox { Header = "Connection", HorizontalAlignment = HorizontalAlignment.Stretch };
-        combo.Items.Add("➕ New connection…");
-        foreach (var s in saved) combo.Items.Add(s.Name);
-        combo.SelectionChanged += (_, __) =>
+        Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap,
+        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+    };
+
+    private static TextBlock ErrorBlock() => new()
+    {
+        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+        Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap,
+    };
+
+    private static HyperlinkButton ManageConnectionsLink() =>
+        new() { Content = "Manage connections…", Padding = new Thickness(0), FontSize = 12 };
+
+    private void WireManageLink(HyperlinkButton link, ContentDialog dialog)
+    {
+        link.Click += (_, _) => { dialog.Hide(); this.Frame?.Navigate(typeof(ConnectionsPage)); };
+    }
+
+    private ContentDialog MakeLocationDialog(string title, FrameworkElement panel, string primary) => new()
+    {
+        Title = title,
+        Content = new ScrollViewer { Content = panel, MaxHeight = 560,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) },
+        PrimaryButtonText = primary,
+        CloseButtonText = "Cancel",
+        DefaultButton = ContentDialogButton.Primary,
+        XamlRoot = this.XamlRoot,
+    };
+
+    /// <summary>Shown when the user tries to add an online location of a kind with no saved connections —
+    /// offers to jump to the Connections page to set one up.</summary>
+    private async Task PromptNoConnectionsAsync(string what)
+    {
+        var d = new ContentDialog
         {
-            var i = combo.SelectedIndex;
-            if (i >= 1 && i - 1 < saved.Count) onPick(saved[i - 1]);
+            Title = $"No {what} connections yet",
+            Content = $"Set up a {what} connection first under Configure ▸ Connections, then come back to add a location.",
+            PrimaryButtonText = "Open Connections",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
         };
-        // Default to the first saved connection (prefilled) when one exists; else "New".
-        combo.SelectedIndex = saved.Count > 0 ? 1 : 0;
-
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(combo);
-        panel.Children.Add(fields);
-        return (combo, panel);
+        if (await d.ShowAsync() == ContentDialogResult.Primary) this.Frame?.Navigate(typeof(ConnectionsPage));
     }
 
-    private static SavedConnection UpsertAdoConnection(string org, string project, int authMode, string pat)
-    {
-        var existing = ConnectionStore.GetAll("ado").FirstOrDefault(c =>
-            string.Equals(c.AdoOrg?.TrimEnd('/'), org?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(c.AdoProject, project, StringComparison.OrdinalIgnoreCase));
-        var conn = existing ?? new SavedConnection { Kind = "ado" };
-        conn.AdoOrg = org; conn.AdoProject = project; conn.AdoAuthMode = authMode; conn.AdoPat = pat;
-        conn.Name = conn.DefaultName();
-        return ConnectionStore.Upsert(conn);
-    }
-
-    /// <summary>GitHub issues location dialog: repo (URL or owner/repo), optional token, state.</summary>
+    /// <summary>GitHub issues location dialog: pick a saved connection, then the issue number / state.</summary>
     private async Task<GithubIssuesLocation> ShowGithubDialogAsync(GithubIssuesLocation existing)
     {
-        var repo = new TextBox
-        {
-            Header = "Repository (URL or owner/repo)",
-            PlaceholderText = "https://github.com/owner/repo  or  owner/repo",
-            Text = existing == null ? OnlineSourceSettings.GithubRepo : $"{existing.Owner}/{existing.Repo}",
-        };
-        var token = new PasswordBox { Header = "Token (optional; for private repos / higher rate limit)",
-            Password = existing?.Token ?? OnlineSourceSettings.GithubToken };
+        var conns = ConnectionStore.GetAll("github");
+        if (conns.Count == 0) { await PromptNoConnectionsAsync("GitHub"); return null; }
+
+        var connCombo = new ComboBox { Header = "Connection", HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var c in conns) connCombo.Items.Add(c.Name);
+        connCombo.SelectedIndex = existing == null ? 0 : Math.Max(0, conns.FindIndex(c =>
+            string.Equals(c.GithubRepo, $"{existing.Owner}/{existing.Repo}", StringComparison.OrdinalIgnoreCase)));
+
         var issue = new TextBox
         {
             Header = "Issue number — open its log attachments (blank = list issues)",
@@ -330,50 +302,24 @@ public sealed partial class SearchLocationsPage : Page
         state.SelectedIndex = stateSeed switch { "open" => 1, "closed" => 2, _ => 0 };
         string State() => state.SelectedIndex switch { 1 => "open", 2 => "closed", _ => "all" };
 
-        // Saved-connection picker for repo + token (the reusable part).
-        var connBox = new StackPanel { Spacing = 4 };
-        connBox.Children.Add(repo); connBox.Children.Add(token);
-        var (_, connPanel) = BuildConnectionPicker("github", connBox, sel =>
-        {
-            repo.Text = sel.GithubRepo; token.Password = sel.GithubToken;
-        });
-
         var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
-        panel.Children.Add(connPanel);
+        panel.Children.Add(connCombo);
+        var manage = ManageConnectionsLink();
+        panel.Children.Add(manage);
         panel.Children.Add(issue);
         panel.Children.Add(state);
 
-        var dialog = new ContentDialog
-        {
-            Title = existing == null ? "Add GitHub issues location" : "Edit GitHub issues location",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 400,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) },
-            PrimaryButtonText = existing == null ? "Add" : "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = this.XamlRoot,
-        };
+        var dialog = MakeLocationDialog(existing == null ? "Add GitHub issues location" : "Edit GitHub issues location",
+            panel, existing == null ? "Add" : "Save");
+        WireManageLink(manage, dialog);
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
-        if (string.IsNullOrWhiteSpace(repo.Text)) return null;
 
-        UpsertGithubConnection(repo.Text, token.Password);
-        OnlineSourceSettings.GithubRepo = repo.Text;
-        OnlineSourceSettings.GithubToken = token.Password;
+        var conn = conns[connCombo.SelectedIndex];
         OnlineSourceSettings.GithubState = State();
         OnlineSourceSettings.GithubIssue = issue.Text?.Trim() ?? "";
 
         int.TryParse(issue.Text?.Trim(), out var issueNum);
-        return new GithubIssuesLocation(repo.Text, token.Password, State(), 500, issueNum);
-    }
-
-    private static SavedConnection UpsertGithubConnection(string repo, string token)
-    {
-        var existing = ConnectionStore.GetAll("github").FirstOrDefault(c =>
-            string.Equals(c.GithubRepo, repo, StringComparison.OrdinalIgnoreCase));
-        var conn = existing ?? new SavedConnection { Kind = "github" };
-        conn.GithubRepo = repo; conn.GithubToken = token;
-        conn.Name = conn.DefaultName();
-        return ConnectionStore.Upsert(conn);
+        return new GithubIssuesLocation(conn.GithubRepo, conn.GithubToken, State(), 500, issueNum);
     }
 
     /// <summary>
@@ -588,18 +534,31 @@ public sealed partial class SearchLocationsPage : Page
         previewGroup.Children.Add(previewBtn);
         previewGroup.Children.Add(previewOut);
 
-        // Saved-connection picker for cluster + database + auth (the reusable part).
-        var connBox = new StackPanel { Spacing = 4 };
-        connBox.Children.Add(cluster); connBox.Children.Add(auth);
-        var (_, connPanel) = BuildConnectionPicker("kusto", connBox, sel =>
+        // Pick a saved Kusto connection — its cluster + auth (and default database) drive the dialog;
+        // cluster/auth above are kept as backing controls the db/table/preview loaders read.
+        var conns = ConnectionStore.GetAll("kusto");
+        if (conns.Count == 0) { await PromptNoConnectionsAsync("Kusto"); return null; }
+        var connCombo = new ComboBox { Header = "Connection", HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var c in conns) connCombo.Items.Add(c.Name);
+        void ApplyConn()
         {
+            if (connCombo.SelectedIndex < 0 || connCombo.SelectedIndex >= conns.Count) return;
+            var sel = conns[connCombo.SelectedIndex];
             cluster.Text = sel.KustoCluster;
-            if (!string.IsNullOrWhiteSpace(sel.KustoDatabase)) dbBox.Text = sel.KustoDatabase;
             auth.SelectedIndex = sel.KustoAuthMode;
-        });
+            if (!string.IsNullOrWhiteSpace(sel.KustoDatabase) && string.IsNullOrWhiteSpace(dbBox.Text))
+                dbBox.Text = sel.KustoDatabase;
+        }
+        connCombo.SelectionChanged += (_, __) => ApplyConn();
+        connCombo.SelectedIndex = existing == null ? 0 : Math.Max(0, conns.FindIndex(c =>
+            string.Equals(c.KustoCluster, existing.ClusterUri, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(c.KustoDatabase, existing.Database, StringComparison.OrdinalIgnoreCase)));
+        ApplyConn();
+        var manage = ManageConnectionsLink();
 
         var panel = new StackPanel { Spacing = 8, MinWidth = 540 };
-        panel.Children.Add(connPanel);
+        panel.Children.Add(connCombo);
+        panel.Children.Add(manage);
         panel.Children.Add(rowLimit);
         panel.Children.Add(dbGroup);
         panel.Children.Add(tablesGroup);
@@ -623,6 +582,7 @@ public sealed partial class SearchLocationsPage : Page
         };
         // Let the dialog grow wider than the default (~548px) so the inset content has room.
         dialog.Resources["ContentDialogMaxWidth"] = 760.0;
+        WireManageLink(manage, dialog);
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
 
         var database = (dbBox.Text ?? string.Empty).Trim();
@@ -630,18 +590,6 @@ public sealed partial class SearchLocationsPage : Page
             || string.IsNullOrWhiteSpace(query.Text))
             return null;
 
-        UpsertKustoConnection(cluster.Text, database, auth.SelectedIndex);
         return new KustoLocation(cluster.Text, database, query.Text, Mode(), SelectedRowLimit());
-    }
-
-    private static SavedConnection UpsertKustoConnection(string cluster, string database, int authMode)
-    {
-        var existing = ConnectionStore.GetAll("kusto").FirstOrDefault(c =>
-            string.Equals(c.KustoCluster, cluster, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(c.KustoDatabase, database, StringComparison.OrdinalIgnoreCase));
-        var conn = existing ?? new SavedConnection { Kind = "kusto" };
-        conn.KustoCluster = cluster; conn.KustoDatabase = database; conn.KustoAuthMode = authMode;
-        conn.Name = conn.DefaultName();
-        return ConnectionStore.Upsert(conn);
     }
 }
