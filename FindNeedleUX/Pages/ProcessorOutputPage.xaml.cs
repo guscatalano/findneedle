@@ -239,6 +239,10 @@ public sealed partial class ProcessorOutputPage : Page
 
     private UIElement BuildFileDetail(string path, bool includeTitle = true)
     {
+        // Output paths can mix separators (e.g. "...\win-x64\output/file.mmd" from {output}/{datetime}).
+        // explorer /select fails on a forward slash and silently opens the desktop, so normalize first.
+        try { path = Path.GetFullPath(path); } catch { /* keep original if it can't be normalized */ }
+
         // Common toolbar (file actions). For .mmd we also offer "Open rendered diagram" which opens
         // the generated zoomable HTML in the browser for a full-screen view.
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -301,6 +305,7 @@ public sealed partial class ProcessorOutputPage : Page
                     BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(6),
+                    MinHeight = 300, // keep the diagram visible even when the rules panel is expanded
                     Child = wv,
                 };
             }
@@ -398,6 +403,8 @@ public sealed partial class ProcessorOutputPage : Page
             list.Children.Add(row);
         }
 
+        // Cap the panel's height and let it scroll internally, so expanding rules (and their lines)
+        // never squeezes the diagram below it off-screen.
         return new Expander
         {
             Header = $"Rules used: {used.Count} of {usage.Rules.Count}",
@@ -405,7 +412,13 @@ public sealed partial class ProcessorOutputPage : Page
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 8),
-            Content = list,
+            Content = new ScrollViewer
+            {
+                MaxHeight = 260,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = list,
+            },
         };
     }
 
