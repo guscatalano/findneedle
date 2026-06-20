@@ -950,6 +950,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (Show("MachineName")) yield return ("MachineName", line.MachineName);
         if (Show("Username"))    yield return ("Username",    line.Username);
         if (Show("OpCode"))      yield return ("OpCode",      line.OpCode);
+        if (Show("ProcessId"))   yield return ("ProcessId",   line.ProcessId);
+        if (Show("ThreadId"))    yield return ("ThreadId",    line.ThreadId);
+        if (Show("ActivityId"))  yield return ("ActivityId",  line.ActivityId);
         if (Show("Tag") && _rowTags.TryGetValue(line.RowId, out var rt))
             yield return ("Tag", string.IsNullOrEmpty(rt.Text) ? rt.Name : $"{rt.Name} — {rt.Text}");
     }

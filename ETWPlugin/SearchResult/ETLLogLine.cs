@@ -19,6 +19,7 @@ public class ETLLogLine : ISearchResult
     public string firstSomething = string.Empty; //dont know what this is
     public string hexPid = string.Empty;
     public string hexTid = string.Empty;
+    public string activityId = string.Empty;
     public string datetime = string.Empty;
     public DateTime parsedTime = DateTime.MinValue;
     public string json = string.Empty;
@@ -148,6 +149,7 @@ public class ETLLogLine : ISearchResult
         this.metadatetime = obj.TimeStamp;
         this.hexPid = obj.ProcessID.ToString("X");
         this.hexTid = obj.ThreadID.ToString("X");
+        try { this.activityId = obj.ActivityID == Guid.Empty ? "" : obj.ActivityID.ToString(); } catch { }
     }
 
     public ETLLogLine(string textline, string filename)
@@ -422,6 +424,18 @@ public class ETLLogLine : ISearchResult
     {
         // ETL log lines don't carry OpCode — return empty so consumers treat it as missing.
         return string.Empty;
+    }
+    // ETW stores PID/TID as hex (both the tracefmt text and the TraceEvent path); surface them as
+    // decimal to match what users expect. ActivityId is a GUID (TraceEvent path only).
+    public string GetProcessId() => HexToDecimal(hexPid);
+    public string GetThreadId() => HexToDecimal(hexTid);
+    public string GetActivityId() => activityId;
+
+    private static string HexToDecimal(string hex)
+    {
+        if (string.IsNullOrEmpty(hex)) return "";
+        try { return Convert.ToInt64(hex, 16).ToString(System.Globalization.CultureInfo.InvariantCulture); }
+        catch { return hex; }
     }
     public string GetSearchableData()
     {

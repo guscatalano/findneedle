@@ -46,4 +46,14 @@ public interface ISearchResult
     /// Returns -1 for backends that have no stable id (callers fall back to load-order position).
     /// </summary>
     public long GetRowId() => -1;
+
+    /// <summary>Originating process id (ETW ProcessID, EventLog Execution ProcessID), or "" if the
+    /// source doesn't carry one. Default "" so existing result types don't have to implement it.</summary>
+    public string GetProcessId() => "";
+
+    /// <summary>Originating thread id (ETW ThreadID, EventLog Execution ThreadID), or "".</summary>
+    public string GetThreadId() => "";
+
+    /// <summary>Correlation / activity id (ETW ActivityId, EventLog Correlation ActivityID), or "".</summary>
+    public string GetActivityId() => "";
 }

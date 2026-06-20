@@ -332,7 +332,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     public static readonly IReadOnlyList<string> DefaultColumnNames = new[]
     {
-        "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level"
+        "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
+        "ProcessId", "ThreadId", "ActivityId"
     };
 
     public static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ThemePresets =

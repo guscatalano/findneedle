@@ -181,6 +181,21 @@ public class EventRecordResult : ISearchResult
         }
     }
 
+    public string GetProcessId()
+    {
+        try { return entry.ProcessId?.ToString() ?? ""; } catch { return ""; }
+    }
+
+    public string GetThreadId()
+    {
+        try { return entry.ThreadId?.ToString() ?? ""; } catch { return ""; }
+    }
+
+    public string GetActivityId()
+    {
+        try { return entry.ActivityId?.ToString() ?? ""; } catch { return ""; }
+    }
+
     public string GetMessage()
     {
         // Prefer the rendered, human-readable description (FormatDescription). Fall back to the raw

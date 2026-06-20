@@ -323,7 +323,10 @@ public static class ResultsViewerSettings
             { "TaskName", true  },
             { "Message",  true  },
             { "Source",   false }, // hidden by default
-            { "Level",    true  }
+            { "Level",    true  },
+            { "ProcessId",  false }, // correlation columns hidden by default (opt-in via Columns ▾)
+            { "ThreadId",   false },
+            { "ActivityId", false }
         };
 
     /// <summary>
@@ -361,7 +364,7 @@ public static class ResultsViewerSettings
     public static readonly IReadOnlyList<string> DetailFieldNames = new[]
     {
         "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
-        "MachineName", "Username", "OpCode", "Tag",
+        "MachineName", "Username", "OpCode", "ProcessId", "ThreadId", "ActivityId", "Tag",
     };
 
     /// <summary>Per-field visibility for the row-details panel (all shown by default). Merged with the

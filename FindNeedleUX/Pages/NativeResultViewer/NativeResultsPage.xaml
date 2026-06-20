@@ -412,6 +412,9 @@
                     <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800"/>
                     <ctWinUI:DataGridTextColumn Header="Source"   Binding="{Binding Source}"   Width="140"/>
                     <ctWinUI:DataGridTextColumn Header="Level"    Binding="{Binding Level}"    Width="90"/>
+                    <ctWinUI:DataGridTextColumn Header="ProcessId"  Binding="{Binding ProcessId}"  Width="80"/>
+                    <ctWinUI:DataGridTextColumn Header="ThreadId"   Binding="{Binding ThreadId}"   Width="80"/>
+                    <ctWinUI:DataGridTextColumn Header="ActivityId" Binding="{Binding ActivityId}" Width="240"/>
                 </ctWinUI:DataGrid.Columns>
             </ctWinUI:DataGrid>
 

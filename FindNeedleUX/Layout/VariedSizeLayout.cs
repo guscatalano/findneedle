@@ -38,6 +38,9 @@ public class LogLine
         MachineName = NormalizeMissing(searchResult.GetMachineName());
         Username = NormalizeMissing(searchResult.GetUsername());
         OpCode = NormalizeMissing(searchResult.GetOpCode());
+        ProcessId = NormalizeMissing(searchResult.GetProcessId());
+        ThreadId = NormalizeMissing(searchResult.GetThreadId());
+        ActivityId = NormalizeMissing(searchResult.GetActivityId());
         SearchableData = searchResult.GetSearchableData(); // unmodified original; used for filtering fallback
         Message = CleanMessage(searchResult.GetMessage(), LogTime, Level);
     }
@@ -154,6 +157,18 @@ public class LogLine
         get; set;
     }
     public string OpCode
+    {
+        get; set;
+    }
+    public string ProcessId
+    {
+        get; set;
+    }
+    public string ThreadId
+    {
+        get; set;
+    }
+    public string ActivityId
     {
         get; set;
     }
