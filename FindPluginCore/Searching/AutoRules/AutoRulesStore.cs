@@ -61,6 +61,15 @@ public static class AutoRulesStore
     }
 
     /// <summary>
+    /// True if any enabled entry has a condition that needs scanned metadata (provider names or a
+    /// build range). The search path uses this to decide whether the (more expensive) ETL metadata
+    /// pre-scan is worth doing — when no such rule is on, auto-add stays purely path-based and instant.
+    /// </summary>
+    public static bool AnyEnabledNeedsMetadata() =>
+        D.Entries.Any(e => e.Enabled && e.Condition != null
+            && ((e.Condition.Providers is { Count: > 0 }) || e.Condition.MinBuild.HasValue || e.Condition.MaxBuild.HasValue));
+
+    /// <summary>
     /// Resolve the rule paths to auto-add for the given context, honoring the master switch and a
     /// per-search opt-out. Missing files are dropped (a bundled rule may not be deployed yet).
     /// </summary>

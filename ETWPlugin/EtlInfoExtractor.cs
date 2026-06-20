@@ -55,6 +55,42 @@ public class EtlInfoExtractor
     }
 
     /// <summary>
+    /// Cheap metadata peek for auto-rule matching: the provider names present plus the OS build number,
+    /// reading at most <paramref name="maxEvents"/> events. The build lives in the early header event
+    /// and the common providers appear quickly, so this stays fast even on multi-GB ETLs. Never throws —
+    /// returns whatever it managed to read.
+    /// </summary>
+    public static (HashSet<string> providers, int? build) QuickScan(string etlPath, int maxEvents = 50000)
+    {
+        var providers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int? build = null;
+        try
+        {
+            if (string.IsNullOrEmpty(etlPath) || !File.Exists(etlPath)) return (providers, build);
+            using var source = new ETWTraceEventSource(etlPath);
+            int n = 0;
+            source.AllEvents += e =>
+            {
+                var p = e.ProviderName;
+                if (!string.IsNullOrEmpty(p)) providers.Add(p);
+
+                if (build == null && p != null
+                    && p.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
+                    && e.EventName.IndexOf("EventTrace", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    try { var pv = e.PayloadByName("ProviderVersion"); if (pv != null) build = Convert.ToInt32(pv); }
+                    catch { /* not this event */ }
+                }
+
+                if (++n >= maxEvents) source.StopProcessing();
+            };
+            source.Process();
+        }
+        catch { /* best-effort — partial metadata is fine for matching */ }
+        return (providers, build);
+    }
+
+    /// <summary>
     /// Full "what's in this .etl?" summary: OS/Windows build, machine shape, capture window, event
     /// counts, a manifest/kernel format breakdown, and the providers present (with per-provider
     /// counts). Reads the ETW header for the cheap fields and a single pass over the events.

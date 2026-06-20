@@ -61,6 +61,15 @@ public sealed class AutoRuleResolverTests
     }
 
     [TestMethod]
+    public void Provider_Matches_CaseInsensitive()
+    {
+        var cond = new AutoRuleCondition { Providers = { "Microsoft-Windows-Security-SPP" } };
+        Assert.IsTrue(AutoRuleResolver.Matches(cond, Ctx(providers: new[] { "microsoft-windows-security-spp" })));
+        Assert.IsFalse(AutoRuleResolver.Matches(cond, Ctx(providers: new[] { "Microsoft-Windows-Kernel-Power" })));
+        Assert.IsFalse(AutoRuleResolver.Matches(cond, Ctx()), "no providers known => can't match a provider condition");
+    }
+
+    [TestMethod]
     public void BuildRange_RequiresKnownBuild()
     {
         var cond = new AutoRuleCondition { MinBuild = 22000, MaxBuild = 26999 };

@@ -84,13 +84,78 @@ public class MiddleLayerService
     /// "these were added automatically").</summary>
     public static List<string> LastAutoAddedRules { get; private set; } = new();
 
-    /// <summary>Build the auto-rule matching context from the current locations: their paths, the
-    /// source kinds present (by location type + file extension). Provider/build metadata is left empty
-    /// here (not known before a scan) — conditions that need it simply won't match.</summary>
+    // Provider/build metadata pre-scanned for the current search (populated by
+    // PreparePendingAutoRuleMetadata before UpdateSearchQuery, cleared right after). Only computed when
+    // an enabled auto-rule actually needs it, so the common case pays nothing.
+    private static HashSet<string> _pendingAutoRuleProviders;
+    private static int? _pendingAutoRuleBuild;
+
+    // Cache of per-file ETL metadata keyed by "path|size|mtimeticks" so repeated searches of the same
+    // file don't re-scan it.
+    private static readonly Dictionary<string, (HashSet<string> providers, int? build)> _etlMetaCache = new();
+
+    /// <summary>
+    /// If any enabled auto-rule needs scanned metadata (providers / build), cheaply peek the ETL
+    /// locations (capped quick-scan, cached per file) and stash the union of providers + the build for
+    /// the upcoming <see cref="UpdateSearchQuery"/> to fold into the match context. No-op (and clears
+    /// stale metadata) when no such rule is enabled. Call right before UpdateSearchQuery at search start.
+    /// </summary>
+    private static void PreparePendingAutoRuleMetadata()
+    {
+        _pendingAutoRuleProviders = null;
+        _pendingAutoRuleBuild = null;
+        try
+        {
+            if (!FindPluginCore.Searching.AutoRules.AutoRulesStore.AnyEnabledNeedsMetadata()) return;
+
+            var providers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int? build = null;
+            foreach (var loc in Locations ?? Enumerable.Empty<ISearchLocation>())
+            {
+                string path = "";
+                try { path = loc?.GetName() ?? ""; } catch { }
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
+                if (!System.IO.Path.GetExtension(path).Equals(".etl", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var (p, b) = GetEtlMetaCached(path);
+                providers.UnionWith(p);
+                build ??= b;
+            }
+            _pendingAutoRuleProviders = providers;
+            _pendingAutoRuleBuild = build;
+        }
+        catch { /* best-effort; conditions needing metadata simply won't match */ }
+    }
+
+    private static void ClearPendingAutoRuleMetadata()
+    {
+        _pendingAutoRuleProviders = null;
+        _pendingAutoRuleBuild = null;
+    }
+
+    private static (HashSet<string> providers, int? build) GetEtlMetaCached(string path)
+    {
+        try
+        {
+            var fi = new FileInfo(path);
+            var key = $"{path}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}";
+            if (_etlMetaCache.TryGetValue(key, out var cached)) return cached;
+            var meta = findneedle.ETWPlugin.EtlInfoExtractor.QuickScan(path);
+            _etlMetaCache[key] = meta;
+            return meta;
+        }
+        catch { return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), null); }
+    }
+
+    /// <summary>Build the auto-rule matching context from the current locations: their paths and the
+    /// source kinds present (by location type + file extension), plus any provider/build metadata
+    /// pre-scanned for this search (see <see cref="PreparePendingAutoRuleMetadata"/>).</summary>
     private static FindPluginCore.Searching.AutoRules.AutoRuleContext BuildAutoRuleContext(
         IEnumerable<ISearchLocation> locations)
     {
         var ctx = new FindPluginCore.Searching.AutoRules.AutoRuleContext();
+        if (_pendingAutoRuleProviders != null) ctx.Providers = _pendingAutoRuleProviders;
+        if (_pendingAutoRuleBuild.HasValue) ctx.Build = _pendingAutoRuleBuild;
         if (locations == null) return ctx;
         foreach (var loc in locations)
         {
@@ -275,7 +340,9 @@ public class MiddleLayerService
         // Stop any background index build from a previous search before we wipe/replace storage.
         CancelBackgroundIndexBuild();
 
+        PreparePendingAutoRuleMetadata();
         UpdateSearchQuery();
+        ClearPendingAutoRuleMetadata();
         var query = SearchQueryUX.CurrentQuery;
         FlowProgress.StartPlan(BuildFlowPlan(query));
         if (query != null)
@@ -701,7 +768,9 @@ public class MiddleLayerService
         ClearOverrideStorage(); // a real search supersedes any cache being viewed
         LastStats = null;        // drop the previous file's decode/stats so its warning banner clears
 
+        PreparePendingAutoRuleMetadata();
         UpdateSearchQuery();
+        ClearPendingAutoRuleMetadata();
         if (SearchQueryUX.CurrentQuery is not NuSearchQuery nu)
             throw new InvalidOperationException(
                 "Streaming search requires NuSearchQuery — the current ISearchQuery factory returned a different type.");
