@@ -42,8 +42,14 @@ public sealed partial class ProcessorOutputPage : Page
 
         var query = MiddleLayerService.SearchQueryUX.CurrentQuery;
         var processors = (query?.Processors ?? new List<IResultProcessor>()).ToList();
-        var files = (MiddleLayerService.LastRuleOutputFiles ?? new List<string>())
-            .Where(File.Exists).ToList();
+
+        // Gather rule-output files from both the captured static and the live query — different run
+        // entry points populate one or the other, so read both to be robust.
+        var files = new List<string>();
+        if (MiddleLayerService.LastRuleOutputFiles != null) files.AddRange(MiddleLayerService.LastRuleOutputFiles);
+        if (query is FindPluginCore.Searching.NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null)
+            files.AddRange(nq.GeneratedRuleOutputFiles);
+        files = files.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         // Summary line.
         var diagramCount = files.Count(IsMermaid);
