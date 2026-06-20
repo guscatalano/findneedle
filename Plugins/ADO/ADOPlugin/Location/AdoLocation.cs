@@ -104,7 +104,23 @@ public class AdoLocation : ISearchLocation
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GetAadToken());
         }
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        // Without this, an unauthenticated request gets a 200/302 HTML sign-in page (which then fails
+        // JSON parsing with "'<' is an invalid start of a value"); Suppress makes ADO return a clean 401.
+        http.DefaultRequestHeaders.Add("X-TFS-FedAuthRedirect", "Suppress");
         return http;
+    }
+
+    /// <summary>Read a response body as JSON, but if ADO handed back an HTML sign-in page (or any
+    /// non-JSON), throw a clear auth error instead of a cryptic JSON-parser message.</summary>
+    private static JsonDocument ReadJson(HttpResponseMessage resp, CancellationToken ct)
+    {
+        var body = resp.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+        var trimmed = body.TrimStart();
+        if (trimmed.StartsWith("<") ||
+            (resp.Content.Headers.ContentType?.MediaType?.Contains("html", StringComparison.OrdinalIgnoreCase) ?? false))
+            throw new Exception("authentication failed — Azure DevOps returned a sign-in page instead of data. "
+                + "Check the PAT (needs Work Items: Read) or your AAD sign-in, and the org/project.");
+        return JsonDocument.Parse(body);
     }
 
     /// <summary>Resolve the work item ids to fetch — explicit IDs if given, else run the WIQL query.</summary>
@@ -123,7 +139,7 @@ public class AdoLocation : ISearchLocation
         using var resp = http.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"), ct)
                              .GetAwaiter().GetResult();
         EnsureOk(resp);
-        using var doc = JsonDocument.Parse(resp.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult());
+        using var doc = ReadJson(resp, ct);
         var ids = new List<int>();
         if (doc.RootElement.TryGetProperty("workItems", out var wis))
             foreach (var wi in wis.EnumerateArray())
@@ -141,7 +157,7 @@ public class AdoLocation : ISearchLocation
                       + $"&$expand=Fields&api-version={ApiVersion}";
             using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
             EnsureOk(resp);
-            using var doc = JsonDocument.Parse(resp.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult());
+            using var doc = ReadJson(resp, ct);
             if (!doc.RootElement.TryGetProperty("value", out var arr)) continue;
             foreach (var wi in arr.EnumerateArray())
             {
@@ -166,7 +182,7 @@ public class AdoLocation : ISearchLocation
             var url = $"{OrganizationUrl}/_apis/wit/workitems/{id}?$expand=relations&api-version={ApiVersion}";
             using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
             EnsureOk(resp);
-            using var doc = JsonDocument.Parse(resp.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult());
+            using var doc = ReadJson(resp, ct);
             if (!doc.RootElement.TryGetProperty("relations", out var rels)) continue;
             foreach (var rel in rels.EnumerateArray())
             {
