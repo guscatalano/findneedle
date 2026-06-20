@@ -47,6 +47,17 @@ public sealed partial class ProcessorOutputPage : Page
         {
             var name = processor.GetType().Name;
             var description = (processor as IResultProcessor)?.GetDescription() ?? name;
+            // RuleDSL processors all share the class name "FindNeedleRuleDSLPlugin", which looks like
+            // duplicate entries when several rules are active. Label each by its rule file instead.
+            if (processor is FindNeedleRuleDSL.FindNeedleRuleDSLPlugin ruleDsl
+                && !string.IsNullOrWhiteSpace(ruleDsl.RulesFilePath))
+            {
+                var ruleName = Path.GetFileName(ruleDsl.RulesFilePath);
+                if (ruleName.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase))
+                    ruleName = ruleName.Substring(0, ruleName.Length - ".rules.json".Length);
+                name = $"Rules: {ruleName}";
+                description = $"RuleDSL · {ruleDsl.RulesFilePath}";
+            }
             var outputText = (processor as IResultProcessor)?.GetOutputText() ?? "No output.";
             var outputFile = (processor as IResultProcessor)?.GetOutputFile(TempStorage.GetSingleton().tempPath);
 
