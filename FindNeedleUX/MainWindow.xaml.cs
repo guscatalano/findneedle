@@ -11,6 +11,9 @@ using FindPluginCore.GlobalConfiguration;
 using FindNeedleCoreUtils;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI;
+using Windows.UI;
 using Windows.Storage.Pickers;
 using FindNeedlePluginLib;
 
@@ -35,6 +38,7 @@ public sealed partial class MainWindow : Window
         // Show WelcomePage on startup
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         RefreshStatusStrip();
+        ApplyPersistedStatusStripVisibility();
         InitMcpIndicator();
 
         // Pre-warm the heavy viewer pages on a low-priority dispatcher tick. Constructing the
@@ -363,15 +367,86 @@ public sealed partial class MainWindow : Window
         return "Loading viewer…";
     }
 
+    private const string StatusHiddenSettingKey = "StatusStripHidden";
+
     private void RefreshStatusStrip()
     {
+        if (StatusSegments == null) return; // not yet realized
+
         var query = MiddleLayerService.GetCurrentQuery();
-        var locations = MiddleLayerService.Locations?.Count ?? 0;
-        var rules = query?.RulesConfigPaths?.Count ?? 0;
-        // Prefer the central per-run summary (set by every search path); fall back to the local one
-        // from the menu Run-search action, then to a dash before any run.
+        var locs = MiddleLayerService.Locations ?? new List<ISearchLocation>();
+        var filters = MiddleLayerService.Filters?.Count ?? 0;
+        var rulePaths = query?.RulesConfigPaths ?? new List<string>();
+
+        StatusSegments.Children.Clear();
+
+        // Locations → Locations page. Tooltip lists the source names.
+        var locTip = locs.Count > 0
+            ? string.Join("\n", locs.Select(l => { try { return l.GetName(); } catch { return "(location)"; } }))
+            : "No locations added";
+        StatusSegments.Children.Add(MakeStatusSegment(Symbol.Folder, "Locations", locs.Count.ToString(),
+            locTip, null, () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage))));
+
+        // Filters (only when present) → Rules page (filters live with rules now).
+        if (filters > 0)
+            StatusSegments.Children.Add(MakeStatusSegment(Symbol.Find, "Filters", filters.ToString(),
+                "Active filters", null, () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage))));
+
+        // Rules → Rules page. Tooltip lists the rule file names.
+        var ruleTip = rulePaths.Count > 0
+            ? string.Join("\n", rulePaths.Select(p => { try { return System.IO.Path.GetFileName(p); } catch { return p; } }))
+            : "No rules configured";
+        StatusSegments.Children.Add(MakeStatusSegment(Symbol.List, "Rules", rulePaths.Count.ToString(),
+            ruleTip, null, () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage))));
+
+        // Last run → open the results viewer. Green when it produced rows, grey otherwise.
         var lastRun = MiddleLayerService.LastRunSummary ?? _lastRunSummary;
-        StatusStrip.Text = $"Locations: {locations} · Rules: {rules} · Last run: {lastRun}";
+        var hasResults = MiddleLayerService.LastRunSummary != null
+            && !MiddleLayerService.LastRunSummary.StartsWith("0 ", StringComparison.Ordinal);
+        var lastRunColor = hasResults ? Color.FromArgb(255, 46, 160, 67) : (Color?)null;
+        StatusSegments.Children.Add(MakeStatusSegment(Symbol.Clock, "Last run", lastRun,
+            "Open the results viewer", lastRunColor, () => NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage))));
+    }
+
+    /// <summary>A flat, clickable status-bar segment: icon + "Label: value", with a tooltip and an
+    /// optional value color. Clicking runs <paramref name="onClick"/> (usually navigation).</summary>
+    private Button MakeStatusSegment(Symbol icon, string label, string value, string tooltip, Color? valueColor, Action onClick)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new SymbolIcon { Symbol = icon, RenderTransform = new ScaleTransform { ScaleX = 0.7, ScaleY = 0.7 }, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5) });
+        row.Children.Add(new TextBlock { Text = $"{label}:", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Colors.Gray) });
+        var valBlock = new TextBlock { Text = value, FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        if (valueColor.HasValue) valBlock.Foreground = new SolidColorBrush(valueColor.Value);
+        row.Children.Add(valBlock);
+
+        var btn = new Button
+        {
+            Content = row,
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(8, 2, 8, 2),
+            MinHeight = 0,
+        };
+        ToolTipService.SetToolTip(btn, tooltip);
+        btn.Click += (_, _) => { try { onClick(); } catch { } };
+        return btn;
+    }
+
+    private void HideStatusStrip_Click(object sender, RoutedEventArgs e) => SetStatusStripHidden(true);
+    private void ShowStatusStrip_Click(object sender, RoutedEventArgs e) => SetStatusStripHidden(false);
+
+    private void SetStatusStripHidden(bool hidden)
+    {
+        StatusStripBorder.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
+        StatusRestoreButton.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+        try { global::Windows.Storage.ApplicationData.Current.LocalSettings.Values[StatusHiddenSettingKey] = hidden; } catch { }
+    }
+
+    private void ApplyPersistedStatusStripVisibility()
+    {
+        bool hidden = false;
+        try { hidden = global::Windows.Storage.ApplicationData.Current.LocalSettings.Values[StatusHiddenSettingKey] is bool b && b; } catch { }
+        SetStatusStripHidden(hidden);
     }
 
     private void SetWindowIcon(string iconPath)
