@@ -89,14 +89,36 @@ public sealed partial class SearchLocationsPage : Page
                 }.ShowAsync();
             }
         }
-        MiddleLayerService.AddLocation(loc);
-        _viewModel.Refresh();
+        if (await AddIfReachableAsync("Azure DevOps", () => loc.TestConnection())) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
+    }
+
+    /// <summary>Validate an online source's connection (off the UI thread) before adding it, surfacing
+    /// any error at add time. On failure the user can still add it anyway. Returns true if it should be
+    /// added.</summary>
+    private async Task<bool> AddIfReachableAsync(string what, Func<string> test)
+    {
+        string err;
+        try { err = await Task.Run(test); }
+        catch (Exception ex) { err = ex.Message; }
+        if (string.IsNullOrEmpty(err)) return true;
+
+        var dialog = new ContentDialog
+        {
+            Title = $"Couldn't reach this {what} source",
+            Content = err + "\n\nAdd it anyway?",
+            PrimaryButtonText = "Add anyway",
+            CloseButtonText = "Go back",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = this.XamlRoot,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
     private async void Button_AddGithub(object sender, RoutedEventArgs e)
     {
         var loc = await ShowGithubDialogAsync(null);
-        if (loc != null) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
+        if (loc == null) return;
+        if (await AddIfReachableAsync("GitHub", () => loc.TestConnection())) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
     }
 
     private async void Button_Edit(object sender, RoutedEventArgs e)

@@ -123,6 +123,23 @@ public class AdoLocation : ISearchLocation
         return JsonDocument.Parse(body);
     }
 
+    /// <summary>Validate org URL + project + auth with one cheap call (GET the project). Returns null on
+    /// success, or a friendly error to surface when the location is added. Used so a bad org/project/PAT
+    /// is caught at add time instead of only when a search runs.</summary>
+    public string? TestConnection(CancellationToken ct = default)
+    {
+        try
+        {
+            using var http = CreateClient();
+            var url = $"{OrganizationUrl}/_apis/projects/{Uri.EscapeDataString(Project)}?api-version={ApiVersion}";
+            using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
+            EnsureOk(resp);
+            using var _ = ReadJson(resp, ct); // also catches the HTML sign-in page
+            return null;
+        }
+        catch (Exception ex) { return ex.Message.Split('\n')[0].Trim(); }
+    }
+
     /// <summary>Resolve the work item ids to fetch — explicit IDs if given, else run the WIQL query.</summary>
     private List<int> ResolveIds(HttpClient http, CancellationToken ct)
     {

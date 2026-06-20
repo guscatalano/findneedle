@@ -79,6 +79,22 @@ public class GithubIssuesLocation : ISearchLocation
         return http;
     }
 
+    /// <summary>Validate owner/repo (+ token) with one cheap call. Returns null on success, else a
+    /// friendly error to surface at add time.</summary>
+    public string? TestConnection(CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(Owner) || string.IsNullOrWhiteSpace(Repo))
+            return "couldn't read the repository — enter it as owner/repo or a github.com URL.";
+        try
+        {
+            using var http = CreateClient();
+            using var resp = http.GetAsync($"https://api.github.com/repos/{Owner}/{Repo}", ct).GetAwaiter().GetResult();
+            EnsureOk(resp);
+            return null;
+        }
+        catch (Exception ex) { return ex.Message.Split('\n')[0].Trim(); }
+    }
+
     public override void LoadInMemory(CancellationToken cancellationToken = default)
     {
         if (_loaded) return;
