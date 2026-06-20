@@ -27,8 +27,10 @@ public class GithubIssueResult : ISearchResult
     private string Get(string key) => _fields.TryGetValue(key, out var v) ? v ?? "" : "";
 
     private static DateTime ParseTime(string s)
-        => DateTime.TryParse(s, CultureInfo.InvariantCulture,
-            DateTimeStyles.RoundtripKind | DateTimeStyles.AssumeUniversal, out var t) ? t : DateTime.MinValue;
+        // GitHub timestamps are ISO 8601 with a Z offset, so RoundtripKind handles them.
+        // (RoundtripKind can't be combined with AssumeUniversal — that throws.)
+        => DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var t)
+            ? t : DateTime.MinValue;
 
     public DateTime GetLogTime() => _time;
     public string GetMachineName() => "";

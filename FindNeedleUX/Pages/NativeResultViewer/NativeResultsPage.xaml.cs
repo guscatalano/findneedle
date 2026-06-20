@@ -181,6 +181,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ApplyScrollBarSize();
 
         UpdateRuleFilterToggleState();
+        UpdateSourcesButtonState();
     }
 
     /// <summary>Enable the "Rule filter" toggle only when the last search applied rules and isn't still
@@ -239,6 +240,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         RefreshSearchSubmitMode();
         UpdateDecodeBanner();
         UpdateStreamingIcon();
+        UpdateSourcesButtonState();
     }
 
     /// <summary>Pick the inline progressive-loading indicator: the small animated theme gif, or a
@@ -758,6 +760,31 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
         => this.Frame?.Navigate(typeof(ResultsViewerSettingsPage));
+
+    /// <summary>Flag the Sources button (red ⚠) when any loaded location reported an error, so a failed
+    /// online source / unreadable file is visible without opening the dialog. Online locations format
+    /// their description as "… — ERROR: message".</summary>
+    private void UpdateSourcesButtonState()
+    {
+        if (SourcesButton == null) return;
+        var errors = new System.Collections.Generic.List<string>();
+        foreach (var loc in MiddleLayerService.Locations)
+        {
+            string desc;
+            try { desc = loc.GetDescription() ?? ""; } catch { continue; }
+            int i = desc.IndexOf("ERROR:", StringComparison.OrdinalIgnoreCase);
+            if (i >= 0)
+            {
+                string name; try { name = loc.GetName(); } catch { name = "(location)"; }
+                errors.Add($"{name}: {desc.Substring(i + "ERROR:".Length).Trim()}");
+            }
+        }
+        bool any = errors.Count > 0;
+        SourcesWarnGlyph.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        ToolTipService.SetToolTip(SourcesButton, any
+            ? "A source failed to load:\n" + string.Join("\n", errors)
+            : "See which locations and rule files this search loaded");
+    }
 
     // ----- "Sources" dialog: which locations + rule files this search loaded -----
     private async void ShowLoadedSources_Click(object sender, RoutedEventArgs e)
@@ -1350,7 +1377,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // captured, so a stale "missing symbols" warning clears (or the new file's own appears) — and
         // enable the Rule filter toggle (it was disabled while the load was still streaming).
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming) && !ViewModel.IsStreaming)
-            DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); });
+            DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); });
     }
     private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
     private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;
