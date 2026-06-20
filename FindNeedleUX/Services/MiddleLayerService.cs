@@ -275,6 +275,12 @@ public class MiddleLayerService
             query.Processors = enabledProcessors;
 
             SearchQueryUX.UpdateSearchQuery();
+            // UpdateSearchQuery() swaps in a brand-new query object; UpdateAllParameters copies
+            // processors/outputs/stats onto it but NOT RulesConfigPaths. Carry those over too —
+            // otherwise the running query's LoadedRules stays null and Step4 rule outputs (UML)
+            // never run, even though the RuleDSL processors were copied and run in Step3.
+            if (SearchQueryUX.CurrentQuery != null && query != null)
+                SearchQueryUX.CurrentQuery.RulesConfigPaths = query.RulesConfigPaths;
             // Try to get SearchStepNotificationSink if possible
             SearchStepNotificationSink? sink = query?.SearchStepNotificationSink;
             SearchQueryUX.UpdateAllParameters(SearchLocationDepth.Intermediate, Locations, Filters,
