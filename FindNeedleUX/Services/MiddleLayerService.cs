@@ -84,6 +84,11 @@ public class MiddleLayerService
     /// "these were added automatically").</summary>
     public static List<string> LastAutoAddedRules { get; private set; } = new();
 
+    /// <summary>Files written by RuleDSL output rules in the most recent search (UML .mmd diagrams,
+    /// rendered images, CSV/JSON exports). The Processor Output page surfaces these so generated
+    /// diagrams/exports are discoverable — they're written straight to the output folder otherwise.</summary>
+    public static List<string> LastRuleOutputFiles { get; private set; } = new();
+
     /// <summary>The RuleDSL processor instances applied in the most recent search. The "Active rules"
     /// page reads their per-run stats (matched count + tag counts) after the search completes.</summary>
     public static List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin> LastRuleProcessors { get; private set; } = new();
@@ -404,7 +409,13 @@ public class MiddleLayerService
         // UpdateSearchQuery() swaps in a fresh query.
         SearchStatistics x = SearchQueryUX.GetSearchStatistics();
         if (SearchQueryUX.CurrentQuery is NuSearchQuery nuDone)
+        {
             CaptureStats(nuDone, GetSearchStorage());
+            // Surface any files written by RuleDSL output rules (UML diagrams, exports) so the
+            // Processor Output page can list/render them — they're otherwise written silently.
+            LastRuleOutputFiles = nuDone.GeneratedRuleOutputFiles
+                .Where(System.IO.File.Exists).ToList();
+        }
         else
             LastStats = x;
         try { PerfReport.SetSource(string.Join(", ", Locations.Select(l => l.GetName()))); } catch { /* label only */ }

@@ -87,6 +87,11 @@ public class NuSearchQuery : ISearchQuery
     private readonly RuleEvaluationEngine _ruleEngine = new();
     private readonly OutputRuleProcessor _outputProcessor = new();
 
+    /// <summary>Files written by RuleDSL output rules during this search (UML diagrams, images,
+    /// CSV/JSON/etc. exports). These go straight to the output folder, so the UI reads this to
+    /// surface them — they have no other handle.</summary>
+    public IReadOnlyList<string> GeneratedRuleOutputFiles => _outputProcessor.GeneratedFiles;
+
     public SearchStepNotificationSink SearchStepNotificationSink
     {
         get => _stepnotifysink;

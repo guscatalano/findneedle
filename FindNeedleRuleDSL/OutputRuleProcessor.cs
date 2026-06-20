@@ -23,6 +23,18 @@ public class OutputRuleProcessor
         "timestamp", "level", "source", "message"
     };
 
+    /// <summary>Absolute paths of every file written during the last <see cref="ProcessOutputRules"/>
+    /// call (UML diagrams, rendered images, CSV/JSON/XML/TXT exports). The UI reads this to surface
+    /// rule outputs that are otherwise written straight to the output folder with no other handle.</summary>
+    public List<string> GeneratedFiles { get; } = new();
+
+    private void RecordGeneratedFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (!GeneratedFiles.Any(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)))
+            GeneratedFiles.Add(path);
+    }
+
     /// <summary>
     /// Process output rules and write results to files.
     /// </summary>
@@ -358,6 +370,7 @@ public class OutputRuleProcessor
                             try
                             {
                                 File.WriteAllText(outPath, umlText ?? string.Empty);
+                                RecordGeneratedFile(outPath);
                                 FindNeedlePluginLib.Logger.Instance.Log($"UML markup written: {outPath}");
                             }
                             catch (Exception ex)
@@ -383,6 +396,7 @@ public class OutputRuleProcessor
                                 };
 
                                 var outputGenerated = generator.GenerateUML(outPath);
+                                RecordGeneratedFile(outputGenerated);
                                 FindNeedlePluginLib.Logger.Instance.Log($"UML generated: {outputGenerated}");
                             }
                             catch (Exception ex)
@@ -452,6 +466,7 @@ public class OutputRuleProcessor
                 }
 
                 WriteOutput(filteredResults, format, path, fields, includeHeaders, delimiter, pretty);
+                RecordGeneratedFile(path);
             }
             catch (Exception ex)
             {
