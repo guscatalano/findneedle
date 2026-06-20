@@ -1,0 +1,28 @@
+[2026-03-01 09:00:00] INFO: User clicked login - user: alice
+[2026-03-01 09:00:01] INFO: AuthService called for user alice
+[2026-03-01 09:00:02] INFO: DB lookup for user id=42
+[2026-03-01 09:00:03] INFO: Auth succeeded - token issued for alice
+[2026-03-01 09:00:04] INFO: Render dashboard for alice
+[2026-03-01 09:00:05] INFO: Notify service: Login(alice)
+
+[2026-03-01 09:05:00] INFO: User clicked login - user: bob
+[2026-03-01 09:05:01] INFO: AuthService called for user bob
+[2026-03-01 09:05:02] WARNING: User not found for id=101
+[2026-03-01 09:05:03] ERROR: Notify failed for bob
+
+[# Minimal sample.log truncated by automation - original file had more entries]
+
+[2026-03-01 09:10:00] ERROR: A .NET application failed - ProcessId=1234
+[2026-03-01 09:10:01] ERROR: Runtime: faulting application name: sampleapp.exe, faulting module: ntdll.dll
+[2026-03-01 09:10:02] ERROR: Runtime: access violation at 0x7ffde000 - reading address 0x00000000
+[2026-03-01 09:10:03] CRITICAL: Unhandled exception System.OutOfMemoryException: Insufficient memory
+[2026-03-01 09:10:04] CRITICAL: StackOverflowException occurred in thread Main
+
+[2026-03-01 09:20:00] ERROR: A .NET application failed - ProcessId=5678
+[2026-03-01 09:20:01] INFO: Application sampleapp2.exe: attempting graceful shutdown
+[2026-03-01 09:20:02] ERROR: Runtime: faulting application name: sampleapp2.exe, faulting module: kernel32.dll
+[2026-03-01 09:20:03] ERROR: Runtime: access violation at 0x7ffdf000 - reading address 0xDEADBEEF
+[2026-03-01 09:20:04] CRITICAL: OutOfMemoryException: Failed to allocate required memory for operation
+[2026-03-01 09:20:05] CRITICAL: StackOverflowException occurred in thread Worker-1
+[2026-03-01 09:20:06] INFO: OS: Process sampleapp2.exe terminated by Runtime
+

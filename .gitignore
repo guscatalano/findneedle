@@ -382,3 +382,7 @@ FmtSum.txt
 # Keep the committed auto-add-rules demo samples (the global *.log ignore would otherwise drop them)
 !Samples/AutoRuleDemo/auto-rule-demo.log
 !Samples/AutoRuleDemo/process-interaction-demo.log
+
+# Keep the test-data sample logs the RuleDSL tests read (otherwise *.log drops them and CI fails)
+!FindNeedleRuleDSL/Examples/sample.log
+!FindNeedleRuleDSLTests/TestData/sample-errors.log

@@ -1,0 +1,17 @@
+[2024-01-15 09:00:00] INFO: Application started successfully
+[2024-01-15 09:01:23] ERROR: Database connection failed - timeout after 30s
+[2024-01-15 09:02:15] WARNING: Memory usage at 85% - consider cleanup
+[2024-01-15 09:03:45] ERROR: File not found: config.xml
+[2024-01-15 09:05:12] DEBUG: Cache hit rate: 92%
+[2024-01-15 09:07:30] CRITICAL: OutOfMemoryException in ProcessData()
+[2024-01-15 09:08:01] ERROR: NullReferenceException at line 142
+[2024-01-15 09:10:00] INFO: Checkpoint completed
+[2024-01-15 09:12:33] ERROR: Access violation at 0x00007FF6A2B1C000
+[2024-01-15 09:15:00] WARNING: Disk space below 10% on C:\
+[2024-01-15 09:18:22] CRITICAL: StackOverflowException - application crash
+[2024-01-15 09:20:00] DEBUG: Transaction rollback successful
+[2024-01-15 09:25:45] User 'john.doe' logged on
+[2024-01-15 09:30:12] ERROR: Authentication failed for user 'admin'
+[2024-01-15 09:35:00] Access denied for user attempting registry modification
+[2024-01-15 17:00:00] User 'john.doe' logged off
+[2024-01-15 17:05:30] INFO: System shutdown initiated
