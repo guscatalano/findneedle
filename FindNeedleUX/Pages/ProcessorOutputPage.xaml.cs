@@ -353,25 +353,55 @@ public sealed partial class ProcessorOutputPage : Page
         var list = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4, 0, 0) };
         foreach (var r in used)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            row.Children.Add(new SymbolIcon { Symbol = Symbol.Accept, Foreground = new SolidColorBrush(Color.FromArgb(255, 46, 160, 67)) });
-            row.Children.Add(new TextBlock { Text = r.Name, FontWeight = FontWeights.SemiBold });
-            row.Children.Add(new TextBlock { Text = $"x{r.Count}", Foreground = new SolidColorBrush(Colors.Gray) });
-            list.Children.Add(row);
+            // Header row: check + rule name + count.
+            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            head.Children.Add(new SymbolIcon { Symbol = Symbol.Accept, Foreground = new SolidColorBrush(Color.FromArgb(255, 46, 160, 67)) });
+            head.Children.Add(new TextBlock { Text = r.Name, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(new TextBlock { Text = $"x{r.Count}", Foreground = new SolidColorBrush(Colors.Gray), VerticalAlignment = VerticalAlignment.Center });
+
+            if (r.Lines != null && r.Lines.Count > 0)
+            {
+                // Expandable: the actual lines this rule picked up.
+                var lines = new StackPanel { Spacing = 1, Margin = new Thickness(20, 2, 0, 4) };
+                foreach (var ln in r.Lines)
+                {
+                    lines.Children.Add(new TextBlock
+                    {
+                        Text = ln.Content,
+                        FontSize = 12,
+                        FontFamily = new FontFamily("Consolas"),
+                        Foreground = new SolidColorBrush(Colors.Gray),
+                        TextWrapping = TextWrapping.Wrap,
+                        IsTextSelectionEnabled = true,
+                    });
+                }
+                list.Children.Add(new Expander
+                {
+                    Header = head,
+                    IsExpanded = false,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                    Content = lines,
+                });
+            }
+            else
+            {
+                list.Children.Add(head);
+            }
         }
         foreach (var r in unused)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Opacity = 0.55 };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Opacity = 0.55, Margin = new Thickness(0, 2, 0, 0) };
             row.Children.Add(new SymbolIcon { Symbol = Symbol.Remove, Foreground = new SolidColorBrush(Colors.Gray) });
-            row.Children.Add(new TextBlock { Text = r.Name });
-            row.Children.Add(new TextBlock { Text = "unused", Foreground = new SolidColorBrush(Colors.Gray) });
+            row.Children.Add(new TextBlock { Text = r.Name, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock { Text = "unused", Foreground = new SolidColorBrush(Colors.Gray), VerticalAlignment = VerticalAlignment.Center });
             list.Children.Add(row);
         }
 
         return new Expander
         {
             Header = $"Rules used: {used.Count} of {usage.Rules.Count}",
-            IsExpanded = true,
+            IsExpanded = false,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 8),

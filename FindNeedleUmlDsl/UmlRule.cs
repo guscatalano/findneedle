@@ -63,6 +63,15 @@ public class UmlRuleUsage
     public string Name { get; set; } = string.Empty;
     public string Match { get; set; } = string.Empty;
     public int Count { get; set; }
+    /// <summary>The actual lines this rule matched (row id + content), in order.</summary>
+    public List<UmlMatchedLine> Lines { get; set; } = new();
+}
+
+/// <summary>One log line a UML rule matched: its stable row id and content.</summary>
+public class UmlMatchedLine
+{
+    public long RowId { get; set; } = -1;
+    public string Content { get; set; } = string.Empty;
 }
 
 /// <summary>A source row that matched a UML rule, with the rule that matched it.</summary>

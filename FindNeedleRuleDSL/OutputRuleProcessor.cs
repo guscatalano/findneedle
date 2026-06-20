@@ -406,7 +406,15 @@ public class OutputRuleProcessor
                                         FilePath = outPath,
                                         Title = proc.Definition?.Title,
                                         Rules = (proc.LastUsage ?? new List<UmlRuleUsage>())
-                                            .Select(u => new UmlRuleHit { Name = u.Name, Match = u.Match, Count = u.Count })
+                                            .Select(u => new UmlRuleHit
+                                            {
+                                                Name = u.Name,
+                                                Match = u.Match,
+                                                Count = u.Count,
+                                                Lines = (u.Lines ?? new List<UmlMatchedLine>())
+                                                    .Select(l => new UmlRuleHitLine { RowId = l.RowId, Content = l.Content })
+                                                    .ToList(),
+                                            })
                                             .ToList(),
                                     });
                                 }
@@ -855,6 +863,13 @@ public sealed class UmlRuleHit
     public string Name { get; set; } = string.Empty;
     public string Match { get; set; } = string.Empty;
     public int Count { get; set; }
+    public List<UmlRuleHitLine> Lines { get; set; } = new();
+}
+
+public sealed class UmlRuleHitLine
+{
+    public long RowId { get; set; } = -1;
+    public string Content { get; set; } = string.Empty;
 }
 
 /// <summary>A results-viewer row that fed a UML diagram (stable row id + the rule that matched it).</summary>

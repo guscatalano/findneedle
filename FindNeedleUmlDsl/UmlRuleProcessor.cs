@@ -52,6 +52,8 @@ public class UmlRuleProcessor
         // Per-rule match counts so callers can show which rules were actually used.
         var counts = new int[_definition.Rules.Count];
         var matchedRows = new List<UmlRowMatch>();
+        // Per-rule matched lines (row id + content) so callers can show what each rule picked up.
+        var perRuleLines = new List<UmlMatchedLine>[_definition.Rules.Count];
 
         foreach (var message in messages)
         {
@@ -62,6 +64,11 @@ public class UmlRuleProcessor
                     continue;
 
                 counts[ruleIndex]++;
+                (perRuleLines[ruleIndex] ??= new List<UmlMatchedLine>()).Add(new UmlMatchedLine
+                {
+                    RowId = message.RowId,
+                    Content = message.Content ?? string.Empty,
+                });
                 if (message.RowId >= 0)
                     matchedRows.Add(new UmlRowMatch
                     {
@@ -127,6 +134,7 @@ public class UmlRuleProcessor
                 Name = string.IsNullOrWhiteSpace(r.Name) ? $"rule {i + 1}" : r.Name,
                 Match = r.Match,
                 Count = counts[i],
+                Lines = perRuleLines[i] ?? new List<UmlMatchedLine>(),
             });
         }
 
