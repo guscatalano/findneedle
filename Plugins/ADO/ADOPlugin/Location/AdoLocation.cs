@@ -275,15 +275,15 @@ public class AdoLocation : ISearchLocation
     private static void EnsureOk(HttpResponseMessage resp)
     {
         if (resp.IsSuccessStatusCode) return;
-        var body = "";
-        try { body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult(); } catch { }
         var hint = (int)resp.StatusCode switch
         {
             401 or 203 => "authentication failed — check your PAT / sign-in and that it has Work Items (Read) scope.",
             404 => "not found — check the organization URL and project name.",
             _ => resp.ReasonPhrase ?? "request failed",
         };
-        throw new Exception($"ADO {(int)resp.StatusCode}: {hint}");
+        // Include the exact request URL so a 404 is diagnosable (wrong org/project/api path/id).
+        var url = resp.RequestMessage?.RequestUri?.ToString() ?? "(unknown url)";
+        throw new Exception($"ADO {(int)resp.StatusCode}: {hint}  [{url}]");
     }
 
     private static IEnumerable<List<T>> Chunk<T>(List<T> src, int size)
