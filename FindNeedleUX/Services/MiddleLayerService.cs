@@ -89,6 +89,10 @@ public class MiddleLayerService
     /// diagrams/exports are discoverable — they're written straight to the output folder otherwise.</summary>
     public static List<string> LastRuleOutputFiles { get; private set; } = new();
 
+    /// <summary>Human-readable summary of the most recent search (row count + cache/scanned), set on
+    /// every search path so the main window status strip's "Last run" is accurate. Null until a run.</summary>
+    public static string? LastRunSummary { get; private set; }
+
     /// <summary>The RuleDSL processor instances applied in the most recent search. The "Active rules"
     /// page reads their per-run stats (matched count + tag counts) after the search completes.</summary>
     public static List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin> LastRuleProcessors { get; private set; } = new();
@@ -419,6 +423,15 @@ public class MiddleLayerService
         else
             LastStats = x;
         try { PerfReport.SetSource(string.Join(", ", Locations.Select(l => l.GetName()))); } catch { /* label only */ }
+
+        // Record a "last run" summary centrally so every entry point (Open log file, Run search,
+        // cached search, etc.) updates the status strip — not just the menu Run-search action.
+        try
+        {
+            var count = GetFilteredRowCount();
+            LastRunSummary = $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (cached)" : " (scanned)")}";
+        }
+        catch { LastRunSummary = "done"; }
 
         // Background mode: Step2 skipped the FTS build so the viewer opens now; kick the batched
         // build off in the background (paging interleaves; substring search uses LIKE until ready).

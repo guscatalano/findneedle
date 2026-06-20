@@ -63,9 +63,9 @@
                  InfoBar) so the spacing is exactly what we set — no mystery template gaps. Collapsed
                  by default; shown via UpdateOutputFilesBanner(). -->
             <Border x:Name="OutputFilesBanner" Visibility="Collapsed"
-                    Margin="12,8,12,0" Padding="12,8" CornerRadius="6"
+                    Margin="0" Padding="12,8" CornerRadius="0"
                     Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                    BorderBrush="{ThemeResource SystemFillColorSuccessBrush}" BorderThickness="1">
+                    BorderBrush="{ThemeResource SystemFillColorSuccessBrush}" BorderThickness="0,0,0,1">
                 <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>

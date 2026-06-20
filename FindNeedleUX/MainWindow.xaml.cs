@@ -368,7 +368,10 @@ public sealed partial class MainWindow : Window
         var query = MiddleLayerService.GetCurrentQuery();
         var locations = MiddleLayerService.Locations?.Count ?? 0;
         var rules = query?.RulesConfigPaths?.Count ?? 0;
-        StatusStrip.Text = $"Locations: {locations} · Rules: {rules} · Last run: {_lastRunSummary}";
+        // Prefer the central per-run summary (set by every search path); fall back to the local one
+        // from the menu Run-search action, then to a dash before any run.
+        var lastRun = MiddleLayerService.LastRunSummary ?? _lastRunSummary;
+        StatusStrip.Text = $"Locations: {locations} · Rules: {rules} · Last run: {lastRun}";
     }
 
     private void SetWindowIcon(string iconPath)
