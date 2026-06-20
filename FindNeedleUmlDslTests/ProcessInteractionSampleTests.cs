@@ -63,4 +63,20 @@ public class ProcessInteractionSampleTests
         Assert.IsTrue(diagram.Contains("dispatch") || diagram.Contains("Worker"), "worker dispatch message present");
         Assert.IsTrue(diagram.Contains("write result") || diagram.Contains("Store"), "store write message present");
     }
+
+    [TestMethod]
+    public void DemoLog_TracksWhichRulesWereUsed()
+    {
+        var rules = FindRulesFile();
+        Assert.IsNotNull(rules);
+
+        var processor = new UmlRuleProcessor(new MermaidSyntaxTranslator());
+        processor.LoadRulesFromFile(rules);
+        var messages = DemoLog.Select(l => new LogMessage { Content = l }).ToList();
+        processor.ProcessMessages(messages);
+
+        Assert.IsTrue(processor.LastUsage.Count > 0, "usage should be reported per rule");
+        Assert.AreEqual(processor.Definition.Rules.Count, processor.LastUsage.Count, "one usage entry per rule");
+        Assert.IsTrue(processor.LastUsage.Any(u => u.Count > 0), "at least one rule should have fired for the demo log");
+    }
 }

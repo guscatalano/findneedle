@@ -92,6 +92,10 @@ public class NuSearchQuery : ISearchQuery
     /// surface them — they have no other handle.</summary>
     public IReadOnlyList<string> GeneratedRuleOutputFiles => _outputProcessor.GeneratedFiles;
 
+    /// <summary>Per-diagram UML rule-usage from this search (which rules fired and how often), so the
+    /// UI can show which rules contributed to each generated diagram.</summary>
+    public IReadOnlyList<FindNeedleRuleDSL.UmlDiagramUsage> GeneratedDiagramUsages => _outputProcessor.GeneratedDiagrams;
+
     public SearchStepNotificationSink SearchStepNotificationSink
     {
         get => _stepnotifysink;

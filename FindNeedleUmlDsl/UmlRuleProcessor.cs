@@ -12,6 +12,10 @@ public class UmlRuleProcessor
 
     public UmlRuleDefinition Definition => _definition;
 
+    /// <summary>Per-rule match counts from the most recent <see cref="ProcessMessages"/> call, in rule
+    /// order. Lets callers report which rules actually contributed to the diagram (and which never fired).</summary>
+    public List<UmlRuleUsage> LastUsage { get; private set; } = new();
+
     public UmlRuleProcessor(IUmlSyntaxTranslator translator)
     {
         _translator = translator;
@@ -41,13 +45,18 @@ public class UmlRuleProcessor
         // Track activation state for participants to avoid emitting invalid deactivate calls
         var activeParticipants = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Per-rule match counts so callers can show which rules were actually used.
+        var counts = new int[_definition.Rules.Count];
+
         foreach (var message in messages)
         {
-            foreach (var rule in _definition.Rules)
+            for (var ruleIndex = 0; ruleIndex < _definition.Rules.Count; ruleIndex++)
             {
+                var rule = _definition.Rules[ruleIndex];
                 if (!MatchesRule(message, rule))
                     continue;
 
+                counts[ruleIndex]++;
                 var element = ResolveElement(message, rule);
                 var type = (element.Type ?? string.Empty).Trim().ToLowerInvariant();
 
@@ -96,6 +105,19 @@ public class UmlRuleProcessor
 
         var footer = _translator.GenerateFooter();
         if (!string.IsNullOrEmpty(footer)) sb.AppendLine(footer);
+
+        LastUsage = new List<UmlRuleUsage>(_definition.Rules.Count);
+        for (var i = 0; i < _definition.Rules.Count; i++)
+        {
+            var r = _definition.Rules[i];
+            LastUsage.Add(new UmlRuleUsage
+            {
+                Name = string.IsNullOrWhiteSpace(r.Name) ? $"rule {i + 1}" : r.Name,
+                Match = r.Match,
+                Count = counts[i],
+            });
+        }
+
         return sb.ToString();
     }
 

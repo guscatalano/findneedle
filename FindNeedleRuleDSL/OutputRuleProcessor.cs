@@ -28,6 +28,10 @@ public class OutputRuleProcessor
     /// rule outputs that are otherwise written straight to the output folder with no other handle.</summary>
     public List<string> GeneratedFiles { get; } = new();
 
+    /// <summary>Per-diagram rule-usage info from UML output rules in the last run, keyed by output path.
+    /// Lets the UI show which UML rules actually contributed to each generated diagram.</summary>
+    public List<UmlDiagramUsage> GeneratedDiagrams { get; } = new();
+
     private void RecordGeneratedFile(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
@@ -371,6 +375,18 @@ public class OutputRuleProcessor
                             {
                                 File.WriteAllText(outPath, umlText ?? string.Empty);
                                 RecordGeneratedFile(outPath);
+                                try
+                                {
+                                    GeneratedDiagrams.Add(new UmlDiagramUsage
+                                    {
+                                        FilePath = outPath,
+                                        Title = proc.Definition?.Title,
+                                        Rules = (proc.LastUsage ?? new List<UmlRuleUsage>())
+                                            .Select(u => new UmlRuleHit { Name = u.Name, Match = u.Match, Count = u.Count })
+                                            .ToList(),
+                                    });
+                                }
+                                catch { }
                                 FindNeedlePluginLib.Logger.Instance.Log($"UML markup written: {outPath}");
                             }
                             catch (Exception ex)
@@ -800,4 +816,19 @@ public class OutputRuleProcessor
             
         return sanitized.Length > 0 ? sanitized.ToString() : "field";
     }
+}
+
+/// <summary>Rule-usage info for one generated UML diagram (which rules fired and how often).</summary>
+public sealed class UmlDiagramUsage
+{
+    public string FilePath { get; set; } = string.Empty;
+    public string? Title { get; set; }
+    public List<UmlRuleHit> Rules { get; set; } = new();
+}
+
+public sealed class UmlRuleHit
+{
+    public string Name { get; set; } = string.Empty;
+    public string Match { get; set; } = string.Empty;
+    public int Count { get; set; }
 }

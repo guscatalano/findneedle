@@ -57,6 +57,14 @@ public class UmlRuleDefinition
     public List<UmlRule> Rules { get; set; } = new();
 }
 
+/// <summary>How many times a single UML rule matched during the last diagram generation.</summary>
+public class UmlRuleUsage
+{
+    public string Name { get; set; } = string.Empty;
+    public string Match { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
 public class UmlParticipant
 {
     [JsonPropertyName("id")]

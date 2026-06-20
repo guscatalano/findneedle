@@ -18,6 +18,8 @@ namespace FindNeedleUX.Pages;
 
 public sealed partial class ProcessorOutputPage : Page
 {
+    private List<FindNeedleRuleDSL.UmlDiagramUsage> _diagramUsages = new();
+
     private enum EntryKind { Header, Processor, File }
 
     private sealed class OutputEntry
@@ -50,6 +52,9 @@ public sealed partial class ProcessorOutputPage : Page
         if (query is FindPluginCore.Searching.NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null)
             files.AddRange(nq.GeneratedRuleOutputFiles);
         files = files.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        _diagramUsages = (query as FindPluginCore.Searching.NuSearchQuery)?.GeneratedDiagramUsages?.ToList()
+            ?? new List<FindNeedleRuleDSL.UmlDiagramUsage>();
 
         // Summary line.
         var diagramCount = files.Count(IsMermaid);
@@ -262,9 +267,10 @@ public sealed partial class ProcessorOutputPage : Page
         if (IsMermaid(path) || IsImageFile(path))
         {
             var grid = new Grid();
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0 title
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 1 actions
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2 rules-used
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 3 view
 
             if (includeTitle)
             {
@@ -276,6 +282,13 @@ public sealed partial class ProcessorOutputPage : Page
             actions.Margin = new Thickness(0, 0, 0, 8);
             grid.Children.Add(actions);
             Grid.SetRow(actions, 1);
+
+            var rulesPanel = BuildRulesUsedPanel(path);
+            if (rulesPanel != null)
+            {
+                grid.Children.Add(rulesPanel);
+                Grid.SetRow(rulesPanel, 2);
+            }
 
             UIElement view;
             try
@@ -296,7 +309,7 @@ public sealed partial class ProcessorOutputPage : Page
                 view = new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) };
             }
             grid.Children.Add(view);
-            Grid.SetRow((FrameworkElement)view, 2);
+            Grid.SetRow((FrameworkElement)view, 3);
             return grid;
         }
 
@@ -321,6 +334,55 @@ public sealed partial class ProcessorOutputPage : Page
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
+    }
+
+    /// <summary>Collapsible panel listing which UML rules fired for this diagram (with counts) and
+    /// which never matched. Returns null when there's no usage info for the file (e.g. an image).</summary>
+    private FrameworkElement? BuildRulesUsedPanel(string path)
+    {
+        FindNeedleRuleDSL.UmlDiagramUsage? usage = null;
+        foreach (var u in _diagramUsages)
+        {
+            if (PathsEqual(u.FilePath, path)) { usage = u; break; }
+        }
+        if (usage == null || usage.Rules.Count == 0) return null;
+
+        var used = usage.Rules.Where(r => r.Count > 0).ToList();
+        var unused = usage.Rules.Where(r => r.Count == 0).ToList();
+
+        var list = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4, 0, 0) };
+        foreach (var r in used)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            row.Children.Add(new SymbolIcon { Symbol = Symbol.Accept, Foreground = new SolidColorBrush(Color.FromArgb(255, 46, 160, 67)) });
+            row.Children.Add(new TextBlock { Text = r.Name, FontWeight = FontWeights.SemiBold });
+            row.Children.Add(new TextBlock { Text = $"x{r.Count}", Foreground = new SolidColorBrush(Colors.Gray) });
+            list.Children.Add(row);
+        }
+        foreach (var r in unused)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Opacity = 0.55 };
+            row.Children.Add(new SymbolIcon { Symbol = Symbol.Remove, Foreground = new SolidColorBrush(Colors.Gray) });
+            row.Children.Add(new TextBlock { Text = r.Name });
+            row.Children.Add(new TextBlock { Text = "unused", Foreground = new SolidColorBrush(Colors.Gray) });
+            list.Children.Add(row);
+        }
+
+        return new Expander
+        {
+            Header = $"Rules used: {used.Count} of {usage.Rules.Count}",
+            IsExpanded = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = list,
+        };
+    }
+
+    private static bool PathsEqual(string a, string b)
+    {
+        try { return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase); }
+        catch { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
     }
 
     // ---------- helpers ----------
