@@ -10,11 +10,28 @@
 
     <ScrollViewer Padding="24">
         <StackPanel Spacing="24">
-            <!-- Header -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="🔍 FindNeedle" FontSize="32" FontWeight="Bold" Foreground="{ThemeResource SystemAccentColorBrush}"/>
-                <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-            </StackPanel>
+            <!-- Hero: animated themed loader + wordmark -->
+            <Border CornerRadius="12" Padding="24">
+                <Border.Background>
+                    <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.12"/>
+                </Border.Background>
+                <StackPanel Orientation="Horizontal" Spacing="20">
+                    <Border Width="96" Height="96" CornerRadius="12" VerticalAlignment="Center"
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                        <Image x:Name="HeroGif" Width="96" Height="96" Stretch="UniformToFill"
+                               AutomationProperties.AccessibilityView="Raw"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="FindNeedle" FontSize="36" FontWeight="Bold"
+                                   Foreground="{ThemeResource SystemAccentColorBrush}"/>
+                        <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="16"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="Search, filter, and diagram logs across folders, ETW, and event logs."
+                                   FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   TextWrapping="Wrap" MaxWidth="420"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
 
             <!-- Quick Actions -->
             <TextBlock Text="Quick Actions" FontWeight="SemiBold" FontSize="18"/>
