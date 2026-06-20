@@ -22,7 +22,11 @@ public class LiveETWTests
         Assert.IsTrue(results.Count >= 2);
     }
 
+    // Live ETW capture of an external helper process — needs the deployed LogETWApp.exe and real-time
+    // ETW privileges, so it's unreliable on CI build agents. Excluded from CI (the pipeline filters
+    // out TestCategory=SkipCI); still runs locally.
     [TestMethod]
+    [TestCategory("SkipCI")]
     public void TestARealProgram()
     {
 
