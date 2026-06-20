@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindNeedleUX.Utils;
 using FindNeedleUX.ViewModels;
+using ADOPlugin.Location;
+using FindNeedlePluginLib;
+using GithubPlugin.Location;
 using KustoPlugin.Location;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -65,16 +68,126 @@ public sealed partial class SearchLocationsPage : Page
         if (loc != null) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
     }
 
+    private async void Button_AddAdo(object sender, RoutedEventArgs e)
+    {
+        var loc = await ShowAdoDialogAsync(null);
+        if (loc != null) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
+    }
+
+    private async void Button_AddGithub(object sender, RoutedEventArgs e)
+    {
+        var loc = await ShowGithubDialogAsync(null);
+        if (loc != null) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
+    }
+
     private async void Button_Edit(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string name }) return;
-        var existing = MiddleLayerService.Locations.OfType<KustoLocation>().FirstOrDefault(k => k.GetName() == name);
-        if (existing == null) return; // only Kusto locations are editable today
-        var updated = await ShowKustoDialogAsync(existing);
+        // The online (configurable) locations are editable; local file/folder ones aren't.
+        ISearchLocation updated = MiddleLayerService.Locations.FirstOrDefault(l => l.GetName() == name) switch
+        {
+            KustoLocation k        => await ShowKustoDialogAsync(k),
+            AdoLocation a          => await ShowAdoDialogAsync(a),
+            GithubIssuesLocation g => await ShowGithubDialogAsync(g),
+            _ => null,
+        };
         if (updated == null) return;
         MiddleLayerService.RemoveLocationByName(name); // replace the old one (its name may have changed)
         MiddleLayerService.AddLocation(updated);
         _viewModel.Refresh();
+    }
+
+    /// <summary>Azure DevOps location dialog: org URL, project, auth (PAT or AAD), and either a WIQL
+    /// query or an explicit list of work item ids.</summary>
+    private async Task<AdoLocation> ShowAdoDialogAsync(AdoLocation existing)
+    {
+        var org = new TextBox
+        {
+            Header = "Organization URL",
+            PlaceholderText = "https://dev.azure.com/org  or  https://org.visualstudio.com",
+            Text = existing?.OrganizationUrl ?? "",
+        };
+        var project = new TextBox { Header = "Project", PlaceholderText = "MyProject", Text = existing?.Project ?? "" };
+
+        var auth = new RadioButtons { Header = "Sign-in", MaxColumns = 1 };
+        auth.Items.Add("Personal Access Token (PAT)");
+        auth.Items.Add("Azure AD interactive sign-in");
+        auth.SelectedIndex = existing != null ? (int)existing.AuthMode : 0;
+        AdoAuthMode Mode() => auth.SelectedIndex == 1 ? AdoAuthMode.Interactive : AdoAuthMode.Pat;
+
+        var pat = new PasswordBox { Header = "PAT (needs Work Items: Read)", Password = existing?.Pat ?? "" };
+        var ids = new TextBox
+        {
+            Header = "Work item IDs (optional, comma-separated)",
+            PlaceholderText = "e.g. 1, 2", Text = existing?.Ids ?? "",
+        };
+        var wiql = new TextBox
+        {
+            Header = "WIQL query (used when no IDs given; blank = recently changed)",
+            AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 60,
+            Text = existing?.Wiql ?? "",
+        };
+
+        var panel = new StackPanel { Spacing = 10, MinWidth = 480 };
+        panel.Children.Add(org);
+        panel.Children.Add(project);
+        panel.Children.Add(auth);
+        panel.Children.Add(pat);
+        panel.Children.Add(ids);
+        panel.Children.Add(wiql);
+
+        var dialog = new ContentDialog
+        {
+            Title = existing == null ? "Add Azure DevOps location" : "Edit Azure DevOps location",
+            Content = new ScrollViewer { Content = panel, MaxHeight = 560,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) },
+            PrimaryButtonText = existing == null ? "Add" : "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
+        if (string.IsNullOrWhiteSpace(org.Text) || string.IsNullOrWhiteSpace(project.Text)) return null;
+
+        return new AdoLocation(org.Text, project.Text, Mode(), pat.Password, wiql.Text, ids.Text);
+    }
+
+    /// <summary>GitHub issues location dialog: repo (URL or owner/repo), optional token, state.</summary>
+    private async Task<GithubIssuesLocation> ShowGithubDialogAsync(GithubIssuesLocation existing)
+    {
+        var repo = new TextBox
+        {
+            Header = "Repository (URL or owner/repo)",
+            PlaceholderText = "https://github.com/owner/repo  or  owner/repo",
+            Text = existing == null ? "" : $"{existing.Owner}/{existing.Repo}",
+        };
+        var token = new PasswordBox { Header = "Token (optional; for private repos / higher rate limit)", Password = existing?.Token ?? "" };
+        var state = new RadioButtons { Header = "Issue state", MaxColumns = 3 };
+        state.Items.Add("all");
+        state.Items.Add("open");
+        state.Items.Add("closed");
+        state.SelectedIndex = existing?.State switch { "open" => 1, "closed" => 2, _ => 0 };
+        string State() => state.SelectedIndex switch { 1 => "open", 2 => "closed", _ => "all" };
+
+        var panel = new StackPanel { Spacing = 10, MinWidth = 460 };
+        panel.Children.Add(repo);
+        panel.Children.Add(token);
+        panel.Children.Add(state);
+
+        var dialog = new ContentDialog
+        {
+            Title = existing == null ? "Add GitHub issues location" : "Edit GitHub issues location",
+            Content = new ScrollViewer { Content = panel, MaxHeight = 400,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) },
+            PrimaryButtonText = existing == null ? "Add" : "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
+        if (string.IsNullOrWhiteSpace(repo.Text)) return null;
+
+        return new GithubIssuesLocation(repo.Text, token.Password, State());
     }
 
     /// <summary>

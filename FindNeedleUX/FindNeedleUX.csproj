@@ -123,6 +123,8 @@
     <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
     <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
     <ProjectReference Include="..\Plugins\Kusto\KustoPlugin\KustoPlugin.csproj" />
+    <ProjectReference Include="..\Plugins\ADO\ADOPlugin\ADOPlugin.csproj" />
+    <ProjectReference Include="..\Plugins\Github\GithubPlugin\GithubPlugin.csproj" />
     <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
   </ItemGroup>
   <ItemGroup>

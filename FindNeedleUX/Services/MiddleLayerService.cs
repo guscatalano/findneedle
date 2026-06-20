@@ -694,7 +694,9 @@ public class MiddleLayerService
             {
                 Name = loc.GetName(),
                 Description = loc.GetDescription(),
-                IsEditable = loc is KustoPlugin.Location.KustoLocation,
+                IsEditable = loc is KustoPlugin.Location.KustoLocation
+                          or ADOPlugin.Location.AdoLocation
+                          or GithubPlugin.Location.GithubIssuesLocation,
             });
         }
         return test;

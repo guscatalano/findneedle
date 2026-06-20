@@ -41,12 +41,24 @@
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Add New Location" FontWeight="SemiBold"/>
-                    <Button Content="➕ Add Folder" Click="Button_AddFolder" Width="120"
-                            AutomationProperties.Name="Add folder location"/>
-                    <Button Content="➕ Add File" Click="Button_AddFile" Width="120" Margin="0,8,0,0"
-                            AutomationProperties.Name="Add file location"/>
-                    <Button Content="➕ Add Kusto" Click="Button_AddKusto" Width="120" Margin="0,8,0,0"
-                            AutomationProperties.Name="Add Kusto cluster location"/>
+
+                    <TextBlock Text="Local files" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="➕ Add Folder" Click="Button_AddFolder" Width="120"
+                                AutomationProperties.Name="Add folder location"/>
+                        <Button Content="➕ Add File" Click="Button_AddFile" Width="120"
+                                AutomationProperties.Name="Add file location"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Online sources" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="☁ Add Kusto" Click="Button_AddKusto" Width="120"
+                                AutomationProperties.Name="Add Kusto cluster location"/>
+                        <Button Content="☁ Add ADO" Click="Button_AddAdo" Width="120"
+                                AutomationProperties.Name="Add Azure DevOps location"/>
+                        <Button Content="☁ Add GitHub" Click="Button_AddGithub" Width="120"
+                                AutomationProperties.Name="Add GitHub issues location"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
