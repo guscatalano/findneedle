@@ -209,17 +209,17 @@ public sealed partial class ProcessorOutputPage : Page
         if (!string.IsNullOrWhiteSpace(desc))
             panel.Children.Add(new TextBlock { Text = desc, FontSize = 13, Foreground = new SolidColorBrush(Colors.Gray), TextWrapping = TextWrapping.Wrap });
 
-        var summary = SafeGet(() => processor.GetOutputText());
-        if (!string.IsNullOrWhiteSpace(summary))
+        // Rich, explained detail for RuleDSL processors (the common case). Falls back to the plain
+        // GetOutputText() summary for any other processor type.
+        if (processor is FindNeedleRuleDSL.FindNeedleRuleDSLPlugin ruleDsl)
         {
-            panel.Children.Add(new Border
-            {
-                Margin = new Thickness(0, 8, 0, 0),
-                Padding = new Thickness(12),
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Color.FromArgb(20, 128, 128, 128)),
-                Child = new TextBlock { Text = summary.Trim(), FontFamily = new FontFamily("Consolas"), TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true },
-            });
+            AddRuleDslDetail(panel, ruleDsl);
+        }
+        else
+        {
+            var summary = SafeGet(() => processor.GetOutputText());
+            if (!string.IsNullOrWhiteSpace(summary))
+                panel.Children.Add(SummaryBox(summary.Trim()));
         }
 
         var outputFile = SafeGet(() => processor.GetOutputFile(TempStorage.GetSingleton().tempPath));
@@ -235,6 +235,110 @@ public sealed partial class ProcessorOutputPage : Page
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
+    }
+
+    private static Border SummaryBox(string text) => new Border
+    {
+        Margin = new Thickness(0, 8, 0, 0),
+        Padding = new Thickness(12),
+        CornerRadius = new CornerRadius(6),
+        Background = new SolidColorBrush(Color.FromArgb(20, 128, 128, 128)),
+        Child = new TextBlock { Text = text, FontFamily = new FontFamily("Consolas"), TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true },
+    };
+
+    /// <summary>Explain a RuleDSL processor's run: how many rows it matched out of how many scanned,
+    /// the rule file, tag breakdown, and the matched rows grouped by the rule that fired (with content)
+    /// — so "found N results" isn't an opaque number.</summary>
+    private void AddRuleDslDetail(StackPanel panel, FindNeedleRuleDSL.FindNeedleRuleDSLPlugin ruleDsl)
+    {
+        var matched = ruleDsl.MatchDetails ?? new List<FindNeedleRuleDSL.RuleMatchDetail>();
+        var input = ruleDsl.LastInputCount;
+        var ruleCount = ruleDsl.RuleCount;
+
+        // Headline stat.
+        panel.Children.Add(new TextBlock
+        {
+            Text = input > 0
+                ? $"Matched {ruleDsl.MatchedCount} of {input} scanned rows  ·  {ruleCount} rule(s) in this file"
+                : $"Matched {ruleDsl.MatchedCount} rows  ·  {ruleCount} rule(s) in this file",
+            FontSize = 14,
+            Margin = new Thickness(0, 8, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        if (!string.IsNullOrWhiteSpace(ruleDsl.RulesFilePath))
+        {
+            var link = new HyperlinkButton { Content = ruleDsl.RulesFilePath, Padding = new Thickness(0), FontSize = 11 };
+            link.Click += (_, _) => { try { Process.Start(new ProcessStartInfo { FileName = ruleDsl.RulesFilePath, UseShellExecute = true }); } catch { } };
+            panel.Children.Add(link);
+        }
+
+        // Tag breakdown.
+        var tags = ruleDsl.TagCounts;
+        if (tags != null && tags.Count > 0)
+        {
+            var tagPanel = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4, 0, 0) };
+            foreach (var kv in tags.OrderByDescending(x => x.Value))
+                tagPanel.Children.Add(new TextBlock { Text = $"• {kv.Key}: {kv.Value}", FontSize = 13 });
+            panel.Children.Add(new Expander
+            {
+                Header = $"Tags applied: {tags.Count}",
+                IsExpanded = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 8, 0, 0),
+                Content = tagPanel,
+            });
+        }
+
+        if (matched.Count == 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "No rows matched — nothing to show. The rule file's match patterns didn't hit any scanned row.",
+                Foreground = new SolidColorBrush(Colors.Gray),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0),
+            });
+            return;
+        }
+
+        // Matched rows grouped by the rule that fired.
+        foreach (var grp in matched.GroupBy(m => m.RuleName).OrderByDescending(g => g.Count()))
+        {
+            var items = grp.ToList();
+            var first = items[0];
+            var lines = new StackPanel { Spacing = 3, Margin = new Thickness(20, 2, 0, 4) };
+            if (!string.IsNullOrWhiteSpace(first.RuleMatch))
+                lines.Children.Add(new TextBlock { Text = $"match: {first.RuleMatch}", FontSize = 11, FontFamily = new FontFamily("Consolas"), Foreground = new SolidColorBrush(Colors.Gray), TextWrapping = TextWrapping.Wrap });
+            foreach (var m in items)
+            {
+                lines.Children.Add(new TextBlock
+                {
+                    Text = m.Content,
+                    FontSize = 12,
+                    FontFamily = new FontFamily("Consolas"),
+                    TextWrapping = TextWrapping.Wrap,
+                    IsTextSelectionEnabled = true,
+                });
+            }
+
+            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            head.Children.Add(new SymbolIcon { Symbol = Symbol.Accept, Foreground = new SolidColorBrush(Color.FromArgb(255, 46, 160, 67)) });
+            head.Children.Add(new TextBlock { Text = grp.Key, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            var actionType = string.IsNullOrWhiteSpace(first.ActionType) ? "" : $"[{first.ActionType}] ";
+            head.Children.Add(new TextBlock { Text = $"{actionType}x{items.Count}", Foreground = new SolidColorBrush(Colors.Gray), VerticalAlignment = VerticalAlignment.Center });
+
+            panel.Children.Add(new Expander
+            {
+                Header = head,
+                IsExpanded = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 4, 0, 0),
+                Content = lines,
+            });
+        }
     }
 
     private UIElement BuildFileDetail(string path, bool includeTitle = true)
@@ -267,46 +371,58 @@ public sealed partial class ProcessorOutputPage : Page
         actions.Children.Add(openBtn);
         actions.Children.Add(revealBtn);
 
-        // --- Visual (diagram / image): a scrollable column (title, actions, rules-used, diagram) so
-        // the whole pane scrolls together. The diagram has a fixed height (zoom/pan lives inside the
-        // WebView), so expanding the rules panel never hides it — you just scroll down. ---
+        // --- Visual (diagram / image) ---
+        // WebView2 has an "airspace" limitation: inside a ScrollViewer it renders ON TOP of the
+        // scrollbar and won't scroll. So the metadata (title, actions, rules-used) goes in its own
+        // scrollable row, and the diagram sits in a separate star row below — never inside a
+        // ScrollViewer. The diagram is always visible; expanding the rules scrolls within the top row.
         if (IsMermaid(path) || IsImageFile(path))
         {
-            var col = new StackPanel { Spacing = 6 };
+            var grid = new Grid();
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });               // 0: scrollable metadata
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: diagram
 
+            var meta = new StackPanel { Spacing = 6 };
             if (includeTitle)
-                col.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
-
+                meta.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
             actions.Margin = new Thickness(0, 0, 0, 8);
-            col.Children.Add(actions);
-
+            meta.Children.Add(actions);
             var rulesPanel = BuildRulesUsedPanel(path);
-            if (rulesPanel != null) col.Children.Add(rulesPanel);
+            if (rulesPanel != null) meta.Children.Add(rulesPanel);
 
+            var metaScroll = new ScrollViewer
+            {
+                Content = meta,
+                MaxHeight = 280, // cap the metadata; the diagram below always stays visible
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            grid.Children.Add(metaScroll);
+            Grid.SetRow(metaScroll, 0);
+
+            UIElement view;
             try
             {
-                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 560 };
+                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
                 var htmlPath = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
                 wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
-                col.Children.Add(new Border
+                view = new Border
                 {
                     BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(6),
+                    MinHeight = 280,
                     Child = wv,
-                });
+                };
             }
             catch (Exception ex)
             {
-                col.Children.Add(new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) });
+                view = new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) };
             }
-
-            return new ScrollViewer
-            {
-                Content = col,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            };
+            grid.Children.Add(view);
+            Grid.SetRow((FrameworkElement)view, 1);
+            return grid;
         }
 
         // --- Text file: scrollable ---

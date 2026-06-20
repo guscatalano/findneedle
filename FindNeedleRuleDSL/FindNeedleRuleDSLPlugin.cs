@@ -17,6 +17,8 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
 {
     private readonly List<ISearchResult> _matchedResults = new();
     private readonly Dictionary<string, int> _tagCounts = new();
+    private readonly List<RuleMatchDetail> _matchDetails = new();
+    private int _lastInputCount;
     private UnifiedRuleSet? _ruleSet;
     private readonly string _provider;
     private readonly string? _rulesFilePath;
@@ -75,6 +77,8 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
     {
         _matchedResults.Clear();
         _tagCounts.Clear();
+        _matchDetails.Clear();
+        _lastInputCount = results.Count;
 
         try
         {
@@ -94,7 +98,20 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
 
             foreach (var (rule, result, action) in matches)
             {
-                _matchedResults.Add(result as ISearchResult ?? throw new InvalidCastException());
+                var sr = result as ISearchResult ?? throw new InvalidCastException();
+                _matchedResults.Add(sr);
+
+                long rid;
+                try { rid = sr.GetRowId(); } catch { rid = -1; }
+                _matchDetails.Add(new RuleMatchDetail
+                {
+                    RuleName = string.IsNullOrWhiteSpace(rule.Name) ? "(unnamed rule)" : rule.Name,
+                    RuleMatch = rule.Match,
+                    ActionType = action.Type ?? string.Empty,
+                    Tag = action.Tag ?? action.Value,
+                    RowId = rid,
+                    Content = SafeContent(sr),
+                });
 
                     if (action.Type == "tag" && !string.IsNullOrEmpty(action.Tag))
                     {
@@ -113,6 +130,12 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
         {
             System.Diagnostics.Debug.WriteLine($"Error processing rules: {ex.Message}");
         }
+    }
+
+    private static string SafeContent(ISearchResult r)
+    {
+        try { return r.GetSearchableData() ?? r.GetMessage() ?? string.Empty; }
+        catch { return string.Empty; }
     }
 
     private void LoadRules()
@@ -186,4 +209,28 @@ public class FindNeedleRuleDSLPlugin : IResultProcessor
     {
         return _matchedResults.AsReadOnly();
     }
+
+    /// <summary>Number of results fed into the last ProcessResults run (the denominator for matches).</summary>
+    public int LastInputCount => _lastInputCount;
+
+    /// <summary>Per-match detail from the last run: which rule matched each row, the action it took,
+    /// and the row content. Lets the UI explain *why* "found N results".</summary>
+    public IReadOnlyList<RuleMatchDetail> MatchDetails => _matchDetails;
+
+    /// <summary>Number of rules across all sections in the loaded rule set (0 if none loaded).</summary>
+    public int RuleCount
+    {
+        get { try { LoadRules(); return _ruleSet?.Sections?.Sum(s => s.Rules?.Count ?? 0) ?? 0; } catch { return 0; } }
+    }
+}
+
+/// <summary>One row a RuleDSL rule matched, with the rule and action that fired.</summary>
+public sealed class RuleMatchDetail
+{
+    public string RuleName { get; set; } = string.Empty;
+    public string RuleMatch { get; set; } = string.Empty;
+    public string ActionType { get; set; } = string.Empty;
+    public string? Tag { get; set; }
+    public long RowId { get; set; } = -1;
+    public string Content { get; set; } = string.Empty;
 }
