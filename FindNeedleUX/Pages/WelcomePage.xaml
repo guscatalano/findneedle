@@ -23,7 +23,7 @@
                     </Border>
                     <StackPanel VerticalAlignment="Center" Spacing="4">
                         <TextBlock Text="FindNeedle" FontSize="36" FontWeight="Bold"
-                                   Foreground="{ThemeResource SystemAccentColorBrush}"/>
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                         <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="16"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Text="Search, filter, and diagram logs across folders, ETW, and event logs."
