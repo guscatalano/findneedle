@@ -58,7 +58,8 @@ public class SearchStatisticsTests
         var s2 = stats.GetTimeTaken(SearchStep.AtSearch);
         Assert.IsTrue(s.TotalMilliseconds > 90); //we slept for 100ms
         Assert.IsTrue(s2.TotalMilliseconds > 40 && s2.TotalMilliseconds < 100); //we slept for 50ms
-        Assert.IsTrue(stats.GetMemoryUsage(SearchStep.AtLoad).Contains("PrivateMemory"));
+        // GetMemoryUsage returns the friendly snapshot string (" Private (…) / Working set (…)").
+        Assert.IsTrue(stats.GetMemoryUsage(SearchStep.AtLoad).Contains("Private"));
 
         Assert.AreEqual(stats.GetRecordsAtStep(SearchStep.AtLoad), 0);
     }

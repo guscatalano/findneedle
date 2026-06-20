@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -79,26 +80,29 @@ public class FolderLocationTests
     [TestMethod]
     public void TestHandlingExtensions()
     {
-        var TEST_FILE = "FakeFolder\\fakefile.txt";
-        FolderLocation loc = new();
-        loc.ParseCommandParameterIntoQuery(TEST_FILE);
+        // FolderLocation treats the registered processors as TEMPLATES and processes each real file
+        // with its own fresh clone (so multiple files never share one processor's per-file state). So
+        // we verify the OUTCOME — the .txt file got processed — rather than the passed instance's flags.
+        var dir = Path.Combine(Path.GetTempPath(), "FN_floc_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var TEST_FILE = Path.Combine(dir, "fakefile.txt");
+        File.WriteAllText(TEST_FILE, "hello");
+        try
+        {
+            FolderLocation loc = new();
+            loc.ParseCommandParameterIntoQuery(TEST_FILE);
 
-        //We know its the only one
-        SampleFileExtensionProcessor sampleFileExtensionProcessor = new();
-        List<IFileExtensionProcessor> processors = new();
-        processors.Add(sampleFileExtensionProcessor);
+            var sampleFileExtensionProcessor = new SampleFileExtensionProcessor();
+            loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { sampleFileExtensionProcessor });
+            loc.LoadInMemory();
 
-        Assert.IsFalse(sampleFileExtensionProcessor.hasDonePreProcessing);
-        Assert.IsFalse(sampleFileExtensionProcessor.hasLoaded);
-
-
-        loc.SetExtensionProcessorList(processors);
-        loc.LoadInMemory();
-
-        Assert.IsTrue(sampleFileExtensionProcessor.hasDonePreProcessing);
-        Assert.IsTrue(sampleFileExtensionProcessor.hasLoaded);
-        Assert.AreEqual(sampleFileExtensionProcessor.lastOpenedFile, TEST_FILE);
-
+            // The per-file clone (not the registered template) processed the file: SampleFileExtension-
+            // Processor.GetResults() returns 2 results per handled .txt file.
+            Assert.AreEqual(2, loc.Search().Count);
+            // The registered instance is a template and is left untouched.
+            Assert.IsFalse(sampleFileExtensionProcessor.hasLoaded);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
     [TestMethod]
@@ -128,23 +132,26 @@ public class FolderLocationTests
     [TestMethod]
     public void TestStatistics()
     {
-        var TEST_FILE = "FakeFolder\\fakefile.txt";
-        FolderLocation loc = new();
-        loc.ParseCommandParameterIntoQuery(TEST_FILE);
+        var dir = Path.Combine(Path.GetTempPath(), "FN_floc_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var TEST_FILE = Path.Combine(dir, "fakefile.txt");
+        File.WriteAllText(TEST_FILE, "hello");
+        try
+        {
+            FolderLocation loc = new();
+            loc.ParseCommandParameterIntoQuery(TEST_FILE);
 
-        //We know its the only one
-        SampleFileExtensionProcessor sampleFileExtensionProcessor = new();
-        List<IFileExtensionProcessor> processors = new();
-        processors.Add(sampleFileExtensionProcessor);
+            loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new SampleFileExtensionProcessor() });
+            loc.LoadInMemory();
+            var result = loc.ReportStatistics();
 
-        loc.SetExtensionProcessorList(processors);
-        loc.LoadInMemory();
-        var result = loc.ReportStatistics();
-
-        Assert.AreEqual(result.Count, 2);
-        Assert.IsTrue(result.FirstOrDefault( x => x.summary.Equals("ExtensionProviders")) != null);
-        Assert.IsTrue(result.FirstOrDefault(x => x.summary.Equals("ProviderByFile")) != null);
-        //Expand later
+            // Both expected stat reports are present (exact count isn't pinned — a per-file stats
+            // report is also emitted now that a real file is processed).
+            Assert.IsTrue(result.Count >= 2);
+            Assert.IsTrue(result.FirstOrDefault(x => x.summary.Equals("ExtensionProviders")) != null);
+            Assert.IsTrue(result.FirstOrDefault(x => x.summary.Equals("ProviderByFile")) != null);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
     [TestMethod]
