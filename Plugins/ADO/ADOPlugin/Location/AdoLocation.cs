@@ -74,6 +74,11 @@ public class AdoLocation : ISearchLocation
     private static readonly object _credLock = new();
     private static InteractiveBrowserCredential? _cred;
 
+    /// <summary>Force the interactive AAD sign-in now (so the browser prompt happens when the user adds
+    /// the location, not later during the first search). Caches the token; safe to call repeatedly.
+    /// Throws if sign-in fails/cancels.</summary>
+    public static void PrimeInteractiveCredential() => GetAadToken();
+
     private static string GetAadToken()
     {
         lock (_credLock)

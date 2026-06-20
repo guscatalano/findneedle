@@ -71,7 +71,26 @@ public sealed partial class SearchLocationsPage : Page
     private async void Button_AddAdo(object sender, RoutedEventArgs e)
     {
         var loc = await ShowAdoDialogAsync(null);
-        if (loc != null) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
+        if (loc == null) return;
+        // Do the interactive Azure AD sign-in now (while adding) rather than surprising the user with a
+        // browser pop-up during the first search. Non-fatal: if it doesn't complete, add anyway — the
+        // search will prompt again.
+        if (loc.AuthMode == AdoAuthMode.Interactive)
+        {
+            try { await Task.Run(() => AdoLocation.PrimeInteractiveCredential()); }
+            catch (Exception ex)
+            {
+                await new ContentDialog
+                {
+                    Title = "Azure DevOps sign-in",
+                    Content = "Sign-in didn't complete — it'll prompt again when you run the search.\n\n" + ex.Message,
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot,
+                }.ShowAsync();
+            }
+        }
+        MiddleLayerService.AddLocation(loc);
+        _viewModel.Refresh();
     }
 
     private async void Button_AddGithub(object sender, RoutedEventArgs e)
