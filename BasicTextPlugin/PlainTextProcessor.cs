@@ -251,13 +251,51 @@ public class PlainTextSearchResult : ISearchResult
 
     private static DateTime ParseLogTime(string text)
     {
-        // Common format: [YYYY-MM-DD HH:MM:SS] at the start of the line.
-        if (text == null || text.Length <= 20) return DateTime.MinValue;
-        var start = text.IndexOf('[');
-        var end = text.IndexOf(']');
-        if (start < 0 || end <= start) return DateTime.MinValue;
-        var timestamp = text.Substring(start + 1, end - start - 1);
-        return DateTime.TryParse(timestamp, out var dt) ? dt : DateTime.MinValue;
+        if (string.IsNullOrWhiteSpace(text)) return DateTime.MinValue;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var styles = System.Globalization.DateTimeStyles.NoCurrentDateDefault;
+
+        // 1) Bracketed near the start: "[2026-06-19 08:00:01] …"
+        var lb = text.IndexOf('[');
+        if (lb >= 0 && lb < 40)
+        {
+            var rb = text.IndexOf(']', lb + 1);
+            if (rb > lb && DateTime.TryParse(text.Substring(lb + 1, rb - lb - 1), inv, styles, out var b) && b.Year > 1)
+                return b;
+        }
+
+        // 2) Leading bare/ISO timestamp: "2026-06-19 08:00:01.001 INFO …" or "2026-06-19T08:00:01Z …".
+        var s = text.TrimStart();
+        int sp1 = s.IndexOf(' ');
+        var first = sp1 > 0 ? s.Substring(0, sp1) : s;
+        // ISO form (date+time joined by 'T') is a single token.
+        if (first.IndexOf('T') > 0 && LooksDateLike(first)
+            && DateTime.TryParse(first, inv, styles, out var iso) && iso.Year > 1)
+            return iso;
+        // "date time" — the first two whitespace tokens.
+        if (sp1 > 0)
+        {
+            int sp2 = s.IndexOf(' ', sp1 + 1);
+            var two = sp2 > sp1 ? s.Substring(0, sp2) : s;
+            if (LooksDateLike(two) && DateTime.TryParse(two, inv, styles, out var dt) && dt.Year > 1)
+                return dt;
+        }
+        // Date only as the first token.
+        if (LooksDateLike(first) && DateTime.TryParse(first, inv, styles, out var d) && d.Year > 1)
+            return d;
+        return DateTime.MinValue;
+    }
+
+    /// <summary>Cheap guard so we don't accidentally DateTime.Parse a non-timestamp token.</summary>
+    private static bool LooksDateLike(string s)
+    {
+        bool digit = false, sep = false;
+        foreach (var c in s)
+        {
+            if (char.IsDigit(c)) digit = true;
+            else if (c == '-' || c == '/' || c == ':') sep = true;
+        }
+        return digit && sep;
     }
 
     // Plain-text logs don't carry these fields. Return empty so consumers (auto-hide column
