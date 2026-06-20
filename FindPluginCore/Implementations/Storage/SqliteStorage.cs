@@ -250,7 +250,33 @@ namespace FindPluginCore.Implementations.Storage
             ";
             cmd.ExecuteNonQuery();
 
+            // Migrate older cache DBs in place: CREATE TABLE IF NOT EXISTS leaves a pre-existing table's
+            // columns untouched, so a warm cache from before a column was added is missing it and inserts
+            // fail ("table has no column named ProcessId"). Add any missing columns idempotently.
+            EnsureColumns("RawResults");
+            EnsureColumns("FilteredResults");
+
             InitializeFts5();
+        }
+
+        /// <summary>Add any of the expected newer columns that an existing (older-schema) table lacks.
+        /// SQLite has no ADD COLUMN IF NOT EXISTS, so check PRAGMA table_info first.</summary>
+        private void EnsureColumns(string table)
+        {
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var q = _connection.CreateCommand())
+            {
+                q.CommandText = $"PRAGMA table_info({table});";
+                using var r = q.ExecuteReader();
+                while (r.Read()) existing.Add(r.GetString(1)); // col 1 = name
+            }
+            foreach (var col in new[] { "ProcessId", "ThreadId", "ActivityId" })
+            {
+                if (existing.Contains(col)) continue;
+                using var a = _connection.CreateCommand();
+                a.CommandText = $"ALTER TABLE {table} ADD COLUMN {col} TEXT;";
+                a.ExecuteNonQuery();
+            }
         }
 
         /// <summary>
