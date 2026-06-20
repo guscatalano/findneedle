@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Process interaction diagram",
+  "description": "Generates a Mermaid sequence diagram of how processes hand off work (client → broker → worker → store) from the log messages.",
+  "sections": [
+    {
+      "name": "ProcessDiagram",
+      "description": "Emit a sequence diagram from process-interaction log lines",
+      "purpose": "output",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "emit-process-sequence",
+          "match": "Client sending request to Broker|Broker dispatching to Worker|Worker writing result to Store|Broker responding to Client",
+          "enabled": true,
+          "action": {
+            "type": "uml",
+            "syntax": "mermaid",
+            "path": "{output}/process_interaction_{datetime}.mmd",
+            "rulesFile": "CommonRules/process-interaction-uml.rules.json",
+            "generateImage": true
+          }
+        }
+      ]
+    }
+  ]
+}

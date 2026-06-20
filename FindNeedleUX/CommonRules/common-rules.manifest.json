@@ -8,5 +8,10 @@
     "File": "etw-crash-detection.rules.json",
     "Name": "ETW crash / fault highlighter",
     "Condition": { "Extensions": [".etl"], "SourceTypes": ["ETW"] }
+  },
+  {
+    "File": "process-interaction.rules.json",
+    "Name": "Process interaction diagram",
+    "Condition": { "PathGlobs": ["*process-interaction*"] }
   }
 ]

@@ -1,0 +1,10 @@
+2026-06-19 10:00:00.001 INFO  Client process started pid=4120
+2026-06-19 10:00:00.050 INFO  Client sending request to Broker (req=42)
+2026-06-19 10:00:00.061 INFO  Broker received request from pid=4120 (req=42)
+2026-06-19 10:00:00.070 INFO  Broker dispatching to Worker pid=7880 (req=42)
+2026-06-19 10:00:00.090 INFO  Worker pid=7880 processing job 42
+2026-06-19 10:00:00.140 INFO  Worker writing result to Store (job 42)
+2026-06-19 10:00:00.160 INFO  Store persisted job 42
+2026-06-19 10:00:00.171 INFO  Worker returning result to Broker (job 42)
+2026-06-19 10:00:00.180 INFO  Broker responding to Client (req=42)
+2026-06-19 10:00:00.190 INFO  Client received response (req=42)

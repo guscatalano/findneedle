@@ -1,0 +1,75 @@
+{
+  "title": "Process interaction sequence",
+  "description": "A sequence diagram of how processes hand work off to each other (client → broker → worker → store), with PIDs pulled from the log messages.",
+  "participants": [
+    { "id": "Client", "displayName": "Client", "type": "participant" },
+    { "id": "Broker", "displayName": "Broker", "type": "participant" },
+    { "id": "Worker", "displayName": "Worker", "type": "participant" },
+    { "id": "Store",  "displayName": "Store",  "type": "participant" }
+  ],
+  "rules": [
+    {
+      "name": "client-start",
+      "match": "Client process started",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "note", "from": "Client", "text": "pid={extract:pid=(\\d+)}", "notePosition": "left" }
+    },
+    {
+      "name": "client-request",
+      "match": "Client sending request to Broker",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Client", "to": "Broker", "text": "request (req={extract:req=(\\d+)})" }
+    },
+    {
+      "name": "broker-activate",
+      "match": "Broker received request",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "activate", "from": "Broker", "text": "" }
+    },
+    {
+      "name": "broker-dispatch",
+      "match": "Broker dispatching to Worker",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Broker", "to": "Worker", "text": "dispatch job (worker pid={extract:pid=(\\d+)})" }
+    },
+    {
+      "name": "worker-store",
+      "match": "Worker writing result to Store",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Worker", "to": "Store", "text": "write result" }
+    },
+    {
+      "name": "store-ack",
+      "match": "Store persisted job",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Store", "to": "Worker", "text": "persisted job {extract:job (\\d+)}" }
+    },
+    {
+      "name": "worker-return",
+      "match": "Worker returning result to Broker",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Worker", "to": "Broker", "text": "result" }
+    },
+    {
+      "name": "broker-respond",
+      "match": "Broker responding to Client",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Broker", "to": "Client", "text": "response" }
+    },
+    {
+      "name": "broker-deactivate",
+      "match": "Broker responding to Client",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "deactivate", "from": "Broker", "text": "" }
+    }
+  ]
+}

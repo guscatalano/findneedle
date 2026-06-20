@@ -379,5 +379,6 @@ LargeSamples/
 FmtFile.txt
 FmtSum.txt
 
-# Keep the committed auto-add-rules demo sample (the global *.log ignore would otherwise drop it)
+# Keep the committed auto-add-rules demo samples (the global *.log ignore would otherwise drop them)
 !Samples/AutoRuleDemo/auto-rule-demo.log
+!Samples/AutoRuleDemo/process-interaction-demo.log
