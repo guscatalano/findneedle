@@ -59,14 +59,38 @@ public class AdoLocation : ISearchLocation
                        string pat = "", string wiql = "", string ids = "", int top = 200,
                        bool openAttachments = false)
     {
-        OrganizationUrl = (organizationUrl ?? "").Trim().TrimEnd('/');
-        Project = (project ?? "").Trim();
+        OrganizationUrl = NormalizeOrgUrl(organizationUrl);
+        Project = (project ?? "").Trim().Trim('/');
         AuthMode = authMode;
         Pat = pat ?? "";
         Wiql = (wiql ?? "").Trim();
         Ids = (ids ?? "").Trim();
         Top = top <= 0 ? 200 : top;
         OpenAttachments = openAttachments;
+    }
+
+    /// <summary>Reduce whatever the user pastes to just the org base, so a project/path accidentally
+    /// included doesn't produce ".../project/project/_apis/..." 404s.
+    ///   https://org.visualstudio.com[/anything]      -> https://org.visualstudio.com
+    ///   https://dev.azure.com/org[/anything]         -> https://dev.azure.com/org</summary>
+    private static string NormalizeOrgUrl(string raw)
+    {
+        var s = (raw ?? "").Trim().TrimEnd('/');
+        if (s.Length == 0) return s;
+        try
+        {
+            var uri = new Uri(s);
+            if (uri.Host.EndsWith(".visualstudio.com", StringComparison.OrdinalIgnoreCase))
+                return $"{uri.Scheme}://{uri.Host}"; // the org is the host; drop any path (e.g. /testado)
+            if (uri.Host.Equals("dev.azure.com", StringComparison.OrdinalIgnoreCase))
+            {
+                var segs = uri.AbsolutePath.Trim('/').Split('/');
+                if (segs.Length >= 1 && segs[0].Length > 0)
+                    return $"{uri.Scheme}://{uri.Host}/{segs[0]}"; // keep only the org segment
+            }
+            return s;
+        }
+        catch { return s; }
     }
 
     // ----- HTTP / auth -----
