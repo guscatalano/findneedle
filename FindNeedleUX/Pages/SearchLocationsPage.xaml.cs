@@ -20,30 +20,42 @@ public sealed partial class SearchLocationsPage : Page
 {
     private readonly SearchLocationsViewModel _viewModel = new();
 
+    // Set when navigated from a welcome-page online-source quick action; opened on Loaded.
+    private string _pendingOnlineKind;
+
     public SearchLocationsPage()
     {
         this.InitializeComponent();
         CheckOtherDLLs.AreWeInstalledOk();
         // Bind the repeater once; the VM refreshes its collection in place.
         VariedImageSizeRepeater.ItemsSource = _viewModel.Locations;
+        Loaded += (_, _) => OpenPendingOnlineDialog();
     }
 
-    /// <summary>When navigated with a source-kind string ("ado"/"github"/"kusto"), open that add
-    /// dialog straight away — lets welcome-page quick actions jump right into adding an online source.</summary>
+    /// <summary>When navigated with a source-kind string ("ado"/"github"/"kusto"), remember it and open
+    /// that add dialog once the page is loaded — lets welcome-page quick actions jump straight into
+    /// adding an online source. Deferred to Loaded so the ContentDialog has a valid XamlRoot.</summary>
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        if (e.Parameter is not string kind || string.IsNullOrEmpty(kind)) return;
-        // Defer until the page is loaded so the ContentDialog has a XamlRoot.
-        _ = DispatcherQueue.TryEnqueue(() =>
+        if (e.Parameter is string kind && !string.IsNullOrEmpty(kind))
         {
-            switch (kind.ToLowerInvariant())
-            {
-                case "ado":    Button_AddAdo(this, null); break;
-                case "github": Button_AddGithub(this, null); break;
-                case "kusto":  Button_AddKusto(this, null); break;
-            }
-        });
+            _pendingOnlineKind = kind;
+            if (IsLoaded) OpenPendingOnlineDialog(); // cached page re-navigation: Loaded won't fire again
+        }
+    }
+
+    private void OpenPendingOnlineDialog()
+    {
+        var kind = _pendingOnlineKind;
+        _pendingOnlineKind = null;
+        if (string.IsNullOrEmpty(kind) || this.XamlRoot == null) return;
+        switch (kind.ToLowerInvariant())
+        {
+            case "ado":    Button_AddAdo(this, null); break;
+            case "github": Button_AddGithub(this, null); break;
+            case "kusto":  Button_AddKusto(this, null); break;
+        }
     }
 
     private void Button_Remove(object sender, RoutedEventArgs e)
