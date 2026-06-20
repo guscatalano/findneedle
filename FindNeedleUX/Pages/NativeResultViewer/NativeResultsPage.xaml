@@ -204,7 +204,7 @@
                 <Button Content="View ▾" Height="32" AutomationProperties.Name="View options"
                         ToolTipService.ToolTip="Row details, filter pane position, and rule filtering">
                     <Button.Flyout>
-                        <MenuFlyout>
+                        <MenuFlyout Placement="Bottom">
                             <ToggleMenuFlyoutItem x:Name="RuleFilterToggle"
                                                   Text="Rule filter — hide rows excluded by active rules"
                                                   IsEnabled="False" Click="RuleFilterToggle_Click"/>
