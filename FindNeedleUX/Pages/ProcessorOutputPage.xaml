@@ -39,12 +39,7 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                <ScrollViewer x:Name="DetailScroll"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Auto"
-                              Padding="16">
-                    <Grid x:Name="DetailHost" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
-                </ScrollViewer>
+                <Grid x:Name="DetailHost" Padding="16" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
             </Border>
         </Grid>
     </Grid>

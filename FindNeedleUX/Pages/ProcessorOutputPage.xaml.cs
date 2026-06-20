@@ -224,88 +224,103 @@ public sealed partial class ProcessorOutputPage : Page
             panel.Children.Add(BuildFileDetail(outputFile!, includeTitle: false));
         }
 
-        return panel;
+        return new ScrollViewer
+        {
+            Content = panel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
     }
 
     private UIElement BuildFileDetail(string path, bool includeTitle = true)
     {
-        var panel = new StackPanel { Spacing = 6 };
-
-        if (includeTitle)
-            panel.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold });
-
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 4) };
-        var openBtn = new Button { Content = WithSymbol(Symbol.OpenFile, "Open") };
+        // Common toolbar (file actions). For .mmd we also offer "Open rendered diagram" which opens
+        // the generated zoomable HTML in the browser for a full-screen view.
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        if (IsMermaid(path) || IsImageFile(path))
+        {
+            var renderBtn = new Button { Content = WithSymbol(Symbol.View, "Open rendered (browser)") };
+            renderBtn.Click += (_, _) =>
+            {
+                try
+                {
+                    var html = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
+                    TryStart(new ProcessStartInfo { FileName = html, UseShellExecute = true });
+                }
+                catch { }
+            };
+            actions.Children.Add(renderBtn);
+        }
+        var openBtn = new Button { Content = WithSymbol(Symbol.OpenFile, "Open source") };
         openBtn.Click += (_, _) => TryStart(new ProcessStartInfo { FileName = path, UseShellExecute = true });
         var revealBtn = new Button { Content = WithSymbol(Symbol.Folder, "Show in folder") };
         revealBtn.Click += (_, _) => TryStart(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{path}\"", UseShellExecute = true });
         actions.Children.Add(openBtn);
         actions.Children.Add(revealBtn);
-        panel.Children.Add(actions);
 
-        panel.Children.Add(new TextBlock
+        // --- Visual (diagram / image): fill the pane, with zoom/pan inside the WebView ---
+        if (IsMermaid(path) || IsImageFile(path))
         {
-            Text = path,
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Colors.Gray),
-            TextWrapping = TextWrapping.Wrap,
-            IsTextSelectionEnabled = true,
-        });
+            var grid = new Grid();
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        try
-        {
-            if (IsMermaid(path) || IsImageFile(path))
+            if (includeTitle)
             {
-                var wv = new WebView2
-                {
-                    MinHeight = 460,
-                    Height = 520,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Margin = new Thickness(0, 6, 0, 0),
-                };
+                var title = new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
+                grid.Children.Add(title);
+                Grid.SetRow(title, 0);
+            }
+
+            actions.Margin = new Thickness(0, 0, 0, 8);
+            grid.Children.Add(actions);
+            Grid.SetRow(actions, 1);
+
+            UIElement view;
+            try
+            {
+                var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
                 var htmlPath = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
                 wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
-                panel.Children.Add(wv);
-
-                if (IsMermaid(path))
+                view = new Border
                 {
-                    panel.Children.Add(new Expander
-                    {
-                        Header = "Diagram source (Mermaid)",
-                        Margin = new Thickness(0, 8, 0, 0),
-                        HorizontalAlignment = HorizontalAlignment.Stretch,
-                        Content = new TextBox
-                        {
-                            Text = SafeReadAll(path),
-                            IsReadOnly = true,
-                            TextWrapping = TextWrapping.Wrap,
-                            AcceptsReturn = true,
-                            FontFamily = new FontFamily("Consolas"),
-                            MinHeight = 120,
-                        },
-                    });
-                }
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(6),
+                    Child = wv,
+                };
             }
-            else
+            catch (Exception ex)
             {
-                panel.Children.Add(new TextBox
-                {
-                    Text = SafeReadAll(path),
-                    IsReadOnly = true,
-                    TextWrapping = TextWrapping.Wrap,
-                    AcceptsReturn = true,
-                    FontFamily = new FontFamily("Consolas"),
-                    MinHeight = 300,
-                    Margin = new Thickness(0, 6, 0, 0),
-                });
+                view = new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) };
             }
-        }
-        catch (Exception ex)
-        {
-            panel.Children.Add(new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) });
+            grid.Children.Add(view);
+            Grid.SetRow((FrameworkElement)view, 2);
+            return grid;
         }
 
-        return panel;
+        // --- Text file: scrollable ---
+        var panel = new StackPanel { Spacing = 6 };
+        if (includeTitle)
+            panel.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(actions);
+        panel.Children.Add(new TextBox
+        {
+            Text = SafeReadAll(path),
+            IsReadOnly = true,
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            FontFamily = new FontFamily("Consolas"),
+            MinHeight = 300,
+            Margin = new Thickness(0, 6, 0, 0),
+        });
+        return new ScrollViewer
+        {
+            Content = panel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
     }
 
     // ---------- helpers ----------
@@ -374,14 +389,37 @@ public sealed partial class ProcessorOutputPage : Page
     {
         var mermaidText = File.ReadAllText(mmdPath);
         var htmlPath = Path.Combine(Path.GetDirectoryName(mmdPath)!, Path.GetFileNameWithoutExtension(mmdPath) + "_view.html");
+        var encoded = System.Net.WebUtility.HtmlEncode(mermaidText);
         var html =
             "<!DOCTYPE html><html><head><meta charset='utf-8'>" +
             "<script src='https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js'></script>" +
-            "<script>mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });</script>" +
-            "<style>body{margin:0;padding:12px;font-family:'Segoe UI',sans-serif;background:#ffffff;}</style>" +
-            "</head><body>" +
-            "<pre class='mermaid'>" + System.Net.WebUtility.HtmlEncode(mermaidText) + "</pre>" +
-            "</body></html>";
+            "<style>" +
+            "html,body{margin:0;height:100%;overflow:hidden;font-family:'Segoe UI',sans-serif;background:#fff;}" +
+            "#stage{position:absolute;inset:0;overflow:hidden;cursor:grab;}#stage.grab{cursor:grabbing;}" +
+            "#diagram{position:absolute;left:0;top:0;transform-origin:0 0;padding:12px;}" +
+            "#diagram svg{max-width:none!important;height:auto!important;}" +
+            ".controls{position:fixed;top:12px;right:12px;z-index:10;display:flex;gap:4px;background:#ffffffd0;border:1px solid #ddd;border-radius:8px;padding:6px;}" +
+            ".controls button{width:34px;height:34px;font-size:16px;cursor:pointer;border:none;background:#eee;border-radius:6px;}" +
+            ".controls button:hover{background:#ddd;}" +
+            "</style></head><body>" +
+            "<div id='stage'><div id='diagram'><pre class='mermaid'>" + encoded + "</pre></div></div>" +
+            "<div class='controls'><button id='zin' title='Zoom in'>+</button><button id='zout' title='Zoom out'>−</button><button id='zfit' title='Fit'>Fit</button><button id='zone' title='Actual size'>1:1</button></div>" +
+            "<script>" +
+            "mermaid.initialize({startOnLoad:true,securityLevel:'loose'});" +
+            "let s=1,tx=12,ty=12,drag=false,sx=0,sy=0;" +
+            "const stage=document.getElementById('stage'),dia=document.getElementById('diagram');" +
+            "function apply(){dia.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';}" +
+            "function fit(){const svg=dia.querySelector('svg');if(!svg)return;const w=svg.clientWidth||svg.getBoundingClientRect().width,h=svg.clientHeight||svg.getBoundingClientRect().height;if(!w||!h)return;s=Math.min((stage.clientWidth-24)/w,(stage.clientHeight-24)/h,1);tx=12;ty=12;apply();}" +
+            "document.getElementById('zin').onclick=()=>{s=Math.min(s*1.2,8);apply();};" +
+            "document.getElementById('zout').onclick=()=>{s=Math.max(s/1.2,0.1);apply();};" +
+            "document.getElementById('zfit').onclick=fit;" +
+            "document.getElementById('zone').onclick=()=>{s=1;tx=12;ty=12;apply();};" +
+            "stage.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY<0?1.1:1/1.1;const r=stage.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;tx=mx-(mx-tx)*f;ty=my-(my-ty)*f;s=Math.max(0.1,Math.min(s*f,8));apply();},{passive:false});" +
+            "stage.addEventListener('mousedown',e=>{drag=true;sx=e.clientX-tx;sy=e.clientY-ty;stage.classList.add('grab');});" +
+            "window.addEventListener('mousemove',e=>{if(drag){tx=e.clientX-sx;ty=e.clientY-sy;apply();}});" +
+            "window.addEventListener('mouseup',()=>{drag=false;stage.classList.remove('grab');});" +
+            "const obs=new MutationObserver(()=>{if(dia.querySelector('svg')){obs.disconnect();setTimeout(fit,60);}});obs.observe(dia,{childList:true,subtree:true});" +
+            "</script></body></html>";
         File.WriteAllText(htmlPath, html);
         return htmlPath;
     }
