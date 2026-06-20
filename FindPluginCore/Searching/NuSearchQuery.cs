@@ -355,6 +355,7 @@ public class NuSearchQuery : ISearchQuery
     /// </summary>
     private void LoadRules()
     {
+        if (LoadedRules != null) return; // idempotent: the UI path calls this from Step1, RunThrough also calls it
         if (RulesConfigPaths == null || RulesConfigPaths.Count == 0)
         {
             Logger.Instance.Log("No rules config paths specified");
@@ -386,6 +387,10 @@ public class NuSearchQuery : ISearchQuery
     {
         Logger.Instance.Log($"Step1_LoadAllLocationsInMemory (with cancellation): {_locations.Count} locations");
         using var _perf = PerfLog.Scope("search.step1", ("locations", _locations.Count));
+        // The UI drives Step1..Step4 directly (not RunThrough), so load rules + SystemConfig here too —
+        // otherwise LoadedRules stays null and Step3 enrichment / Step4 rule outputs (UML) never run.
+        LoadRules();
+        ApplySystemConfig();
         _skipScan = false;
         _cachedSourcePath = null;
 
@@ -879,6 +884,9 @@ public class NuSearchQuery : ISearchQuery
         }
 
         _filteredResults = allResults;
+        // The UI path calls Step2 directly and doesn't assign the return to _currentResultList (only
+        // RunThrough does), so set it here — Step3 enrichment / Step4 rule outputs (UML) read it.
+        _currentResultList = allResults;
 
         // ----- Settle HybridStorage to disk on the search thread, not the UI thread -----
         // The viewer (any viewer) opens immediately after Step2; if Hybrid still has rows in RAM
