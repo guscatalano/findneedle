@@ -74,4 +74,14 @@ public interface ISearchResult
 
     /// <summary>The source log's own record sequence number (EventLog EventRecordID), or "".</summary>
     public string GetRecordId() => "";
+
+    /// <summary>Friendly originating process name (ETW ProcessName), or "" if unknown.</summary>
+    public string GetProcessName() => "";
+
+    /// <summary>
+    /// The event's structured payload as a JSON object of name→value pairs (parsed EventData/UserData
+    /// for the Event Log, named properties for ETW), or "" if none. Shown as an expandable key/value
+    /// section in the details panel instead of being buried in the message blob.
+    /// </summary>
+    public string GetStructuredData() => "";
 }

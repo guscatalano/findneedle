@@ -951,6 +951,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (Show("Username"))    yield return ("Username",    line.Username);
         if (Show("OpCode"))      yield return ("OpCode",      line.OpCode);
         if (Show("ProcessId"))   yield return ("ProcessId",   line.ProcessId);
+        if (Show("ProcessName")) yield return ("ProcessName", line.ProcessName);
         if (Show("ThreadId"))    yield return ("ThreadId",    line.ThreadId);
         if (Show("ActivityId"))  yield return ("ActivityId",  line.ActivityId);
         if (Show("EventId"))     yield return ("EventId",     line.EventId);
@@ -1024,6 +1025,72 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 : text;
             Grid.SetRow(valueElement, row); Grid.SetColumn(valueElement, 2);
             g.Children.Add(valueElement);
+        }
+
+        AppendStructuredData(g, line);
+    }
+
+    /// <summary>Append the event's parsed structured payload (StructuredData JSON) as a labeled
+    /// "Event data" section of key/value rows, so it's readable instead of buried in the message.</summary>
+    private void AppendStructuredData(Grid g, LogLine line)
+    {
+        if (string.IsNullOrWhiteSpace(line.StructuredData)) return;
+        Dictionary<string, string> pairs;
+        try
+        {
+            pairs = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(line.StructuredData);
+        }
+        catch { return; }
+        if (pairs == null || pairs.Count == 0) return;
+
+        // Section header spanning all columns.
+        int headerRow = g.RowDefinitions.Count;
+        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var header = new TextBlock
+        {
+            Text = $"Event data ({pairs.Count})",
+            FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 10, 0, 2),
+        };
+        Grid.SetRow(header, headerRow); Grid.SetColumn(header, 0); Grid.SetColumnSpan(header, 3);
+        g.Children.Add(header);
+
+        foreach (var kv in pairs)
+        {
+            int row = g.RowDefinitions.Count;
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var copy = new Button
+            {
+                Content = new FontIcon { Glyph = "", FontSize = 14 },
+                Padding = new Thickness(6, 2, 6, 2),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            var captured = kv.Value ?? "";
+            copy.Click += (_, __) => CopyToClipboard(captured);
+            ToolTipService.SetToolTip(copy, $"Copy {kv.Key}");
+            Grid.SetRow(copy, row); Grid.SetColumn(copy, 0);
+            g.Children.Add(copy);
+
+            var k = new TextBlock
+            {
+                Text = kv.Key,
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic,
+                VerticalAlignment = VerticalAlignment.Top,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            Grid.SetRow(k, row); Grid.SetColumn(k, 1);
+            g.Children.Add(k);
+
+            var v = new TextBlock
+            {
+                Text = kv.Value ?? "",
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Grid.SetRow(v, row); Grid.SetColumn(v, 2);
+            g.Children.Add(v);
         }
     }
 

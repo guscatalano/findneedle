@@ -41,7 +41,8 @@ public class CorrelationFieldsStorageTests
         {
             new R("alpha") { Pid = "4120", Tid = "7880", Act = "{11111111-1111-1111-1111-111111111111}",
                 Eid = "1003", Kw = "Audit Success", Rel = "{22222222-2222-2222-2222-222222222222}",
-                Chan = "Application", PGuid = "{33333333-3333-3333-3333-333333333333}", Rec = "106936" },
+                Chan = "Application", PGuid = "{33333333-3333-3333-3333-333333333333}", Rec = "106936",
+                PName = "svchost.exe", SD = "{\"Foo\":\"bar\"}" },
             new R("beta")  { Pid = "", Tid = "", Act = "" }, // a source without correlation fields
         });
 
@@ -59,6 +60,8 @@ public class CorrelationFieldsStorageTests
         Assert.AreEqual("Application", alpha.GetChannel());
         Assert.AreEqual("{33333333-3333-3333-3333-333333333333}", alpha.GetProviderGuid());
         Assert.AreEqual("106936", alpha.GetRecordId());
+        Assert.AreEqual("svchost.exe", alpha.GetProcessName());
+        Assert.AreEqual("{\"Foo\":\"bar\"}", alpha.GetStructuredData());
 
         var beta = all.First(r => r.GetMessage() == "beta");
         Assert.AreEqual("", beta.GetProcessId());
@@ -76,7 +79,7 @@ public class CorrelationFieldsStorageTests
         private readonly string _m;
         public R(string m) { _m = m; }
         public string Pid = "", Tid = "", Act = "";
-        public string Eid = "", Kw = "", Rel = "", Chan = "", PGuid = "", Rec = "";
+        public string Eid = "", Kw = "", Rel = "", Chan = "", PGuid = "", Rec = "", PName = "", SD = "";
         public DateTime GetLogTime() => new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         public string GetMachineName() => "M";
         public void WriteToConsole() { }
@@ -97,5 +100,7 @@ public class CorrelationFieldsStorageTests
         public string GetChannel() => Chan;
         public string GetProviderGuid() => PGuid;
         public string GetRecordId() => Rec;
+        public string GetProcessName() => PName;
+        public string GetStructuredData() => SD;
     }
 }

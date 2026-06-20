@@ -325,6 +325,7 @@ public static class ResultsViewerSettings
             { "Source",   false }, // hidden by default
             { "Level",    true  },
             { "ProcessId",  false }, // correlation/detail columns hidden by default (opt-in via Columns ▾)
+            { "ProcessName", false },
             { "ThreadId",   false },
             { "ActivityId", false },
             { "EventId",           false },
@@ -371,7 +372,7 @@ public static class ResultsViewerSettings
     public static readonly IReadOnlyList<string> DetailFieldNames = new[]
     {
         "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
-        "MachineName", "Username", "OpCode", "ProcessId", "ThreadId", "ActivityId",
+        "MachineName", "Username", "OpCode", "ProcessId", "ProcessName", "ThreadId", "ActivityId",
         "EventId", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId", "Tag",
     };
 

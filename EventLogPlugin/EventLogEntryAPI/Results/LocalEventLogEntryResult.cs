@@ -52,7 +52,35 @@ public class LocalEventLogEntryResult : ISearchResult
 
     public string GetOpCode()
     {
-        throw new NotImplementedException();
+        // The legacy EventLogEntry API doesn't expose OpCode — return empty (throwing here crashed
+        // storage ingest, which calls GetOpCode() on every row).
+        return string.Empty;
+    }
+
+    // The legacy EventLogEntry API exposes the low word of InstanceId as the event id, and Index as
+    // the record number. It has no PID/TID/ActivityId. ReplacementStrings are the event's data fields.
+    public string GetEventId()
+    {
+        try { return (entry.InstanceId & 0xFFFF).ToString(System.Globalization.CultureInfo.InvariantCulture); }
+        catch { return ""; }
+    }
+
+    public string GetRecordId()
+    {
+        try { return entry.Index.ToString(System.Globalization.CultureInfo.InvariantCulture); } catch { return ""; }
+    }
+
+    public string GetStructuredData()
+    {
+        try
+        {
+            var rs = entry.ReplacementStrings;
+            if (rs == null || rs.Length == 0) return "";
+            var pairs = new Dictionary<string, string>();
+            for (int i = 0; i < rs.Length; i++) pairs["Data" + (i + 1)] = rs[i] ?? "";
+            return System.Text.Json.JsonSerializer.Serialize(pairs);
+        }
+        catch { return ""; }
     }
 
     public string GetSource()

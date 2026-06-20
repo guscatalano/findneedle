@@ -216,6 +216,28 @@ public class EventRecordResult : ISearchResult
         try { return entry.RecordId?.ToString() ?? ""; } catch { return ""; }
     }
 
+    /// <summary>Parse the captured &lt;EventData&gt; XML into a JSON object of Name→value pairs (unnamed
+    /// Data elements get Data1, Data2, …). Empty for events with no EventData (e.g. UserData-only).</summary>
+    public string GetStructuredData()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(eventdata)) return "";
+            var root = System.Xml.Linq.XElement.Parse("<EventData>" + eventdata + "</EventData>");
+            var pairs = new Dictionary<string, string>();
+            int i = 0;
+            foreach (var d in root.Elements())
+            {
+                i++;
+                var name = d.Attribute("Name")?.Value;
+                if (string.IsNullOrEmpty(name)) name = "Data" + i;
+                if (!pairs.ContainsKey(name)) pairs[name] = d.Value;
+            }
+            return pairs.Count == 0 ? "" : System.Text.Json.JsonSerializer.Serialize(pairs);
+        }
+        catch { return ""; }
+    }
+
     public string GetThreadId()
     {
         try { return entry.ThreadId?.ToString() ?? ""; } catch { return ""; }

@@ -333,7 +333,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public static readonly IReadOnlyList<string> DefaultColumnNames = new[]
     {
         "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
-        "ProcessId", "ThreadId", "ActivityId",
+        "ProcessId", "ProcessName", "ThreadId", "ActivityId",
         "EventId", "OpCode", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId"
     };
 

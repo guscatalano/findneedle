@@ -47,6 +47,8 @@ public class LogLine
         Channel = NormalizeMissing(searchResult.GetChannel());
         ProviderGuid = NormalizeMissing(searchResult.GetProviderGuid());
         RecordId = NormalizeMissing(searchResult.GetRecordId());
+        ProcessName = NormalizeMissing(searchResult.GetProcessName());
+        StructuredData = searchResult.GetStructuredData() ?? ""; // JSON; left as-is (not normalized)
         SearchableData = searchResult.GetSearchableData(); // unmodified original; used for filtering fallback
         Message = CleanMessage(searchResult.GetMessage(), LogTime, Level);
     }
@@ -199,6 +201,14 @@ public class LogLine
         get; set;
     }
     public string RecordId
+    {
+        get; set;
+    }
+    public string ProcessName
+    {
+        get; set;
+    }
+    public string StructuredData
     {
         get; set;
     }

@@ -31,6 +31,10 @@ public class KustoRowResult : ISearchResult
     private static readonly string[] TaskCols    = { "TaskName", "Task", "OperationName" };
     private static readonly string[] MachineCols = { "HostInstance", "Machine", "Computer", "RoleInstance", "Hostname", "Host" };
     private static readonly string[] UserCols    = { "User", "Username", "UserName", "Identity" };
+    private static readonly string[] PidCols     = { "ProcessId", "PID", "ProcessID", "Pid" };
+    private static readonly string[] TidCols     = { "ThreadId", "TID", "ThreadID", "Tid" };
+    private static readonly string[] EventIdCols = { "EventId", "EventID", "Id", "EventCode" };
+    private static readonly string[] ActivityCols = { "ActivityId", "ActivityID", "CorrelationId", "TraceId" };
 
     // "[2026-01-25 06:33:16] rest..."  (also tolerates a leading "name=" prefix)  →  ts + rest
     private static readonly Regex BracketTime = new(@"^\s*(?:[\w.]+=)?\[(?<ts>[^\]]{4,40})\]\s*(?<rest>.*)$", RegexOptions.Singleline | RegexOptions.Compiled);
@@ -127,6 +131,10 @@ public class KustoRowResult : ISearchResult
     public string GetUsername() => First(UserCols);
     public string GetTaskName() => First(TaskCols);
     public string GetOpCode() => string.Empty;
+    public string GetProcessId() => First(PidCols);
+    public string GetThreadId() => First(TidCols);
+    public string GetEventId() => First(EventIdCols);
+    public string GetActivityId() => First(ActivityCols);
     public string GetSource() => First(SourceCols);
     public string GetSearchableData() => _searchable;
     public string GetMessage() => _message;

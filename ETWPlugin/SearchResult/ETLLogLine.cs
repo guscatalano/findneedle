@@ -25,6 +25,8 @@ public class ETLLogLine : ISearchResult
     public string relatedActivityId = string.Empty;
     public string providerGuid = string.Empty;
     public string opcodeName = string.Empty;
+    public string processName = string.Empty;
+    public string structuredData = string.Empty;
     public string datetime = string.Empty;
     public DateTime parsedTime = DateTime.MinValue;
     public string json = string.Empty;
@@ -143,10 +145,19 @@ public class ETLLogLine : ISearchResult
         {
             this.eventtxt += " == ";
         }
+        var structured = new Dictionary<string, string>();
         foreach(var prop in props)
         {
-            this.eventtxt += prop + ": " + obj.PayloadStringByName(prop) + " | ";
+            var val = obj.PayloadStringByName(prop);
+            this.eventtxt += prop + ": " + val + " | ";
+            if (!string.IsNullOrEmpty(prop) && !structured.ContainsKey(prop)) structured[prop] = val ?? "";
         }
+        try
+        {
+            this.processName = obj.ProcessName ?? "";
+            if (structured.Count > 0) this.structuredData = System.Text.Json.JsonSerializer.Serialize(structured);
+        }
+        catch { }
 
         // Carry the precise event time directly (round-trip string keeps sub-second precision; the
         // metadatetime field is what GetLogTime returns, avoiding the lossy ToString()/re-parse).
@@ -441,6 +452,8 @@ public class ETLLogLine : ISearchResult
     public string GetKeywords() => keywords;
     public string GetRelatedActivityId() => relatedActivityId;
     public string GetProviderGuid() => providerGuid;
+    public string GetProcessName() => processName;
+    public string GetStructuredData() => structuredData;
 
     private static string HexToDecimal(string hex)
     {
