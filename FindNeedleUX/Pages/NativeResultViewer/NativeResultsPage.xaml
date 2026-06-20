@@ -65,7 +65,7 @@
             <Border x:Name="OutputFilesBanner" Visibility="Collapsed"
                     Margin="0" Padding="12,8" CornerRadius="0"
                     Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
-                    BorderBrush="{ThemeResource SystemFillColorSuccessBrush}" BorderThickness="0,0,0,1">
+                    BorderThickness="0">
                 <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
