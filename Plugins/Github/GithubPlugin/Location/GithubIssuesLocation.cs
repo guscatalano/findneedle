@@ -88,8 +88,17 @@ public class GithubIssuesLocation : ISearchLocation
         try
         {
             using var http = CreateClient();
-            using var resp = http.GetAsync($"https://api.github.com/repos/{Owner}/{Repo}", ct).GetAwaiter().GetResult();
-            EnsureOk(resp);
+            using (var resp = http.GetAsync($"https://api.github.com/repos/{Owner}/{Repo}", ct).GetAwaiter().GetResult())
+                EnsureOk(resp);
+            // If pointed at a specific issue, make sure it exists (so a bad number is caught now).
+            if (IssueNumber > 0)
+            {
+                using var ir = http.GetAsync(
+                    $"https://api.github.com/repos/{Owner}/{Repo}/issues/{IssueNumber}", ct).GetAwaiter().GetResult();
+                if (ir.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    return $"issue #{IssueNumber} doesn't exist in {Owner}/{Repo}.";
+                EnsureOk(ir);
+            }
             return null;
         }
         catch (Exception ex) { return ex.Message.Split('\n')[0].Trim(); }

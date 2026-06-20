@@ -156,12 +156,55 @@ public class AdoLocation : ISearchLocation
         {
             using var http = CreateClient();
             var url = $"{OrganizationUrl}/_apis/projects/{Uri.EscapeDataString(Project)}?api-version={ApiVersion}";
-            using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
-            EnsureOk(resp);
-            using var _ = ReadJson(resp, ct); // also catches the HTML sign-in page
+            using (var resp = http.GetAsync(url, ct).GetAwaiter().GetResult())
+            {
+                EnsureOk(resp);
+                using var _ = ReadJson(resp, ct); // also catches the HTML sign-in page
+            }
+
+            // Validate the actual target, not just the project, so a bad ID / empty query is caught now.
+            if (!string.IsNullOrWhiteSpace(Ids))
+            {
+                var ids = ParseIds(Ids);
+                if (ids.Count == 0) return "no valid work item IDs entered.";
+                var found = FindExistingIds(http, ids, ct);
+                if (found.Count == 0)
+                    return $"none of the work item IDs exist in this project: {string.Join(", ", ids)}.";
+                var missing = ids.Where(i => !found.Contains(i)).ToList();
+                if (missing.Count > 0)
+                    return $"these work item IDs don't exist: {string.Join(", ", missing)}.";
+            }
+            else
+            {
+                // No explicit IDs: run the WIQL so a broken query is caught at add time.
+                _ = ResolveIds(http, ct);
+            }
             return null;
         }
         catch (Exception ex) { return ex.Message.Split('\n')[0].Trim(); }
+    }
+
+    private static List<int> ParseIds(string ids) =>
+        (ids ?? "").Split(new[] { ',', ' ', ';', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+                   .Select(s => int.TryParse(s.Trim(), out var n) ? n : -1)
+                   .Where(n => n > 0).Distinct().ToList();
+
+    /// <summary>Of the requested ids, which actually exist (errorPolicy=Omit returns only existing ones).</summary>
+    private HashSet<int> FindExistingIds(HttpClient http, List<int> ids, CancellationToken ct)
+    {
+        var found = new HashSet<int>();
+        foreach (var chunk in Chunk(ids, 200))
+        {
+            var url = $"{OrganizationUrl}/_apis/wit/workitems?ids={string.Join(",", chunk)}"
+                      + $"&fields=System.Id&errorPolicy=Omit&api-version={ApiVersion}";
+            using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
+            EnsureOk(resp);
+            using var doc = ReadJson(resp, ct);
+            if (doc.RootElement.TryGetProperty("value", out var arr))
+                foreach (var wi in arr.EnumerateArray())
+                    if (wi.TryGetProperty("id", out var idEl)) found.Add(idEl.GetInt32());
+        }
+        return found;
     }
 
     /// <summary>Resolve the work item ids to fetch — explicit IDs if given, else run the WIQL query.</summary>
@@ -169,9 +212,7 @@ public class AdoLocation : ISearchLocation
     {
         if (!string.IsNullOrWhiteSpace(Ids))
         {
-            return Ids.Split(new[] { ',', ' ', ';', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries)
-                      .Select(s => int.TryParse(s.Trim(), out var n) ? n : -1)
-                      .Where(n => n > 0).Distinct().ToList();
+            return ParseIds(Ids);
         }
 
         var projSeg = string.IsNullOrEmpty(Project) ? "" : Uri.EscapeDataString(Project) + "/";
