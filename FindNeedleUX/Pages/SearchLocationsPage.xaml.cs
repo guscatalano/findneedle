@@ -28,6 +28,24 @@ public sealed partial class SearchLocationsPage : Page
         VariedImageSizeRepeater.ItemsSource = _viewModel.Locations;
     }
 
+    /// <summary>When navigated with a source-kind string ("ado"/"github"/"kusto"), open that add
+    /// dialog straight away — lets welcome-page quick actions jump right into adding an online source.</summary>
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        if (e.Parameter is not string kind || string.IsNullOrEmpty(kind)) return;
+        // Defer until the page is loaded so the ContentDialog has a XamlRoot.
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            switch (kind.ToLowerInvariant())
+            {
+                case "ado":    Button_AddAdo(this, null); break;
+                case "github": Button_AddGithub(this, null); break;
+                case "kusto":  Button_AddKusto(this, null); break;
+            }
+        });
+    }
+
     private void Button_Remove(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string name })

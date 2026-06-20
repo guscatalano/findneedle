@@ -77,6 +77,9 @@ public sealed partial class MainWindow : Window
             case "open_file":         QuickFileOpen(); break;
             case "open_folder":       QuickFolderOpen(); break;
             case "open_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage)); break;
+            case "open_ado":          contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "ado"); break;
+            case "open_github":       contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "github"); break;
+            case "open_kusto":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "kusto"); break;
             case "cached":            contentFrame.Navigate(typeof(FindNeedleUX.Pages.CachedSearchesPage)); break;
             case "locations":         contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)); break;
             case "rules_config":      contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage)); break;
