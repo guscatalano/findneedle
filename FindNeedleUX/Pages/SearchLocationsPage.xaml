@@ -59,6 +59,13 @@
                         <Button Content="☁ Add GitHub" Click="Button_AddGithub" Width="120"
                                 AutomationProperties.Name="Add GitHub issues location"/>
                     </StackPanel>
+
+                    <StackPanel x:Name="StatusPanel" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0"
+                                Visibility="Collapsed" VerticalAlignment="Center">
+                        <ProgressRing IsActive="True" Width="18" Height="18"/>
+                        <TextBlock x:Name="StatusText" VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

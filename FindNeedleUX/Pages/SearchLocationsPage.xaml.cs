@@ -77,9 +77,11 @@ public sealed partial class SearchLocationsPage : Page
         // search will prompt again.
         if (loc.AuthMode == AdoAuthMode.Interactive)
         {
+            ShowStatus("Signing in to Azure DevOps — check your browser…");
             try { await Task.Run(() => AdoLocation.PrimeInteractiveCredential()); }
             catch (Exception ex)
             {
+                HideStatus();
                 await new ContentDialog
                 {
                     Title = "Azure DevOps sign-in",
@@ -92,14 +94,28 @@ public sealed partial class SearchLocationsPage : Page
         if (await AddIfReachableAsync("Azure DevOps", () => loc.TestConnection())) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
     }
 
+    private void ShowStatus(string text)
+    {
+        if (StatusPanel == null) return;
+        StatusText.Text = text;
+        StatusPanel.Visibility = Visibility.Visible;
+    }
+
+    private void HideStatus()
+    {
+        if (StatusPanel != null) StatusPanel.Visibility = Visibility.Collapsed;
+    }
+
     /// <summary>Validate an online source's connection (off the UI thread) before adding it, surfacing
     /// any error at add time. On failure the user can still add it anyway. Returns true if it should be
     /// added.</summary>
     private async Task<bool> AddIfReachableAsync(string what, Func<string> test)
     {
         string err;
+        ShowStatus($"Checking the {what} source…");
         try { err = await Task.Run(test); }
         catch (Exception ex) { err = ex.Message; }
+        finally { HideStatus(); }
         if (string.IsNullOrEmpty(err)) return true;
 
         var dialog = new ContentDialog
