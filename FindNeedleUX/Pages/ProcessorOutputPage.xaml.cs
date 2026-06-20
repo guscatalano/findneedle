@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using System.Collections.Generic;
+using System.Linq;
 using FindNeedlePluginLib;
 using FindNeedleUX.Services;
 using Microsoft.UI.Xaml;
@@ -11,309 +12,358 @@ using System;
 using FindNeedleCoreUtils;
 using System.Diagnostics;
 using System.IO;
+using Windows.UI;
 
 namespace FindNeedleUX.Pages;
 
 public sealed partial class ProcessorOutputPage : Page
 {
-    private List<object> _processors;
-    private Dictionary<object, UIElement> _processorContentMap = new();
-    // Stable key for the synthetic "Rule Outputs" nav entry (diagrams/exports written by Step4 rules).
-    private readonly object _ruleOutputsKey = new();
+    private enum EntryKind { Header, Processor, File }
+
+    private sealed class OutputEntry
+    {
+        public EntryKind Kind;
+        public string Title = "";
+        public string Subtitle = "";
+        public IResultProcessor? Processor;
+        public string? FilePath;
+    }
 
     public ProcessorOutputPage()
     {
         this.InitializeComponent();
-        Loaded += ProcessorOutputPage_Loaded;
+        Loaded += (_, _) => BuildPage();
     }
 
-    private void ProcessorOutputPage_Loaded(object sender, RoutedEventArgs e)
+    private void BuildPage()
     {
-        LoadProcessorNavItems();
-    }
+        OutputList.Items.Clear();
+        DetailHost.Children.Clear();
 
-    private void LoadProcessorNavItems()
-    {
-        var navView = this.FindName("ProcessorNavView") as NavigationView;
-        var contentGrid = this.FindName("ProcessorContentGrid") as Grid;
-        if (navView == null || contentGrid == null) return;
-        navView.MenuItems.Clear();
-        contentGrid.Children.Clear();
-        _processorContentMap.Clear();
         var query = MiddleLayerService.SearchQueryUX.CurrentQuery;
-        var processors = query != null ? query.Processors : new List<IResultProcessor>();
-        _processors = new List<object>(processors);
-        foreach (var processor in _processors)
+        var processors = (query?.Processors ?? new List<IResultProcessor>()).ToList();
+        var files = (MiddleLayerService.LastRuleOutputFiles ?? new List<string>())
+            .Where(File.Exists).ToList();
+
+        // Summary line.
+        var diagramCount = files.Count(IsMermaid);
+        var parts = new List<string>
         {
-            var name = processor.GetType().Name;
-            var description = (processor as IResultProcessor)?.GetDescription() ?? name;
-            // RuleDSL processors all share the class name "FindNeedleRuleDSLPlugin", which looks like
-            // duplicate entries when several rules are active. Label each by its rule file instead.
-            if (processor is FindNeedleRuleDSL.FindNeedleRuleDSLPlugin ruleDsl
-                && !string.IsNullOrWhiteSpace(ruleDsl.RulesFilePath))
-            {
-                var ruleName = Path.GetFileName(ruleDsl.RulesFilePath);
-                if (ruleName.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase))
-                    ruleName = ruleName.Substring(0, ruleName.Length - ".rules.json".Length);
-                name = $"Rules: {ruleName}";
-                description = $"RuleDSL · {ruleDsl.RulesFilePath}";
-            }
-            var outputText = (processor as IResultProcessor)?.GetOutputText() ?? "No output.";
-            var outputFile = (processor as IResultProcessor)?.GetOutputFile(TempStorage.GetSingleton().tempPath);
+            $"{processors.Count} rule{(processors.Count == 1 ? "" : "s")}/processor{(processors.Count == 1 ? "" : "s")} applied"
+        };
+        if (files.Count > 0) parts.Add($"{files.Count} file{(files.Count == 1 ? "" : "s")} generated");
+        if (diagramCount > 0) parts.Add($"{diagramCount} diagram{(diagramCount == 1 ? "" : "s")}");
+        SummaryText.Text = string.Join("  -  ", parts);
 
-            var outputBox = new TextBox
-            {
-                Text = outputText,
-                IsReadOnly = true,
-                TextWrapping = TextWrapping.Wrap,
-                FontFamily = new FontFamily("Consolas"),
-                Margin = new Thickness(0, 8, 0, 0),
-                AcceptsReturn = true,
-                MinHeight = 300,
-                MinWidth = 300
-            };
+        ListViewItem? firstSelectable = null;
 
-            var scrollViewer = new ScrollViewer
-            {
-                Content = outputBox,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Margin = new Thickness(0, 0, 0, 0),
-                MinHeight = 300,
-                MinWidth = 300
-            };
-
-            var webView = new WebView2
-            {
-                Margin = new Thickness(0, 8, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                MinHeight = 300,
-                MinWidth = 300,
-                Height = double.NaN, // Allow to auto-size vertically
-                Width = double.NaN // Allow to auto-size horizontally
-            };
-  
-            // Create clickable link TextBox for file path
-            var filePathLink = new TextBox
-            {
-                Text = outputFile ?? string.Empty,
-                IsReadOnly = true,
-                FontFamily = new FontFamily("Consolas"),
-                Margin = new Thickness(0, 0, 0, 4),
-                Foreground = new SolidColorBrush(Colors.Blue),
-                Background = new SolidColorBrush(Colors.Transparent),
-                BorderThickness = new Thickness(0),
-                MinWidth = 300
-            };
-            ToolTipService.SetToolTip(filePathLink, "Click to open file");
-            filePathLink.PointerPressed += (s, e) =>
-            {
-                if (!string.IsNullOrWhiteSpace(outputFile) && File.Exists(outputFile))
-                {
-                    try { Process.Start(new ProcessStartInfo { FileName = outputFile, UseShellExecute = true }); } catch { }
-                }
-            };
-
-            // Use a Grid to allow WebView2 to stretch
-            var fileOutputGrid = new Grid();
-            fileOutputGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            fileOutputGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            fileOutputGrid.Children.Add(filePathLink);
-            Grid.SetRow(filePathLink, 0);
-            fileOutputGrid.Children.Add(webView);
-            Grid.SetRow(webView, 1);
-
-            var fileOutputPivotItem = new PivotItem
-            {
-                Header = "File Output",
-                Content = fileOutputGrid
-            };
-            fileOutputPivotItem.SetValue(PivotItem.VerticalContentAlignmentProperty, VerticalAlignment.Stretch);
-            fileOutputPivotItem.SetValue(PivotItem.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch);
-
-            if (!string.IsNullOrWhiteSpace(outputFile) && File.Exists(outputFile))
-            {
-                Debug.WriteLine($"[ProcessorOutputPage] Output file: {outputFile}");
-                if (IsImageFile(outputFile))
-                {
-                    var htmlPath = GenerateImageHtml(outputFile);
-                    webView.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
-                }
-                else
-                {
-                    webView.Source = new Uri("file:///" + outputFile.Replace("\\", "/"));
-                }
-            }
-
-            var runButton = new Button
-            {
-                Content = "Run Processor",
-                Margin = new Thickness(0, 0, 0, 8),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Tag = new ProcessorButtonTag { Processor = processor, OutputBox = outputBox, WebView = webView }
-            };
-            runButton.Click += RunProcessor_Click;
-
-            var titleBlock = new TextBlock
-            {
-                Text = name,
-                FontWeight = FontWeights.Bold,
-                FontSize = 20,
-                Margin = new Thickness(0, 0, 0, 2)
-            };
-            var descBlock = new TextBlock
-            {
-                Text = description,
-                FontSize = 14,
-                Foreground = new SolidColorBrush(Colors.Gray),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-
-            // Create pivot for output tabs
-            var pivot = new Pivot();
-            pivot.Items.Add(new PivotItem
-            {
-                Header = "Text Output",
-                Content = scrollViewer
-            });
-            pivot.Items.Add(fileOutputPivotItem);
-            pivot.VerticalAlignment = VerticalAlignment.Stretch;
-            pivot.HorizontalAlignment = HorizontalAlignment.Stretch;
-            pivot.Height = double.NaN;
-            pivot.Width = double.NaN;
-
-            // Create outer grid for layout
-            var outerGrid = new Grid();
-            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // title
-            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // desc
-            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // run button
-            outerGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // pivot
-
-            // Add title, desc, run button, pivot to grid
-            outerGrid.Children.Add(titleBlock);
-            Grid.SetRow(titleBlock, 0);
-            outerGrid.Children.Add(descBlock);
-            Grid.SetRow(descBlock, 1);
-            outerGrid.Children.Add(runButton);
-            Grid.SetRow(runButton, 2);
-            outerGrid.Children.Add(pivot);
-            Grid.SetRow(pivot, 3);
-
-            _processorContentMap[processor] = outerGrid;
-            var navItem = new NavigationViewItem { Content = name, Tag = processor };
-            ToolTipService.SetToolTip(navItem, description);
-            navView.MenuItems.Add(navItem);
-        }
-        // Rule outputs (UML diagrams / exports) written by Step4 output rules. These go straight to
-        // the output folder and aren't tied to any IResultProcessor, so surface them as their own entry.
-        var ruleOutputs = MiddleLayerService.LastRuleOutputFiles;
-        if (ruleOutputs != null && ruleOutputs.Count > 0)
+        // --- Generated files first (the payoff: diagrams / exports) ---
+        if (files.Count > 0)
         {
-            _processorContentMap[_ruleOutputsKey] = BuildRuleOutputsContent(ruleOutputs);
-            var navItem = new NavigationViewItem { Content = "Rule Outputs (Diagrams)", Tag = _ruleOutputsKey };
-            ToolTipService.SetToolTip(navItem, "Diagrams and exports written by RuleDSL output rules in the last search");
-            navView.MenuItems.Add(navItem);
+            OutputList.Items.Add(MakeHeaderItem("Generated files"));
+            foreach (var f in files)
+            {
+                var entry = new OutputEntry
+                {
+                    Kind = EntryKind.File,
+                    Title = Path.GetFileName(f),
+                    Subtitle = DescribeFile(f),
+                    FilePath = f,
+                };
+                var item = MakeEntryItem(entry, SymbolFor(f));
+                OutputList.Items.Add(item);
+                if (firstSelectable == null && (IsMermaid(f) || IsImageFile(f))) firstSelectable = item;
+            }
         }
 
-        if (navView.MenuItems.Count == 0)
+        // --- Rules & processors ---
+        if (processors.Count > 0)
         {
-            navView.MenuItems.Add(new NavigationViewItem { Content = "No Processors", IsEnabled = false });
-            contentGrid.Children.Add(new TextBlock { Text = "No processors are enabled and no rule outputs were generated in this workspace." });
+            OutputList.Items.Add(MakeHeaderItem("Rules & processors"));
+            foreach (var p in processors)
+            {
+                var (title, subtitle) = DescribeProcessor(p);
+                var entry = new OutputEntry
+                {
+                    Kind = EntryKind.Processor,
+                    Title = title,
+                    Subtitle = subtitle,
+                    Processor = p,
+                };
+                var item = MakeEntryItem(entry, Symbol.Setting);
+                OutputList.Items.Add(item);
+                firstSelectable ??= item;
+            }
+        }
+
+        if (firstSelectable == null)
+        {
+            ShowEmptyDetail();
             return;
         }
 
-        // Select the first entry by default.
-        navView.SelectedItem = navView.MenuItems[0];
-        if (navView.MenuItems[0] is NavigationViewItem first && first.Tag != null)
-            ShowProcessorContent(first.Tag);
+        OutputList.SelectedItem = firstSelectable;
     }
 
-    /// <summary>Build the content panel for the synthetic "Rule Outputs" nav entry: one section per
-    /// generated file with a click-to-open link, an inline Mermaid render for .mmd, an image view for
-    /// images, and raw text otherwise.</summary>
-    private UIElement BuildRuleOutputsContent(List<string> files)
+    // ---------- list item factories ----------
+
+    private static ListViewItem MakeHeaderItem(string text)
     {
-        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-        panel.Children.Add(new TextBlock
+        return new ListViewItem
         {
-            Text = "Rule Outputs",
-            FontWeight = FontWeights.Bold,
-            FontSize = 20,
-            Margin = new Thickness(0, 0, 0, 2)
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Diagrams and exports generated by RuleDSL output rules in the last search.",
-            FontSize = 14,
-            Foreground = new SolidColorBrush(Colors.Gray),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        foreach (var file in files)
-        {
-            var ext = Path.GetExtension(file).ToLowerInvariant();
-            panel.Children.Add(new TextBlock
+            Content = new TextBlock
             {
-                Text = Path.GetFileName(file),
+                Text = text.ToUpperInvariant(),
+                FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 12, 0, 0)
-            });
-
-            var link = new HyperlinkButton { Content = file, Padding = new Thickness(0, 0, 0, 4) };
-            link.Click += (s, e) =>
-            {
-                try { Process.Start(new ProcessStartInfo { FileName = file, UseShellExecute = true }); } catch { }
-            };
-            panel.Children.Add(link);
-
-            try
-            {
-                if (ext == ".mmd" || IsImageFile(file))
-                {
-                    var wv = new WebView2
-                    {
-                        MinHeight = 360,
-                        Height = 380,
-                        HorizontalAlignment = HorizontalAlignment.Stretch,
-                        Margin = new Thickness(0, 4, 0, 8)
-                    };
-                    var htmlPath = ext == ".mmd" ? GenerateMermaidHtml(file) : GenerateImageHtml(file);
-                    wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
-                    panel.Children.Add(wv);
-                }
-                else
-                {
-                    panel.Children.Add(new TextBox
-                    {
-                        Text = File.ReadAllText(file),
-                        IsReadOnly = true,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontFamily = new FontFamily("Consolas"),
-                        AcceptsReturn = true,
-                        MinHeight = 200,
-                        Margin = new Thickness(0, 4, 0, 8)
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                panel.Children.Add(new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) });
-            }
-        }
-
-        return new ScrollViewer
-        {
-            Content = panel,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                Foreground = new SolidColorBrush(Colors.Gray),
+                Margin = new Thickness(4, 8, 4, 2),
+            },
+            IsHitTestVisible = false,
+            IsEnabled = false,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
     }
 
-    /// <summary>Wrap a Mermaid .mmd file in an HTML page that renders it via mermaid.js (loaded from
-    /// CDN). The raw source stays available through the file link if offline.</summary>
+    private static ListViewItem MakeEntryItem(OutputEntry entry, Symbol symbol)
+    {
+        var icon = new SymbolIcon
+        {
+            Symbol = symbol,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 0, 10, 0),
+        };
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = entry.Title, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (!string.IsNullOrEmpty(entry.Subtitle))
+        {
+            text.Children.Add(new TextBlock
+            {
+                Text = entry.Subtitle,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+        }
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(icon);
+        row.Children.Add(text);
+
+        return new ListViewItem
+        {
+            Content = row,
+            Tag = entry,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+    }
+
+    // ---------- selection ----------
+
+    private void OutputList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (OutputList.SelectedItem is ListViewItem lvi && lvi.Tag is OutputEntry entry)
+        {
+            DetailHost.Children.Clear();
+            UIElement content = entry.Kind == EntryKind.File
+                ? BuildFileDetail(entry.FilePath!)
+                : BuildProcessorDetail(entry.Processor!, entry.Title);
+            DetailHost.Children.Add(content);
+        }
+    }
+
+    private void ShowEmptyDetail()
+    {
+        DetailHost.Children.Clear();
+        DetailHost.Children.Add(new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Children =
+            {
+                new SymbolIcon { Symbol = Symbol.Help, Foreground = new SolidColorBrush(Colors.Gray), HorizontalAlignment = HorizontalAlignment.Center },
+                new TextBlock { Text = "No processor output", FontSize = 16, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Center },
+                new TextBlock { Text = "Run a search with rules, processors, or output rules enabled.", FontSize = 13, Foreground = new SolidColorBrush(Colors.Gray), HorizontalAlignment = HorizontalAlignment.Center },
+            },
+        });
+    }
+
+    // ---------- detail builders ----------
+
+    private UIElement BuildProcessorDetail(IResultProcessor processor, string title)
+    {
+        var panel = new StackPanel { Spacing = 6 };
+        panel.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.SemiBold });
+
+        var desc = SafeGet(() => processor.GetDescription());
+        if (!string.IsNullOrWhiteSpace(desc))
+            panel.Children.Add(new TextBlock { Text = desc, FontSize = 13, Foreground = new SolidColorBrush(Colors.Gray), TextWrapping = TextWrapping.Wrap });
+
+        var summary = SafeGet(() => processor.GetOutputText());
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            panel.Children.Add(new Border
+            {
+                Margin = new Thickness(0, 8, 0, 0),
+                Padding = new Thickness(12),
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(Color.FromArgb(20, 128, 128, 128)),
+                Child = new TextBlock { Text = summary.Trim(), FontFamily = new FontFamily("Consolas"), TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true },
+            });
+        }
+
+        var outputFile = SafeGet(() => processor.GetOutputFile(TempStorage.GetSingleton().tempPath));
+        if (!string.IsNullOrWhiteSpace(outputFile) && File.Exists(outputFile))
+        {
+            panel.Children.Add(new TextBlock { Text = "Output file", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 0) });
+            panel.Children.Add(BuildFileDetail(outputFile!, includeTitle: false));
+        }
+
+        return panel;
+    }
+
+    private UIElement BuildFileDetail(string path, bool includeTitle = true)
+    {
+        var panel = new StackPanel { Spacing = 6 };
+
+        if (includeTitle)
+            panel.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold });
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 4) };
+        var openBtn = new Button { Content = WithSymbol(Symbol.OpenFile, "Open") };
+        openBtn.Click += (_, _) => TryStart(new ProcessStartInfo { FileName = path, UseShellExecute = true });
+        var revealBtn = new Button { Content = WithSymbol(Symbol.Folder, "Show in folder") };
+        revealBtn.Click += (_, _) => TryStart(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{path}\"", UseShellExecute = true });
+        actions.Children.Add(openBtn);
+        actions.Children.Add(revealBtn);
+        panel.Children.Add(actions);
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = path,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Colors.Gray),
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+        });
+
+        try
+        {
+            if (IsMermaid(path) || IsImageFile(path))
+            {
+                var wv = new WebView2
+                {
+                    MinHeight = 460,
+                    Height = 520,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Margin = new Thickness(0, 6, 0, 0),
+                };
+                var htmlPath = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
+                wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
+                panel.Children.Add(wv);
+
+                if (IsMermaid(path))
+                {
+                    panel.Children.Add(new Expander
+                    {
+                        Header = "Diagram source (Mermaid)",
+                        Margin = new Thickness(0, 8, 0, 0),
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        Content = new TextBox
+                        {
+                            Text = SafeReadAll(path),
+                            IsReadOnly = true,
+                            TextWrapping = TextWrapping.Wrap,
+                            AcceptsReturn = true,
+                            FontFamily = new FontFamily("Consolas"),
+                            MinHeight = 120,
+                        },
+                    });
+                }
+            }
+            else
+            {
+                panel.Children.Add(new TextBox
+                {
+                    Text = SafeReadAll(path),
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap,
+                    AcceptsReturn = true,
+                    FontFamily = new FontFamily("Consolas"),
+                    MinHeight = 300,
+                    Margin = new Thickness(0, 6, 0, 0),
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            panel.Children.Add(new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray) });
+        }
+
+        return panel;
+    }
+
+    // ---------- helpers ----------
+
+    private static (string title, string subtitle) DescribeProcessor(IResultProcessor p)
+    {
+        if (p is FindNeedleRuleDSL.FindNeedleRuleDSLPlugin ruleDsl && !string.IsNullOrWhiteSpace(ruleDsl.RulesFilePath))
+        {
+            var name = Path.GetFileName(ruleDsl.RulesFilePath);
+            if (name.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(0, name.Length - ".rules.json".Length);
+            return ($"Rules: {name}", "RuleDSL");
+        }
+        var friendly = SafeGet(() => p.GetDescription()) is { Length: > 0 } d ? d : p.GetType().Name;
+        return (friendly, p.GetType().Name);
+    }
+
+    private static string DescribeFile(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant().TrimStart('.');
+        if (IsMermaid(path)) return "Mermaid diagram";
+        if (IsImageFile(path)) return "Image";
+        return string.IsNullOrEmpty(ext) ? "File" : ext.ToUpperInvariant();
+    }
+
+    private static Symbol SymbolFor(string path)
+    {
+        if (IsImageFile(path)) return Symbol.Pictures;
+        return Symbol.Document;
+    }
+
+    private static StackPanel WithSymbol(Symbol symbol, string text)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        sp.Children.Add(new SymbolIcon { Symbol = symbol });
+        sp.Children.Add(new TextBlock { Text = text });
+        return sp;
+    }
+
+    private static bool IsMermaid(string path) => Path.GetExtension(path).Equals(".mmd", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsImageFile(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".svg";
+    }
+
+    private static string SafeReadAll(string path)
+    {
+        try { return File.ReadAllText(path); } catch (Exception ex) { return $"(unable to read file: {ex.Message})"; }
+    }
+
+    private static string? SafeGet(Func<string?> get)
+    {
+        try { return get(); } catch { return null; }
+    }
+
+    private static void TryStart(ProcessStartInfo psi)
+    {
+        try { Process.Start(psi); } catch { }
+    }
+
+    /// <summary>Wrap a Mermaid .mmd file in an HTML page rendered via mermaid.js (CDN). The raw source
+    /// stays available in the "Diagram source" expander / the file link if offline.</summary>
     private static string GenerateMermaidHtml(string mmdPath)
     {
         var mermaidText = File.ReadAllText(mmdPath);
@@ -322,8 +372,7 @@ public sealed partial class ProcessorOutputPage : Page
             "<!DOCTYPE html><html><head><meta charset='utf-8'>" +
             "<script src='https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js'></script>" +
             "<script>mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });</script>" +
-            "<style>body{margin:0;padding:8px;font-family:'Segoe UI',sans-serif;background:#ffffff;}" +
-            ".src{white-space:pre-wrap;font-family:Consolas,monospace;color:#888;border-top:1px solid #eee;margin-top:12px;padding-top:8px;}</style>" +
+            "<style>body{margin:0;padding:12px;font-family:'Segoe UI',sans-serif;background:#ffffff;}</style>" +
             "</head><body>" +
             "<pre class='mermaid'>" + System.Net.WebUtility.HtmlEncode(mermaidText) + "</pre>" +
             "</body></html>";
@@ -331,120 +380,32 @@ public sealed partial class ProcessorOutputPage : Page
         return htmlPath;
     }
 
-    private void ProcessorNavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
-    {
-        if (args.SelectedItem is NavigationViewItem item && item.Tag != null)
-        {
-            ShowProcessorContent(item.Tag);
-            // Collapse the pane after selection
-            sender.IsPaneOpen = false;
-        }
-    }
-
-    private void ProcessorNavView_PaneOpened(NavigationView sender, object args)
-    {
-        foreach (var item in sender.MenuItems)
-        {
-            if (item is NavigationViewItem navItem)
-                navItem.Visibility = Visibility.Visible;
-        }
-    }
-
-    private void ProcessorNavView_PaneClosed(NavigationView sender, object args)
-    {
-        foreach (var item in sender.MenuItems)
-        {
-            if (item is NavigationViewItem navItem)
-                navItem.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void ShowProcessorContent(object processor)
-    {
-        var contentGrid = this.FindName("ProcessorContentGrid") as Grid;
-        if (contentGrid == null) return;
-        contentGrid.Children.Clear();
-        if (_processorContentMap.TryGetValue(processor, out var content))
-        {
-            contentGrid.Children.Add(content);
-        }
-    }
-
-    private void RunProcessor_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.Tag is ProcessorButtonTag tag)
-        {
-            if (tag.Processor is IResultProcessor processor && tag.OutputBox != null && tag.WebView != null)
-            {
-                var results = MiddleLayerService.GetSearchResults();
-                processor.ProcessResults(results);
-                tag.OutputBox.Text = processor.GetOutputText();
-                var outputFile = processor.GetOutputFile(TempStorage.GetSingleton().tempPath);
-                if (!string.IsNullOrWhiteSpace(outputFile) && File.Exists(outputFile))
-                {
-                    Debug.WriteLine($"[ProcessorOutputPage] Output file: {outputFile}");
-                    if (IsImageFile(outputFile))
-                    {
-                        var htmlPath = GenerateImageHtml(outputFile);
-                        tag.WebView.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
-                    }
-                    else
-                    {
-                        tag.WebView.Source = new Uri("file:///" + outputFile.Replace("\\", "/"));
-                    }
-                }
-                else
-                {
-                    tag.WebView.Source = null;
-                }
-            }
-        }
-    }
-
-    private static bool IsImageFile(string path)
-    {
-        var ext = Path.GetExtension(path).ToLowerInvariant();
-        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp";
-    }
-
     private static string GenerateImageHtml(string imagePath)
     {
         var htmlPath = Path.Combine(Path.GetDirectoryName(imagePath)!, Path.GetFileNameWithoutExtension(imagePath) + "_view.html");
         var imgSrc = Path.GetFileName(imagePath);
-        var html = "" +
+        var html =
             "<html><head><style>" +
-            "body { margin:0;padding:0; }" +
-            ".img-zoom-container { position:relative; width:100vw; height:100vh; overflow:auto; }" +
-            ".img-zoom { max-width:100vw; max-height:100vh; display:block; margin:auto; transition: transform 0.2s; cursor: grab; }" +
-            ".zoom-controls { position:fixed; top:16px; right:16px; z-index:10; background:#fff8; border-radius:8px; padding:8px; }" +
-            ".zoom-btn { font-size:24px; margin:4px; padding:4px 12px; cursor:pointer; border:none; background:#eee; border-radius:4px; }" +
+            "body{margin:0;padding:0;background:#fff;}" +
+            ".img-zoom-container{position:relative;width:100vw;height:100vh;overflow:auto;}" +
+            ".img-zoom{max-width:100vw;max-height:100vh;display:block;margin:auto;transition:transform .2s;cursor:grab;}" +
+            ".zoom-controls{position:fixed;top:16px;right:16px;z-index:10;background:#fff8;border-radius:8px;padding:8px;}" +
+            ".zoom-btn{font-size:24px;margin:4px;padding:4px 12px;cursor:pointer;border:none;background:#eee;border-radius:4px;}" +
             "</style></head><body>" +
             "<div class='img-zoom-container'><img src='" + imgSrc + "' class='img-zoom' id='zoomImg'/></div>" +
-            "<div class='zoom-controls'><button class='zoom-btn' id='zoomIn'>+</button><button class='zoom-btn' id='zoomOut'>?</button><button class='zoom-btn' id='zoomReset'>Reset</button></div>" +
+            "<div class='zoom-controls'><button class='zoom-btn' id='zoomIn'>+</button><button class='zoom-btn' id='zoomOut'>-</button><button class='zoom-btn' id='zoomReset'>Reset</button></div>" +
             "<script type='text/javascript'>" +
-            "let zoom = 1; let originX = 0; let originY = 0; let isDragging = false; let startX = 0; let startY = 0;" +
-            "const img = document.getElementById('zoomImg');" +
-            "const zoomIn = document.getElementById('zoomIn');" +
-            "const zoomOut = document.getElementById('zoomOut');" +
-            "const zoomReset = document.getElementById('zoomReset');" +
-            "function applyZoom() { img.style.transform = 'scale(' + zoom + ') translate(' + originX + 'px,' + originY + 'px)'; }" +
-            "zoomIn.onclick = function() { zoom = Math.min(zoom + 0.2, 5); applyZoom(); };" +
-            "zoomOut.onclick = function() { zoom = Math.max(zoom - 0.2, 1); if (zoom === 1) { originX = 0; originY = 0; } applyZoom(); };" +
-            "zoomReset.onclick = function() { zoom = 1; originX = 0; originY = 0; applyZoom(); };" +
-            "img.addEventListener('wheel', function(e) { e.preventDefault(); var rect = img.getBoundingClientRect(); var mx = e.clientX - rect.left; var my = e.clientY - rect.top; var prevZoom = zoom; if (e.deltaY < 0) zoom = Math.min(zoom + 0.2, 5); else zoom = Math.max(zoom - 0.2, 1); if (zoom !== prevZoom) { originX -= (mx - rect.width/2) * (zoom - prevZoom) / zoom; originY -= (my - rect.height/2) * (zoom - prevZoom) / zoom; } if (zoom === 1) { originX = 0; originY = 0; } applyZoom(); });" +
-            "img.addEventListener('dblclick', function(e) { var rect = img.getBoundingClientRect(); var mx = e.clientX - rect.left; var my = e.clientY - rect.top; var prevZoom = zoom; if (zoom === 1) zoom = 2; else zoom = 1; if (zoom !== prevZoom) { originX -= (mx - rect.width/2) * (zoom - prevZoom) / zoom; originY -= (my - rect.height/2) * (zoom - prevZoom) / zoom; } if (zoom === 1) { originX = 0; originY = 0; } applyZoom(); });" +
-            "img.addEventListener('mousedown', function(e) { if (zoom > 1) { isDragging = true; startX = e.clientX - originX; startY = e.clientY - originY; img.style.cursor = 'grabbing'; } });" +
-            "window.addEventListener('mousemove', function(e) { if (isDragging) { originX = e.clientX - startX; originY = e.clientY - startY; applyZoom(); } });" +
-            "window.addEventListener('mouseup', function(e) { isDragging = false; img.style.cursor = 'grab'; });" +
+            "let zoom=1,originX=0,originY=0,isDragging=false,startX=0,startY=0;" +
+            "const img=document.getElementById('zoomImg');" +
+            "document.getElementById('zoomIn').onclick=function(){zoom=Math.min(zoom+0.2,5);apply();};" +
+            "document.getElementById('zoomOut').onclick=function(){zoom=Math.max(zoom-0.2,1);if(zoom===1){originX=0;originY=0;}apply();};" +
+            "document.getElementById('zoomReset').onclick=function(){zoom=1;originX=0;originY=0;apply();};" +
+            "function apply(){img.style.transform='scale('+zoom+') translate('+originX+'px,'+originY+'px)';}" +
+            "img.addEventListener('mousedown',function(e){if(zoom>1){isDragging=true;startX=e.clientX-originX;startY=e.clientY-originY;img.style.cursor='grabbing';}});" +
+            "window.addEventListener('mousemove',function(e){if(isDragging){originX=e.clientX-startX;originY=e.clientY-startY;apply();}});" +
+            "window.addEventListener('mouseup',function(){isDragging=false;img.style.cursor='grab';});" +
             "</script></body></html>";
         File.WriteAllText(htmlPath, html);
         return htmlPath;
-    }
-
-    private class ProcessorButtonTag
-    {
-        public object? Processor { get; set; }
-        public TextBox? OutputBox { get; set; }
-        public WebView2? WebView { get; set; }
     }
 }

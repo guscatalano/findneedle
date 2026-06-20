@@ -6,10 +6,46 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <NavigationView x:Name="ProcessorNavView" PaneDisplayMode="Left" IsPaneOpen="True" IsSettingsVisible="False" IsBackButtonVisible="Collapsed" SelectionChanged="ProcessorNavView_SelectionChanged" PaneOpened="ProcessorNavView_PaneOpened" PaneClosed="ProcessorNavView_PaneClosed" Margin="8">
-        <NavigationView.MenuItems>
-            <!-- Items will be added in code-behind -->
-        </NavigationView.MenuItems>
-        <Grid x:Name="ProcessorContentGrid" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
-    </NavigationView>
+    <Grid Margin="16" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="2">
+            <TextBlock Text="Processor Output" FontSize="26" FontWeight="SemiBold" />
+            <TextBlock x:Name="SummaryText" FontSize="13" Foreground="Gray" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Master / detail -->
+        <Grid Grid.Row="1" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <ListView x:Name="OutputList"
+                          SelectionMode="Single"
+                          SelectionChanged="OutputList_SelectionChanged"
+                          Padding="4" />
+            </Border>
+
+            <Border Grid.Column="1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <ScrollViewer x:Name="DetailScroll"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              Padding="16">
+                    <Grid x:Name="DetailHost" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
 </Page>
