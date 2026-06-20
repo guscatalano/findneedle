@@ -35,6 +35,14 @@ public sealed partial class ProcessorOutputPage : Page
     {
         this.InitializeComponent();
         Loaded += (_, _) => BuildPage();
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == global::Windows.System.VirtualKey.Escape && FullscreenOverlay.Visibility == Visibility.Visible)
+            {
+                ExitFullscreen();
+                e.Handled = true;
+            }
+        };
     }
 
     private void BuildPage()
@@ -178,6 +186,35 @@ public sealed partial class ProcessorOutputPage : Page
         ListBorder.Visibility = _listCollapsed ? Visibility.Collapsed : Visibility.Visible;
         ListColumn.Width = _listCollapsed ? new GridLength(0) : new GridLength(300);
         // (icon stays the hamburger in both states)
+    }
+
+    /// <summary>Show the diagram/image full-page over everything else. A fresh WebView is built in the
+    /// overlay host (the inline one stays as-is) so leaving fullscreen needs no teardown of the detail.</summary>
+    private void EnterFullscreen(string path)
+    {
+        try { path = Path.GetFullPath(path); } catch { }
+        FullscreenHost.Children.Clear();
+        FullscreenTitle.Text = Path.GetFileName(path);
+        try
+        {
+            var wv = new WebView2 { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
+            var htmlPath = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
+            wv.Source = new Uri("file:///" + htmlPath.Replace("\\", "/"));
+            FullscreenHost.Children.Add(wv);
+        }
+        catch (Exception ex)
+        {
+            FullscreenHost.Children.Add(new TextBlock { Text = $"(unable to display: {ex.Message})", Foreground = new SolidColorBrush(Colors.Gray), Margin = new Thickness(16) });
+        }
+        FullscreenOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void ExitFullscreen_Click(object sender, RoutedEventArgs e) => ExitFullscreen();
+
+    private void ExitFullscreen()
+    {
+        FullscreenOverlay.Visibility = Visibility.Collapsed;
+        FullscreenHost.Children.Clear(); // dispose the WebView so it stops rendering
     }
 
     private void OutputList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -362,6 +399,10 @@ public sealed partial class ProcessorOutputPage : Page
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         if (IsMermaid(path) || IsImageFile(path))
         {
+            var fullscreenBtn = new Button { Content = WithSymbol(Symbol.FullScreen, "Fullscreen") };
+            fullscreenBtn.Click += (_, _) => EnterFullscreen(path);
+            actions.Children.Add(fullscreenBtn);
+
             var renderBtn = new Button { Content = WithSymbol(Symbol.View, "Open rendered (browser)") };
             renderBtn.Click += (_, _) =>
             {

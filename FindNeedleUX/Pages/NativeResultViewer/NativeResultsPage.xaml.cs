@@ -351,6 +351,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (warn == null)
         {
             DecodeBanner.IsOpen = false;
+            DecodeBanner.Visibility = Visibility.Collapsed;
             return;
         }
         DecodeBanner.Title = warn.Value.headline;
@@ -360,6 +361,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning;
         // "Decode anyway" only makes sense when ~nothing decoded — a partial decode already shows rows.
         DecodeBannerForce.Visibility = warn.Value.hardFailure ? Visibility.Visible : Visibility.Collapsed;
+        DecodeBanner.Visibility = Visibility.Visible;
         DecodeBanner.IsOpen = true;
     }
 
@@ -374,6 +376,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Force a full decode (no pre-scan/fail-fast) and reopen. MainWindow drives this through the
         // standard search-progress spinner, so the user gets live status + a cancel button.
         DecodeBanner.IsOpen = false;
+        DecodeBanner.Visibility = Visibility.Collapsed;
         MainWindowActions.RerunWithFullDecode();
     }
 

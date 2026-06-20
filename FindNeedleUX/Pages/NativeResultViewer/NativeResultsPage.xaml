@@ -3,12 +3,14 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:FindNeedleUX.Pages.NativeResultViewer"
+    xmlns:pages="using:FindNeedleUX.Pages"
     xmlns:ctWinUI="using:CommunityToolkit.WinUI.UI.Controls"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Page.Resources>
         <local:HexToBrushConverter x:Key="HexToBrush"/>
         <local:TimeFormatConverter x:Key="TimeFmt"/>
+        <pages:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
         <!-- Row details panel -->
         <DataTemplate x:Key="RowDetailsTemplate">
@@ -88,6 +90,7 @@
             <!-- Shown while a streaming search is still producing rows; count keeps rising. -->
             <InfoBar x:Name="StreamingBanner" IsClosable="False" Severity="Informational"
                      IsIconVisible="False" Margin="12,8,12,0"
+                     Visibility="{x:Bind ViewModel.IsStreaming, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                      IsOpen="{x:Bind ViewModel.IsStreaming, Mode=OneWay}">
                 <InfoBar.Content>
                     <!-- Single compact row: animated loader icon · status text · Stop. -->
@@ -107,7 +110,7 @@
             </InfoBar>
 
             <!-- Why-is-this-empty banner (e.g. WPP ETL with missing symbols). Hidden unless set. -->
-            <InfoBar x:Name="DecodeBanner" IsOpen="False" IsClosable="True"
+            <InfoBar x:Name="DecodeBanner" IsOpen="False" IsClosable="True" Visibility="Collapsed"
                      Severity="Warning" Margin="12,8,12,0">
                 <InfoBar.Content>
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">

@@ -53,5 +53,32 @@
                 <Grid x:Name="DetailHost" Padding="16" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
             </Border>
         </Grid>
+
+        <!-- Fullscreen diagram overlay: covers the whole page when the user maximizes a diagram. -->
+        <Grid x:Name="FullscreenOverlay" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
+              Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" ColumnSpacing="8" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="FullscreenTitle" Grid.Column="0" FontSize="18" FontWeight="SemiBold"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="1" Click="ExitFullscreen_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE73F;" FontSize="14" />
+                        <TextBlock Text="Exit fullscreen (Esc)" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Grid.Row="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8">
+                <Grid x:Name="FullscreenHost" />
+            </Border>
+        </Grid>
     </Grid>
 </Page>
