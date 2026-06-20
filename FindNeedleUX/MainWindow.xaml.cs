@@ -463,11 +463,14 @@ public sealed partial class MainWindow : Window
 
     private void HideStatusStrip_Click(object sender, RoutedEventArgs e) => SetStatusStripHidden(true);
     private void ShowStatusStrip_Click(object sender, RoutedEventArgs e) => SetStatusStripHidden(false);
+    private void StatusBarToggle_Click(object sender, RoutedEventArgs e)
+        => SetStatusStripHidden(StatusBarToggle.IsChecked == false);
 
     private void SetStatusStripHidden(bool hidden)
     {
         StatusStripBorder.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
         StatusRestoreButton.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
+        if (StatusBarToggle != null) StatusBarToggle.IsChecked = !hidden;
         try { global::Windows.Storage.ApplicationData.Current.LocalSettings.Values[StatusHiddenSettingKey] = hidden; } catch { }
     }
 
