@@ -188,7 +188,8 @@ public class AdoLocation : ISearchLocation
         }
         if (links == 0) _error = "the selected work item(s) have no file attachments to open.";
         else if (saved == 0) _error = $"found {links} attachment(s) but none downloaded.";
-        else _results.AddRange(AttachmentFolderProcessor.ProcessFolder(temp, ct));
+        else _results.AddRange(AttachmentFolderProcessor.ProcessFolder(temp, ct,
+            friendlySource: $"ADO {ShortOrg()}/{Project}"));
         Logger.Instance.Log($"ADO attachments: downloaded {saved} file(s), parsed {_results.Count} rows");
     }
 

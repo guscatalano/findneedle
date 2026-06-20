@@ -181,7 +181,8 @@ public class GithubIssuesLocation : ISearchLocation
                     catch (Exception ex) { Logger.Instance.Log($"GitHub attachment download failed ({url}): {ex.Message}"); }
                 }
                 if (saved == 0) _error = $"issue #{IssueNumber}: found {urls.Count} attachment link(s) but none downloaded.";
-                else _results.AddRange(AttachmentFolderProcessor.ProcessFolder(temp, ct));
+                else _results.AddRange(AttachmentFolderProcessor.ProcessFolder(temp, ct,
+                    friendlySource: $"GitHub {Owner}/{Repo}#{IssueNumber}"));
                 Logger.Instance.Log($"GitHub issue #{IssueNumber}: downloaded {saved} attachment(s), parsed {_results.Count} rows");
             }
         }
