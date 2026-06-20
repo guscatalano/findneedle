@@ -153,11 +153,12 @@ public class EventRecordResult : ISearchResult
     {
         try
         {
-            return entry.TaskDisplayName;
+            return entry.TaskDisplayName ?? "";
         }
         catch (Exception)
         {
-            return "null exception";
+            // Many providers have no task metadata — TaskDisplayName throws; treat as "no task".
+            return "";
         }
     }
 

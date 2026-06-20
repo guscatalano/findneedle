@@ -439,7 +439,9 @@ public class ETLLogLine : ISearchResult
     }
     public string GetMessage()
     {
-        return eventtxt.ToString();
+        // The TraceEvent (live) path fills eventtxt; the tracefmt (file) path leaves it empty and puts
+        // the decoded line in 'json' — fall back to that so file-based ETL rows aren't blank.
+        return string.IsNullOrEmpty(eventtxt) ? json : eventtxt;
     }
     public string GetOpCode() => opcodeName;
     // ETW stores PID/TID as hex (both the tracefmt text and the TraceEvent path); surface them as
