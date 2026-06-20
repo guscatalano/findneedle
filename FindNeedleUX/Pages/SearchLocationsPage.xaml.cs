@@ -171,20 +171,20 @@ public sealed partial class SearchLocationsPage : Page
             AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 60,
             Text = existing?.Wiql ?? OnlineSourceSettings.AdoWiql,
         };
-        var attach = new CheckBox
-        {
-            Content = "Open the work items' log attachments (download & parse the files)",
-            IsChecked = existing?.OpenAttachments ?? OnlineSourceSettings.AdoOpenAttachments,
-        };
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 480 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Opens the log attachments of the chosen work items.",
+            FontSize = 12, TextWrapping = TextWrapping.Wrap,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
         panel.Children.Add(org);
         panel.Children.Add(project);
         panel.Children.Add(auth);
         panel.Children.Add(pat);
         panel.Children.Add(ids);
         panel.Children.Add(wiql);
-        panel.Children.Add(attach);
 
         var dialog = new ContentDialog
         {
@@ -206,10 +206,8 @@ public sealed partial class SearchLocationsPage : Page
         OnlineSourceSettings.AdoPat = pat.Password;
         OnlineSourceSettings.AdoWiql = wiql.Text;
         OnlineSourceSettings.AdoIds = ids.Text;
-        OnlineSourceSettings.AdoOpenAttachments = attach.IsChecked == true;
 
-        return new AdoLocation(org.Text, project.Text, Mode(), pat.Password, wiql.Text, ids.Text,
-            top: 200, openAttachments: attach.IsChecked == true);
+        return new AdoLocation(org.Text, project.Text, Mode(), pat.Password, wiql.Text, ids.Text);
     }
 
     /// <summary>GitHub issues location dialog: repo (URL or owner/repo), optional token, state.</summary>

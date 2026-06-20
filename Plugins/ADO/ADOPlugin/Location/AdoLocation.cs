@@ -26,9 +26,10 @@ public enum AdoAuthMode
 }
 
 /// <summary>
-/// An Azure DevOps project as a search location: pulls work items (via a WIQL query or an explicit
-/// list of IDs) over the REST API and maps each into an <see cref="AdoWorkItemResult"/>. Works with
-/// any org — both <c>https://dev.azure.com/org</c> and the legacy <c>https://org.visualstudio.com</c>.
+/// An Azure DevOps project as a search location: opens the log attachments of the chosen work items
+/// (a WIQL query or an explicit list of IDs) — downloads each AttachedFile and parses it through the
+/// normal file pipeline. Works with any org — both <c>https://dev.azure.com/org</c> and the legacy
+/// <c>https://org.visualstudio.com</c>.
 /// </summary>
 public class AdoLocation : ISearchLocation
 {
@@ -44,8 +45,6 @@ public class AdoLocation : ISearchLocation
     /// <summary>WIQL query. Empty = recently-changed default.</summary>
     public string Wiql { get; }
     public int Top { get; }
-    /// <summary>When true, download + parse the work items' file attachments instead of listing them.</summary>
-    public bool OpenAttachments { get; }
 
     private const string ApiVersion = "7.0";
     private const string DefaultWiql =
@@ -56,8 +55,7 @@ public class AdoLocation : ISearchLocation
     private string? _error;
 
     public AdoLocation(string organizationUrl, string project, AdoAuthMode authMode,
-                       string pat = "", string wiql = "", string ids = "", int top = 200,
-                       bool openAttachments = false)
+                       string pat = "", string wiql = "", string ids = "", int top = 200)
     {
         OrganizationUrl = NormalizeOrgUrl(organizationUrl);
         Project = (project ?? "").Trim().Trim('/');
@@ -66,7 +64,6 @@ public class AdoLocation : ISearchLocation
         Wiql = (wiql ?? "").Trim();
         Ids = (ids ?? "").Trim();
         Top = top <= 0 ? 200 : top;
-        OpenAttachments = openAttachments;
     }
 
     /// <summary>Reduce whatever the user pastes to just the org base, so a project/path accidentally
@@ -229,30 +226,6 @@ public class AdoLocation : ISearchLocation
         return ids.Take(Top).ToList();
     }
 
-    /// <summary>Fetch the full field set for a batch of ids (the REST API caps a GET at 200 ids).</summary>
-    private void FetchWorkItems(HttpClient http, List<int> ids, string label, CancellationToken ct)
-    {
-        foreach (var chunk in Chunk(ids, 200))
-        {
-            if (ct.IsCancellationRequested) break;
-            // errorPolicy=Omit: skip ids that don't exist instead of 404-ing the whole batch.
-            var url = $"{OrganizationUrl}/_apis/wit/workitems?ids={string.Join(",", chunk)}"
-                      + $"&$expand=Fields&errorPolicy=Omit&api-version={ApiVersion}";
-            using var resp = http.GetAsync(url, ct).GetAwaiter().GetResult();
-            EnsureOk(resp);
-            using var doc = ReadJson(resp, ct);
-            if (!doc.RootElement.TryGetProperty("value", out var arr)) continue;
-            foreach (var wi in arr.EnumerateArray())
-            {
-                var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                if (wi.TryGetProperty("id", out var idEl)) fields["System.Id"] = idEl.ToString();
-                if (wi.TryGetProperty("fields", out var f))
-                    foreach (var p in f.EnumerateObject()) fields[p.Name] = FlattenValue(p.Value);
-                _results.Add(new AdoWorkItemResult(fields, label));
-            }
-        }
-    }
-
     /// <summary>Download the work items' file attachments (relations with rel "AttachedFile") to a temp
     /// folder, then parse them through the normal file pipeline.</summary>
     private void LoadAttachments(HttpClient http, List<int> ids, CancellationToken ct)
@@ -307,23 +280,6 @@ public class AdoLocation : ISearchLocation
         Logger.Instance.Log($"ADO attachments: downloaded {saved} file(s), parsed {_results.Count} rows");
     }
 
-    /// <summary>ADO field values are strings/numbers/identity-objects; flatten to a display string.</summary>
-    private static string FlattenValue(JsonElement v)
-    {
-        switch (v.ValueKind)
-        {
-            case JsonValueKind.String: return v.GetString() ?? "";
-            case JsonValueKind.Number: return v.GetRawText();
-            case JsonValueKind.True: return "true";
-            case JsonValueKind.False: return "false";
-            case JsonValueKind.Object:
-                // Identity refs ("System.ChangedBy" etc.) carry a displayName.
-                if (v.TryGetProperty("displayName", out var dn)) return dn.GetString() ?? "";
-                return v.GetRawText();
-            default: return "";
-        }
-    }
-
     private static void EnsureOk(HttpResponseMessage resp)
     {
         if (resp.IsSuccessStatusCode) return;
@@ -354,10 +310,8 @@ public class AdoLocation : ISearchLocation
         {
             using var http = CreateClient();
             var ids = ResolveIds(http, cancellationToken);
-            var label = GetName();
-            if (OpenAttachments) LoadAttachments(http, ids, cancellationToken);
-            else if (ids.Count > 0) FetchWorkItems(http, ids, label, cancellationToken);
-            Logger.Instance.Log($"ADO loaded {_results.Count} {(OpenAttachments ? "attachment rows" : "work items")} from {OrganizationUrl}/{Project}");
+            LoadAttachments(http, ids, cancellationToken);
+            Logger.Instance.Log($"ADO loaded {_results.Count} attachment rows from {OrganizationUrl}/{Project}");
         }
         catch (Exception ex)
         {
@@ -402,17 +356,14 @@ public class AdoLocation : ISearchLocation
         catch { return OrganizationUrl; }
     }
 
-    public override string GetName()
-        => OpenAttachments ? $"ADO: {ShortOrg()}/{Project} attachments" : $"ADO: {ShortOrg()}/{Project}";
+    public override string GetName() => $"ADO: {ShortOrg()}/{Project} attachments";
 
     public override string GetDescription()
     {
         if (_error != null) return $"ADO {ShortOrg()}/{Project} — ERROR: {_error}";
         var what = !string.IsNullOrWhiteSpace(Ids) ? $"ids {Ids}"
                  : (string.IsNullOrWhiteSpace(Wiql) ? "recently-changed work items" : "WIQL query");
-        return OpenAttachments
-            ? $"Log attachments from Azure DevOps {OrganizationUrl}, project {Project}, {what}"
-            : $"Azure DevOps {OrganizationUrl}, project {Project}, {what}";
+        return $"Log attachments from Azure DevOps {OrganizationUrl}, project {Project}, {what}";
     }
 
     public string? LastError => _error;
