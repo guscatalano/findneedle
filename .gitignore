@@ -378,3 +378,6 @@ LargeSamples/
 # Scratch ETL-decode dumps from tracefmt (can be hundreds of MB)
 FmtFile.txt
 FmtSum.txt
+
+# Keep the committed auto-add-rules demo sample (the global *.log ignore would otherwise drop it)
+!Samples/AutoRuleDemo/auto-rule-demo.log

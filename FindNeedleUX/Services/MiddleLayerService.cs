@@ -115,11 +115,18 @@ public class MiddleLayerService
                 string path = "";
                 try { path = loc?.GetName() ?? ""; } catch { }
                 if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
-                if (!System.IO.Path.GetExtension(path).Equals(".etl", StringComparison.OrdinalIgnoreCase)) continue;
+                var ext = System.IO.Path.GetExtension(path);
 
-                var (p, b) = GetEtlMetaCached(path);
-                providers.UnionWith(p);
-                build ??= b;
+                if (ext.Equals(".etl", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (p, b) = GetEtlMetaCached(path);   // providers + build
+                    providers.UnionWith(p);
+                    build ??= b;
+                }
+                else if (ext.Equals(".evtx", StringComparison.OrdinalIgnoreCase))
+                {
+                    providers.UnionWith(GetEvtxProvidersCached(path)); // providers only (no build in evtx)
+                }
             }
             _pendingAutoRuleProviders = providers;
             _pendingAutoRuleBuild = build;
@@ -145,6 +152,23 @@ public class MiddleLayerService
             return meta;
         }
         catch { return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), null); }
+    }
+
+    private static readonly Dictionary<string, HashSet<string>> _evtxMetaCache = new();
+
+    private static HashSet<string> GetEvtxProvidersCached(string path)
+    {
+        try
+        {
+            var fi = new FileInfo(path);
+            var key = $"{path}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}";
+            if (_evtxMetaCache.TryGetValue(key, out var cached)) return cached;
+            var providers = findneedle.Implementations.Locations.EventLogQueryLocation
+                .EvtxMetaExtractor.QuickScanProviders(path);
+            _evtxMetaCache[key] = providers;
+            return providers;
+        }
+        catch { return new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
     }
 
     /// <summary>Build the auto-rule matching context from the current locations: their paths and the
