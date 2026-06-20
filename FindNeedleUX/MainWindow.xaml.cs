@@ -399,10 +399,25 @@ public sealed partial class MainWindow : Window
         StatusSegments.Children.Add(MakeStatusSegment(Symbol.List, "Rules", rulePaths.Count.ToString(),
             ruleTip, null, () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage))));
 
-        // Last run → open the results viewer. Green when it produced rows, grey otherwise.
-        var lastRun = MiddleLayerService.LastRunSummary ?? _lastRunSummary;
-        var hasResults = MiddleLayerService.LastRunSummary != null
-            && !MiddleLayerService.LastRunSummary.StartsWith("0 ", StringComparison.Ordinal);
+        // Last run → open the results viewer. Compute the count live from the current result storage
+        // so it's accurate for every path (streaming, cached, or a normal run) — not just the ones
+        // that set LastRunSummary. Falls back to LastRunSummary, then a dash before any search.
+        string lastRun;
+        bool hasResults = false;
+        int liveCount = -1;
+        try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { }
+        if (liveCount >= 0)
+        {
+            var suffix = MiddleLayerService.LastSearchReusedCache ? " (cached)" : " (scanned)";
+            lastRun = $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
+            hasResults = liveCount > 0;
+        }
+        else
+        {
+            lastRun = MiddleLayerService.LastRunSummary ?? _lastRunSummary;
+            hasResults = MiddleLayerService.LastRunSummary != null
+                && !MiddleLayerService.LastRunSummary.StartsWith("0 ", StringComparison.Ordinal);
+        }
         var lastRunColor = hasResults ? Color.FromArgb(255, 46, 160, 67) : (Color?)null;
         StatusSegments.Children.Add(MakeStatusSegment(Symbol.Clock, "Last run", lastRun,
             "Open the results viewer", lastRunColor, () => NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage))));
