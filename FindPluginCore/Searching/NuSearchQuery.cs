@@ -545,6 +545,27 @@ public class NuSearchQuery : ISearchQuery
         if (_skipScan)
         {
             Logger.Instance.Log("Step2: skipping (cache reuse).");
+            // The viewer reads cached rows straight from storage via IPagedLogSource. But RuleDSL
+            // enrichment/output and any processors/outputs walk _currentResultList (not storage), so
+            // when those are active we must still materialize the cached rows into the list — otherwise
+            // Step3/Step4 run over nothing (e.g. the UML diagram comes out empty on a cache hit).
+            bool needsListOnReuse =
+                LoadedRules != null
+                || (_processors != null && _processors.Count > 0)
+                || (_outputs != null && _outputs.Count > 0);
+            if (needsListOnReuse && _resultStorage != null)
+            {
+                var cached = new List<ISearchResult>();
+                _resultStorage.GetFilteredResultsInBatches(b => cached.AddRange(b), 1000, cancellationToken);
+                if (LoadedRules != null)
+                {
+                    using (PerfLog.Scope("rule_filter", ("in_rows", cached.Count)))
+                        cached = ApplyRuleFiltering(cached);
+                }
+                _filteredResults = cached;
+                _currentResultList = cached;
+                Logger.Instance.Log($"Step2: cache reuse materialized {cached.Count} rows for rule/processor/output consumers.");
+            }
             return _filteredResults;
         }
 

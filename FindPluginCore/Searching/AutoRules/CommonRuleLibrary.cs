@@ -32,6 +32,10 @@ public static class CommonRuleLibrary
             {
                 var fileName = Path.GetFileName(file);
                 manifest.TryGetValue(fileName, out var meta);
+                // Some shipped *.rules.json files are helpers loaded by other rules (e.g. a UML
+                // emitter's participants/messages file referenced via rulesFile) — not standalone
+                // auto-add rules. The manifest marks those Hidden so they don't clutter the list.
+                if (meta?.Hidden == true) continue;
                 entries.Add(new AutoRuleEntry
                 {
                     Id = "builtin:" + fileName.ToLowerInvariant(),
@@ -67,5 +71,8 @@ public static class CommonRuleLibrary
         public string File { get; set; }
         public string Name { get; set; }
         public AutoRuleCondition Condition { get; set; }
+        /// <summary>When true the rule is a helper loaded by another rule, not a standalone
+        /// auto-add entry — it's excluded from the discovered list shown to the user.</summary>
+        public bool Hidden { get; set; }
     }
 }

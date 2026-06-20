@@ -13,5 +13,10 @@
     "File": "process-interaction.rules.json",
     "Name": "Process interaction diagram",
     "Condition": { "PathGlobs": ["*process-interaction*"] }
+  },
+  {
+    "File": "process-interaction-uml.rules.json",
+    "Name": "Process interaction diagram (UML participants)",
+    "Hidden": true
   }
 ]

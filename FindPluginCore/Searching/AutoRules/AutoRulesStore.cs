@@ -90,13 +90,51 @@ public static class AutoRulesStore
         }
         catch { d = new Data(); }
 
-        // Merge in any bundled library rules the saved file doesn't have yet (keyed by rule path), so
-        // upgrades surface new common rules. They start disabled — the user opts in.
+        // Built-in library rules are keyed by their stable Id (derived from the file name), NOT by the
+        // absolute RulePath: the deployment dir changes between runs (bin\Debug vs bin\x64\Debug, dev
+        // vs installed), and the user's enabled-state must survive that. So first collapse any duplicate
+        // built-ins (same Id, different stale paths) — OR-ing their enabled flags so an enabled copy
+        // wins — then for each shipped rule refresh the path to the current location, and add any
+        // newly-shipped rules (disabled — the user opts in).
         bool dirty = false;
-        foreach (var lib in CommonRuleLibrary.Discover())
+
+        var collapsed = new List<AutoRuleEntry>();
+        var seenBuiltin = new Dictionary<string, AutoRuleEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in d.Entries)
         {
-            if (d.Entries.Any(e => string.Equals(e.RulePath, lib.RulePath, StringComparison.OrdinalIgnoreCase)))
+            if (e.BuiltIn && !string.IsNullOrEmpty(e.Id) && seenBuiltin.TryGetValue(e.Id, out var keep))
+            {
+                if (e.Enabled) keep.Enabled = true; // any enabled copy wins
+                dirty = true;                       // dropping a stale duplicate
                 continue;
+            }
+            if (e.BuiltIn && !string.IsNullOrEmpty(e.Id)) seenBuiltin[e.Id] = e;
+            collapsed.Add(e);
+        }
+        if (collapsed.Count != d.Entries.Count) d.Entries = collapsed;
+
+        var discovered = CommonRuleLibrary.Discover();
+
+        // Drop stale built-ins that are no longer shipped (renamed, removed, or now Hidden helpers) so
+        // they don't linger in the list or get auto-added by a dangling path.
+        var liveIds = new HashSet<string>(discovered.Select(l => l.Id), StringComparer.OrdinalIgnoreCase);
+        int removedStale = d.Entries.RemoveAll(e => e.BuiltIn && !string.IsNullOrEmpty(e.Id) && !liveIds.Contains(e.Id));
+        if (removedStale > 0) dirty = true;
+
+        foreach (var lib in discovered)
+        {
+            var existing = d.Entries.FirstOrDefault(e =>
+                string.Equals(e.Id, lib.Id, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                // Re-point to the current deployment location; keep the user's enabled flag + condition.
+                if (!string.Equals(existing.RulePath, lib.RulePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    existing.RulePath = lib.RulePath;
+                    dirty = true;
+                }
+                continue;
+            }
             lib.Enabled = false;
             d.Entries.Add(lib);
             dirty = true;
