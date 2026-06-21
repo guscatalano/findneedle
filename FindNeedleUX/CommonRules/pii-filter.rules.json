@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Filter out PII",
+  "description": "Hides log lines that contain personally identifiable information — email addresses, US Social Security numbers, formatted credit-card numbers, phone numbers, and MAC addresses. Opt-in: enable it under Configure > Auto-add rules, then it applies to every search. IP-address filtering ships disabled (it would hide most network logs); enable that rule if you need it. Edit the patterns under Configure > Rules to fit your data.",
+  "sections": [
+    {
+      "name": "PiiFilter",
+      "description": "Exclude rows that contain PII",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "exclude-email",
+          "match": "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}",
+          "enabled": true,
+          "action": { "type": "exclude" }
+        },
+        {
+          "name": "exclude-ssn",
+          "match": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+          "enabled": true,
+          "action": { "type": "exclude" }
+        },
+        {
+          "name": "exclude-credit-card",
+          "match": "\\b\\d{4}[ -]\\d{4}[ -]\\d{4}[ -]\\d{4}\\b",
+          "enabled": true,
+          "action": { "type": "exclude" }
+        },
+        {
+          "name": "exclude-phone",
+          "match": "\\b(?:\\+?1[-. ]?)?\\(?\\d{3}\\)?[-. ]\\d{3}[-. ]\\d{4}\\b",
+          "enabled": true,
+          "action": { "type": "exclude" }
+        },
+        {
+          "name": "exclude-mac-address",
+          "match": "\\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\\b",
+          "enabled": true,
+          "action": { "type": "exclude" }
+        },
+        {
+          "name": "exclude-ipv4",
+          "match": "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
+          "enabled": false,
+          "action": { "type": "exclude" }
+        }
+      ]
+    }
+  ]
+}

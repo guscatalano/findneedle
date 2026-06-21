@@ -20,6 +20,11 @@
     "Hidden": true
   },
   {
+    "File": "pii-filter.rules.json",
+    "Name": "Filter out PII",
+    "Condition": { "Always": true }
+  },
+  {
     "File": "dism-interaction.rules.json",
     "Name": "DISM interaction diagram",
     "Condition": { "PathGlobs": ["*dism*"] }
