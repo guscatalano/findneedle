@@ -87,6 +87,39 @@ public class LogCatalogTests
     }
 
     [TestMethod]
+    public void HideBuiltIn_ExcludesFromGetAll_UntilIncludeHidden()
+    {
+        Assert.IsTrue(LogCatalog.GetAll().Any(e => e.Id == "builtin:cbs"));
+        LogCatalog.SetBuiltInHidden("builtin:cbs", true);
+
+        Assert.IsTrue(LogCatalog.IsHiddenBuiltIn("builtin:cbs"));
+        Assert.IsFalse(LogCatalog.GetAll().Any(e => e.Id == "builtin:cbs"), "hidden built-in excluded by default");
+        Assert.IsTrue(LogCatalog.GetAll(includeHidden: true).Any(e => e.Id == "builtin:cbs"), "shown when includeHidden");
+
+        // Unhide restores it.
+        LogCatalog.SetBuiltInHidden("builtin:cbs", false);
+        Assert.IsFalse(LogCatalog.IsHiddenBuiltIn("builtin:cbs"));
+        Assert.IsTrue(LogCatalog.GetAll().Any(e => e.Id == "builtin:cbs"));
+    }
+
+    [TestMethod]
+    public void HiddenBuiltIns_Persist_AcrossReload()
+    {
+        LogCatalog.SetBuiltInHidden("builtin:temp", true);
+        LogCatalog.SetStorageLocationForTests(_file); // re-point at same file
+        Assert.IsTrue(LogCatalog.IsHiddenBuiltIn("builtin:temp"));
+    }
+
+    [TestMethod]
+    public void SetBuiltInHidden_IgnoresNonBuiltInIds()
+    {
+        var user = LogCatalog.Upsert(new LogCatalogEntry { Name = "U", Path = "p" });
+        LogCatalog.SetBuiltInHidden(user.Id, true);   // not a built-in id → no-op
+        Assert.IsFalse(LogCatalog.IsHiddenBuiltIn(user.Id));
+        Assert.IsTrue(LogCatalog.GetAll().Any(e => e.Id == user.Id), "user entry still shown");
+    }
+
+    [TestMethod]
     public void UserEntries_Persist_AcrossReload()
     {
         LogCatalog.Upsert(new LogCatalogEntry { Name = "Persisted", Path = @"%TEMP%", Kind = "folder" });

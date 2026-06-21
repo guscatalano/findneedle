@@ -24,9 +24,12 @@ public sealed partial class LogFinderPage : Page
     private void RenderList()
     {
         ListHost.Children.Clear();
-        foreach (var entry in LogCatalog.GetAll())
+        bool showHidden = ShowHiddenCheck?.IsChecked == true;
+        foreach (var entry in LogCatalog.GetAll(includeHidden: showHidden))
             ListHost.Children.Add(BuildRow(entry));
     }
+
+    private void ShowHidden_Changed(object sender, RoutedEventArgs e) => RenderList();
 
     private FrameworkElement BuildRow(LogCatalogEntry e)
     {
@@ -47,9 +50,12 @@ public sealed partial class LogFinderPage : Page
         Grid.SetColumn(icon, 0); grid.Children.Add(icon);
 
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        bool hidden = e.BuiltIn && LogCatalog.IsHiddenBuiltIn(e.Id);
+        if (hidden) card.Opacity = 0.55;
         var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         titleRow.Children.Add(new TextBlock { Text = e.Name, FontWeight = FontWeights.SemiBold });
         if (e.BuiltIn) titleRow.Children.Add(new TextBlock { Text = "built-in", FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Dim() });
+        if (hidden) titleRow.Children.Add(new TextBlock { Text = "· hidden", FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Dim() });
         if (!e.Exists) titleRow.Children.Add(new TextBlock { Text = "· not found on this machine", FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"] });
         text.Children.Add(titleRow);
         if (!string.IsNullOrWhiteSpace(e.Description))
@@ -65,7 +71,14 @@ public sealed partial class LogFinderPage : Page
         ToolTipService.SetToolTip(reveal, "Reveal in Explorer");
         reveal.Click += (_, _) => Reveal(e);
         actions.Children.Add(reveal);
-        if (!e.BuiltIn)
+        if (e.BuiltIn)
+        {
+            // Built-ins can't be removed — only hidden (shown again via "Show hidden built-ins").
+            var hide = new Button { Content = hidden ? "Unhide" : "Hide" };
+            hide.Click += (_, _) => { LogCatalog.SetBuiltInHidden(e.Id, !hidden); RenderList(); };
+            actions.Children.Add(hide);
+        }
+        else
         {
             var edit = new Button { Content = "Edit" };
             edit.Click += async (_, _) => { var u = await ShowEntryDialog(e); if (u != null) { LogCatalog.Upsert(u); RenderList(); } };

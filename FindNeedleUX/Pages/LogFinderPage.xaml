@@ -21,11 +21,20 @@
                        Text="A catalog of apps/components and where their logs live. Click Open to load them and view results. Built-ins cover common Windows locations; add your own below."/>
         </StackPanel>
 
-        <Button Grid.Row="1" HorizontalAlignment="Left" Click="Button_AddEntry">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <FontIcon Glyph="&#xE710;" FontSize="14"/><TextBlock Text="Add app / location"/>
-            </StackPanel>
-        </Button>
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" HorizontalAlignment="Left" Click="Button_AddEntry">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE710;" FontSize="14"/><TextBlock Text="Add app / location"/>
+                </StackPanel>
+            </Button>
+            <CheckBox Grid.Column="2" x:Name="ShowHiddenCheck" Content="Show hidden built-ins"
+                      Checked="ShowHidden_Changed" Unchecked="ShowHidden_Changed" VerticalAlignment="Center"/>
+        </Grid>
 
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="ListHost" Spacing="8"/>
