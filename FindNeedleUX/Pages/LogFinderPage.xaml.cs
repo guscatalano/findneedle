@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using FindNeedleUX.Services;
 using FindNeedleUX.Utils;
@@ -25,13 +26,24 @@ public sealed partial class LogFinderPage : Page
     {
         ListHost.Children.Clear();
         bool showHidden = ShowHiddenCheck?.IsChecked == true;
-        foreach (var entry in LogCatalog.GetAll(includeHidden: showHidden))
-            ListHost.Children.Add(BuildRow(entry));
+        var all = LogCatalog.GetAll(includeHidden: showHidden);
+        foreach (var group in all.GroupBy(e => e.Category, StringComparer.OrdinalIgnoreCase))
+        {
+            ListHost.Children.Add(new TextBlock
+            {
+                Text = group.Key, FontWeight = FontWeights.SemiBold, FontSize = 13,
+                Margin = new Thickness(2, 8, 0, 2),
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            });
+            var rows = group.ToList();
+            for (int i = 0; i < rows.Count; i++)
+                ListHost.Children.Add(BuildRow(rows[i], i, rows.Count));
+        }
     }
 
     private void ShowHidden_Changed(object sender, RoutedEventArgs e) => RenderList();
 
-    private FrameworkElement BuildRow(LogCatalogEntry e)
+    private FrameworkElement BuildRow(LogCatalogEntry e, int indexInGroup, int groupCount)
     {
         var card = new Border
         {
@@ -64,6 +76,34 @@ public sealed partial class LogFinderPage : Page
         Grid.SetColumn(text, 1); grid.Children.Add(text);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+
+        // Reorder within the category. (Segoe MDL2 chevrons via char code — no unicode literal.)
+        var up = new Button { Content = new FontIcon { Glyph = ((char)0xE70E).ToString(), FontSize = 12 }, IsEnabled = indexInGroup > 0, Padding = new Thickness(6) };
+        ToolTipService.SetToolTip(up, "Move up");
+        up.Click += (_, _) => { LogCatalog.MoveWithinCategory(e.Id, -1); RenderList(); };
+        var down = new Button { Content = new FontIcon { Glyph = ((char)0xE70D).ToString(), FontSize = 12 }, IsEnabled = indexInGroup < groupCount - 1, Padding = new Thickness(6) };
+        ToolTipService.SetToolTip(down, "Move down");
+        down.Click += (_, _) => { LogCatalog.MoveWithinCategory(e.Id, +1); RenderList(); };
+        actions.Children.Add(up); actions.Children.Add(down);
+
+        // Reassign category (built-ins and user entries).
+        var cat = new Button { Content = new SymbolIcon { Symbol = Symbol.Tag }, Padding = new Thickness(6) };
+        ToolTipService.SetToolTip(cat, "Move to category");
+        var catMenu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+        foreach (var c in LogCatalog.GetCategories())
+        {
+            var item = new MenuFlyoutItem { Text = c };
+            var target = c;
+            item.Click += (_, _) => { LogCatalog.SetCategory(e.Id, target); RenderList(); };
+            catMenu.Items.Add(item);
+        }
+        catMenu.Items.Add(new MenuFlyoutSeparator());
+        var newCat = new MenuFlyoutItem { Text = "New category…" };
+        newCat.Click += async (_, _) => { var name = await PromptCategoryAsync(); if (!string.IsNullOrWhiteSpace(name)) { LogCatalog.SetCategory(e.Id, name); RenderList(); } };
+        catMenu.Items.Add(newCat);
+        cat.Flyout = catMenu;
+        actions.Children.Add(cat);
+
         var open = new Button { Content = WithIcon(e.IsFolder ? Symbol.OpenLocal : Symbol.OpenFile, e.IsFolder ? "Open folder" : "Open file"), IsEnabled = e.Exists };
         open.Click += (_, _) => OpenEntry(e);
         actions.Children.Add(open);
@@ -156,10 +196,13 @@ public sealed partial class LogFinderPage : Page
         pathRow.Children.Add(pathBox); pathRow.Children.Add(browse);
 
         var desc = new TextBox { Header = "Description (optional)", Text = existing?.Description ?? "" };
+        var category = new ComboBox { Header = "Category", IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var c in LogCatalog.GetCategories()) category.Items.Add(c);
+        category.Text = string.IsNullOrWhiteSpace(existing?.Category) ? LogCatalog.DefaultUserCategory : existing.Category;
         var error = new TextBlock { Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"], Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap };
 
         var panel = new StackPanel { Spacing = 10, MinWidth = 480 };
-        panel.Children.Add(name); panel.Children.Add(kind); panel.Children.Add(pathRow); panel.Children.Add(desc); panel.Children.Add(error);
+        panel.Children.Add(name); panel.Children.Add(kind); panel.Children.Add(pathRow); panel.Children.Add(category); panel.Children.Add(desc); panel.Children.Add(error);
 
         var dialog = new ContentDialog
         {
@@ -182,6 +225,23 @@ public sealed partial class LogFinderPage : Page
         result.Path = pathBox.Text.Trim();
         result.Kind = kind.SelectedIndex == 1 ? "file" : "folder";
         result.Description = desc.Text?.Trim() ?? "";
+        result.Category = string.IsNullOrWhiteSpace(category.Text) ? LogCatalog.DefaultUserCategory : category.Text.Trim();
         return result;
+    }
+
+    /// <summary>Small prompt for a new category name (used by the per-row "Move to category" menu).</summary>
+    private async Task<string> PromptCategoryAsync()
+    {
+        var box = new TextBox { Header = "New category name", PlaceholderText = "e.g. My app" };
+        var dialog = new ContentDialog
+        {
+            Title = "New category",
+            Content = box,
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary ? box.Text?.Trim() : null;
     }
 }

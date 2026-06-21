@@ -15,6 +15,7 @@ public sealed class LogCatalogEntry
     public string Path { get; set; } = "";
     public string Kind { get; set; } = "folder"; // "folder" | "file"
     public string Description { get; set; } = "";
+    public string Category { get; set; } = "";   // grouping label; resolved/defaulted by LogCatalog
     public bool BuiltIn { get; set; }
 
     public bool IsFolder => string.Equals(Kind, "folder", StringComparison.OrdinalIgnoreCase);
@@ -45,33 +46,113 @@ public static class LogCatalog
 
     /// <summary>Common Windows log locations, shipped so the finder is useful out of the box. Paths use
     /// environment variables so they resolve per-machine.</summary>
+    public const string DefaultBuiltInCategory = "Windows";
+    public const string DefaultUserCategory = "My logs";
+
     public static readonly IReadOnlyList<LogCatalogEntry> BuiltIns = new[]
     {
         new LogCatalogEntry { Id = "builtin:winevt", Name = "Windows Event Logs (.evtx)", Kind = "folder",
-            Path = @"%SystemRoot%\System32\winevt\Logs", Description = "Saved event log files", BuiltIn = true },
+            Path = @"%SystemRoot%\System32\winevt\Logs", Description = "Saved event log files", Category = DefaultBuiltInCategory, BuiltIn = true },
         new LogCatalogEntry { Id = "builtin:cbs", Name = "Windows Servicing (CBS)", Kind = "folder",
-            Path = @"%SystemRoot%\Logs\CBS", Description = "Component-based servicing logs", BuiltIn = true },
+            Path = @"%SystemRoot%\Logs\CBS", Description = "Component-based servicing logs", Category = DefaultBuiltInCategory, BuiltIn = true },
         new LogCatalogEntry { Id = "builtin:dism", Name = "DISM", Kind = "folder",
-            Path = @"%SystemRoot%\Logs\DISM", Description = "Deployment Image Servicing logs", BuiltIn = true },
+            Path = @"%SystemRoot%\Logs\DISM", Description = "Deployment Image Servicing logs", Category = DefaultBuiltInCategory, BuiltIn = true },
         new LogCatalogEntry { Id = "builtin:panther", Name = "Windows Setup (Panther)", Kind = "folder",
-            Path = @"%SystemRoot%\Panther", Description = "Setup / upgrade logs", BuiltIn = true },
+            Path = @"%SystemRoot%\Panther", Description = "Setup / upgrade logs", Category = DefaultBuiltInCategory, BuiltIn = true },
         new LogCatalogEntry { Id = "builtin:wu", Name = "Windows Update (ETL)", Kind = "folder",
-            Path = @"%SystemRoot%\Logs\WindowsUpdate", Description = "Windows Update trace logs (.etl)", BuiltIn = true },
+            Path = @"%SystemRoot%\Logs\WindowsUpdate", Description = "Windows Update trace logs (.etl)", Category = DefaultBuiltInCategory, BuiltIn = true },
         new LogCatalogEntry { Id = "builtin:defender", Name = "Microsoft Defender", Kind = "folder",
-            Path = @"%ProgramData%\Microsoft\Windows Defender\Support", Description = "Defender support logs", BuiltIn = true },
+            Path = @"%ProgramData%\Microsoft\Windows Defender\Support", Description = "Defender support logs", Category = DefaultBuiltInCategory, BuiltIn = true },
         new LogCatalogEntry { Id = "builtin:temp", Name = "User Temp", Kind = "folder",
-            Path = @"%TEMP%", Description = "Many apps drop logs here", BuiltIn = true },
+            Path = @"%TEMP%", Description = "Many apps drop logs here", Category = DefaultBuiltInCategory, BuiltIn = true },
     };
 
-    /// <summary>All entries: built-ins (re-pathed from the shipped list) first, then user entries.
+    /// <summary>All entries with their category resolved and ordered for display: grouped by category
+    /// (categories in first-seen order), and within a category by the user's saved order then name.
     /// Hidden built-ins are excluded unless <paramref name="includeHidden"/> is true.</summary>
     public static List<LogCatalogEntry> GetAll(bool includeHidden = false)
     {
         var data = Load();
         var hidden = new HashSet<string>(data.HiddenBuiltIns ?? new(), StringComparer.OrdinalIgnoreCase);
-        var builtIns = BuiltIns.Select(Clone).Where(b => includeHidden || !hidden.Contains(b.Id));
-        var userEntries = data.UserEntries.Where(e => !e.BuiltIn);
-        return builtIns.Concat(userEntries).ToList();
+
+        var entries = new List<LogCatalogEntry>();
+        foreach (var b in BuiltIns)
+        {
+            if (!includeHidden && hidden.Contains(b.Id)) continue;
+            var c = Clone(b);
+            c.Category = ResolveCategory(data, c);
+            entries.Add(c);
+        }
+        foreach (var u in data.UserEntries.Where(e => !e.BuiltIn))
+        {
+            u.Category = ResolveCategory(data, u);
+            entries.Add(u);
+        }
+
+        int Order(LogCatalogEntry e) => data.Order != null && data.Order.TryGetValue(e.Id, out var o) ? o : int.MaxValue;
+
+        // Stable category order: the order each category first appears in the entry list.
+        var catOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in entries) if (!catOrder.ContainsKey(e.Category)) catOrder[e.Category] = catOrder.Count;
+
+        return entries
+            .OrderBy(e => catOrder[e.Category])
+            .ThenBy(Order)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string ResolveCategory(Data data, LogCatalogEntry e)
+    {
+        if (data.BuiltInCategory != null && data.BuiltInCategory.TryGetValue(e.Id, out var ov) && !string.IsNullOrWhiteSpace(ov))
+            return ov.Trim();
+        if (!string.IsNullOrWhiteSpace(e.Category)) return e.Category.Trim();
+        return e.BuiltIn ? DefaultBuiltInCategory : DefaultUserCategory;
+    }
+
+    /// <summary>Distinct categories currently in use (for the "move to category" picker).</summary>
+    public static List<string> GetCategories()
+        => GetAll(includeHidden: true).Select(e => e.Category).Distinct(StringComparer.OrdinalIgnoreCase)
+           .OrderBy(c => c, StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>Reassign an entry's category (works for built-ins and user entries).</summary>
+    public static void SetCategory(string id, string category)
+    {
+        category = (category ?? "").Trim();
+        if (string.IsNullOrEmpty(category)) return;
+        var data = Load();
+        if (id.StartsWith("builtin:", StringComparison.OrdinalIgnoreCase))
+        {
+            data.BuiltInCategory ??= new();
+            data.BuiltInCategory[id] = category;
+        }
+        else
+        {
+            var u = data.UserEntries.FirstOrDefault(e => e.Id == id);
+            if (u == null) return;
+            u.Category = category;
+        }
+        Save(data);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Move an entry up/down within its own category (persists an explicit order for the group).</summary>
+    public static void MoveWithinCategory(string id, int delta)
+    {
+        var all = GetAll(includeHidden: true);
+        var entry = all.FirstOrDefault(e => e.Id == id);
+        if (entry == null) return;
+        var group = all.Where(e => string.Equals(e.Category, entry.Category, StringComparison.OrdinalIgnoreCase)).ToList();
+        int i = group.FindIndex(e => e.Id == id);
+        int t = i + delta;
+        if (i < 0 || t < 0 || t >= group.Count) return;
+        (group[i], group[t]) = (group[t], group[i]);
+
+        var data = Load();
+        data.Order ??= new();
+        for (int k = 0; k < group.Count; k++) data.Order[group[k].Id] = k;
+        Save(data);
+        Changed?.Invoke();
     }
 
     public static LogCatalogEntry GetById(string id) => GetAll(includeHidden: true).FirstOrDefault(e => e.Id == id);
@@ -118,7 +199,7 @@ public static class LogCatalog
 
     private static LogCatalogEntry Clone(LogCatalogEntry e) => new()
     {
-        Id = e.Id, Name = e.Name, Path = e.Path, Kind = e.Kind, Description = e.Description, BuiltIn = e.BuiltIn,
+        Id = e.Id, Name = e.Name, Path = e.Path, Kind = e.Kind, Description = e.Description, Category = e.Category, BuiltIn = e.BuiltIn,
     };
 
     private static Data Load()
@@ -146,5 +227,7 @@ public static class LogCatalog
     {
         public List<LogCatalogEntry> UserEntries { get; set; } = new();
         public List<string> HiddenBuiltIns { get; set; } = new();
+        public Dictionary<string, string> BuiltInCategory { get; set; } = new(); // id -> category override
+        public Dictionary<string, int> Order { get; set; } = new();              // id -> within-category order
     }
 }

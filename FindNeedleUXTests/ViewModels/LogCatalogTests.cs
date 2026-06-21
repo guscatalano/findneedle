@@ -135,6 +135,62 @@ public class LogCatalogTests
     }
 
     [TestMethod]
+    public void SetCategory_OnUserEntry_Persists()
+    {
+        var e = LogCatalog.Upsert(new LogCatalogEntry { Name = "U", Path = "p", Category = "Cat A" });
+        LogCatalog.SetCategory(e.Id, "Cat B");
+        Assert.AreEqual("Cat B", LogCatalog.GetById(e.Id).Category);
+    }
+
+    [TestMethod]
+    public void SetCategory_OnBuiltIn_OverridesDefault()
+    {
+        LogCatalog.SetCategory("builtin:temp", "Diagnostics");
+        var b = LogCatalog.GetAll(includeHidden: true).First(x => x.Id == "builtin:temp");
+        Assert.AreEqual("Diagnostics", b.Category);
+        Assert.IsTrue(LogCatalog.GetCategories().Contains("Diagnostics"));
+    }
+
+    [TestMethod]
+    public void UserEntry_DefaultsToMyLogsCategory()
+    {
+        var e = LogCatalog.Upsert(new LogCatalogEntry { Name = "NoCat", Path = "p" });
+        Assert.AreEqual(LogCatalog.DefaultUserCategory, LogCatalog.GetById(e.Id).Category);
+    }
+
+    [TestMethod]
+    public void MoveWithinCategory_Reorders_AndPersists()
+    {
+        // Three user entries in one category; reorder the last to the front.
+        var a = LogCatalog.Upsert(new LogCatalogEntry { Name = "A", Path = "a", Category = "Z" });
+        var b = LogCatalog.Upsert(new LogCatalogEntry { Name = "B", Path = "b", Category = "Z" });
+        var c = LogCatalog.Upsert(new LogCatalogEntry { Name = "C", Path = "c", Category = "Z" });
+
+        string[] InZ() => LogCatalog.GetAll(includeHidden: true)
+            .Where(e => e.Category == "Z").Select(e => e.Name).ToArray();
+        CollectionAssert.AreEqual(new[] { "A", "B", "C" }, InZ());
+
+        LogCatalog.MoveWithinCategory(c.Id, -1);
+        CollectionAssert.AreEqual(new[] { "A", "C", "B" }, InZ());
+
+        LogCatalog.SetStorageLocationForTests(_file); // persisted
+        CollectionAssert.AreEqual(new[] { "A", "C", "B" }, InZ());
+    }
+
+    [TestMethod]
+    public void GetAll_GroupsByCategory()
+    {
+        LogCatalog.Upsert(new LogCatalogEntry { Name = "x", Path = "p", Category = "Alpha" });
+        var cats = LogCatalog.GetAll(includeHidden: true).Select(e => e.Category).ToList();
+        // entries of the same category are contiguous
+        foreach (var g in cats.Distinct())
+        {
+            int first = cats.IndexOf(g), last = cats.LastIndexOf(g);
+            Assert.AreEqual(last - first + 1, cats.Count(c => c == g), $"category '{g}' should be contiguous");
+        }
+    }
+
+    [TestMethod]
     public void BuiltIns_AreValid()
     {
         Assert.IsTrue(LogCatalog.BuiltIns.All(b => b.BuiltIn));
