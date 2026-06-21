@@ -64,6 +64,28 @@ public class DismInteractionSampleTests
     }
 
     [TestMethod]
+    public void DismLog_RepeatedSessions_CollapseViaDedupe()
+    {
+        // A real dism.log replays the same milestones for every session. With dedupe on, feeding the
+        // log many times must NOT grow the diagram — that's what kept it under the renderer's size cap.
+        var rules = FindRulesFile();
+        var processor = new UmlRuleProcessor(new MermaidSyntaxTranslator());
+        processor.LoadRulesFromFile(rules);
+
+        var once = DismLog.Select(l => new LogMessage { Content = l }).ToList();
+        var oneSession = processor.ProcessMessages(once);
+
+        var many = new List<LogMessage>();
+        for (int i = 0; i < 50; i++) many.AddRange(DismLog.Select(l => new LogMessage { Content = l }));
+        var fiftySessions = processor.ProcessMessages(many);
+
+        Assert.AreEqual(oneSession, fiftySessions,
+            "with dedupe, 50 replays of the same session produce the same generic diagram as one");
+        // Sanity: the rules file actually requested dedupe.
+        Assert.IsTrue(processor.Definition.Dedupe, "dism-interaction-uml.rules.json should set dedupe:true");
+    }
+
+    [TestMethod]
     public void DismRules_OnlyFireOnMilestones_NotEveryLine()
     {
         var rules = FindRulesFile();

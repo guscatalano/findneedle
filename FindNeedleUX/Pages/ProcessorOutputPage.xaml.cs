@@ -667,7 +667,9 @@ public sealed partial class ProcessorOutputPage : Page
             "<div id='stage'><div id='diagram'><pre class='mermaid'>" + encoded + "</pre></div></div>" +
             "<div class='controls'><button id='zin' title='Zoom in'>+</button><button id='zout' title='Zoom out'>−</button><button id='zfit' title='Fit'>Fit</button><button id='zone' title='Actual size'>1:1</button></div>" +
             "<script>" +
-            "mermaid.initialize({startOnLoad:true,securityLevel:'loose'});" +
+            // maxTextSize: lift mermaid's default 50k-char ceiling so a large (but valid) diagram still
+            // renders instead of failing with "maximum text size in diagram exceeded".
+            "mermaid.initialize({startOnLoad:true,securityLevel:'loose',maxTextSize:5000000});" +
             "let s=1,tx=12,ty=12,drag=false,sx=0,sy=0;" +
             "const stage=document.getElementById('stage'),dia=document.getElementById('diagram');" +
             "function apply(){dia.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';}" +

@@ -1,6 +1,8 @@
 {
   "title": "DISM session interaction",
   "description": "A generic sequence diagram of a DISM session: DismApi starts a session, the DISM Manager loads a local image session, the Provider Store comes up and the imaging providers negotiate the target, then the session shuts down. Matches stable DISM milestone phrases (not PIDs), so it works across any dism.log.",
+  "dedupe": true,
+  "maxElements": 200,
   "participants": [
     { "id": "API",   "displayName": "DismApi",        "type": "participant" },
     { "id": "Mgr",   "displayName": "DISM Manager",   "type": "participant" },

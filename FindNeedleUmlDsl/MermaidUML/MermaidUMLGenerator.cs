@@ -276,7 +276,7 @@ public class MermaidUMLGenerator : IUMLGenerator
                 <pre class="mermaid">
             {{mermaidContent}}
                 </pre>
-                <script>mermaid.initialize({startOnLoad:true, theme:'default'});</script>
+                <script>mermaid.initialize({startOnLoad:true, theme:'default', maxTextSize:5000000});</script>
             </body>
             </html>
             """;

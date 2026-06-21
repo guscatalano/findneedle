@@ -50,6 +50,22 @@ public class UmlRuleDefinition
     [JsonPropertyName("title")]
     public string? Title { get; set; }
 
+    /// <summary>
+    /// Collapse repeated identical interactions into one. When a log replays the same flow many times
+    /// (e.g. a DISM log with thousands of sessions), the diagram would otherwise emit the same steps
+    /// over and over and blow past the renderer's size limit. With dedupe on, each unique element
+    /// (type + from + to + text + note/arrow) is emitted once, yielding a single generic flow.
+    /// </summary>
+    [JsonPropertyName("dedupe")]
+    public bool Dedupe { get; set; }
+
+    /// <summary>
+    /// Hard cap on the number of body elements emitted (0 = unlimited). A safety net so no diagram can
+    /// exceed the renderer's maximum text size; when hit, generation stops and appends a truncation note.
+    /// </summary>
+    [JsonPropertyName("maxElements")]
+    public int MaxElements { get; set; }
+
     [JsonPropertyName("participants")]
     public List<UmlParticipant> Participants { get; set; } = new();
 

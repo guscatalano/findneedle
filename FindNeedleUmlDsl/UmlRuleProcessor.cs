@@ -55,8 +55,28 @@ public class UmlRuleProcessor
         // Per-rule matched lines (row id + content) so callers can show what each rule picked up.
         var perRuleLines = new List<UmlMatchedLine>[_definition.Rules.Count];
 
+        // Size controls: dedupe collapses a replayed flow (e.g. thousands of DISM sessions) into one
+        // generic flow; maxElements is a hard ceiling so no diagram can blow the renderer's size limit.
+        bool dedupe = _definition.Dedupe;
+        int maxElements = _definition.MaxElements;
+        var seen = dedupe ? new HashSet<string>(StringComparer.Ordinal) : null;
+        int emitted = 0;
+        bool truncated = false;
+
+        // Emit a body line subject to dedupe + cap. Returns false once the cap is hit (stop emitting).
+        bool Emit(string line)
+        {
+            if (line == null) return true;
+            if (dedupe && !seen.Add(line)) return true;       // duplicate of an already-emitted element
+            if (maxElements > 0 && emitted >= maxElements) { truncated = true; return false; }
+            sb.AppendLine(line);
+            emitted++;
+            return true;
+        }
+
         foreach (var message in messages)
         {
+            if (truncated) break;
             for (var ruleIndex = 0; ruleIndex < _definition.Rules.Count; ruleIndex++)
             {
                 var rule = _definition.Rules[ruleIndex];
@@ -88,7 +108,7 @@ public class UmlRuleProcessor
                     {
                         // If already active, still emit (mermaid tolerates re-activate) and record state
                         activeParticipants.Add(participant);
-                        sb.AppendLine(_translator.GenerateElement(element));
+                        if (!Emit(_translator.GenerateElement(element))) break;
                     }
                     else
                     {
@@ -101,7 +121,7 @@ public class UmlRuleProcessor
                     if (!string.IsNullOrEmpty(participant) && activeParticipants.Contains(participant))
                     {
                         activeParticipants.Remove(participant);
-                        sb.AppendLine(_translator.GenerateElement(element));
+                        if (!Emit(_translator.GenerateElement(element))) break;
                     }
                     else
                     {
@@ -111,15 +131,24 @@ public class UmlRuleProcessor
                 else if (type == "groupend")
                 {
                     // groupend is emitted as 'end' in translator; always emit to avoid leaving blocks open
-                    sb.AppendLine(_translator.GenerateElement(element));
+                    if (!Emit(_translator.GenerateElement(element))) break;
                 }
                 else
                 {
                     // Regular elements (message, note, delay, divider, etc.)
-                    sb.AppendLine(_translator.GenerateElement(element));
+                    if (!Emit(_translator.GenerateElement(element))) break;
                 }
             }
         }
+
+        if (truncated)
+            sb.AppendLine(_translator.GenerateElement(new ResolvedUmlElement
+            {
+                Type = "note",
+                From = _definition.Participants.Count > 0 ? _definition.Participants[0].Id : null,
+                Text = $"diagram truncated at {maxElements} elements",
+                NotePosition = "over",
+            }));
 
         var footer = _translator.GenerateFooter();
         if (!string.IsNullOrEmpty(footer)) sb.AppendLine(footer);
