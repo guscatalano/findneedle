@@ -151,6 +151,74 @@ public sealed partial class SearchLocationsPage : Page
         }
     }
 
+    /// <summary>Add a live Windows Event Log channel as a location (the running machine's logs), like
+    /// the ETW live collector. Pick a channel (Application/System/…) or "everything".</summary>
+    private async void Button_AddEventLog(object sender, RoutedEventArgs e)
+    {
+        Microsoft.UI.Xaml.Media.Brush Dim()
+            => (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+
+        var nameBox = new TextBox { Header = "Event log / channel", PlaceholderText = "e.g. Application, System, Security", Text = "Application" };
+        var filter = new TextBox { PlaceholderText = "Filter channels…" };
+        var list = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 220 };
+        var status = new TextBlock { FontSize = 12, Foreground = Dim(), TextWrapping = TextWrapping.Wrap };
+        var all = new List<string>();
+        void Apply()
+        {
+            var f = (filter.Text ?? "").Trim();
+            list.ItemsSource = string.IsNullOrEmpty(f) ? all
+                : all.Where(x => x.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+        filter.TextChanged += (_, _) => Apply();
+        list.SelectionChanged += (_, _) => { if (list.SelectedItem is string s) nameBox.Text = s; };
+
+        async Task LoadChannels()
+        {
+            status.Text = "Loading channels…";
+            try
+            {
+                var channels = await Task.Run(() => findneedle.Implementations.Discovery.EventLogDiscovery.GetAllEventLogs());
+                all = channels ?? new List<string>();
+                all.Insert(0, EverythingChannel);
+                Apply();
+                status.Text = $"{all.Count - 1} channels — filter/click, or type a name above.";
+            }
+            catch (Exception ex) { status.Text = "Couldn't list channels: " + ex.Message; }
+        }
+
+        var panel = new StackPanel { Spacing = 8, MinWidth = 460 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Reads this machine's running Windows Event Log channels (live). This is NOT for opening a saved .evtx file — use \"Add File\" for those.",
+            FontSize = 12, Foreground = Dim(), TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(nameBox);
+        panel.Children.Add(filter);
+        panel.Children.Add(list);
+        panel.Children.Add(status);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add live Event Log",
+            Content = new ScrollViewer { Content = panel, MaxHeight = 520,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) },
+            PrimaryButtonText = "Add",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+        };
+        _ = LoadChannels(); // populate while the dialog is open
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var name = (nameBox.Text ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (name.StartsWith("everything", StringComparison.OrdinalIgnoreCase)) name = "everything";
+        MiddleLayerService.AddLocation(new findneedle.Implementations.LocalEventLogQueryLocation(name));
+        _viewModel.Refresh();
+    }
+
+    private const string EverythingChannel = "everything (all logs)";
+
     private async void Button_AddKusto(object sender, RoutedEventArgs e)
     {
         var loc = await ShowKustoDialogAsync(null);

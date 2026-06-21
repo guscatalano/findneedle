@@ -43,12 +43,15 @@
                     <!-- New: pick a source to add -->
                     <PivotItem Header="New">
                         <StackPanel Spacing="8" Margin="0,8,0,0">
-                            <TextBlock Text="Local files" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="Local" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="➕ Add Folder" Click="Button_AddFolder" Width="120"
                                         AutomationProperties.Name="Add folder location"/>
                                 <Button Content="➕ Add File" Click="Button_AddFile" Width="120"
                                         AutomationProperties.Name="Add file location"/>
+                                <Button Content="📋 Add Live Event Log" Click="Button_AddEventLog" Width="180"
+                                        ToolTipService.ToolTip="Read this machine's running Event Log channels (not a saved .evtx file — use Add File for those)"
+                                        AutomationProperties.Name="Add live Windows Event Log location"/>
                             </StackPanel>
 
                             <TextBlock Text="Online sources" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
