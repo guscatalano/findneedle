@@ -1112,6 +1112,67 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
 
         AppendStructuredData(g, line);
+        AppendReformattedMessage(g, line);
+    }
+
+    /// <summary>Append a "Reformatted" section when an enabled message-reformat rule applies to this
+    /// row's Message — breaks a dense one-line blob (e.g. a DISM line) into readable named fields.
+    /// Generic: driven by <see cref="MessageReformatCatalog"/>, which the user can edit/extend.</summary>
+    private void AppendReformattedMessage(Grid g, LogLine line)
+    {
+        MessageReformatResult r;
+        try { r = MessageReformatCatalog.Apply(line.Message); }
+        catch { return; }
+        if (r == null || r.Fields.Count == 0) return;
+
+        int headerRow = g.RowDefinitions.Count;
+        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var header = new TextBlock
+        {
+            Text = $"Reformatted — {r.RuleName} ({r.Fields.Count})",
+            FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 10, 0, 2),
+        };
+        Grid.SetRow(header, headerRow); Grid.SetColumn(header, 0); Grid.SetColumnSpan(header, 3);
+        g.Children.Add(header);
+
+        foreach (var (field, value) in r.Fields)
+        {
+            int row = g.RowDefinitions.Count;
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var copy = new Button
+            {
+                Content = new FontIcon { Glyph = "", FontSize = 14 },
+                Padding = new Thickness(6, 2, 6, 2),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            var captured = value ?? "";
+            copy.Click += (_, __) => CopyToClipboard(captured);
+            ToolTipService.SetToolTip(copy, $"Copy {field}");
+            Grid.SetRow(copy, row); Grid.SetColumn(copy, 0);
+            g.Children.Add(copy);
+
+            var k = new TextBlock
+            {
+                Text = field,
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic,
+                VerticalAlignment = VerticalAlignment.Top,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            Grid.SetRow(k, row); Grid.SetColumn(k, 1);
+            g.Children.Add(k);
+
+            var v = new TextBlock
+            {
+                Text = value ?? "",
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            Grid.SetRow(v, row); Grid.SetColumn(v, 2);
+            g.Children.Add(v);
+        }
     }
 
     /// <summary>Append the event's parsed structured payload (StructuredData JSON) as a labeled

@@ -759,6 +759,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: SearchRulesPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage));
                 break;
+            case "reformat_rules":
+                Logger.Instance.Log("Navigated: ReformatRulesPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ReformatRulesPage));
+                break;
             case "auto_rules":
                 Logger.Instance.Log("Navigated: AutoAddRulesPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.AutoAddRulesPage));
