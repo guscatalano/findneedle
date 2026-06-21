@@ -53,14 +53,14 @@ public class LocalEventLogTests
     {
         var query = new LocalEventLogQueryLocation("everything");
         using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
-        query.LoadInMemory(cts.Token);  // honors the token per record/channel, so it stops bounded
-        List<ISearchResult> ret = query.Search();
+        query.LoadInMemory(cts.Token);             // deferred — reading happens below, bounded by the token
+        List<ISearchResult> ret = query.Search(cts.Token);
         Assert.IsTrue(ret.Count > 0, "the live 'everything' event log query should return records");
         Assert.IsFalse(string.IsNullOrEmpty(ret.First().GetResultSource()));
     }
 
     /// <summary>Same bounded "everything" load, drained through the batched callback path the search
-    /// engine actually uses, to prove the results stream out. SkipCI for the same reasons.</summary>
+    /// engine actually uses (streams to storage, no full-set retention). SkipCI for the same reasons.</summary>
     [TestMethod]
     [TestCategory("SkipCI")]
     public async Task LocalEventLogQuery_Everything_LoadsViaCallback()
@@ -69,8 +69,19 @@ public class LocalEventLogTests
         using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
         query.LoadInMemory(cts.Token);
         int total = 0;
-        await query.SearchWithCallback(batch => total += batch.Count);
+        await query.SearchWithCallback(batch => total += batch.Count, cts.Token);
         Assert.IsTrue(total > 0, "batched callback should yield records for 'everything'");
+    }
+
+    /// <summary>The row-count estimate should be populated so Auto storage routes a big "everything"
+    /// load to SQLite (stream-to-disk) instead of in-memory.</summary>
+    [TestMethod]
+    [TestCategory("SkipCI")]
+    public void LocalEventLogQuery_Everything_HasRecordEstimate()
+    {
+        var query = new LocalEventLogQueryLocation("everything");
+        var (_, recordCount) = query.GetSearchPerformanceEstimate();
+        Assert.IsTrue(recordCount.HasValue && recordCount.Value > 0, "should estimate a positive record count");
     }
 
     [TestMethod]
