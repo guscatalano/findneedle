@@ -975,6 +975,14 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         return (min, max);
     }
 
+    /// <summary>Top distinct values of a field over the current filtered set (MCP <c>facets</c>).</summary>
+    public FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult GetFacets(string field, int limit, int sampleCap)
+        => FindNeedleUX.Services.Mcp.LogAnalysis.Facets(_source, BuildFilterSpec(), field, limit, sampleCap);
+
+    /// <summary>Most common message templates over the current filtered set (MCP <c>top_patterns</c>).</summary>
+    public FindNeedleUX.Services.Mcp.LogAnalysis.PatternResult GetTopPatterns(int limit, int sampleCap)
+        => FindNeedleUX.Services.Mcp.LogAnalysis.TopPatterns(_source, BuildFilterSpec(), limit, sampleCap);
+
     /// <summary>Current level counts over the filtered set (for the MCP <c>summary</c>).</summary>
     public Dictionary<string, int> GetFilteredLevelCounts()
         => _source == null ? new Dictionary<string, int>() : new Dictionary<string, int>(_source.GetLevelCounts(BuildFilterSpec()));

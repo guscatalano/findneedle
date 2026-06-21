@@ -67,6 +67,14 @@ internal sealed class FakeViewerController : IMcpViewerController
     public Task<List<HistogramBucketDto>> GetHistogramAsync(int buckets)
         => Task.FromResult(new List<HistogramBucketDto> { new() { Start = "2026-01-01T00:00:00Z", Count = 7 } });
 
+    public Task<LogAnalysis.FacetResult> GetFacetsAsync(string field, int limit, int sampleCap)
+        => Task.FromResult(new LogAnalysis.FacetResult(field, 1, 1, false,
+            new List<LogAnalysis.Facet> { new("x", 1) }));
+
+    public Task<LogAnalysis.PatternResult> GetTopPatternsAsync(int limit, int sampleCap)
+        => Task.FromResult(new LogAnalysis.PatternResult(1, 1, false,
+            new List<LogAnalysis.Pattern> { new("{n} thing", 1, "1 thing") }));
+
     public Task<int> SetFilterAsync(string search, string provider, string taskName, string message,
         string source, string level, string fromTime, string toTime)
         => Task.FromResult(42);

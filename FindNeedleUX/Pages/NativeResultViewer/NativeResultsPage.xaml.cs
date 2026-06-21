@@ -2102,6 +2102,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return result;
     });
 
+    // Facets / patterns scan up to a sample cap and are pure reads — run them on the threadpool so a
+    // big log doesn't freeze the UI. The paged source's GetPage is already used off-thread elsewhere.
+    public Task<FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult> GetFacetsAsync(string field, int limit, int sampleCap)
+        => System.Threading.Tasks.Task.Run(() => ViewModel.GetFacets(field, limit, sampleCap));
+
+    public Task<FindNeedleUX.Services.Mcp.LogAnalysis.PatternResult> GetTopPatternsAsync(int limit, int sampleCap)
+        => System.Threading.Tasks.Task.Run(() => ViewModel.GetTopPatterns(limit, sampleCap));
+
     public Task<int> SetFilterAsync(string search, string provider, string taskName, string message,
         string source, string level, string fromTime, string toTime) => McpOnUiAsync(() =>
     {

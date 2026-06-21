@@ -109,6 +109,8 @@ public sealed class McpViewerBridge
     public Task<RecordDto> GetRecordAsync(long rowId) => Viewer.GetRecordAsync(rowId);
     public Task<SummaryDto> GetSummaryAsync() => Viewer.GetSummaryAsync();
     public Task<List<HistogramBucketDto>> GetHistogramAsync(int buckets) => Viewer.GetHistogramAsync(buckets);
+    public Task<LogAnalysis.FacetResult> GetFacetsAsync(string field, int limit, int sampleCap) => Viewer.GetFacetsAsync(field, limit, sampleCap);
+    public Task<LogAnalysis.PatternResult> GetTopPatternsAsync(int limit, int sampleCap) => Viewer.GetTopPatternsAsync(limit, sampleCap);
     public Task<int> SetFilterAsync(string search, string provider, string taskName, string message,
         string source, string level, string fromTime, string toTime)
         => Viewer.SetFilterAsync(search, provider, taskName, message, source, level, fromTime, toTime);

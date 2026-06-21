@@ -172,6 +172,29 @@ internal static class McpTools
             InputSchema = Obj(new { buckets = I("Number of time buckets (default 20, max 200).") }),
             Invoke = async a => await B.GetHistogramAsync(Int(a, "buckets", 20)),
         },
+        new ToolDef
+        {
+            Name = "facets",
+            Description = "Top distinct values (with counts) of a field over the current filtered set — e.g. which providers/sources/levels/tasks dominate. Fields: provider, source, level, taskName, processName, processId, channel, eventId, machineName, username. Scans up to sampleCap rows (counts beyond it are approximate; the result flags 'truncated').",
+            InputSchema = Obj(new
+            {
+                field = S("Field to group by: provider, source, level, taskName, processName, processId, channel, eventId, machineName, username."),
+                limit = I("Max values to return (default 20)."),
+                sampleCap = I("Max rows to scan (default 500000)."),
+            }, "field"),
+            Invoke = async a => await B.GetFacetsAsync(Str(a, "field"), Int(a, "limit", 20), Int(a, "sampleCap", 500_000)),
+        },
+        new ToolDef
+        {
+            Name = "top_patterns",
+            Description = "Most common message templates over the current filtered set — the generic 'what is this log mostly saying?' view. Messages are normalized (numbers, GUIDs, hex, paths, quoted strings → placeholders) so near-identical lines collapse into one template with a count and an example. Scans up to sampleCap rows (default 200000; result flags 'truncated' if more exist).",
+            InputSchema = Obj(new
+            {
+                limit = I("Max templates to return (default 20)."),
+                sampleCap = I("Max rows to scan (default 200000)."),
+            }),
+            Invoke = async a => await B.GetTopPatternsAsync(Int(a, "limit", 20), Int(a, "sampleCap", 200_000)),
+        },
 
         // ---------- viewer: drive ----------
         new ToolDef

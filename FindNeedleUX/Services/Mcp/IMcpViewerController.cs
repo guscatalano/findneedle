@@ -26,6 +26,12 @@ public interface IMcpViewerController
 
     Task<List<HistogramBucketDto>> GetHistogramAsync(int buckets);
 
+    /// <summary>Top distinct values (with counts) of one field over the current filtered set.</summary>
+    Task<LogAnalysis.FacetResult> GetFacetsAsync(string field, int limit, int sampleCap);
+
+    /// <summary>Most common message templates (normalized) over the current filtered set.</summary>
+    Task<LogAnalysis.PatternResult> GetTopPatternsAsync(int limit, int sampleCap);
+
     /// <summary>Set any subset of filters (null = leave unchanged, "" = clear). Returns new filtered count.</summary>
     Task<int> SetFilterAsync(string search, string provider, string taskName, string message,
         string source, string level, string fromTime, string toTime);
