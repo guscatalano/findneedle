@@ -42,4 +42,13 @@ public class PlainTextTimeTests
     {
         Assert.AreEqual(DateTime.MinValue, Time("just a plain message with no timestamp"));
     }
+
+    [TestMethod]
+    public void DismCommaSeparator_ParsesFullTime()
+    {
+        // DISM logs: "2026-06-20 09:33:36, Info  DISM  ..." — the comma after the time used to break
+        // the parse, collapsing every row to midnight. The full time-of-day must come through.
+        var t = Time("2026-06-20 09:33:36, Info                  DISM   API: PID=24288 TID=16576");
+        Assert.AreEqual(new DateTime(2026, 6, 20, 9, 33, 36), t);
+    }
 }

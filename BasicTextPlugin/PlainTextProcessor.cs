@@ -277,6 +277,10 @@ public class PlainTextSearchResult : ISearchResult
         {
             int sp2 = s.IndexOf(' ', sp1 + 1);
             var two = sp2 > sp1 ? s.Substring(0, sp2) : s;
+            // DISM and similar emit "2026-06-20 09:33:36, Info …" — a comma terminates the time
+            // token. Strip a trailing comma so the full time-of-day parses; otherwise this falls
+            // through to the date-only branch below and every row collapses to midnight.
+            two = two.TrimEnd(',');
             if (LooksDateLike(two) && DateTime.TryParse(two, inv, styles, out var dt) && dt.Year > 1)
                 return dt;
         }

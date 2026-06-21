@@ -71,6 +71,24 @@ public class StorageTests
         public string GetResultSource() => _resultSource;
     }
 
+    /// <summary>A dummy whose Level is settable, for the per-level count tests.</summary>
+    private sealed class LeveledResult : ISearchResult
+    {
+        private readonly Level _level;
+        public LeveledResult(Level level) { _level = level; }
+        public DateTime GetLogTime() => DummySearchResult.FixedTime;
+        public string GetMachineName() => "M";
+        public void WriteToConsole() { }
+        public Level GetLevel() => _level;
+        public string GetUsername() => "U";
+        public string GetTaskName() => "T";
+        public string GetOpCode() => "O";
+        public string GetSource() => "S";
+        public string GetSearchableData() => "D";
+        public string GetMessage() => "Msg";
+        public string GetResultSource() => "RS";
+    }
+
     private (string searchedFile, string dbPath) CreateUniqueSearchFile()
     {
         var searchedFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -110,6 +128,40 @@ public class StorageTests
             "Hybrid" => HybridFactory(),
             _ => throw new ArgumentException("Unknown storage kind: " + kind, nameof(kind)),
         };
+    }
+
+    [TestMethod]
+    public void Sqlite_RunningLevelCounts_MatchSql_AndSurviveClear()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+
+        // 5 Error, 3 Warning, 2 Info — across two batches so the running map accumulates.
+        var rows = new List<ISearchResult>();
+        for (int i = 0; i < 5; i++) rows.Add(new LeveledResult(Level.Error));
+        for (int i = 0; i < 3; i++) rows.Add(new LeveledResult(Level.Warning));
+        for (int i = 0; i < 2; i++) rows.Add(new LeveledResult(Level.Info));
+        storage.AddFilteredBatch(rows.GetRange(0, 6));
+        storage.AddFilteredBatch(rows.GetRange(6, 4));
+
+        // Lock-free running map must equal the SQL truth.
+        var counts = storage.GetLevelCounts(new SqliteStorage.FilterInput());
+        Assert.AreEqual(5, counts[(int)Level.Error]);
+        Assert.AreEqual(3, counts[(int)Level.Warning]);
+        Assert.AreEqual(2, counts[(int)Level.Info]);
+
+        CollectionAssert.AreEqual(
+            new[] { (int)Level.Error, (int)Level.Warning, (int)Level.Info }.OrderBy(x => x).ToArray(),
+            storage.GetDistinctLevels().ToArray());
+
+        // A filtered query still goes through SQL and agrees.
+        Assert.AreEqual(3, storage.GetFilteredCount(new SqliteStorage.FilterInput { LevelInt = (int)Level.Warning }));
+
+        // After ClearTables the map resets to empty.
+        storage.ClearTables();
+        Assert.AreEqual(0, storage.GetDistinctLevels().Count);
+        Assert.AreEqual(0, storage.GetLevelCounts(new SqliteStorage.FilterInput()).Count);
     }
 
     // Parameterized tests using DataTestMethod to run each scenario for both implementations.

@@ -33,6 +33,17 @@ namespace FindPluginCore.Implementations.Storage
         private volatile int _rawCount;
         private volatile int _filteredCount;
 
+        // Running per-level counts of FilteredResults, indexed by (int)Level, so GetDistinctLevels /
+        // GetLevelCounts(no filter) can answer without SELECT DISTINCT / GROUP BY — and crucially
+        // without taking _sync, which during a streaming scan blocks behind the writer (the viewer's
+        // GetDistinctLevels stalled ~2s on a cold 1.5M-row open). Only trustworthy when built from an
+        // empty table (a fresh scan): _levelCountsValid is true after ClearTables / on an empty open,
+        // and flips false if a level falls outside the array. A warm-cache reuse leaves it false, so
+        // those reads fall back to SQL — fine, since there's no concurrent writer to contend with then.
+        // 16 slots covers the Level enum (0..5) with headroom; atomic int reads/writes, writes under _sync.
+        private readonly int[] _levelCounts = new int[16];
+        private volatile bool _levelCountsValid;
+
         /// <summary>
         /// Fires after each <see cref="AddFilteredBatch"/> commits. The argument is the number of
         /// rows that just landed (the batch size, not the running total). Used by the streaming
@@ -82,6 +93,9 @@ namespace FindPluginCore.Implementations.Storage
                 _rawCount = GetCount("RawResults");
                 _filteredCount = GetCount("FilteredResults");
             }
+            // The running level map is exact only when built from empty (a fresh scan increments it
+            // per insert). A non-empty warm cache leaves it invalid → level reads use SQL.
+            _levelCountsValid = _filteredCount == 0;
         }
 
         /// <summary>
@@ -101,6 +115,7 @@ namespace FindPluginCore.Implementations.Storage
                 _rawCount = GetCount("RawResults");
                 _filteredCount = GetCount("FilteredResults");
             }
+            _levelCountsValid = _filteredCount == 0;
             // If the cache recorded that its FTS index was built, mark it ready so substring search
             // uses the index immediately rather than falling back to LIKE.
             try
@@ -798,9 +813,12 @@ namespace FindPluginCore.Implementations.Storage
                 InitializeFts5();
                 _ftsIndexBuilt = false;
 
-                // Tables are now empty — keep the running counts in sync.
+                // Tables are now empty — keep the running counts in sync. The level map is exact
+                // again (all zeros) and a fresh scan will increment it per insert.
                 _rawCount = 0;
                 _filteredCount = 0;
+                Array.Clear(_levelCounts, 0, _levelCounts.Length);
+                _levelCountsValid = true;
             }
         }
 
@@ -876,11 +894,15 @@ namespace FindPluginCore.Implementations.Storage
             // Counterintuitively this is ~28× faster than a 500-row multi-VALUES statement here:
             // Microsoft.Data.Sqlite's per-parameter bind cost makes a 5000-parameter chunk far more
             // expensive than 500 cheap single-row binds. (Benchmarked: ~370k rows/s vs ~13k rows/s.)
+            // Maintain the running level map only for the filtered table (what the viewer reads).
+            // BindAndExecute has just set p.Level.Value, so read it back rather than re-deriving.
+            bool trackLevels = string.Equals(table, "FilteredResults", StringComparison.Ordinal);
             using var cmd = CreatePreparedInsert(table, tx, out var p);
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested) break;
                 BindAndExecute(cmd, p, result);
+                if (trackLevels) BumpLevelCount(p.Level.Value);
                 inserted++;
                 // Fire progress mid-transaction so the caller can update status text. The lock is
                 // still held; subscribers must not call back into storage (the contract is: count only).
@@ -969,6 +991,19 @@ namespace FindPluginCore.Implementations.Storage
             p.ProcessName.Value       = r.GetProcessName() ?? "";
             p.StructuredData.Value    = r.GetStructuredData() ?? "";
             cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>Increment the running level map for one just-inserted filtered row. Called under
+        /// _sync (inside BulkInsert). A level outside the array invalidates the map so reads fall back
+        /// to SQL rather than under-count.</summary>
+        private void BumpLevelCount(object levelBoxed)
+        {
+            if (!_levelCountsValid) return;
+            int lvl;
+            try { lvl = Convert.ToInt32(levelBoxed); }
+            catch { _levelCountsValid = false; return; }
+            if ((uint)lvl < (uint)_levelCounts.Length) _levelCounts[lvl]++;
+            else _levelCountsValid = false;
         }
 
         public void GetRawResultsInBatches(Action<List<ISearchResult>> onBatch, int batchSize = 1000, CancellationToken cancellationToken = default)
@@ -1162,6 +1197,15 @@ namespace FindPluginCore.Implementations.Storage
 
         public List<int> GetDistinctLevels()
         {
+            // Fast path: the running level map knows exactly which levels are present, lock-free —
+            // so the viewer's load doesn't take _sync and stall behind the streaming writer.
+            if (_levelCountsValid)
+            {
+                var present = new List<int>();
+                for (int i = 0; i < _levelCounts.Length; i++)
+                    if (_levelCounts[i] > 0) present.Add(i); // ascending, mirrors ORDER BY Level
+                return present;
+            }
             lock (_sync)
             {
                 using var cmd = _connection.CreateCommand();
@@ -1175,6 +1219,15 @@ namespace FindPluginCore.Implementations.Storage
 
         public Dictionary<int, int> GetLevelCounts(FilterInput filter)
         {
+            // Fast path: no filter + a valid running map → return per-level totals without a GROUP BY
+            // scan and without taking _sync (avoids the streaming-writer contention on a cold load).
+            if (IsEmptyFilter(filter) && _levelCountsValid)
+            {
+                var d = new Dictionary<int, int>();
+                for (int i = 0; i < _levelCounts.Length; i++)
+                    if (_levelCounts[i] > 0) d[i] = _levelCounts[i];
+                return d;
+            }
             lock (_sync)
             {
                 var (where, ps) = BuildWhere(filter, UseFts);
