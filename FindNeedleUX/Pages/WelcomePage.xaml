@@ -10,22 +10,25 @@
 
     <ScrollViewer Padding="24,16,24,24">
         <StackPanel Spacing="16">
-            <!-- Hero: animated themed loader + wordmark (compact, so the quick actions sit higher) -->
-            <Border CornerRadius="10" Padding="14">
+            <!-- Hero: animated themed loader + wordmark -->
+            <Border CornerRadius="12" Padding="20">
                 <Border.Background>
                     <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.12"/>
                 </Border.Background>
-                <StackPanel Orientation="Horizontal" Spacing="14">
-                    <Border Width="56" Height="56" CornerRadius="10" VerticalAlignment="Center"
+                <StackPanel Orientation="Horizontal" Spacing="18">
+                    <Border Width="84" Height="84" CornerRadius="12" VerticalAlignment="Center"
                             Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
-                        <Image x:Name="HeroGif" Width="56" Height="56" Stretch="UniformToFill"
+                        <Image x:Name="HeroGif" Width="84" Height="84" Stretch="UniformToFill"
                                AutomationProperties.AccessibilityView="Raw"/>
                     </Border>
-                    <StackPanel VerticalAlignment="Center" Spacing="1">
-                        <TextBlock Text="FindNeedle" FontSize="22" FontWeight="Bold"
+                    <StackPanel VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="FindNeedle" FontSize="32" FontWeight="Bold"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                        <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="13"
+                        <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="15"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="Search, filter, and diagram logs across folders, ETW, and event logs."
+                                   FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   TextWrapping="Wrap" MaxWidth="440"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -36,30 +39,40 @@
                      CloseButtonClick="IntroBanner_CloseButtonClick"
                      Title="New here?">
                 <InfoBar.Content>
-                    <StackPanel Spacing="10" Margin="0,4,0,12">
-                        <TextBlock TextWrapping="Wrap"
-                                   Text="Pick a Quick Action below to open logs, or use Configure ▸ Locations / Connections / Rules to build a custom search pipeline. Then run it from Run &amp; Results (or the Run → View Results button in the status bar)."/>
-                        <TextBlock Text="Key features" FontWeight="SemiBold" Margin="0,4,0,0"/>
-                        <StackPanel Spacing="6">
+                    <!-- Two columns: getting-started on the left, key features on the right — keeps the
+                         banner short so the quick actions stay visible. -->
+                    <Grid ColumnSpacing="24" Margin="0,4,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Spacing="8">
+                            <TextBlock TextWrapping="Wrap"
+                                       Text="Pick a Quick Action below to open logs, or use Configure ▸ Locations / Connections / Rules to build a custom search pipeline. Then run it from Run &amp; Results (or the Run → View Results button in the status bar)."/>
+                            <HyperlinkButton Content="View documentation" NavigateUri="https://github.com/guscatalano/findneedle" Padding="0"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Text="Key features" FontWeight="SemiBold"/>
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="Plugin-based data sources (folders, files, event logs, ETW, online sources)" TextWrapping="Wrap"/>
+                                <TextBlock Text="Data sources: folders, files, event logs, ETW, online sources" TextWrapping="Wrap"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="RuleDSL for filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
+                                <TextBlock Text="RuleDSL filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="Fast result viewer with paging, tagging, and column controls" TextWrapping="Wrap"/>
+                                <TextBlock Text="Fast viewer with paging, tagging, and column controls" TextWrapping="Wrap"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="PlantUML / Mermaid diagram generation from logs" TextWrapping="Wrap"/>
+                                <TextBlock Text="PlantUML / Mermaid diagrams from logs" TextWrapping="Wrap"/>
                             </StackPanel>
                         </StackPanel>
-                        <HyperlinkButton Content="View documentation" NavigateUri="https://github.com/guscatalano/findneedle" Padding="0"/>
-                    </StackPanel>
+                    </Grid>
                 </InfoBar.Content>
             </InfoBar>
 
