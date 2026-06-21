@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -40,6 +42,51 @@ internal static class McpTools
             ? a.GetProperty(n).GetBoolean() : def;
 
     private static object Ok(object extra = null) => extra ?? new { ok = true };
+
+    /// <summary>
+    /// Read FindNeedle's own diagnostic logs for the <c>get_diagnostics</c> tool: the perf log
+    /// (from <see cref="FindPluginCore.Diagnostics.PerfLog.FilePath"/>) and/or the app message log
+    /// (in-memory <see cref="FindNeedlePluginLib.Logger.LogCache"/> for this run). Pure read; never
+    /// throws — a failure on one source is reported in-band so the other still returns.
+    /// </summary>
+    private static object ReadDiagnostics(string which, int maxLines, string contains)
+    {
+        bool wantPerf = which is "both" or "perf";
+        bool wantApp = which is "both" or "app";
+        var perfPath = FindPluginCore.Diagnostics.PerfLog.FilePath;
+
+        IEnumerable<string> Filter(IEnumerable<string> lines) =>
+            string.IsNullOrEmpty(contains)
+                ? lines
+                : lines.Where(l => l != null && l.IndexOf(contains, StringComparison.OrdinalIgnoreCase) >= 0);
+
+        List<string> perf = null, app = null;
+        if (wantPerf)
+        {
+            try { perf = Filter(ReadAllLinesShared(perfPath)).TakeLast(maxLines).ToList(); }
+            catch (Exception ex) { perf = new List<string> { "(perf log unreadable: " + ex.Message + ")" }; }
+        }
+        if (wantApp)
+        {
+            try { app = Filter(FindNeedlePluginLib.Logger.Instance.LogCache).TakeLast(maxLines).ToList(); }
+            catch (Exception ex) { app = new List<string> { "(app log unreadable: " + ex.Message + ")" }; }
+        }
+
+        return new { perfLogPath = perfPath, perfLineCount = perf?.Count ?? 0, appLineCount = app?.Count ?? 0, perf, app };
+    }
+
+    /// <summary>Read a text file's lines with a shared read lock, so reading the perf log never
+    /// fights the append-writer (which holds the file open during a write).</summary>
+    private static string[] ReadAllLinesShared(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return Array.Empty<string>();
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var sr = new StreamReader(fs);
+        var lines = new List<string>();
+        string line;
+        while ((line = sr.ReadLine()) != null) lines.Add(line);
+        return lines.ToArray();
+    }
 
     // schema fragments
     private static object Obj(object properties, params string[] required)
@@ -130,6 +177,21 @@ internal static class McpTools
             Description = "Wait until a result viewer is open (e.g. just after app launch or a search), so viewer tools don't hit the 'no viewer' race. Returns whether one is ready.",
             InputSchema = Obj(new { timeoutMs = I("Max time to wait in ms (default 10000, max 120000).") }),
             Invoke = async a => new { ready = await B.WaitForViewerAsync(Int(a, "timeoutMs", 10_000)) },
+        },
+        new ToolDef
+        {
+            Name = "get_diagnostics",
+            Description = "Read FindNeedle's OWN diagnostic logs — NOT the logs being analyzed. Two sources: 'perf' is the structured timing log (search.run / location.* / viewer.* / cache.* / storage.* events with elapsed_ms) that shows how the app is performing — load times, cache hits, storage tier; 'app' is the human-readable message log (info / warnings / errors) for this run. Use this to understand the user's experience and diagnose slow loads or failures. Always succeeds.",
+            InputSchema = Obj(new
+            {
+                which = S("Which log: 'perf' (timings), 'app' (messages), or 'both' (default)."),
+                lines = I("Max lines per log, newest last (default 100, max 2000)."),
+                contains = S("Optional case-insensitive substring filter applied per line (e.g. 'cache', 'location.end', 'error')."),
+            }),
+            Invoke = async a => await Task.FromResult(ReadDiagnostics(
+                (Str(a, "which", "both") ?? "both").Trim().ToLowerInvariant(),
+                Math.Clamp(Int(a, "lines", 100), 1, 2000),
+                Str(a, "contains"))),
         },
 
         // ---------- viewer: read ----------
