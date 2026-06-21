@@ -425,7 +425,9 @@ public class NuSearchQuery : ISearchQuery
         {
             FlowProgress.Begin(FlowPhase.CheckCache);
             var path = _locations[0].GetName();
-            if (System.IO.File.Exists(path))
+            // File OR folder — the cache signature (EvaluateCacheReuse) handles both, so a folder
+            // source like the DISM Logs folder gets the same warm-cache skip-the-rescan fast path.
+            if (FindNeedleCoreUtils.CachedStorage.SourceExists(path))
             {
                 try
                 {
@@ -442,12 +444,15 @@ public class NuSearchQuery : ISearchQuery
                             CacheReusePromptInfo info;
                             try
                             {
-                                var fi = new System.IO.FileInfo(path);
+                                // Folder-aware signature so the prompt shows the aggregate size/mtime
+                                // for a folder source, not a throw from FileInfo on a directory.
+                                FindNeedleCoreUtils.CachedStorage.TryGetSourceSignature(
+                                    path, out var sigSize, out var sigMtime, out _);
                                 info = new CacheReusePromptInfo
                                 {
                                     SourceFilePath = path,
-                                    SourceFileSize = fi.Length,
-                                    SourceFileMtimeUtc = fi.LastWriteTimeUtc,
+                                    SourceFileSize = sigSize,
+                                    SourceFileMtimeUtc = sigMtime,
                                     CachedRowCount = sql.GetStatistics().filteredRecordCount,
                                     CacheCompletedAtUtc = sql.TryGetCacheCompletedAt(),
                                 };
@@ -1105,7 +1110,7 @@ public class NuSearchQuery : ISearchQuery
         else
         {
             var path = _locations[0].GetName();
-            if (!System.IO.File.Exists(path))
+            if (!FindNeedleCoreUtils.CachedStorage.SourceExists(path))
             {
                 PerfLog.Log("cache.write.skip", ("reason", "source_missing"));
             }

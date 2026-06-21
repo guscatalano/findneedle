@@ -29,6 +29,8 @@ public class SearchIndexTests
     {
         foreach (var p in _dbPaths)
             try { if (File.Exists(p)) File.Delete(p); } catch { }
+        foreach (var d in _dirs)
+            try { if (Directory.Exists(d)) Directory.Delete(d, recursive: true); } catch { }
     }
 
     private SqliteStorage NewSqlite()
@@ -92,6 +94,66 @@ public class SearchIndexTests
             Assert.IsTrue(s.IsSearchIndexBuilt, "fts_built=1 should round-trip through the cache");
             Assert.AreEqual(ExpectedNeedles, SearchCount(s, "needle"));
         }
+    }
+
+    /// <summary>A folder "source" with a couple of log files. The cache signature must aggregate
+    /// over its files so a folder gets the warm-cache fast path (the DISM Logs folder case).</summary>
+    private string NewSourceFolder(params string[] fileContents)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "idxsrcdir_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        for (int i = 0; i < fileContents.Length; i++)
+            File.WriteAllText(Path.Combine(dir, $"part{i}.log"), fileContents[i]);
+        _dirs.Add(dir);
+        _dbPaths.Add(CachedStorage.GetCacheFilePath(dir, ".db"));
+        return dir;
+    }
+
+    private readonly List<string> _dirs = new();
+
+    [TestMethod]
+    public void Cache_FolderSource_ReusesWhenUnchanged_InvalidatesOnChange()
+    {
+        var dir = NewSourceFolder("alpha log line", "beta log line");
+        const int sver = SqliteStorage.CacheSchemaVersion;
+
+        // Build + stamp a cache keyed on the FOLDER path.
+        using (var s = new SqliteStorage(dir))
+        {
+            s.ClearTables();
+            s.AddFilteredBatch(MakeRows());
+            s.WriteCompletionMetadata(dir, sver);
+        }
+
+        // Reopen unchanged → folder signature matches → reuse.
+        using (var s = new SqliteStorage(dir))
+            Assert.IsTrue(s.EvaluateCacheReuse(dir, sver), "unchanged folder should reuse the cache");
+
+        // Grow one file → total size + mtime change → no reuse.
+        File.AppendAllText(Path.Combine(dir, "part0.log"), " more bytes");
+        using (var s = new SqliteStorage(dir))
+            Assert.IsFalse(s.EvaluateCacheReuse(dir, sver), "a changed file must invalidate the folder cache");
+    }
+
+    [TestMethod]
+    public void Cache_FolderSource_InvalidatesWhenFileAdded()
+    {
+        var dir = NewSourceFolder("only file");
+        const int sver = SqliteStorage.CacheSchemaVersion;
+
+        using (var s = new SqliteStorage(dir))
+        {
+            s.ClearTables();
+            s.AddFilteredBatch(MakeRows());
+            s.WriteCompletionMetadata(dir, sver);
+        }
+        using (var s = new SqliteStorage(dir))
+            Assert.IsTrue(s.EvaluateCacheReuse(dir, sver));
+
+        // A new (empty) file: total size + mtime could coincide, but file count changed → no reuse.
+        File.WriteAllText(Path.Combine(dir, "added.log"), "");
+        using (var s = new SqliteStorage(dir))
+            Assert.IsFalse(s.EvaluateCacheReuse(dir, sver), "adding a file must invalidate the folder cache");
     }
 
     [TestMethod]

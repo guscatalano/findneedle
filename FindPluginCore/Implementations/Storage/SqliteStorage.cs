@@ -46,9 +46,10 @@ namespace FindPluginCore.Implementations.Storage
         /// value stored in the <c>_meta</c> table on the cached DB.
         /// </summary>
         // v2: added ProcessId/ThreadId/ActivityId. v3: EventId/Keywords/RelatedActivityId/Channel/
-        // ProviderGuid/RecordId. v4: ProcessName/StructuredData. Old caches rescan; EnsureColumns
-        // migrates table structure in place.
-        public const int CacheSchemaVersion = 4;
+        // ProviderGuid/RecordId. v4: ProcessName/StructuredData. v5: folder-aware source signature
+        // (source_count added; size/mtime now aggregate across a folder's files). Old caches rescan;
+        // EnsureColumns migrates table structure in place.
+        public const int CacheSchemaVersion = 5;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -522,7 +523,7 @@ namespace FindPluginCore.Implementations.Storage
         {
             ReusedExistingCache = false;
 
-            if (string.IsNullOrEmpty(sourcePath) || !System.IO.File.Exists(sourcePath))
+            if (!CachedStorage.SourceExists(sourcePath))
             {
                 FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "source_missing"));
                 ClearTables();
@@ -533,15 +534,12 @@ namespace FindPluginCore.Implementations.Storage
             {
                 long expectedSize;
                 DateTime expectedMtime;
-                try
+                int expectedCount;
+                // Signature works for a single file OR a folder (sum of sizes, newest mtime, file
+                // count) so the warm-cache fast path covers folder sources like the DISM Logs folder.
+                if (!CachedStorage.TryGetSourceSignature(sourcePath, out expectedSize, out expectedMtime, out expectedCount))
                 {
-                    var info = new System.IO.FileInfo(sourcePath);
-                    expectedSize = info.Length;
-                    expectedMtime = info.LastWriteTimeUtc;
-                }
-                catch (Exception ex)
-                {
-                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "stat_failed"), ("msg", ex.GetType().Name));
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "stat_failed"));
                     ClearTables();
                     return false;
                 }
@@ -591,6 +589,15 @@ namespace FindPluginCore.Implementations.Storage
                 {
                     FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "mtime_differs"),
                         ("got", sm ?? "(null)"), ("want", expectedMtimeStr));
+                    ClearTables();
+                    return false;
+                }
+                // File count guards the folder case: a file added or removed (without changing total
+                // size or the newest mtime — e.g. a log rotated out) would otherwise slip through.
+                if (!meta.TryGetValue("source_count", out var sc) || sc != expectedCount.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "count_differs"),
+                        ("got", sc ?? "(null)"), ("want", expectedCount));
                     ClearTables();
                     return false;
                 }
@@ -646,22 +653,14 @@ namespace FindPluginCore.Implementations.Storage
             }
             long size;
             string mtime;
-            try
+            int count;
+            // Same file-or-folder signature EvaluateCacheReuse validates against.
+            if (!CachedStorage.TryGetSourceSignature(sourcePath, out size, out var mtimeUtc, out count))
             {
-                var info = new System.IO.FileInfo(sourcePath);
-                if (!info.Exists)
-                {
-                    FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", false), ("reason", "source_missing"));
-                    return;
-                }
-                size = info.Length;
-                mtime = info.LastWriteTimeUtc.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
-            }
-            catch (Exception ex)
-            {
-                FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", false), ("reason", "stat_failed"), ("msg", ex.GetType().Name));
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", false), ("reason", "source_missing"));
                 return;
             }
+            mtime = mtimeUtc.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
 
             lock (_sync)
             {
@@ -672,6 +671,7 @@ namespace FindPluginCore.Implementations.Storage
                     WriteMetaKey(tx, "source_path",    sourcePath);
                     WriteMetaKey(tx, "source_size",    size.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     WriteMetaKey(tx, "source_mtime",   mtime);
+                    WriteMetaKey(tx, "source_count",   count.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     WriteMetaKey(tx, "completed",      "1");
                     // Whether the FTS index is already built. With deferred (lazy/background) indexing
                     // the rows can be cache-complete while the index isn't built yet — a warm reopen
