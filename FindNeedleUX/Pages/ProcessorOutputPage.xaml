@@ -89,5 +89,16 @@
                 <Grid x:Name="FullscreenHost" />
             </Border>
         </Grid>
+
+        <!-- Generating overlay: themed loader gif while an output rule runs. -->
+        <Border x:Name="GeneratingOverlay" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
+                Background="#90000000" AutomationProperties.LiveSetting="Polite">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                <Image x:Name="GeneratingGif" Width="160" Height="160" Visibility="Collapsed"/>
+                <ProgressRing x:Name="GeneratingRing" Width="48" Height="48" IsActive="True"/>
+                <TextBlock x:Name="GeneratingText" Text="Generating diagram…" Foreground="White"
+                           FontSize="14" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Page>

@@ -53,6 +53,7 @@ public sealed partial class ProcessorOutputPage : Page
         GenerateButton.IsEnabled = false;
         var prevLabel = GenerateLabel.Text;
         GenerateLabel.Text = "Generating…";
+        ShowGeneratingOverlay(true);
         try
         {
             await System.Threading.Tasks.Task.Run(() => MiddleLayerService.GenerateRuleOutputs());
@@ -64,9 +65,50 @@ public sealed partial class ProcessorOutputPage : Page
         }
         finally
         {
+            ShowGeneratingOverlay(false);
             GenerateLabel.Text = prevLabel;
             GenerateButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>Show/hide the "generating" overlay, using the user's themed loader gif (the same little
+    /// animations the search uses) and falling back to a progress ring for the Spinner/Bar themes.</summary>
+    private void ShowGeneratingOverlay(bool show)
+    {
+        if (GeneratingOverlay == null) return;
+        if (show)
+        {
+            var mode = ResultsViewerSettings.LoadingAnimation;
+            if (RobotLoader.IsAnimated(mode))
+            {
+                try
+                {
+                    GeneratingGif.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
+                        new Uri(RobotLoader.Uri(0, mode, wide: false)));
+                    GeneratingGif.Visibility = Visibility.Visible;
+                    GeneratingRing.Visibility = Visibility.Collapsed;
+                    GeneratingRing.IsActive = false;
+                }
+                catch
+                {
+                    GeneratingGif.Visibility = Visibility.Collapsed;
+                    GeneratingRing.Visibility = Visibility.Visible;
+                    GeneratingRing.IsActive = true;
+                }
+            }
+            else
+            {
+                GeneratingGif.Visibility = Visibility.Collapsed;
+                GeneratingRing.Visibility = Visibility.Visible;
+                GeneratingRing.IsActive = true;
+            }
+        }
+        else
+        {
+            GeneratingRing.IsActive = false;
+            GeneratingGif.Source = null; // stop the gif decoding
+        }
+        GeneratingOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void BuildPage()
