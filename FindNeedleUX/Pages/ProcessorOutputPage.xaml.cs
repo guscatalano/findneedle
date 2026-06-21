@@ -20,7 +20,7 @@ public sealed partial class ProcessorOutputPage : Page
 {
     private List<FindNeedleRuleDSL.UmlDiagramUsage> _diagramUsages = new();
 
-    private enum EntryKind { Header, Processor, File }
+    private enum EntryKind { Header, Processor, File, Pending }
 
     private sealed class OutputEntry
     {
@@ -91,6 +91,10 @@ public sealed partial class ProcessorOutputPage : Page
         _diagramUsages = (query as FindPluginCore.Searching.NuSearchQuery)?.GeneratedDiagramUsages?.ToList()
             ?? new List<FindNeedleRuleDSL.UmlDiagramUsage>();
 
+        // Output rules that haven't been run yet (deferred). Listed so the page can say "I can produce
+        // these — click Generate" before anything is generated.
+        var pending = files.Count == 0 ? PendingOutputs() : new List<PendingOutput>();
+
         // Summary line.
         var diagramCount = files.Count(IsMermaid);
         var parts = new List<string>
@@ -99,9 +103,23 @@ public sealed partial class ProcessorOutputPage : Page
         };
         if (files.Count > 0) parts.Add($"{files.Count} file{(files.Count == 1 ? "" : "s")} generated");
         if (diagramCount > 0) parts.Add($"{diagramCount} diagram{(diagramCount == 1 ? "" : "s")}");
+        if (pending.Count > 0) parts.Add($"{pending.Count} output{(pending.Count == 1 ? "" : "s")} ready — click Generate");
         SummaryText.Text = string.Join("  -  ", parts);
 
         ListViewItem? firstSelectable = null;
+
+        // --- Ready to generate (deferred outputs not yet produced) ---
+        if (pending.Count > 0)
+        {
+            OutputList.Items.Add(MakeHeaderItem("Ready to generate"));
+            foreach (var po in pending)
+            {
+                var entry = new OutputEntry { Kind = EntryKind.Pending, Title = po.Title, Subtitle = po.Detail };
+                var item = MakeEntryItem(entry, Symbol.Play);
+                OutputList.Items.Add(item);
+                firstSelectable ??= item;
+            }
+        }
 
         // --- Generated files first (the payoff: diagrams / exports) ---
         if (files.Count > 0)
@@ -149,6 +167,65 @@ public sealed partial class ProcessorOutputPage : Page
         }
 
         OutputList.SelectedItem = firstSelectable;
+    }
+
+    private sealed record PendingOutput(string Title, string Detail);
+
+    /// <summary>Describe the output rules that WOULD run (parsed from the active rule files' output
+    /// sections) so the page can preview them before the user hits Generate.</summary>
+    private static List<PendingOutput> PendingOutputs()
+    {
+        var result = new List<PendingOutput>();
+        var paths = MiddleLayerService.SearchQueryUX.CurrentQuery?.RulesConfigPaths;
+        if (paths == null) return result;
+        foreach (var path in paths)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+                var root = doc.RootElement;
+                string setTitle =
+                    root.TryGetProperty("title", out var t) ? t.GetString() :
+                    root.TryGetProperty("Title", out var t2) ? t2.GetString() :
+                    Path.GetFileNameWithoutExtension(path);
+
+                if (!root.TryGetProperty("sections", out var secs) && !root.TryGetProperty("Sections", out secs)) continue;
+                if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+                foreach (var s in secs.EnumerateArray())
+                {
+                    string purpose = s.TryGetProperty("purpose", out var p) ? p.GetString()
+                                   : s.TryGetProperty("Purpose", out var p2) ? p2.GetString() : null;
+                    if (!string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!s.TryGetProperty("rules", out var rules) && !s.TryGetProperty("Rules", out rules)) continue;
+                    if (rules.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+                    foreach (var r in rules.EnumerateArray())
+                    {
+                        if ((r.TryGetProperty("enabled", out var en) || r.TryGetProperty("Enabled", out en))
+                            && en.ValueKind == System.Text.Json.JsonValueKind.False) continue;
+                        if (!r.TryGetProperty("action", out var act) && !r.TryGetProperty("Action", out act)) continue;
+                        string type = act.TryGetProperty("type", out var ty) ? ty.GetString()
+                                    : act.TryGetProperty("Type", out var ty2) ? ty2.GetString() : "output";
+                        result.Add(new PendingOutput(setTitle ?? "Output", DescribePendingAction(type, act)));
+                    }
+                }
+            }
+            catch { /* skip an unparseable rule file */ }
+        }
+        return result;
+    }
+
+    private static string DescribePendingAction(string type, System.Text.Json.JsonElement act)
+    {
+        string Get(string n) => act.TryGetProperty(n, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+        var path = Get("path") ?? Get("Path");
+        var fileHint = string.IsNullOrEmpty(path) ? "" : " → " + Path.GetFileName(path);
+        return (type ?? "").ToLowerInvariant() switch
+        {
+            "uml" => $"{Get("syntax") ?? "mermaid"} diagram{fileHint}",
+            "output" => $"{(Get("format") ?? "csv").ToUpperInvariant()} export{fileHint}",
+            _ => (type ?? "output") + fileHint,
+        };
     }
 
     // ---------- list item factories ----------
@@ -249,9 +326,12 @@ public sealed partial class ProcessorOutputPage : Page
         if (OutputList.SelectedItem is ListViewItem lvi && lvi.Tag is OutputEntry entry)
         {
             DetailHost.Children.Clear();
-            UIElement content = entry.Kind == EntryKind.File
-                ? BuildFileDetail(entry.FilePath!)
-                : BuildProcessorDetail(entry.Processor!, entry.Title);
+            UIElement content = entry.Kind switch
+            {
+                EntryKind.File => BuildFileDetail(entry.FilePath!),
+                EntryKind.Pending => BuildPendingDetail(entry),
+                _ => BuildProcessorDetail(entry.Processor!, entry.Title),
+            };
             DetailHost.Children.Add(content);
         }
     }
@@ -273,6 +353,26 @@ public sealed partial class ProcessorOutputPage : Page
     }
 
     // ---------- detail builders ----------
+
+    /// <summary>Detail for a not-yet-generated output: what it will produce + a Generate button. Outputs
+    /// are deferred so a normal search stays fast; this is the explicit "produce it now" affordance.</summary>
+    private UIElement BuildPendingDetail(OutputEntry entry)
+    {
+        var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(new TextBlock { Text = entry.Title, FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrEmpty(entry.Subtitle))
+            panel.Children.Add(new TextBlock { Text = entry.Subtitle, Foreground = new SolidColorBrush(Colors.Gray), TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Not generated yet. Output rules run on demand so searches stay fast — click Generate to produce them.",
+            Foreground = new SolidColorBrush(Colors.Gray), TextWrapping = TextWrapping.Wrap,
+        });
+        var btn = new Button { Content = "Generate now", Margin = new Thickness(0, 4, 0, 0) };
+        try { btn.Style = (Style)Application.Current.Resources["AccentButtonStyle"]; } catch { }
+        btn.Click += (_, __) => Generate_Click(btn, null!);
+        panel.Children.Add(btn);
+        return panel;
+    }
 
     private UIElement BuildProcessorDetail(IResultProcessor processor, string title)
     {
