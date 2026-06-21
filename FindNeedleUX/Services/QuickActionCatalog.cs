@@ -26,7 +26,7 @@ public static class QuickActionCatalog
         new QuickAction("open_ado",         "Open ADO Work Item",  "🔷"),
         new QuickAction("open_github",      "Open GitHub Issue",   "🐙"),
         new QuickAction("open_kusto",       "Open Kusto Query",    "🔎"),
-        new QuickAction("cached",           "Cached Searches",     "🕑"),
+        new QuickAction("cached",           "Recent Searches",     "🕑"),
         new QuickAction("locations",        "Configure Locations", "📍"),
         new QuickAction("rules_config",     "Configure Rules",     "⚙️"),
         new QuickAction("auto_rules",       "Auto-add Rules",      "✨"),
@@ -38,7 +38,7 @@ public static class QuickActionCatalog
     };
 
     /// <summary>The default set shown until the user customizes.</summary>
-    public static readonly IReadOnlyList<string> Defaults = new[] { "open_file", "open_folder", "open_rules" };
+    public static readonly IReadOnlyList<string> Defaults = new[] { "open_file", "open_folder", "open_rules", "cached" };
 
     private static readonly string DefaultPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
