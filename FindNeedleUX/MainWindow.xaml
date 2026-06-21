@@ -48,9 +48,6 @@
             </MenuBarItem>
 
             <MenuBarItem Title="Settings">
-                <ToggleMenuFlyoutItem x:Name="StatusBarToggle" Text="Show status bar" IsChecked="True"
-                                      Click="StatusBarToggle_Click"/>
-                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Preferences..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
                 <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
                 <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
@@ -101,18 +98,6 @@
                 </StackPanel>
             </Grid>
         </Border>
-
-        <!-- Restore handle, shown only when the status bar is hidden. Labeled so it's discoverable. -->
-        <Button x:Name="StatusRestoreButton" Grid.Row="1" Visibility="Collapsed"
-                Click="ShowStatusStrip_Click" HorizontalAlignment="Stretch" Padding="0" MinHeight="0"
-                Height="18" Background="{ThemeResource SystemControlBackgroundAltHighBrush}"
-                BorderThickness="0,0,0,1" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}"
-                ToolTipService.ToolTip="Show status bar">
-            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                <FontIcon Glyph="&#xE70D;" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="Show status bar" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-            </StackPanel>
-        </Button>
 
         <!-- Main content area with overlay spinner -->
         <Grid Grid.Row="2">

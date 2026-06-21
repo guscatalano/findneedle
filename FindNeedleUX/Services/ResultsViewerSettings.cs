@@ -203,6 +203,15 @@ public static class ResultsViewerSettings
         set { Data.ShowWelcomeIntro = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>Whether the main-window status bar is shown. On by default; the bar's × turns it off,
+    /// a Preferences toggle turns it back on. Broadcasts Changed so the window updates live.</summary>
+    public const bool DefaultShowStatusBar = true;
+    public static bool ShowStatusBar
+    {
+        get => Data.ShowStatusBar ?? DefaultShowStatusBar;
+        set { Data.ShowStatusBar = value; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>
     /// Whether the in-app MCP server is enabled. When on, the app hosts a localhost-only HTTP MCP
     /// endpoint that lets an agent read and drive the live result viewer. Off by default (it exposes
@@ -505,6 +514,7 @@ public static class ResultsViewerSettings
         public bool? RobotWide { get; set; }
         public bool? ColorTaggedRows { get; set; }
         public bool? ShowWelcomeIntro { get; set; }
+        public bool? ShowStatusBar { get; set; }
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }
         public string TraceFormatSearchPath { get; set; }

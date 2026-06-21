@@ -246,6 +246,18 @@
                                        Text="The intro + key-features banner at the top of the welcome page. Dismissing it there also unchecks this."/>
                         </StackPanel>
                     </Border>
+
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Status bar" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ShowStatusBarCheck" Content="Show the status bar"
+                                      Checked="ShowStatusBarCheck_Changed" Unchecked="ShowStatusBarCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="The bar at the top with Locations / Rules / Last run / Run → View Results. Closing it with the × turns this off."/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- ============================ SEARCH ============================ -->

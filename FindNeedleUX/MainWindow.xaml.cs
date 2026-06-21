@@ -42,6 +42,8 @@ public sealed partial class MainWindow : Window
         // Keep the top "Quick" menu in sync when quick actions are edited on the welcome page.
         FindNeedleUX.Services.QuickActionCatalog.Changed += () => DispatcherQueue.TryEnqueue(BuildQuickMenu);
         ApplyPersistedStatusStripVisibility();
+        // Re-apply status-bar visibility when toggled in Preferences.
+        ResultsViewerSettings.Changed += () => DispatcherQueue.TryEnqueue(ApplyPersistedStatusStripVisibility);
         InitMcpIndicator();
 
         // Pre-warm the heavy viewer pages on a low-priority dispatcher tick. Constructing the
@@ -437,8 +439,6 @@ public sealed partial class MainWindow : Window
         return "Loading viewer…";
     }
 
-    private const string StatusHiddenSettingKey = "StatusStripHidden";
-
     private void RefreshStatusStrip()
     {
         if (StatusSegments == null) return; // not yet realized
@@ -707,24 +707,13 @@ public sealed partial class MainWindow : Window
         menu.ShowAt(StatusEditButton);
     }
 
-    private void HideStatusStrip_Click(object sender, RoutedEventArgs e) => SetStatusStripHidden(true);
-    private void ShowStatusStrip_Click(object sender, RoutedEventArgs e) => SetStatusStripHidden(false);
-    private void StatusBarToggle_Click(object sender, RoutedEventArgs e)
-        => SetStatusStripHidden(StatusBarToggle.IsChecked == false);
-
-    private void SetStatusStripHidden(bool hidden)
-    {
-        StatusStripBorder.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
-        StatusRestoreButton.Visibility = hidden ? Visibility.Visible : Visibility.Collapsed;
-        if (StatusBarToggle != null) StatusBarToggle.IsChecked = !hidden;
-        try { global::Windows.Storage.ApplicationData.Current.LocalSettings.Values[StatusHiddenSettingKey] = hidden; } catch { }
-    }
+    // The × on the status bar hides it; it's restored from Preferences (Settings ▸ Preferences ▸
+    // "Show status bar"), not an on-screen handle. Persisted via ResultsViewerSettings (file-based).
+    private void HideStatusStrip_Click(object sender, RoutedEventArgs e) => ResultsViewerSettings.ShowStatusBar = false;
 
     private void ApplyPersistedStatusStripVisibility()
     {
-        bool hidden = false;
-        try { hidden = global::Windows.Storage.ApplicationData.Current.LocalSettings.Values[StatusHiddenSettingKey] is bool b && b; } catch { }
-        SetStatusStripHidden(hidden);
+        StatusStripBorder.Visibility = ResultsViewerSettings.ShowStatusBar ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void SetWindowIcon(string iconPath)

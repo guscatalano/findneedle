@@ -91,9 +91,7 @@
                     </StackPanel>
                 </Button>
             </Grid>
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="QuickActionsHost" Orientation="Horizontal" Spacing="12"/>
-            </ScrollViewer>
+            <local:SimpleWrapPanel x:Name="QuickActionsHost" HorizontalSpacing="12" VerticalSpacing="12"/>
 
         </StackPanel>
     </ScrollViewer>
