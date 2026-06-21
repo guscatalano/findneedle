@@ -99,4 +99,45 @@ public class PiiFilterRulesTests
         var rule = LoadRules().Sections.SelectMany(s => s.Rules).First(r => r.Name == "exclude-ipv4");
         Assert.IsFalse(rule.Enabled, "IPv4 filtering is opt-in (off by default)");
     }
+
+    // ----- companion redact rule set -----
+
+    private static UnifiedRuleSet LoadRedactRules()
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir != null)
+        {
+            var candidate = Path.Combine(dir.FullName, "FindNeedleUX", "CommonRules", "pii-redact.rules.json");
+            if (File.Exists(candidate))
+                return JsonSerializer.Deserialize<UnifiedRuleSet>(File.ReadAllText(candidate),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            dir = dir.Parent;
+        }
+        Assert.Fail("pii-redact.rules.json not found");
+        return null;
+    }
+
+    [TestMethod]
+    public void RedactRuleSet_UsesRedactAction_WithReplacement()
+    {
+        var set = LoadRedactRules();
+        var rules = set.Sections.SelectMany(s => s.Rules).ToList();
+        Assert.IsTrue(rules.Count >= 5);
+        foreach (var r in rules)
+        {
+            Assert.AreEqual("redact", r.Action.Type, $"{r.Name} should redact");
+            Assert.IsFalse(string.IsNullOrEmpty(r.Action.Replacement), $"{r.Name} needs a replacement mask");
+            _ = new Regex(r.Match); // must compile
+        }
+    }
+
+    [TestMethod]
+    public void RedactEmail_MasksTheValue()
+    {
+        var rule = LoadRedactRules().Sections.SelectMany(s => s.Rules).First(r => r.Name == "redact-email");
+        var rx = new Regex(rule.Match, RegexOptions.IgnoreCase);
+        var masked = rx.Replace("login from bob@contoso.com ok", rule.Action.Replacement);
+        Assert.IsFalse(masked.Contains("bob@contoso.com"));
+        StringAssert.Contains(masked, rule.Action.Replacement);
+    }
 }

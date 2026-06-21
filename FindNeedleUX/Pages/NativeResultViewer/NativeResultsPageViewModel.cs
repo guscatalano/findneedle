@@ -52,6 +52,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private FindPluginCore.Implementations.Storage.SqliteStorage _ruleFilteredStorage;
     private readonly List<(Regex match, Regex unmatch)> _excludeRules = new();
     private readonly List<(Regex match, Regex unmatch)> _includeRules = new();
+    private readonly List<(Regex match, string replacement)> _redactRules = new();
 
     /// <summary>True while the viewer is showing the rule-filtered subset.</summary>
     public bool RuleFilterActive { get; private set; }
@@ -74,8 +75,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         }
 
         CompileRuleFilters(ruleFiles);
-        if (_excludeRules.Count == 0 && _includeRules.Count == 0) return -1;
+        if (_excludeRules.Count == 0 && _includeRules.Count == 0 && _redactRules.Count == 0) return -1;
 
+        bool redacting = _redactRules.Count > 0;
         var orig = MiddleLayerService.GetSearchStorage();
         var built = await Task.Run(() =>
         {
@@ -85,6 +87,10 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             orig.GetFilteredResultsInBatches(batch =>
             {
                 var keep = batch.Where(r => RulePass(r.GetSearchableData())).ToList();
+                // Redact (mask) PII in-place on the kept rows before they're stored, so the masked
+                // text is what the viewer shows, searches, and exports.
+                if (redacting)
+                    for (int i = 0; i < keep.Count; i++) keep[i] = new RedactingSearchResult(keep[i], _redactRules);
                 if (keep.Count > 0) { store.AddFilteredBatch(keep); kept += keep.Count; }
             });
             return (store, kept);
@@ -120,6 +126,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         _excludeRules.Clear();
         _includeRules.Clear();
+        _redactRules.Clear();
         var opts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         foreach (var file in ruleFiles ?? Enumerable.Empty<string>())
         {
@@ -133,6 +140,16 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                     {
                         if (!rule.Enabled || string.IsNullOrEmpty(rule.Match)) continue;
                         var type = rule.Action?.Type?.ToLowerInvariant();
+
+                        if (type == "redact")
+                        {
+                            Regex rm;
+                            try { rm = CompileRule(rule.Match); } catch { continue; }
+                            var replacement = string.IsNullOrEmpty(rule.Action?.Replacement) ? "[REDACTED]" : rule.Action.Replacement;
+                            _redactRules.Add((rm, replacement));
+                            continue;
+                        }
+
                         if (type != "exclude" && type != "include") continue;
 
                         Regex m;

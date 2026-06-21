@@ -21,7 +21,12 @@
   },
   {
     "File": "pii-filter.rules.json",
-    "Name": "Filter out PII",
+    "Name": "Filter out PII (hide lines)",
+    "Condition": { "Always": true }
+  },
+  {
+    "File": "pii-redact.rules.json",
+    "Name": "Redact PII (mask in place)",
     "Condition": { "Always": true }
   },
   {

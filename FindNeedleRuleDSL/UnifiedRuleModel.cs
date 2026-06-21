@@ -212,6 +212,9 @@ public class UnifiedRuleAction
     [JsonPropertyName("value")]
     public string? Value { get; set; } // For "tag" action: the tag value
 
+    [JsonPropertyName("replacement")]
+    public string? Replacement { get; set; } // For "redact" action: the mask text (default "[REDACTED]")
+
     [JsonPropertyName("processor")]
     public string? Processor { get; set; } // For "route" action: target processor name
 

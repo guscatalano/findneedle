@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Redact PII",
+  "description": "Masks personally identifiable information in place — email addresses, US Social Security numbers, formatted credit-card numbers, phone numbers, and MAC addresses are replaced with [REDACTED] while the log line is kept. Companion to 'Filter out PII' (which hides the whole line instead). Opt-in: enable under Configure > Auto-add rules, turn on the viewer's Rule filter, and the masked text is what you see, search, and export. IP-address redaction ships disabled.",
+  "sections": [
+    {
+      "name": "PiiRedact",
+      "description": "Mask PII in place",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "redact-email",
+          "match": "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}",
+          "enabled": true,
+          "action": { "type": "redact", "replacement": "[REDACTED-EMAIL]" }
+        },
+        {
+          "name": "redact-ssn",
+          "match": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+          "enabled": true,
+          "action": { "type": "redact", "replacement": "[REDACTED-SSN]" }
+        },
+        {
+          "name": "redact-credit-card",
+          "match": "\\b\\d{4}[ -]\\d{4}[ -]\\d{4}[ -]\\d{4}\\b",
+          "enabled": true,
+          "action": { "type": "redact", "replacement": "[REDACTED-CARD]" }
+        },
+        {
+          "name": "redact-phone",
+          "match": "\\b(?:\\+?1[-. ]?)?\\(?\\d{3}\\)?[-. ]\\d{3}[-. ]\\d{4}\\b",
+          "enabled": true,
+          "action": { "type": "redact", "replacement": "[REDACTED-PHONE]" }
+        },
+        {
+          "name": "redact-mac-address",
+          "match": "\\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\\b",
+          "enabled": true,
+          "action": { "type": "redact", "replacement": "[REDACTED-MAC]" }
+        },
+        {
+          "name": "redact-ipv4",
+          "match": "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
+          "enabled": false,
+          "action": { "type": "redact", "replacement": "[REDACTED-IP]" }
+        }
+      ]
+    }
+  ]
+}
