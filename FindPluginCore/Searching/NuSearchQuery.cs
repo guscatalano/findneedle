@@ -1002,10 +1002,14 @@ public class NuSearchQuery : ISearchQuery
     private bool LoadedRulesNeedListNow()
     {
         if (LoadedRules == null) return false;
-        if (_ruleLoader.GetSectionsByPurpose(LoadedRules, "filter").Count > 0) return true;
+        // Enrichment transforms the in-RAM list in Step3 → always needs it.
         if (_ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment").Count > 0) return true;
+        // Filter rules only feed outputs (the viewer reads raw scanned rows and applies filter rules via
+        // its rule-view toggle). So filtering alone doesn't force materialization during a plain search —
+        // it's needed only when outputs actually run. When outputs are deferred, neither does.
         if (DeferOutputs) return false;
-        return _ruleLoader.GetSectionsByPurpose(LoadedRules, "output").Count > 0;
+        return _ruleLoader.GetSectionsByPurpose(LoadedRules, "output").Count > 0
+            || _ruleLoader.GetSectionsByPurpose(LoadedRules, "filter").Count > 0;
     }
 
     /// <summary>Whether anything will consume the full list this run (so Step2 must consolidate it).</summary>

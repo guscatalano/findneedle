@@ -47,24 +47,36 @@ public class RuleProcessorGatingTests
     }
 
     [TestMethod]
-    public void FilterRule_NeedsAProcessor()
+    public void FilterRule_DoesNotNeedAProcessor()
     {
+        // Filter rules feed outputs on demand + the viewer's rule-view toggle — they don't need a
+        // Step3 stats processor, which would force the whole result list to consolidate every search.
         var p = Write("filter.rules.json", """
         { "sections": [ { "name": "F", "purpose": "filter", "providers": ["*"],
             "rules": [ { "name": "x", "match": "secret", "action": { "type": "exclude" } } ] } ] }
+        """);
+        Assert.IsFalse(MiddleLayerService.RuleFileHasProcessableSections(p));
+    }
+
+    [TestMethod]
+    public void EnrichmentRule_NeedsAProcessor()
+    {
+        var p = Write("enrich.rules.json", """
+        { "sections": [ { "name": "E", "purpose": "enrichment", "providers": ["*"],
+            "rules": [ { "name": "t", "match": "x", "action": { "type": "tag", "tag": "T" } } ] } ] }
         """);
         Assert.IsTrue(MiddleLayerService.RuleFileHasProcessableSections(p));
     }
 
     [TestMethod]
-    public void MixedRule_NeedsAProcessor()
+    public void FilterPlusOutput_DoesNotNeedAProcessor()
     {
         var p = Write("mixed.rules.json", """
         { "sections": [
             { "name": "F", "purpose": "filter", "providers": ["*"], "rules": [] },
             { "name": "D", "purpose": "output", "providers": ["*"], "rules": [] } ] }
         """);
-        Assert.IsTrue(MiddleLayerService.RuleFileHasProcessableSections(p));
+        Assert.IsFalse(MiddleLayerService.RuleFileHasProcessableSections(p));
     }
 
     [TestMethod]
@@ -90,5 +102,21 @@ public class RuleProcessorGatingTests
         Assert.IsNotNull(dism, "shipped DISM emitter must exist");
         Assert.IsFalse(MiddleLayerService.RuleFileHasProcessableSections(dism),
             "the DISM emitter is output-only → must not force consolidation as a processor");
+    }
+
+    [TestMethod]
+    public void ShippedPiiFilter_DoesNotForceConsolidation()
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        string pii = null;
+        while (dir != null)
+        {
+            var c = Path.Combine(dir.FullName, "FindNeedleUX", "CommonRules", "pii-filter.rules.json");
+            if (File.Exists(c)) { pii = c; break; }
+            dir = dir.Parent;
+        }
+        Assert.IsNotNull(pii, "shipped PII filter must exist");
+        Assert.IsFalse(MiddleLayerService.RuleFileHasProcessableSections(pii),
+            "the PII filter is filter-only → must not force consolidation during plain viewing");
     }
 }

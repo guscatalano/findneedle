@@ -341,10 +341,12 @@ public class MiddleLayerService
     }
 
     /// <summary>
-    /// True if a rule file has any non-output section (filter / enrichment / unspecified) — i.e. it does
-    /// work in Step2/Step3 and so needs the full result list. An all-output ruleset (e.g. a UML diagram)
-    /// returns false: its output runs lazily on demand, so it shouldn't force consolidation every search.
-    /// Conservative: any parse problem or unknown shape returns true.
+    /// True if a rule file needs a Step3 processor — i.e. it has an enrichment (or unknown-purpose)
+    /// section that transforms the in-RAM result list. Filter and output sections do NOT: filtering is
+    /// applied to outputs on demand (and to the viewer via the rule-view toggle), and output rules run
+    /// via the on-demand output path. Registering a processor forces the full result list to consolidate
+    /// on every search, so we only do it when there's enrichment work that actually needs it. Conservative:
+    /// any parse problem or unknown shape returns true.
     /// </summary>
     internal static bool RuleFileHasProcessableSections(string path)
     {
@@ -360,10 +362,12 @@ public class MiddleLayerService
                 string purpose = null;
                 if (s.TryGetProperty("purpose", out var p) || s.TryGetProperty("Purpose", out p))
                     purpose = p.GetString();
-                if (!string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase))
-                    return true; // a filter/enrichment/unspecified section → needs the list
+                // Only enrichment (or an unspecified/unknown purpose) needs a Step3 processor + the list.
+                if (!string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(purpose, "filter", StringComparison.OrdinalIgnoreCase))
+                    return true;
             }
-            return false; // every section is output-only
+            return false; // only filter/output sections → no Step3 processor needed
         }
         catch { return true; }
     }
