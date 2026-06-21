@@ -23,6 +23,7 @@ public static class QuickActionCatalog
         new QuickAction("open_file",        "Open Log File",       "📁"),
         new QuickAction("open_folder",      "Open Folder",         "📂"),
         new QuickAction("open_rules",       "Open Log with Rules", "📝"),
+        new QuickAction("log_finder",       "Log Finder",          "🧭"),
         new QuickAction("open_ado",         "Open ADO Work Item",  "🔷"),
         new QuickAction("open_github",      "Open GitHub Issue",   "🐙"),
         new QuickAction("open_kusto",       "Open Kusto Query",    "🔎"),
