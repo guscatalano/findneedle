@@ -39,55 +39,63 @@
             </StackPanel>
 
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Add New Location" FontWeight="SemiBold"/>
+                <Pivot>
+                    <!-- New: pick a source to add -->
+                    <PivotItem Header="New">
+                        <StackPanel Spacing="8" Margin="0,8,0,0">
+                            <TextBlock Text="Local files" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="➕ Add Folder" Click="Button_AddFolder" Width="120"
+                                        AutomationProperties.Name="Add folder location"/>
+                                <Button Content="➕ Add File" Click="Button_AddFile" Width="120"
+                                        AutomationProperties.Name="Add file location"/>
+                            </StackPanel>
 
-                    <TextBlock Text="Local files" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Content="➕ Add Folder" Click="Button_AddFolder" Width="120"
-                                AutomationProperties.Name="Add folder location"/>
-                        <Button Content="➕ Add File" Click="Button_AddFile" Width="120"
-                                AutomationProperties.Name="Add file location"/>
-                    </StackPanel>
+                            <TextBlock Text="Online sources" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="☁ Add Kusto" Click="Button_AddKusto" Width="120"
+                                        AutomationProperties.Name="Add Kusto cluster location"/>
+                                <Button Content="☁ Add ADO" Click="Button_AddAdo" Width="120"
+                                        AutomationProperties.Name="Add Azure DevOps location"/>
+                                <Button Content="☁ Add GitHub" Click="Button_AddGithub" Width="120"
+                                        AutomationProperties.Name="Add GitHub issues location"/>
+                            </StackPanel>
 
-                    <TextBlock Text="Online sources" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button Content="☁ Add Kusto" Click="Button_AddKusto" Width="120"
-                                AutomationProperties.Name="Add Kusto cluster location"/>
-                        <Button Content="☁ Add ADO" Click="Button_AddAdo" Width="120"
-                                AutomationProperties.Name="Add Azure DevOps location"/>
-                        <Button Content="☁ Add GitHub" Click="Button_AddGithub" Width="120"
-                                AutomationProperties.Name="Add GitHub issues location"/>
-                    </StackPanel>
+                            <StackPanel x:Name="StatusPanel" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0"
+                                        Visibility="Collapsed" VerticalAlignment="Center">
+                                <ProgressRing IsActive="True" Width="18" Height="18"/>
+                                <TextBlock x:Name="StatusText" VerticalAlignment="Center"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </PivotItem>
 
-                    <StackPanel x:Name="StatusPanel" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0"
-                                Visibility="Collapsed" VerticalAlignment="Center">
-                        <ProgressRing IsActive="True" Width="18" Height="18"/>
-                        <TextBlock x:Name="StatusText" VerticalAlignment="Center"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    </StackPanel>
-                </StackPanel>
+                    <!-- Recent: one click to re-add a recently used file/folder -->
+                    <PivotItem Header="Recent">
+                        <StackPanel Spacing="8" Margin="0,8,0,0">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Recently used file/folder locations" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Grid.Column="1" Text="Keep" VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <NumberBox Grid.Column="2" x:Name="RecentMaxBox" Minimum="1" Maximum="50" SpinButtonPlacementMode="Compact"
+                                           Width="96" SmallChange="1" ValueChanged="RecentMax_ValueChanged"
+                                           AutomationProperties.Name="How many recent locations to keep"/>
+                                <Button Grid.Column="3" Content="Clear" Click="RecentClear_Click"/>
+                            </Grid>
+                            <StackPanel x:Name="RecentHost" Spacing="4"/>
+                            <TextBlock x:Name="RecentEmpty" Text="No recent locations yet — add a folder or file and it'll show up here."
+                                       FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed"/>
+                        </StackPanel>
+                    </PivotItem>
+                </Pivot>
             </Border>
-
-            <!-- Recently used file/folder locations — one click to re-add. -->
-            <StackPanel x:Name="RecentSection" Spacing="8" Visibility="Collapsed">
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Recently used" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="Keep" VerticalAlignment="Center" FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <NumberBox Grid.Column="2" x:Name="RecentMaxBox" Minimum="1" Maximum="50" SpinButtonPlacementMode="Compact"
-                               Width="96" SmallChange="1" ValueChanged="RecentMax_ValueChanged"
-                               AutomationProperties.Name="How many recent locations to keep"/>
-                    <Button Grid.Column="3" Content="Clear" Click="RecentClear_Click"/>
-                </Grid>
-                <StackPanel x:Name="RecentHost" Spacing="4"/>
-            </StackPanel>
 
             <StackPanel Spacing="8">
                 <TextBlock Text="Configured Locations" FontWeight="SemiBold"/>

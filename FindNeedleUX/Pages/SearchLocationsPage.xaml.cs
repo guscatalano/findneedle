@@ -44,7 +44,7 @@ public sealed partial class SearchLocationsPage : Page
 
         RecentHost.Children.Clear();
         var recents = RecentLocationsStore.Get();
-        RecentSection.Visibility = recents.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RecentEmpty.Visibility = recents.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         foreach (var path in recents)
         {
