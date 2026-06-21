@@ -397,69 +397,114 @@ public sealed partial class MainWindow : Window
     private void RefreshStatusStrip()
     {
         if (StatusSegments == null) return; // not yet realized
-
-        var query = MiddleLayerService.GetCurrentQuery();
-        var locs = MiddleLayerService.Locations ?? new List<ISearchLocation>();
-        var filters = MiddleLayerService.Filters?.Count ?? 0;
-        var rulePaths = query?.RulesConfigPaths ?? new List<string>();
-
         StatusSegments.Children.Clear();
-
-        // Locations → Locations page. Tooltip lists the source names.
-        var locTip = locs.Count > 0
-            ? string.Join("\n", locs.Select(l => { try { return l.GetName(); } catch { return "(location)"; } }))
-            : "No locations added";
-        StatusSegments.Children.Add(MakeStatusSegment(Symbol.Folder, "Locations", locs.Count.ToString(),
-            locTip, null, () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage))));
-
-        // Filters (only when present) → Rules page (filters live with rules now).
-        if (filters > 0)
-            StatusSegments.Children.Add(MakeStatusSegment(Symbol.Find, "Filters", filters.ToString(),
-                "Active filters", null, () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage))));
-
-        // Rules → Rules page. Tooltip lists the rule file names.
-        var ruleTip = rulePaths.Count > 0
-            ? string.Join("\n", rulePaths.Select(p => { try { return System.IO.Path.GetFileName(p); } catch { return p; } }))
-            : "No rules configured";
-        StatusSegments.Children.Add(MakeStatusSegment(Symbol.List, "Rules", rulePaths.Count.ToString(),
-            ruleTip, null, () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage))));
-
-        // Last run → open the results viewer. Compute the count live from the current result storage
-        // so it's accurate for every path (streaming, cached, or a normal run) — not just the ones
-        // that set LastRunSummary. Falls back to LastRunSummary, then a dash before any search.
-        string lastRun;
-        bool hasResults = false;
-        int liveCount = -1;
-        try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { }
-        if (liveCount >= 0)
+        foreach (var id in StatusBarCatalog.GetSelectedIds())
         {
-            var suffix = MiddleLayerService.LastSearchReusedCache ? " (cached)" : " (scanned)";
-            lastRun = $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
-            hasResults = liveCount > 0;
+            var item = BuildStatusItem(id);
+            if (item != null) StatusSegments.Children.Add(item);
         }
-        else
-        {
-            lastRun = MiddleLayerService.LastRunSummary ?? _lastRunSummary;
-            hasResults = MiddleLayerService.LastRunSummary != null
-                && !MiddleLayerService.LastRunSummary.StartsWith("0 ", StringComparison.Ordinal);
-        }
-        var lastRunColor = hasResults ? Color.FromArgb(255, 46, 160, 67) : (Color?)null;
-        StatusSegments.Children.Add(MakeStatusSegment(Symbol.Clock, "Last run", lastRun,
-            "Open the results viewer", lastRunColor, () => NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage))));
+    }
 
-        // Output files (diagrams/exports) → Processor Output page. Only when the last run produced any.
-        var outFiles = new List<string>();
-        if (MiddleLayerService.LastRuleOutputFiles != null) outFiles.AddRange(MiddleLayerService.LastRuleOutputFiles);
-        if (query is FindPluginCore.Searching.NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null) outFiles.AddRange(nq.GeneratedRuleOutputFiles);
-        var outCount = outFiles.Where(System.IO.File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-        if (outCount > 0)
+    /// <summary>Build one status-bar item by id. Returns null when an info item is empty and shouldn't
+    /// clutter the bar (filters/output files with a zero count).</summary>
+    private FrameworkElement BuildStatusItem(string id)
+    {
+        var query = MiddleLayerService.GetCurrentQuery();
+        switch (id)
         {
-            var fileTip = string.Join("\n", outFiles.Where(System.IO.File.Exists)
-                .Distinct(StringComparer.OrdinalIgnoreCase).Select(System.IO.Path.GetFileName));
-            StatusSegments.Children.Add(MakeStatusSegment(Symbol.Document, "Output files", outCount.ToString(),
-                fileTip, Color.FromArgb(255, 46, 160, 67),
-                () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage))));
+            case "locations":
+            {
+                var locs = MiddleLayerService.Locations ?? new List<ISearchLocation>();
+                var tip = locs.Count > 0
+                    ? string.Join("\n", locs.Select(l => { try { return l.GetName(); } catch { return "(location)"; } }))
+                    : "No locations added";
+                return MakeStatusSegment(Symbol.Folder, "Locations", locs.Count.ToString(), tip, null,
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)));
+            }
+            case "filters":
+            {
+                var filters = MiddleLayerService.Filters?.Count ?? 0;
+                if (filters == 0) return null;
+                return MakeStatusSegment(Symbol.Find, "Filters", filters.ToString(), "Active filters", null,
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage)));
+            }
+            case "rules":
+            {
+                var rulePaths = query?.RulesConfigPaths ?? new List<string>();
+                var tip = rulePaths.Count > 0
+                    ? string.Join("\n", rulePaths.Select(p => { try { return System.IO.Path.GetFileName(p); } catch { return p; } }))
+                    : "No rules configured";
+                return MakeStatusSegment(Symbol.List, "Rules", rulePaths.Count.ToString(), tip, null,
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage)));
+            }
+            case "lastrun":
+            {
+                string lastRun; bool hasResults = false; int liveCount = -1;
+                try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { }
+                if (liveCount >= 0)
+                {
+                    var suffix = MiddleLayerService.LastSearchReusedCache ? " (cached)" : " (scanned)";
+                    lastRun = $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
+                    hasResults = liveCount > 0;
+                }
+                else
+                {
+                    lastRun = MiddleLayerService.LastRunSummary ?? _lastRunSummary;
+                    hasResults = MiddleLayerService.LastRunSummary != null
+                        && !MiddleLayerService.LastRunSummary.StartsWith("0 ", StringComparison.Ordinal);
+                }
+                var color = hasResults ? Color.FromArgb(255, 46, 160, 67) : (Color?)null;
+                return MakeStatusSegment(Symbol.Clock, "Last run", lastRun, "Open the results viewer", color,
+                    () => NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage)));
+            }
+            case "outputfiles":
+            {
+                var outFiles = new List<string>();
+                if (MiddleLayerService.LastRuleOutputFiles != null) outFiles.AddRange(MiddleLayerService.LastRuleOutputFiles);
+                if (query is FindPluginCore.Searching.NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null) outFiles.AddRange(nq.GeneratedRuleOutputFiles);
+                var files = outFiles.Where(System.IO.File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (files.Count == 0) return null;
+                return MakeStatusSegment(Symbol.Document, "Output files", files.Count.ToString(),
+                    string.Join("\n", files.Select(System.IO.Path.GetFileName)), Color.FromArgb(255, 46, 160, 67),
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)));
+            }
+            case "run_view":
+                return MakeStatusActionButton(Symbol.Play, "Run → View Results",
+                    "Run the search and open the results viewer", () => RunAndViewResults());
+            default:
+                return null;
         }
+    }
+
+    /// <summary>A prominent action button for the status bar (icon + label), distinct from the info
+    /// segments — used for "Run → View Results".</summary>
+    private Button MakeStatusActionButton(Symbol icon, string label, string tooltip, Action onClick)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new SymbolIcon { Symbol = icon, RenderTransform = new ScaleTransform { ScaleX = 0.7, ScaleY = 0.7 }, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5) });
+        row.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var btn = new Button
+        {
+            Content = row,
+            Padding = new Thickness(10, 2, 10, 2),
+            MinHeight = 0,
+            Background = new SolidColorBrush(Color.FromArgb(30, 46, 160, 67)),
+        };
+        ToolTipService.SetToolTip(btn, tooltip);
+        btn.Click += (_, _) => { try { onClick(); } catch { } };
+        return btn;
+    }
+
+    /// <summary>Run the current search (locations/rules) and open the results viewer — the status-bar
+    /// "Run → View Results" action.</summary>
+    public async void RunAndViewResults()
+    {
+        if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
+        {
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
+            return;
+        }
+        await OpenWithOptionalStreamingAsync("Running search…");
     }
 
     /// <summary>A flat, clickable status-bar segment: icon + "Label: value", with a tooltip and an
@@ -484,6 +529,43 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(btn, tooltip);
         btn.Click += (_, _) => { try { onClick(); } catch { } };
         return btn;
+    }
+
+    /// <summary>Open a flyout to choose which status-bar items show (and reorder them).</summary>
+    private void EditStatusBar_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+        var selected = StatusBarCatalog.GetSelectedIds();
+
+        // Selected items first (in order) with toggle + move up/down, then the unselected ones to add.
+        foreach (var id in selected)
+        {
+            var item = StatusBarCatalog.Find(id);
+            if (item == null) continue;
+            var sub = new MenuFlyoutSubItem { Text = $"✓ {item.Label}" };
+            var up = new MenuFlyoutItem { Text = "Move left" };
+            up.Click += (_, _) => { StatusBarCatalog.Move(id, -1); RefreshStatusStrip(); };
+            var down = new MenuFlyoutItem { Text = "Move right" };
+            down.Click += (_, _) => { StatusBarCatalog.Move(id, +1); RefreshStatusStrip(); };
+            var hide = new MenuFlyoutItem { Text = "Hide" };
+            hide.Click += (_, _) => { StatusBarCatalog.Toggle(id); RefreshStatusStrip(); };
+            sub.Items.Add(up); sub.Items.Add(down); sub.Items.Add(hide);
+            menu.Items.Add(sub);
+        }
+
+        var addable = StatusBarCatalog.All.Where(a => !selected.Contains(a.Id)).ToList();
+        if (addable.Count > 0)
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            foreach (var a in addable)
+            {
+                var add = new MenuFlyoutItem { Text = $"➕ {a.Label}" };
+                add.Click += (_, _) => { StatusBarCatalog.Toggle(a.Id); RefreshStatusStrip(); };
+                menu.Items.Add(add);
+            }
+        }
+
+        menu.ShowAt(StatusEditButton);
     }
 
     private void HideStatusStrip_Click(object sender, RoutedEventArgs e) => SetStatusStripHidden(true);

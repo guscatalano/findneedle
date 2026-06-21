@@ -90,11 +90,18 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel x:Name="StatusSegments" Grid.Column="0" Orientation="Horizontal"
                             Spacing="2" VerticalAlignment="Center"/>
-                <Button x:Name="StatusHideButton" Grid.Column="1" Click="HideStatusStrip_Click"
-                        Background="Transparent" BorderThickness="0" Padding="6,2" MinHeight="0"
-                        ToolTipService.ToolTip="Hide status bar">
-                    <FontIcon Glyph="&#xE711;" FontSize="11"/>
-                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="StatusEditButton" Click="EditStatusBar_Click"
+                            Background="Transparent" BorderThickness="0" Padding="6,2" MinHeight="0"
+                            ToolTipService.ToolTip="Choose what shows here">
+                        <FontIcon Glyph="&#xE70F;" FontSize="11"/>
+                    </Button>
+                    <Button x:Name="StatusHideButton" Click="HideStatusStrip_Click"
+                            Background="Transparent" BorderThickness="0" Padding="6,2" MinHeight="0"
+                            ToolTipService.ToolTip="Hide status bar">
+                        <FontIcon Glyph="&#xE711;" FontSize="11"/>
+                    </Button>
+                </StackPanel>
             </Grid>
         </Border>
 
