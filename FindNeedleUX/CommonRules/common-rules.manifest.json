@@ -18,5 +18,15 @@
     "File": "process-interaction-uml.rules.json",
     "Name": "Process interaction diagram (UML participants)",
     "Hidden": true
+  },
+  {
+    "File": "dism-interaction.rules.json",
+    "Name": "DISM interaction diagram",
+    "Condition": { "PathGlobs": ["*dism*"] }
+  },
+  {
+    "File": "dism-interaction-uml.rules.json",
+    "Name": "DISM interaction diagram (UML participants)",
+    "Hidden": true
   }
 ]

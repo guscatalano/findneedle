@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "DISM interaction diagram",
+  "description": "Generates a generic Mermaid sequence diagram of a DISM session (DismApi → Manager → Provider Store → imaging providers) from a dism.log.",
+  "sections": [
+    {
+      "name": "DismDiagram",
+      "description": "Emit a sequence diagram from DISM session milestone lines",
+      "purpose": "output",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "emit-dism-sequence",
+          "match": "Starting DismApi\\.dll session|Successfully loaded the ImageSession|Successfully created the local image session and provider store|does not support CreateDismImage on|DismShutdownInternal",
+          "enabled": true,
+          "action": {
+            "type": "uml",
+            "syntax": "mermaid",
+            "path": "{output}/dism_interaction_{datetime}.mmd",
+            "rulesFile": "CommonRules/dism-interaction-uml.rules.json",
+            "generateImage": true
+          }
+        }
+      ]
+    }
+  ]
+}

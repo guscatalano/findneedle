@@ -1,0 +1,82 @@
+{
+  "title": "DISM session interaction",
+  "description": "A generic sequence diagram of a DISM session: DismApi starts a session, the DISM Manager loads a local image session, the Provider Store comes up and the imaging providers negotiate the target, then the session shuts down. Matches stable DISM milestone phrases (not PIDs), so it works across any dism.log.",
+  "participants": [
+    { "id": "API",   "displayName": "DismApi",        "type": "participant" },
+    { "id": "Mgr",   "displayName": "DISM Manager",   "type": "participant" },
+    { "id": "Store", "displayName": "Provider Store", "type": "participant" },
+    { "id": "Prov",  "displayName": "Imaging Providers", "type": "participant" }
+  ],
+  "rules": [
+    {
+      "name": "api-session-start",
+      "match": "Starting DismApi\\.dll session",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "note", "from": "API", "text": "DismApi session start", "notePosition": "left" }
+    },
+    {
+      "name": "host-info",
+      "match": "Host machine information",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "note", "from": "API", "text": "OS {extract:OS Version=([0-9.]+)} ({extract:architecture=([a-z0-9]+)})", "notePosition": "over" }
+    },
+    {
+      "name": "api-active",
+      "match": "Created g_internalDismSession",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "activate", "from": "API", "text": "" }
+    },
+    {
+      "name": "load-image-session",
+      "match": "Successfully loaded the ImageSession",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "API", "to": "Mgr", "text": "load local image session" }
+    },
+    {
+      "name": "create-image-session",
+      "match": "Successfully created the local image session and provider store",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Mgr", "to": "Store", "text": "create image session + provider store" }
+    },
+    {
+      "name": "logger-ready",
+      "match": "Found and Initialized the DISM Logger",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "note", "from": "Store", "text": "provider store + logger ready", "notePosition": "over" }
+    },
+    {
+      "name": "provider-negotiate",
+      "match": "does not support CreateDismImage on",
+      "useRegex": false,
+      "enabled": true,
+      "action": { "type": "message", "from": "Store", "to": "Prov", "text": "{extract:provider ([A-Za-z]+) does not}: not for this image", "arrowStyle": "dashed" }
+    },
+    {
+      "name": "provider-selected",
+      "match": "Successfully created and initialized the image|The provider .* successfully created",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "Prov", "to": "Mgr", "text": "image provider selected", "arrowStyle": "response" }
+    },
+    {
+      "name": "session-shutdown",
+      "match": "DismShutdownInternal|Shutting down the DISM",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "message", "from": "Mgr", "to": "API", "text": "shutdown session", "arrowStyle": "response" }
+    },
+    {
+      "name": "api-deactivate",
+      "match": "DismShutdownInternal|Shutting down the DISM",
+      "useRegex": true,
+      "enabled": true,
+      "action": { "type": "deactivate", "from": "API", "text": "" }
+    }
+  ]
+}
