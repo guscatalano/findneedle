@@ -351,8 +351,10 @@ public class OutputRuleProcessor
                             idx++;
                         }
 
-                        // Call ProcessMessages
+                        // Call ProcessMessages (timed — surfaced as a generation stat)
+                        var genStopwatch = System.Diagnostics.Stopwatch.StartNew();
                         var umlText = proc.ProcessMessages(msgList);
+                        genStopwatch.Stop();
 
                         // Record which source rows fed the diagram (keep the first rule that matched
                         // each row, so a row gets one clear tag).
@@ -401,11 +403,12 @@ public class OutputRuleProcessor
                                 RecordGeneratedFile(outPath);
                                 try
                                 {
+                                    var lastUsage = proc.LastUsage ?? new List<UmlRuleUsage>();
                                     GeneratedDiagrams.Add(new UmlDiagramUsage
                                     {
                                         FilePath = outPath,
                                         Title = proc.Definition?.Title,
-                                        Rules = (proc.LastUsage ?? new List<UmlRuleUsage>())
+                                        Rules = lastUsage
                                             .Select(u => new UmlRuleHit
                                             {
                                                 Name = u.Name,
@@ -416,6 +419,14 @@ public class OutputRuleProcessor
                                                     .ToList(),
                                             })
                                             .ToList(),
+                                        SourceRowCount = msgList.Count,
+                                        MatchedRowCount = proc.LastMatchedRows?.Count ?? 0,
+                                        ParticipantCount = proc.Definition?.Participants?.Count ?? 0,
+                                        InteractionCount = lastUsage.Sum(u => u.Count),
+                                        DiagramCharCount = umlText?.Length ?? 0,
+                                        DiagramLineCount = string.IsNullOrEmpty(umlText)
+                                            ? 0 : umlText.Count(ch => ch == '\n') + 1,
+                                        GenerationMs = genStopwatch.ElapsedMilliseconds,
                                     });
                                 }
                                 catch { }
@@ -850,12 +861,29 @@ public class OutputRuleProcessor
     }
 }
 
-/// <summary>Rule-usage info for one generated UML diagram (which rules fired and how often).</summary>
+/// <summary>Rule-usage info for one generated UML diagram (which rules fired and how often),
+/// plus generation stats (inputs, output size, timing) the UI surfaces after a Generate.</summary>
 public sealed class UmlDiagramUsage
 {
     public string FilePath { get; set; } = string.Empty;
     public string? Title { get; set; }
     public List<UmlRuleHit> Rules { get; set; } = new();
+
+    // ----- Generation stats -----
+    /// <summary>Rows fed to the generator (the search's result set at generation time).</summary>
+    public int SourceRowCount { get; set; }
+    /// <summary>Rows that matched a UML rule and so contributed to the diagram.</summary>
+    public int MatchedRowCount { get; set; }
+    /// <summary>Participants (lifelines / actors) in the generated diagram.</summary>
+    public int ParticipantCount { get; set; }
+    /// <summary>Total rule hits = interactions drawn (sum of per-rule counts).</summary>
+    public int InteractionCount { get; set; }
+    /// <summary>Lines in the generated markup.</summary>
+    public int DiagramLineCount { get; set; }
+    /// <summary>Characters in the generated markup.</summary>
+    public int DiagramCharCount { get; set; }
+    /// <summary>Wall-clock time spent generating the diagram markup, in milliseconds.</summary>
+    public long GenerationMs { get; set; }
 }
 
 public sealed class UmlRuleHit

@@ -607,6 +607,8 @@ public sealed partial class ProcessorOutputPage : Page
                 meta.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
             actions.Margin = new Thickness(0, 0, 0, 8);
             meta.Children.Add(actions);
+            var statsPanel = BuildGenerationStatsPanel(path);
+            if (statsPanel != null) meta.Children.Add(statsPanel);
             var rulesPanel = BuildRulesUsedPanel(path);
             if (rulesPanel != null) meta.Children.Add(rulesPanel);
 
@@ -670,6 +672,81 @@ public sealed partial class ProcessorOutputPage : Page
             Content = panel,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+    }
+
+    /// <summary>A compact, always-visible card of generation stats for a just-generated diagram:
+    /// how long it took, how many rows went in / matched, and how big the diagram came out. Returns
+    /// null when there's no usage info for the file (e.g. an image, or a diagram from an older run).</summary>
+    private FrameworkElement? BuildGenerationStatsPanel(string path)
+    {
+        FindNeedleRuleDSL.UmlDiagramUsage? usage = null;
+        foreach (var u in _diagramUsages)
+        {
+            if (PathsEqual(u.FilePath, path)) { usage = u; break; }
+        }
+        if (usage == null) return null;
+
+        string timing = usage.GenerationMs < 1
+            ? "<1 ms"
+            : usage.GenerationMs < 1000
+                ? $"{usage.GenerationMs} ms"
+                : $"{usage.GenerationMs / 1000.0:0.0}s";
+
+        // (label, value) pairs — only the ones that carry signal.
+        var stats = new List<(string Label, string Value)>
+        {
+            ("Generated in", timing),
+            ("Rows in",      $"{usage.SourceRowCount:N0}"),
+            ("Matched",      $"{usage.MatchedRowCount:N0}"),
+            ("Interactions", $"{usage.InteractionCount:N0}"),
+            ("Participants", $"{usage.ParticipantCount:N0}"),
+            ("Size",         $"{usage.DiagramLineCount:N0} lines · {usage.DiagramCharCount:N0} chars"),
+        };
+
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        for (int i = 0; i < stats.Count; i++)
+        {
+            var chip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            chip.Children.Add(new TextBlock
+            {
+                Text = stats[i].Label,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            chip.Children.Add(new TextBlock
+            {
+                Text = stats[i].Value,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            chips.Children.Add(chip);
+            if (i < stats.Count - 1)
+                chips.Children.Add(new TextBlock { Text = "·", FontSize = 12, Foreground = new SolidColorBrush(Colors.Gray), VerticalAlignment = VerticalAlignment.Center });
+        }
+
+        var card = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 8) };
+        card.Children.Add(new TextBlock { Text = "Generation stats", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Colors.Gray) });
+        // Horizontal scroll so a narrow pane never clips the chips (the metadata ScrollViewer above
+        // disables its own horizontal bar).
+        card.Children.Add(new ScrollViewer
+        {
+            Content = chips,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(20, 128, 128, 128)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 0, 8),
+            Child = card,
         };
     }
 
