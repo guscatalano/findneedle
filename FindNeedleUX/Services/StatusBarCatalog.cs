@@ -19,7 +19,6 @@ public static class StatusBarCatalog
     public static readonly IReadOnlyList<StatusBarItem> All = new[]
     {
         new StatusBarItem("locations",   "Locations"),
-        new StatusBarItem("filters",     "Filters"),
         new StatusBarItem("rules",       "Rules"),
         new StatusBarItem("lastrun",     "Last run"),
         new StatusBarItem("outputfiles", "Output files"),

@@ -17,12 +17,8 @@
         </Grid.RowDefinitions>
 
         <MenuBar Grid.Row="0">
-            <MenuBarItem Title="Quick">
-                <MenuFlyoutItem Text="Open Log File" Click="MenuFlyoutItem_Click" Name="openlogfile" />
-                <MenuFlyoutItem Text="Open Folder with logs" Click="MenuFlyoutItem_Click" Name="openlogfolder"/>
-                <MenuFlyoutItem Text="Open Log with Rules..." Click="MenuFlyoutItem_Click" Name="openlogwithrules"/>
-                <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="Cached searches…" Click="MenuFlyoutItem_Click" Name="cached_searches"/>
+            <MenuBarItem x:Name="QuickMenu" Title="Quick">
+                <!-- Items are built in code (BuildQuickMenu): Welcome + the welcome-page quick actions. -->
             </MenuBarItem>
             <MenuBarItem Title="Workspace">
                 <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />

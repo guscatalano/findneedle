@@ -29,7 +29,7 @@ public sealed partial class MainWindow : Window
         this.InitializeComponent();
         WindowUtil.TrackWindow(this);
         SetWindowIcon("Assets\\appicon.ico");
-        contentFrame.Navigated += (s, e) => RefreshStatusStrip();
+        contentFrame.Navigated += (s, e) => { RefreshStatusStrip(); BuildQuickMenu(); };
         MiddleLayerService.StateChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         // Unified "Step X of N · phase · detail" status: whenever the spinner is up (search or viewer
         // open), show the current flow phase. Detail (row counts etc.) flows in via FlowProgress.Detail.
@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window
         // Show WelcomePage on startup
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         RefreshStatusStrip();
+        BuildQuickMenu();
         ApplyPersistedStatusStripVisibility();
         InitMcpIndicator();
 
@@ -66,6 +67,34 @@ public sealed partial class MainWindow : Window
     public void NavigateToQuickLogWithRules()
     {
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+    }
+
+    /// <summary>Populate the top "Quick" menu so it mirrors the welcome page: a "Welcome" entry to go
+    /// home, then the user's customized quick actions, then a "Customize…" shortcut. Rebuilt on each
+    /// navigation so it reflects edits made on the welcome page.</summary>
+    private void BuildQuickMenu()
+    {
+        if (QuickMenu == null) return;
+        QuickMenu.Items.Clear();
+
+        var home = new MenuFlyoutItem { Text = "🏠 Welcome" };
+        home.Click += (_, _) => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
+        QuickMenu.Items.Add(home);
+        QuickMenu.Items.Add(new MenuFlyoutSeparator());
+
+        foreach (var qaId in FindNeedleUX.Services.QuickActionCatalog.GetSelectedIds())
+        {
+            var a = FindNeedleUX.Services.QuickActionCatalog.Find(qaId);
+            if (a == null) continue;
+            var mi = new MenuFlyoutItem { Text = $"{a.Emoji}  {a.Label}" };
+            mi.Click += (_, _) => RunQuickAction(a.Id);
+            QuickMenu.Items.Add(mi);
+        }
+
+        QuickMenu.Items.Add(new MenuFlyoutSeparator());
+        var customize = new MenuFlyoutItem { Text = "Customize quick actions…" };
+        customize.Click += (_, _) => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
+        QuickMenu.Items.Add(customize);
     }
 
     /// <summary>Run a welcome-page quick action by its catalog id (see QuickActionCatalog). Maps to the
