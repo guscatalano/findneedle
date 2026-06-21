@@ -1039,6 +1039,15 @@ namespace FindPluginCore.Implementations.Storage
 
         public int GetFilteredCount(FilterInput filter)
         {
+            // Fast path: no filter predicates → the count is the running total we already maintain
+            // (volatile, lock-free, identical to GetStatistics().filteredRecordCount). This avoids
+            // both a full COUNT(*) scan AND taking _sync — which during a streaming search would
+            // otherwise block behind the writer's bulk-insert transactions. The viewer's first-page
+            // count waiting on that lock was a multi-second stall when opening a 1.45M-row folder.
+            // Slightly stale (may omit an in-flight uncommitted batch) the same way GetStatistics is;
+            // the viewer refreshes on FilteredRowsAdded, so the count converges.
+            if (IsEmptyFilter(filter)) return _filteredCount;
+
             lock (_sync)
             {
                 var (where, ps) = BuildWhere(filter, UseFts);
@@ -1116,6 +1125,20 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         private static bool HasGlobalSearch(FilterInput f) => f != null && !string.IsNullOrEmpty(f.Search);
+
+        /// <summary>True when the filter has no predicates, so a query over it spans the whole
+        /// FilteredResults table. Lets count/level queries short-circuit to the maintained running
+        /// total instead of scanning. Mirrors the conditions BuildWhere would emit.</summary>
+        private static bool IsEmptyFilter(FilterInput f)
+            => f == null || (
+                string.IsNullOrEmpty(f.Search) &&
+                string.IsNullOrEmpty(f.Provider) &&
+                string.IsNullOrEmpty(f.TaskName) &&
+                string.IsNullOrEmpty(f.Message) &&
+                string.IsNullOrEmpty(f.Source) &&
+                !f.LevelInt.HasValue &&
+                string.IsNullOrEmpty(f.LogTimeFrom) &&
+                string.IsNullOrEmpty(f.LogTimeTo));
 
         /// <summary>
         /// Fetch a single filtered row by its stable <c>FilteredResults.Id</c>, independent of any
