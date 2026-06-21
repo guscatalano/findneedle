@@ -679,7 +679,12 @@ public class NuSearchQuery : ISearchQuery
                         // Otherwise accumulate for the post-scan filter/store/consolidate steps.
                         if (streamFilteredDuringScan)
                         {
-                            _resultStorage.AddRawBatch(batch, cancellationToken);
+                            // Filtered-only: in this path there are no filters, so raw == filtered,
+                            // and nothing downstream reads RawResults — the viewer + cache reuse read
+                            // FilteredResults, and consolidation is skipped (no_consumers). Writing the
+                            // raw table too just doubles the SQLite insert work during the scan (on a
+                            // 1.45M-row DISM folder that's the bulk of a ~21s load). See CaptureStats,
+                            // which already treats raw as 0 on the streaming pipeline.
                             _resultStorage.AddFilteredBatch(batch, cancellationToken);
                             streamedCount += batch.Count;
                         }
