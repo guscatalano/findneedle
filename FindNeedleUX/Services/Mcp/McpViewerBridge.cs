@@ -173,19 +173,40 @@ public sealed class McpViewerBridge
         return MiddleLayerService.Locations.Count < before;
     });
 
-    public async Task RunSearchAsync()
+    public Task RunSearchAsync() => RunSearchAsync(false);
+
+    /// <param name="ignoreCache">Force a fresh scan: set the cache-mode override to Never for this
+    /// run (captured/restored on the UI thread) so a warm cache is rescanned and no reuse prompt
+    /// appears. The search consumes the override synchronously at kickoff, so restoring afterward is
+    /// safe.</param>
+    public async Task RunSearchAsync(bool ignoreCache)
     {
-        var handler = RunSearchHandler;
-        if (handler != null) { await handler().ConfigureAwait(false); }
-        else
+        FindPluginCore.Searching.CacheReuseMode? prevOverride = null;
+        if (ignoreCache)
+            prevOverride = await RunOnUiAsync(() =>
+            {
+                var p = MiddleLayerService.CacheModeOverride;
+                MiddleLayerService.CacheModeOverride = FindPluginCore.Searching.CacheReuseMode.Never;
+                return p;
+            }).ConfigureAwait(false);
+        try
         {
-            // Fallback: trigger a streaming search directly (no navigation). The active viewer, if
-            // any, picks up the new results on its next load.
-            await RunOnUiAsync(() => { MiddleLayerService.RunSearchStreaming(); }).ConfigureAwait(false);
+            var handler = RunSearchHandler;
+            if (handler != null) { await handler().ConfigureAwait(false); }
+            else
+            {
+                // Fallback: trigger a streaming search directly (no navigation). The active viewer, if
+                // any, picks up the new results on its next load.
+                await RunOnUiAsync(() => { MiddleLayerService.RunSearchStreaming(); }).ConfigureAwait(false);
+            }
+            // If a viewer isn't up yet (e.g. it's opening as part of this search), give it a moment to
+            // register so a follow-up viewer tool doesn't hit the "no viewer" race. No-op if one's open.
+            if (!HasViewer) await WaitForViewerAsync(8_000).ConfigureAwait(false);
         }
-        // If a viewer isn't up yet (e.g. it's opening as part of this search), give it a moment to
-        // register so a follow-up viewer tool doesn't hit the "no viewer" race. No-op if one's open.
-        if (!HasViewer) await WaitForViewerAsync(8_000).ConfigureAwait(false);
+        finally
+        {
+            if (ignoreCache) await RunOnUiAsync(() => MiddleLayerService.CacheModeOverride = prevOverride).ConfigureAwait(false);
+        }
     }
 
     public Task CancelSearchAsync() => RunOnUiAsync(() => MiddleLayerService.CurrentStreamingSearch?.Stop());

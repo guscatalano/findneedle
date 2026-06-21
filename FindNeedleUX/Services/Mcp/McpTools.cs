@@ -43,6 +43,27 @@ internal static class McpTools
 
     private static object Ok(object extra = null) => extra ?? new { ok = true };
 
+    /// <summary>Project the Log Finder catalog for the <c>list_log_catalog</c> tool. Pure read of
+    /// <see cref="LogCatalog"/> (a file-backed static, no UI needed); <c>Exists</c> stats each path.</summary>
+    private static object ListLogCatalog(bool includeMissing)
+    {
+        var entries = LogCatalog.GetAll(includeHidden: false)
+            .Where(e => includeMissing || e.Exists)
+            .Select(e => new
+            {
+                id = e.Id,
+                name = e.Name,
+                path = e.ExpandedPath,
+                category = e.Category,
+                kind = e.Kind,
+                exists = e.Exists,
+                builtIn = e.BuiltIn,
+                description = e.Description,
+            })
+            .ToList();
+        return new { count = entries.Count, entries };
+    }
+
     /// <summary>
     /// Read FindNeedle's own diagnostic logs for the <c>get_diagnostics</c> tool: the perf log
     /// (from <see cref="FindPluginCore.Diagnostics.PerfLog.FilePath"/>) and/or the app message log
@@ -150,10 +171,33 @@ internal static class McpTools
         },
         new ToolDef
         {
+            Name = "list_log_catalog",
+            Description = "List the Log Finder catalog — the user's saved + built-in known log locations (e.g. Windows Event Logs, CBS, DISM, Panther, Windows Update, Defender, Temp). Each entry has an id, name, resolved path, category, kind (folder/file), and whether it exists on this machine. Load one with add_log_location(id), then run_search.",
+            InputSchema = Obj(new { includeMissing = Bn("Include entries whose path doesn't exist on this machine (default false).") }),
+            Invoke = async a => await Task.FromResult(ListLogCatalog(Bool(a, "includeMissing", false))),
+        },
+        new ToolDef
+        {
+            Name = "add_log_location",
+            Description = "Add a Log Finder catalog entry (by id from list_log_catalog) as a data source location, resolving its environment-variable path. Then call run_search to load it.",
+            InputSchema = Obj(new { id = S("Catalog entry id from list_log_catalog.") }, "id"),
+            Invoke = async a =>
+            {
+                var id = Str(a, "id");
+                var entry = LogCatalog.GetById(id);
+                if (entry == null) throw new ArgumentException($"No log catalog entry with id '{id}'. Call list_log_catalog for valid ids.");
+                var path = entry.ExpandedPath;
+                if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException($"Catalog entry '{entry.Name}' has no path.");
+                await B.AddFolderAsync(path);
+                return new { added = entry.Name, path, kind = entry.Kind };
+            },
+        },
+        new ToolDef
+        {
             Name = "run_search",
-            Description = "Run the search over the loaded locations and refresh the viewer with the results.",
-            InputSchema = Obj(new { }),
-            Invoke = async _ => { await B.RunSearchAsync(); return Ok(); },
+            Description = "Run the search over the loaded locations and refresh the viewer with the results. Set ignoreCache to force a fresh scan (skip the warm-cache reuse and its prompt) — e.g. to pick up changed parsing or re-measure load time.",
+            InputSchema = Obj(new { ignoreCache = Bn("Force a fresh rescan instead of reusing a warm cache (default false).") }),
+            Invoke = async a => { await B.RunSearchAsync(Bool(a, "ignoreCache", false)); return Ok(); },
         },
         new ToolDef
         {
