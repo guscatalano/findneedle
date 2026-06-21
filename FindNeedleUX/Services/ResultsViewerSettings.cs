@@ -194,6 +194,15 @@ public static class ResultsViewerSettings
         set { Data.ColorTaggedRows = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>Whether the welcome page shows the "New here?" intro/getting-started banner. On by
+    /// default; the banner's close button turns it off, a Preferences toggle turns it back on.</summary>
+    public const bool DefaultShowWelcomeIntro = true;
+    public static bool ShowWelcomeIntro
+    {
+        get => Data.ShowWelcomeIntro ?? DefaultShowWelcomeIntro;
+        set { Data.ShowWelcomeIntro = value; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>
     /// Whether the in-app MCP server is enabled. When on, the app hosts a localhost-only HTTP MCP
     /// endpoint that lets an agent read and drive the live result viewer. Off by default (it exposes
@@ -495,6 +504,7 @@ public static class ResultsViewerSettings
         public string LoadingAnimation { get; set; }
         public bool? RobotWide { get; set; }
         public bool? ColorTaggedRows { get; set; }
+        public bool? ShowWelcomeIntro { get; set; }
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }
         public string TraceFormatSearchPath { get; set; }

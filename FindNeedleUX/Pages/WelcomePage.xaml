@@ -33,13 +33,37 @@
                 </StackPanel>
             </Border>
 
-            <!-- Getting started: prominent, right under the hero so it isn't missed. -->
-            <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
-                     Title="New here? Getting started"
-                     Message="Pick a Quick Action below to open logs, or use Configure ▸ Locations / Connections / Rules to build a custom search pipeline. Then run it from Run &amp; Results (or the Run → View Results button in the status bar).">
-                <InfoBar.ActionButton>
-                    <HyperlinkButton Content="View documentation" NavigateUri="https://github.com/guscatalano/findneedle"/>
-                </InfoBar.ActionButton>
+            <!-- Getting started + key features: prominent under the hero, permanently dismissible
+                 (× sets ResultsViewerSettings.ShowWelcomeIntro=false; a Preferences toggle restores it). -->
+            <InfoBar x:Name="IntroBanner" IsOpen="True" IsClosable="True" Severity="Informational"
+                     CloseButtonClick="IntroBanner_CloseButtonClick"
+                     Title="New here?">
+                <InfoBar.Content>
+                    <StackPanel Spacing="10" Margin="0,4,0,12">
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Pick a Quick Action below to open logs, or use Configure ▸ Locations / Connections / Rules to build a custom search pipeline. Then run it from Run &amp; Results (or the Run → View Results button in the status bar)."/>
+                        <TextBlock Text="Key features" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                <TextBlock Text="Plugin-based data sources (folders, files, event logs, ETW, online sources)" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                <TextBlock Text="RuleDSL for filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                <TextBlock Text="Fast result viewer with paging, tagging, and column controls" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                <TextBlock Text="PlantUML / Mermaid diagram generation from logs" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <HyperlinkButton Content="View documentation" NavigateUri="https://github.com/guscatalano/findneedle" Padding="0"/>
+                    </StackPanel>
+                </InfoBar.Content>
             </InfoBar>
 
             <!-- Quick Actions (customizable) -->
@@ -60,27 +84,6 @@
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="QuickActionsHost" Orientation="Horizontal" Spacing="12"/>
             </ScrollViewer>
-
-            <!-- Features -->
-            <TextBlock Text="Key Features" FontWeight="SemiBold" FontSize="18"/>
-            <StackPanel Spacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                    <TextBlock Text="Plugin-based data sources (folders, files, event logs, ETW)" TextWrapping="Wrap"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                    <TextBlock Text="RuleDSL for filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                    <TextBlock Text="Multiple result viewers (Web, Community, Native)" TextWrapping="Wrap"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                    <TextBlock Text="PlantUML/Mermaid integration for diagram generation" TextWrapping="Wrap"/>
-                </StackPanel>
-            </StackPanel>
 
         </StackPanel>
     </ScrollViewer>

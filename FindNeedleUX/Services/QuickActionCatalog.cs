@@ -73,7 +73,12 @@ public static class QuickActionCatalog
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         WriteRaw(clean);
+        Changed?.Invoke();
     }
+
+    /// <summary>Raised after the selection changes (add/remove/reorder), so the welcome page and the
+    /// top "Quick" menu stay in sync.</summary>
+    public static event Action Changed;
 
     /// <summary>Add an action to the end (no-op if unknown or already present). Returns the new list.</summary>
     public static List<string> Add(string id)

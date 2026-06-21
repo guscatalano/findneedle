@@ -100,6 +100,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- Row tags ---
             ColorTaggedRowsCheck.IsChecked = ResultsViewerSettings.ColorTaggedRows;
+            ShowWelcomeIntroCheck.IsChecked = ResultsViewerSettings.ShowWelcomeIntro;
 
             // --- MCP server ---
             McpEnabledCheck.IsChecked = ResultsViewerSettings.McpServerEnabled;
@@ -350,6 +351,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (_suppressEvents) return;
         ResultsViewerSettings.ColorTaggedRows = ColorTaggedRowsCheck.IsChecked == true;
+    }
+
+    private void ShowWelcomeIntroCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.ShowWelcomeIntro = ShowWelcomeIntroCheck.IsChecked == true;
     }
 
     private void ShowStepHistoryCheck_Changed(object sender, RoutedEventArgs e)

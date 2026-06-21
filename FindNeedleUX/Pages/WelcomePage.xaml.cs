@@ -19,7 +19,13 @@ public sealed partial class WelcomePage : Page
     {
         this.InitializeComponent();
         LoadHeroAnimation();
-        Loaded += (_, _) => RenderQuickActions();
+        Loaded += (_, _) => { RenderQuickActions(); IntroBanner.IsOpen = ResultsViewerSettings.ShowWelcomeIntro; };
+    }
+
+    /// <summary>The × on the intro banner hides it permanently (until re-enabled in Preferences).</summary>
+    private void IntroBanner_CloseButtonClick(Microsoft.UI.Xaml.Controls.InfoBar sender, object args)
+    {
+        ResultsViewerSettings.ShowWelcomeIntro = false;
     }
 
     /// <summary>Show the app's themed loader as an animated hero. Uses the loader theme chosen in

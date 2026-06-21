@@ -234,6 +234,18 @@
                                        Text="Tagged rows always show a colored tag glyph on the left. Turn this on to tint the whole row too."/>
                         </StackPanel>
                     </Border>
+
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Welcome page" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ShowWelcomeIntroCheck" Content="Show the &quot;New here?&quot; getting-started banner"
+                                      Checked="ShowWelcomeIntroCheck_Changed" Unchecked="ShowWelcomeIntroCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="The intro + key-features banner at the top of the welcome page. Dismissing it there also unchecks this."/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- ============================ SEARCH ============================ -->

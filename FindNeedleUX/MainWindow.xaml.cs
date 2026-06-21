@@ -39,6 +39,8 @@ public sealed partial class MainWindow : Window
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         RefreshStatusStrip();
         BuildQuickMenu();
+        // Keep the top "Quick" menu in sync when quick actions are edited on the welcome page.
+        FindNeedleUX.Services.QuickActionCatalog.Changed += () => DispatcherQueue.TryEnqueue(BuildQuickMenu);
         ApplyPersistedStatusStripVisibility();
         InitMcpIndicator();
 
