@@ -8,27 +8,24 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <ScrollViewer Padding="24">
-        <StackPanel Spacing="24">
-            <!-- Hero: animated themed loader + wordmark -->
-            <Border CornerRadius="12" Padding="24">
+    <ScrollViewer Padding="24,16,24,24">
+        <StackPanel Spacing="16">
+            <!-- Hero: animated themed loader + wordmark (compact, so the quick actions sit higher) -->
+            <Border CornerRadius="10" Padding="14">
                 <Border.Background>
                     <SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.12"/>
                 </Border.Background>
-                <StackPanel Orientation="Horizontal" Spacing="20">
-                    <Border Width="96" Height="96" CornerRadius="12" VerticalAlignment="Center"
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                    <Border Width="56" Height="56" CornerRadius="10" VerticalAlignment="Center"
                             Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
-                        <Image x:Name="HeroGif" Width="96" Height="96" Stretch="UniformToFill"
+                        <Image x:Name="HeroGif" Width="56" Height="56" Stretch="UniformToFill"
                                AutomationProperties.AccessibilityView="Raw"/>
                     </Border>
-                    <StackPanel VerticalAlignment="Center" Spacing="4">
-                        <TextBlock Text="FindNeedle" FontSize="36" FontWeight="Bold"
+                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="FindNeedle" FontSize="22" FontWeight="Bold"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                        <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="16"
+                        <TextBlock Text="Advanced Log Search &amp; Analysis" FontSize="13"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="Search, filter, and diagram logs across folders, ETW, and event logs."
-                                   FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                   TextWrapping="Wrap" MaxWidth="420"/>
                     </StackPanel>
                 </StackPanel>
             </Border>

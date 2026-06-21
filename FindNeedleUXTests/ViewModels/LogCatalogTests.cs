@@ -109,4 +109,47 @@ public class LogCatalogTests
         var ids = LogCatalog.BuiltIns.Select(b => b.Id).ToList();
         Assert.AreEqual(ids.Count, ids.Distinct().Count(), "built-in ids unique");
     }
+
+    /// <summary>Validate every built-in entry individually: flagged built-in, "builtin:" id, a name +
+    /// path, a known kind, and a path whose environment variables resolve to a rooted absolute path.
+    /// (Existence isn't asserted — not every machine has every component installed.)</summary>
+    [TestMethod]
+    [DynamicData(nameof(BuiltInEntries), DynamicDataSourceType.Method,
+        DynamicDataDisplayName = nameof(BuiltInDisplayName))]
+    public void BuiltIn_Entry_IsWellFormed(LogCatalogEntry b)
+    {
+        Assert.IsTrue(b.BuiltIn, "built-in entries must be flagged BuiltIn");
+        StringAssert.StartsWith(b.Id, "builtin:");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(b.Name), "name required");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(b.Path), "path required");
+        Assert.IsTrue(b.Kind is "folder" or "file", $"unexpected kind '{b.Kind}'");
+        Assert.AreEqual(b.Kind == "folder", b.IsFolder);
+
+        var expanded = b.ExpandedPath;
+        Assert.IsFalse(expanded.Contains('%'), $"env vars should resolve: {b.Path} -> {expanded}");
+        Assert.IsTrue(System.IO.Path.IsPathRooted(expanded), $"resolved path should be absolute: {expanded}");
+    }
+
+    public static System.Collections.Generic.IEnumerable<object[]> BuiltInEntries()
+        => LogCatalog.BuiltIns.Select(b => new object[] { b });
+
+    public static string BuiltInDisplayName(System.Reflection.MethodInfo _, object[] data)
+        => $"Built-in — {((LogCatalogEntry)data[0]).Name}";
+
+    /// <summary>Every built-in's env vars are actually defined on this machine (so the path doesn't
+    /// resolve to a bogus literal). Existence of the folder itself is not required.</summary>
+    [TestMethod]
+    public void BuiltIns_EnvironmentVariables_AreDefined()
+    {
+        foreach (var b in LogCatalog.BuiltIns)
+        {
+            // Pull each %VAR% token out of the raw path and confirm it expands to something non-empty.
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(b.Path, "%([^%]+)%"))
+            {
+                var name = m.Groups[1].Value;
+                var val = System.Environment.GetEnvironmentVariable(name);
+                Assert.IsFalse(string.IsNullOrEmpty(val), $"{b.Name}: environment variable %{name}% is not set");
+            }
+        }
+    }
 }
