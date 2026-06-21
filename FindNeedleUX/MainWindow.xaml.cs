@@ -515,6 +515,11 @@ public sealed partial class MainWindow : Window
             var item = BuildStatusItem(id);
             if (item != null) StatusSegments.Children.Add(item);
         }
+
+        // Always surface "a UML diagram is available/ready" when relevant, regardless of the user's
+        // chosen status-bar items — it's a transient notification, not a configurable segment.
+        var uml = BuildUmlChip();
+        if (uml != null) StatusSegments.Children.Add(uml);
     }
 
     /// <summary>Build one status-bar item by id. Returns null when an info item is empty and shouldn't
@@ -659,6 +664,35 @@ public sealed partial class MainWindow : Window
 
     /// <summary>MCP chip: a colored dot + state (off / listening / a client is connected). Click opens
     /// the MCP help/config. "Connected" = a client request arrived in the last 2 minutes.</summary>
+    /// <summary>A status-bar chip that appears when a UML diagram is available for the current results —
+    /// green "ready" once one's been generated, blue "available" when an output rule can produce one.
+    /// Injected directly by RefreshStatusStrip (not catalog-gated) so it always surfaces when relevant.
+    /// Returns null when no diagram is ready or available.</summary>
+    private FrameworkElement BuildUmlChip()
+    {
+        bool ready, available;
+        try
+        {
+            ready = MiddleLayerService.GeneratedDiagramFiles.Count > 0;
+            available = !ready && MiddleLayerService.HasUmlOutputRule;
+        }
+        catch { return null; }
+        if (!ready && !available) return null;
+
+        var (text, dot, tip) = ready
+            ? ("UML diagram ready", Color.FromArgb(255, 46, 160, 67), "A UML diagram has been generated — click to view it.")
+            : ("UML diagram available", Color.FromArgb(255, 0, 120, 215), "An output rule can produce a UML diagram — click to generate it.");
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(dot), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new SymbolIcon { Symbol = Symbol.View, RenderTransform = new ScaleTransform { ScaleX = 0.7, ScaleY = 0.7 }, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5) });
+        row.Children.Add(new TextBlock { Text = text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        var btn = new Button { Content = row, Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 0 };
+        ToolTipService.SetToolTip(btn, tip);
+        btn.Click += (_, _) => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage));
+        return btn;
+    }
+
     private FrameworkElement BuildMcpChip()
     {
         bool running = FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.ServerPort > 0;

@@ -372,6 +372,68 @@ public class MiddleLayerService
         catch { return true; }
     }
 
+    /// <summary>Whether any active rule can produce a UML diagram (a UML output rule is enabled) — used to
+    /// show "UML diagram available" in the status bar before it's generated.</summary>
+    public static bool HasUmlOutputRule
+    {
+        get
+        {
+            var paths = SearchQueryUX.CurrentQuery?.RulesConfigPaths;
+            if (paths == null) return false;
+            foreach (var p in paths) if (RuleFileHasUmlOutput(p)) return true;
+            return false;
+        }
+    }
+
+    private static bool RuleFileHasUmlOutput(string path)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return false;
+            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            if (!doc.RootElement.TryGetProperty("sections", out var secs) && !doc.RootElement.TryGetProperty("Sections", out secs))
+                return false;
+            if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+            foreach (var s in secs.EnumerateArray())
+            {
+                string purpose = s.TryGetProperty("purpose", out var p) ? p.GetString()
+                               : s.TryGetProperty("Purpose", out var p2) ? p2.GetString() : null;
+                if (!string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!s.TryGetProperty("rules", out var rules) && !s.TryGetProperty("Rules", out rules)) continue;
+                if (rules.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+                foreach (var r in rules.EnumerateArray())
+                {
+                    if ((r.TryGetProperty("enabled", out var en) || r.TryGetProperty("Enabled", out en))
+                        && en.ValueKind == System.Text.Json.JsonValueKind.False) continue;
+                    if (!r.TryGetProperty("action", out var act) && !r.TryGetProperty("Action", out act)) continue;
+                    string type = act.TryGetProperty("type", out var ty) ? ty.GetString()
+                                : act.TryGetProperty("Type", out var ty2) ? ty2.GetString() : null;
+                    if (string.Equals(type, "uml", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+            return false;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Generated diagram files (.mmd/.puml/.png) from the last search or on-demand generation.</summary>
+    public static List<string> GeneratedDiagramFiles
+    {
+        get
+        {
+            var files = new List<string>();
+            if (LastRuleOutputFiles != null) files.AddRange(LastRuleOutputFiles);
+            if (SearchQueryUX.CurrentQuery is NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null)
+                files.AddRange(nq.GeneratedRuleOutputFiles);
+            return files
+                .Where(f => f.EndsWith(".mmd", StringComparison.OrdinalIgnoreCase)
+                         || f.EndsWith(".puml", StringComparison.OrdinalIgnoreCase)
+                         || f.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                .Where(System.IO.File.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+    }
+
     /// <summary>Whether the current search has output rules/outputs to generate (drives the UI button).</summary>
     public static bool HasOutputRules =>
         (SearchQueryUX.CurrentQuery as NuSearchQuery)?.HasOutputRules ?? false;
