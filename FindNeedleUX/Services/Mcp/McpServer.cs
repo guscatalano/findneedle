@@ -122,6 +122,12 @@ public sealed class McpServer : IDisposable
             LastActivityUtc = DateTime.UtcNow;
             try { Activity?.Invoke(); } catch { }
 
+            // Identify the client for the activity log: prefer the User-Agent (MCP clients send one,
+            // e.g. a tool name), else fall back to the loopback remote address.
+            string client = ctx.Request.UserAgent;
+            if (string.IsNullOrWhiteSpace(client))
+                client = ctx.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown";
+
             string body;
             using (var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding ?? Encoding.UTF8))
                 body = await reader.ReadToEndAsync().ConfigureAwait(false);
@@ -135,7 +141,7 @@ public sealed class McpServer : IDisposable
                 var responses = new System.Collections.Generic.List<object>();
                 foreach (var msg in root.EnumerateArray())
                 {
-                    var r = await HandleMessageAsync(msg).ConfigureAwait(false);
+                    var r = await HandleMessageAsync(msg, client).ConfigureAwait(false);
                     if (r != null) responses.Add(r);
                 }
                 if (responses.Count == 0) { ctx.Response.StatusCode = 202; ctx.Response.Close(); return; }
@@ -143,7 +149,7 @@ public sealed class McpServer : IDisposable
             }
             else
             {
-                var r = await HandleMessageAsync(root).ConfigureAwait(false);
+                var r = await HandleMessageAsync(root, client).ConfigureAwait(false);
                 if (r == null) { ctx.Response.StatusCode = 202; ctx.Response.Close(); return; }
                 await WriteJsonAsync(ctx, r).ConfigureAwait(false);
             }
@@ -160,7 +166,7 @@ public sealed class McpServer : IDisposable
     }
 
     /// <summary>Handle one JSON-RPC message. Returns the response object, or null for a notification.</summary>
-    private async Task<object> HandleMessageAsync(JsonElement msg)
+    private async Task<object> HandleMessageAsync(JsonElement msg, string client = null)
     {
         JsonElement idEl = default;
         bool hasId = msg.TryGetProperty("id", out idEl);
@@ -169,6 +175,23 @@ public sealed class McpServer : IDisposable
 
         if (string.IsNullOrEmpty(method))
             return hasId ? Error(id, -32600, "Invalid request: missing method") : null;
+
+        // Record meaningful commands for the "who's connected / last commands" view. Tool calls record
+        // the tool name + a short arg summary; ping/notifications are skipped as noise.
+        if (method != "ping" && !method.StartsWith("notifications/"))
+        {
+            string tool = null, detail = null;
+            if (method == "tools/call" && msg.TryGetProperty("params", out var cp))
+            {
+                if (cp.TryGetProperty("name", out var tnEl)) tool = tnEl.GetString();
+                if (cp.TryGetProperty("arguments", out var taEl) && taEl.ValueKind == JsonValueKind.Object)
+                {
+                    var raw = taEl.GetRawText();
+                    detail = raw.Length > 200 ? raw.Substring(0, 200) + "…" : raw;
+                }
+            }
+            try { McpActivityLog.Record(client, method, tool, detail); } catch { }
+        }
 
         // Notifications (no id) get no response.
         switch (method)

@@ -219,12 +219,79 @@ public sealed partial class MainWindow : Window
         buttons.Children.Add(copyConfig);
         panel.Children.Add(buttons);
 
+        AppendMcpActivity(panel);
+
         var flyout = new Flyout { Content = panel };
         var settingsLink = new HyperlinkButton { Content = "More settings…", Padding = new Thickness(0, 4, 0, 0) };
         settingsLink.Click += (_, __) => { flyout.Hide(); contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage)); };
         panel.Children.Add(settingsLink);
 
         flyout.ShowAt(McpHelpButton);
+    }
+
+    /// <summary>Append "who's connected + last commands" to the MCP flyout, from the in-memory activity
+    /// log. Answers the at-a-glance "is an agent talking to me and what is it doing?"</summary>
+    private void AppendMcpActivity(StackPanel panel)
+    {
+        var dim = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var clients = FindNeedleUX.Services.Mcp.McpActivityLog.KnownClients();
+        var active = FindNeedleUX.Services.Mcp.McpActivityLog.ActiveClients();
+        var recent = FindNeedleUX.Services.Mcp.McpActivityLog.RecentCommands(10);
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Connected clients", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12,
+            Margin = new Thickness(0, 8, 0, 0),
+        });
+        if (clients.Count == 0)
+        {
+            panel.Children.Add(new TextBlock { Text = "No client has connected yet.", FontSize = 12, Foreground = dim, TextWrapping = TextWrapping.Wrap });
+        }
+        else
+        {
+            foreach (var c in clients)
+            {
+                bool isActive = active.Any(a => a.Name == c.Name);
+                var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+                line.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse
+                {
+                    Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center,
+                    Fill = new SolidColorBrush(isActive ? Color.FromArgb(255, 46, 160, 67) : Color.FromArgb(255, 158, 158, 158)),
+                });
+                line.Children.Add(new TextBlock
+                {
+                    Text = $"{c.Name}  ·  {c.Commands} cmd{(c.Commands == 1 ? "" : "s")}  ·  last {c.LastSeenUtc.ToLocalTime():HH:mm:ss}",
+                    FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                });
+                panel.Children.Add(line);
+            }
+        }
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Last 10 commands", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 12,
+            Margin = new Thickness(0, 8, 0, 0),
+        });
+        if (recent.Count == 0)
+        {
+            panel.Children.Add(new TextBlock { Text = "No commands yet.", FontSize = 12, Foreground = dim });
+        }
+        else
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var cmd in recent)
+            {
+                var what = string.IsNullOrEmpty(cmd.Tool) ? cmd.Method : $"{cmd.Method} → {cmd.Tool}";
+                sb.AppendLine($"{cmd.TimeUtc.ToLocalTime():HH:mm:ss}  {what}");
+            }
+            panel.Children.Add(new Border
+            {
+                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"],
+                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(8),
+                Child = new TextBlock { Text = sb.ToString().TrimEnd(), FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 11, IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap },
+            });
+        }
     }
 
     private static void SetClipboard(string text)
