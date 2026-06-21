@@ -17,6 +17,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" x:Name="ToggleListButton" Click="ToggleList_Click"
                     VerticalAlignment="Top" Padding="8" Background="Transparent" BorderThickness="0"
@@ -27,6 +28,14 @@
                 <TextBlock Text="Processor Output" FontSize="26" FontWeight="SemiBold" />
                 <TextBlock x:Name="SummaryText" FontSize="13" Foreground="Gray" TextWrapping="Wrap" />
             </StackPanel>
+            <Button Grid.Column="2" x:Name="GenerateButton" Click="Generate_Click"
+                    VerticalAlignment="Top" Style="{StaticResource AccentButtonStyle}"
+                    ToolTipService.ToolTip="Run the enabled output rules (e.g. UML diagrams) over the current results">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon x:Name="GenerateIcon" Glyph="&#xE768;" FontSize="14" />
+                    <TextBlock x:Name="GenerateLabel" Text="Generate" />
+                </StackPanel>
+            </Button>
         </Grid>
 
         <!-- Master / detail -->

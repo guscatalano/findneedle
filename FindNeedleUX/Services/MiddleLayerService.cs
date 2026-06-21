@@ -310,9 +310,34 @@ public class MiddleLayerService
                 // Lazy/Background modes defer the in-search FTS index build so the viewer opens
                 // before the (potentially multi-minute) index finishes; Eager builds it in Step2.
                 nu.DeferIndexBuild = EffectiveIndexingMode != FindPluginCore.Searching.IndexingMode.Eager;
+                // Don't run output rules (UML diagrams, exports) on every search — that forces the full
+                // result list to materialize and re-scans it each run. The UI generates outputs on demand
+                // (GenerateRuleOutputs), keeping plain "view a log" searches on the fast lazy path.
+                nu.DeferOutputs = true;
             }
         }
     }
+
+    /// <summary>
+    /// Run the (deferred) RuleDSL output rules / outputs now — e.g. generate the UML diagram on demand.
+    /// Scans the current results once; safe to call off the UI thread. Updates
+    /// <see cref="LastRuleOutputFiles"/> and notifies. Returns the files produced.
+    /// </summary>
+    public static List<string> GenerateRuleOutputs(System.Threading.CancellationToken ct = default)
+    {
+        if (SearchQueryUX.CurrentQuery is NuSearchQuery nu)
+        {
+            var files = nu.GenerateOutputsNow(ct);
+            LastRuleOutputFiles = files;
+            NotifyStateChanged();
+            return files;
+        }
+        return new List<string>();
+    }
+
+    /// <summary>Whether the current search has output rules/outputs to generate (drives the UI button).</summary>
+    public static bool HasOutputRules =>
+        (SearchQueryUX.CurrentQuery as NuSearchQuery)?.HasOutputRules ?? false;
 
     public static List<LogLine> GetLogLines()
     {

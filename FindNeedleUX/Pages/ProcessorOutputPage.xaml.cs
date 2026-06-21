@@ -45,10 +45,37 @@ public sealed partial class ProcessorOutputPage : Page
         };
     }
 
+    /// <summary>Generate (run) the deferred output rules on demand — e.g. build the UML diagram. Outputs
+    /// don't run on every search (that forces the full result list to materialize + rescan); this is the
+    /// explicit "produce the diagram now" action.</summary>
+    private async void Generate_Click(object sender, RoutedEventArgs e)
+    {
+        GenerateButton.IsEnabled = false;
+        var prevLabel = GenerateLabel.Text;
+        GenerateLabel.Text = "Generating…";
+        try
+        {
+            await System.Threading.Tasks.Task.Run(() => MiddleLayerService.GenerateRuleOutputs());
+            BuildPage();
+        }
+        catch (Exception ex)
+        {
+            SummaryText.Text = "Generate failed: " + ex.Message;
+        }
+        finally
+        {
+            GenerateLabel.Text = prevLabel;
+            GenerateButton.IsEnabled = true;
+        }
+    }
+
     private void BuildPage()
     {
         OutputList.Items.Clear();
         DetailHost.Children.Clear();
+
+        // Show Generate only when there are output rules to run.
+        GenerateButton.Visibility = MiddleLayerService.HasOutputRules ? Visibility.Visible : Visibility.Collapsed;
 
         var query = MiddleLayerService.SearchQueryUX.CurrentQuery;
         var processors = (query?.Processors ?? new List<IResultProcessor>()).ToList();

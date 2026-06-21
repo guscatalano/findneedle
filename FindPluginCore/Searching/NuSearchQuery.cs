@@ -562,10 +562,7 @@ public class NuSearchQuery : ISearchQuery
             // enrichment/output and any processors/outputs walk _currentResultList (not storage), so
             // when those are active we must still materialize the cached rows into the list — otherwise
             // Step3/Step4 run over nothing (e.g. the UML diagram comes out empty on a cache hit).
-            bool needsListOnReuse =
-                LoadedRules != null
-                || (_processors != null && _processors.Count > 0)
-                || (_outputs != null && _outputs.Count > 0);
+            bool needsListOnReuse = NeedsResultList();
             if (needsListOnReuse && _resultStorage != null)
             {
                 var cached = new List<ISearchResult>();
@@ -610,10 +607,7 @@ public class NuSearchQuery : ISearchQuery
         // peak RAM to ~one batch. Any filters/rules/processors/outputs, sync scan, or non-SQLite
         // storage fall back to the accumulate-then-store path below.
         bool noFilters = _filters == null || _filters.Count == 0;
-        bool willMaterializeList =
-            LoadedRules != null
-            || (_processors != null && _processors.Count > 0)
-            || (_outputs != null && _outputs.Count > 0);
+        bool willMaterializeList = NeedsResultList();
         bool streamFilteredDuringScan =
             !useSync && noFilters && !willMaterializeList && _resultStorage is SqliteStorage;
         if (streamFilteredDuringScan)
@@ -861,10 +855,7 @@ public class NuSearchQuery : ISearchQuery
         // Quick Open on a huge log — no rules, no processors, no outputs — this is 36 seconds
         // of pure allocation. Skip it; downstream consumers fall back to the storage-backed path.
         int known = SafeFilteredCount();
-        bool needsList =
-            LoadedRules != null
-            || (_processors != null && _processors.Count > 0)
-            || (_outputs != null && _outputs.Count > 0);
+        bool needsList = NeedsResultList();
 
         List<ISearchResult> allResults;
 
@@ -986,6 +977,73 @@ public class NuSearchQuery : ISearchQuery
     /// it false so search works immediately without a viewer to orchestrate the build.
     /// </summary>
     public bool DeferIndexBuild { get; set; }
+
+    /// <summary>
+    /// When set, Step4 does NOT run output rules / outputs automatically. The UI sets this so a search
+    /// stays on the lazy "just view a log" path (no full-list consolidation, no output scan) even when
+    /// an output rule — e.g. a UML diagram — is enabled; the diagram is generated on demand instead via
+    /// <see cref="GenerateOutputsNow"/>. The CLI / RunThrough path leaves it false so a batch run still
+    /// writes its outputs. Filter and enrichment rules are unaffected (they always apply).
+    /// </summary>
+    public bool DeferOutputs { get; set; }
+
+    /// <summary>Whether this search has output rules (purpose "output") or output plugins to generate —
+    /// lets the UI show a "Generate" action only when there's something to produce.</summary>
+    public bool HasOutputRules =>
+        (LoadedRules != null && _ruleLoader.GetSectionsByPurpose(LoadedRules, "output").Count > 0)
+        || (_outputs != null && _outputs.Count > 0);
+
+    /// <summary>
+    /// Whether the loaded RuleDSL rules require the full in-RAM result list to be built right now.
+    /// Filter / enrichment sections always do (they run during Step2/Step3); output sections only do
+    /// when outputs aren't deferred. Lets a deferred-output search (e.g. an enabled UML diagram with no
+    /// other rules) stay on the lazy storage-backed path.
+    /// </summary>
+    private bool LoadedRulesNeedListNow()
+    {
+        if (LoadedRules == null) return false;
+        if (_ruleLoader.GetSectionsByPurpose(LoadedRules, "filter").Count > 0) return true;
+        if (_ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment").Count > 0) return true;
+        if (DeferOutputs) return false;
+        return _ruleLoader.GetSectionsByPurpose(LoadedRules, "output").Count > 0;
+    }
+
+    /// <summary>Whether anything will consume the full list this run (so Step2 must consolidate it).</summary>
+    private bool NeedsResultList() =>
+        LoadedRulesNeedListNow()
+        || (_processors != null && _processors.Count > 0)
+        || (!DeferOutputs && _outputs != null && _outputs.Count > 0);
+
+    /// <summary>
+    /// Run the (previously deferred) output rules / outputs now, on demand. Consolidates the result
+    /// list from storage first if the search stayed lazy (re-applying any rule filtering), then runs
+    /// Step4. Returns the output files produced. Lets the UI generate a UML diagram explicitly instead
+    /// of on every search.
+    /// </summary>
+    public List<string> GenerateOutputsNow(CancellationToken cancellationToken = default)
+    {
+        if ((_currentResultList == null || _currentResultList.Count == 0) && _resultStorage != null)
+        {
+            var list = new List<ISearchResult>(Math.Max(SafeFilteredCount(), 1024));
+            _resultStorage.GetFilteredResultsInBatches(b => list.AddRange(b), 1000, cancellationToken);
+            if (LoadedRules != null)
+                using (PerfLog.Scope("rule_filter", ("in_rows", list.Count)))
+                    list = ApplyRuleFiltering(list);
+            _currentResultList = list;
+            _filteredResults = list;
+        }
+
+        bool prev = DeferOutputs;
+        DeferOutputs = false;
+        try
+        {
+            using (PerfLog.Scope("search.generate_outputs", ("rows", _currentResultList?.Count ?? 0)))
+                Step4_ProcessAllResultsToOutput(cancellationToken);
+        }
+        finally { DeferOutputs = prev; }
+
+        return GeneratedRuleOutputFiles.Where(System.IO.File.Exists).ToList();
+    }
 
     /// <summary>
     /// Build the search index on demand (lazy first-search, or background after the viewer opens),
@@ -1191,6 +1249,14 @@ public class NuSearchQuery : ISearchQuery
         using var _perf = PerfLog.Scope("search.step4",
             ("outputs", _outputs?.Count ?? 0), ("rules", LoadedRules != null));
         _stepnotifysink.NotifyStep(SearchStep.AtOutput);
+
+        // Deferred: the UI runs outputs on demand (GenerateOutputsNow) so a normal search stays lazy.
+        if (DeferOutputs)
+        {
+            PerfLog.Log("search.step4.deferred");
+            Logger.Instance.Log("Step4: outputs deferred (run on demand via GenerateOutputsNow)");
+            return;
+        }
 
         // Apply output rules if loaded
         if (LoadedRules != null)
