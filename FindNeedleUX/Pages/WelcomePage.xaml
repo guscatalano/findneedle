@@ -33,6 +33,15 @@
                 </StackPanel>
             </Border>
 
+            <!-- Getting started: prominent, right under the hero so it isn't missed. -->
+            <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
+                     Title="New here? Getting started"
+                     Message="Pick a Quick Action below to open logs, or use Configure ▸ Locations / Connections / Rules to build a custom search pipeline. Then run it from Run &amp; Results (or the Run → View Results button in the status bar).">
+                <InfoBar.ActionButton>
+                    <HyperlinkButton Content="View documentation" NavigateUri="https://github.com/guscatalano/findneedle"/>
+                </InfoBar.ActionButton>
+            </InfoBar>
+
             <!-- Quick Actions (customizable) -->
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -73,14 +82,6 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Documentation Link -->
-            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" Padding="16" CornerRadius="8" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="📖 Getting started" FontWeight="SemiBold"/>
-                    <TextBlock Text="Pick a quick action above, or use the Configure menu to set up locations, filters, and RuleDSL files for a custom search pipeline." TextWrapping="Wrap"/>
-                    <HyperlinkButton Content="View Documentation" NavigateUri="https://github.com/guscatalano/findneedle"/>
-                </StackPanel>
-            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

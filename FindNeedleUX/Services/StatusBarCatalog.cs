@@ -23,6 +23,13 @@ public static class StatusBarCatalog
         new StatusBarItem("lastrun",     "Last run"),
         new StatusBarItem("outputfiles", "Output files"),
         new StatusBarItem("run_view",    "Run → View Results"),
+        new StatusBarItem("run",         "Run search"),
+        new StatusBarItem("stop",        "Stop"),
+        new StatusBarItem("perf",        "Storage & timing"),
+        new StatusBarItem("connections", "Connections"),
+        new StatusBarItem("autorules",   "Auto-rules"),
+        new StatusBarItem("diagram",     "Diagram tools"),
+        new StatusBarItem("mcp",         "MCP server"),
     };
 
     public static readonly IReadOnlyList<string> Defaults =

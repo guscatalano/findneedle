@@ -72,17 +72,27 @@ public sealed partial class MainWindow : Window
     /// <summary>Populate the top "Quick" menu so it mirrors the welcome page: a "Welcome" entry to go
     /// home, then the user's customized quick actions, then a "Customize…" shortcut. Rebuilt on each
     /// navigation so it reflects edits made on the welcome page.</summary>
+    private string _quickMenuSig;
+
     private void BuildQuickMenu()
     {
         if (QuickMenu == null) return;
-        QuickMenu.Items.Clear();
+
+        // Only rebuild when the selection actually changed — Navigated fires constantly and rebuilding
+        // every time piled up duplicate items. Clear reliably via RemoveAt (MenuBarItem.Items.Clear is
+        // flaky in WinUI).
+        var ids = FindNeedleUX.Services.QuickActionCatalog.GetSelectedIds();
+        var sig = string.Join(",", ids);
+        if (sig == _quickMenuSig && QuickMenu.Items.Count > 0) return;
+        _quickMenuSig = sig;
+        while (QuickMenu.Items.Count > 0) QuickMenu.Items.RemoveAt(QuickMenu.Items.Count - 1);
 
         var home = new MenuFlyoutItem { Text = "🏠 Welcome" };
         home.Click += (_, _) => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         QuickMenu.Items.Add(home);
         QuickMenu.Items.Add(new MenuFlyoutSeparator());
 
-        foreach (var qaId in FindNeedleUX.Services.QuickActionCatalog.GetSelectedIds())
+        foreach (var qaId in ids)
         {
             var a = FindNeedleUX.Services.QuickActionCatalog.Find(qaId);
             if (a == null) continue;
@@ -130,6 +140,9 @@ public sealed partial class MainWindow : Window
         McpToggle.IsChecked = ResultsViewerSettings.McpServerEnabled;
         RefreshMcpDot();
         FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += () => DispatcherQueue.TryEnqueue(RefreshMcpDot);
+        // Refresh the status strip's MCP chip when a client connects/sends a request, and on server on/off.
+        FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
+        FindNeedleUX.Services.Mcp.McpServer.Activity += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
     }
 
     private void RefreshMcpDot()
@@ -500,9 +513,103 @@ public sealed partial class MainWindow : Window
             case "run_view":
                 return MakeStatusActionButton(Symbol.Play, "Run → View Results",
                     "Run the search and open the results viewer", () => RunAndViewResults());
+            case "run":
+                return MakeStatusActionButton(Symbol.Refresh, "Run search",
+                    "Run the search (without opening the viewer)", () => RunSearchOnly());
+            case "stop":
+            {
+                var btn = MakeStatusActionButton(Symbol.Stop, "Stop", "Cancel the running search", () => StopSearch());
+                btn.IsEnabled = IsSearchRunning;
+                return btn;
+            }
+            case "perf":
+            {
+                var storage = MiddleLayerService.GetSearchStorage();
+                if (storage == null) return null;
+                var tier = storage.GetType().Name.Replace("Storage", "");
+                return MakeStatusSegment(Symbol.Repair, "Storage", tier,
+                    "Search storage tier — click for the timing / why-so-slow report", null,
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage)));
+            }
+            case "connections":
+            {
+                var n = FindNeedleUX.Services.ConnectionStore.GetAll().Count;
+                return MakeStatusSegment(Symbol.Contact, "Connections", n.ToString(),
+                    "Saved online-source connections", null,
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ConnectionsPage)));
+            }
+            case "autorules":
+            {
+                var n = MiddleLayerService.LastAutoAddedRules?.Count ?? 0;
+                return MakeStatusSegment(Symbol.Bookmarks, "Auto-rules", n.ToString(),
+                    "Rules auto-added to the last search", null,
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.AutoAddRulesPage)));
+            }
+            case "diagram":
+                return MakeStatusNavChip(Symbol.View, "Diagrams", "Open the UML / diagram tools",
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage)));
+            case "mcp":
+                return BuildMcpChip();
             default:
                 return null;
         }
+    }
+
+    private bool _searchRunning;
+    private bool IsSearchRunning => _searchRunning || MiddleLayerService.CurrentStreamingSearch != null;
+
+    /// <summary>Run the current search without opening the viewer (status-bar "Run search").</summary>
+    public async void RunSearchOnly()
+    {
+        if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
+        { contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)); return; }
+        _searchRunning = true; RefreshStatusStrip();
+        try { await RunSearchWithProgress(); }
+        finally { _searchRunning = false; RefreshStatusStrip(); }
+    }
+
+    /// <summary>Cancel the running search (streaming or progress) — status-bar "Stop".</summary>
+    public void StopSearch()
+    {
+        try { MiddleLayerService.CurrentStreamingSearch?.Stop(); } catch { }
+        try { _quickActionCts?.Cancel(); } catch { }
+    }
+
+    /// <summary>A flat nav chip (icon + label, no count) for the status bar.</summary>
+    private Button MakeStatusNavChip(Symbol icon, string label, string tooltip, Action onClick)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new SymbolIcon { Symbol = icon, RenderTransform = new ScaleTransform { ScaleX = 0.7, ScaleY = 0.7 }, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5) });
+        row.Children.Add(new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        var btn = new Button { Content = row, Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 0 };
+        ToolTipService.SetToolTip(btn, tooltip);
+        btn.Click += (_, _) => { try { onClick(); } catch { } };
+        return btn;
+    }
+
+    /// <summary>MCP chip: a colored dot + state (off / listening / a client is connected). Click opens
+    /// the MCP help/config. "Connected" = a client request arrived in the last 2 minutes.</summary>
+    private FrameworkElement BuildMcpChip()
+    {
+        bool running = FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.ServerPort > 0;
+        var last = FindNeedleUX.Services.Mcp.McpServer.LastActivityUtc;
+        bool connected = running && last.HasValue && (DateTime.UtcNow - last.Value).TotalSeconds < 120;
+
+        var (text, dot) = !running
+            ? ("MCP off", Color.FromArgb(255, 158, 158, 158))
+            : connected
+                ? ("MCP · client connected", Color.FromArgb(255, 46, 160, 67))
+                : ("MCP · listening", Color.FromArgb(255, 0, 120, 215));
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(dot), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        var btn = new Button { Content = row, Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 0 };
+        ToolTipService.SetToolTip(btn, running
+            ? (connected ? $"An MCP client is connected (last request {last:HH:mm:ss}). Click for details." : "MCP server is listening for a client. Click for details.")
+            : "MCP server is off. Click for details.");
+        btn.Click += (_, _) => McpHelpButton_Click(btn, null);
+        return btn;
     }
 
     /// <summary>A prominent action button for the status bar (icon + label), distinct from the info

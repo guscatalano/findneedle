@@ -37,6 +37,13 @@ public sealed class McpServer : IDisposable
     public bool IsRunning { get; private set; }
     public int Port { get; private set; }
 
+    /// <summary>UTC time of the last client request (any POST). Lets the UI show whether a client is
+    /// actively connected. Static because there's a single in-app server.</summary>
+    public static DateTime? LastActivityUtc { get; private set; }
+
+    /// <summary>Raised on each client request (off the UI thread).</summary>
+    public static event Action Activity;
+
     /// <summary>Optional sink for diagnostics (start/stop/errors). Set by the host.</summary>
     public Action<string> Log { get; set; }
 
@@ -110,6 +117,10 @@ public sealed class McpServer : IDisposable
                 ctx.Response.Close();
                 return;
             }
+
+            // A POST is a live client request — stamp it so the UI can show "a client is connected".
+            LastActivityUtc = DateTime.UtcNow;
+            try { Activity?.Invoke(); } catch { }
 
             string body;
             using (var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding ?? Encoding.UTF8))
