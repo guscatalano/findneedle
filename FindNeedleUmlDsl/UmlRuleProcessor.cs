@@ -317,15 +317,21 @@ public class UmlRuleProcessor
             result = result.Replace("{beforeMatch}", beforeText);
         }
 
-        var extractPattern = @"\{extract:([^}]+)\}";
-        var extractMatch = Regex.Match(result, extractPattern);
-        if (extractMatch.Success)
+        // Resolve EACH {extract:<regex>} independently against the content. (Previously the first
+        // placeholder's value was substituted into every placeholder, so a template with two extracts —
+        // e.g. "OS {extract:OS Version=([0-9.]+)} ({extract:architecture=([a-z0-9]+)})" — repeated the
+        // OS version where the architecture should have been.)
+        result = Regex.Replace(result, @"\{extract:([^}]+)\}", m =>
         {
-            var regex = extractMatch.Groups[1].Value;
-            var regexMatch = Regex.Match(content, regex);
-            var extracted = regexMatch.Success && regexMatch.Groups.Count > 1 ? regexMatch.Groups[1].Value : regexMatch.Value;
-            result = Regex.Replace(result, extractPattern, extracted);
-        }
+            var regex = m.Groups[1].Value;
+            try
+            {
+                var rm = Regex.Match(content, regex);
+                if (!rm.Success) return string.Empty;
+                return rm.Groups.Count > 1 ? rm.Groups[1].Value : rm.Value;
+            }
+            catch { return string.Empty; } // invalid inner regex → drop the placeholder
+        });
 
         return result;
     }
