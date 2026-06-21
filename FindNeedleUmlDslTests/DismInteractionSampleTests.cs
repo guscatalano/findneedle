@@ -72,6 +72,8 @@ public class DismInteractionSampleTests
         var processor = new UmlRuleProcessor(new MermaidSyntaxTranslator());
         processor.LoadRulesFromFile(rules);
 
+        int Arrows(string d) => d.Split('\n').Count(l => l.Contains("->>") || l.Contains("-->>"));
+
         var once = DismLog.Select(l => new LogMessage { Content = l }).ToList();
         var oneSession = processor.ProcessMessages(once);
 
@@ -79,8 +81,12 @@ public class DismInteractionSampleTests
         for (int i = 0; i < 50; i++) many.AddRange(DismLog.Select(l => new LogMessage { Content = l }));
         var fiftySessions = processor.ProcessMessages(many);
 
-        Assert.AreEqual(oneSession, fiftySessions,
-            "with dedupe, 50 replays of the same session produce the same generic diagram as one");
+        // Dedupe collapses the replayed flow: 50 sessions emit the SAME number of arrows as one…
+        Assert.AreEqual(Arrows(oneSession), Arrows(fiftySessions),
+            "with dedupe, 50 replays produce the same shape as one session");
+        // …but the count is preserved as a "×50" annotation, so no information is lost.
+        StringAssert.Contains(fiftySessions, "×50");
+        Assert.IsFalse(oneSession.Contains("×"), "a single occurrence is not annotated");
         // Sanity: the rules file actually requested dedupe.
         Assert.IsTrue(processor.Definition.Dedupe, "dism-interaction-uml.rules.json should set dedupe:true");
     }

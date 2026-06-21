@@ -59,15 +59,27 @@ public class UmlRuleProcessor
         // generic flow; maxElements is a hard ceiling so no diagram can blow the renderer's size limit.
         bool dedupe = _definition.Dedupe;
         int maxElements = _definition.MaxElements;
-        var seen = dedupe ? new HashSet<string>(StringComparer.Ordinal) : null;
         int emitted = 0;
         bool truncated = false;
 
-        // Emit a body line subject to dedupe + cap. Returns false once the cap is hit (stop emitting).
-        bool Emit(string line)
+        // Dedupe doesn't discard information: it collapses identical interactions but counts them, so a
+        // step that happened N times is shown once annotated "×N". Emission is deferred to after the scan
+        // (so the final count is known); keyed by the rendered line, kept in first-seen order.
+        var dedupOrder = dedupe ? new List<(string sig, ResolvedUmlElement el)>() : null;
+        var dedupCount = dedupe ? new Dictionary<string, int>(StringComparer.Ordinal) : null;
+
+        // Handle one element: emit inline (non-dedupe) or record for the counted render pass (dedupe).
+        // Returns false once the hard cap is hit (stop scanning) — only meaningful in non-dedupe mode.
+        bool Handle(ResolvedUmlElement el)
         {
+            var line = _translator.GenerateElement(el);
             if (line == null) return true;
-            if (dedupe && !seen.Add(line)) return true;       // duplicate of an already-emitted element
+            if (dedupe)
+            {
+                if (dedupCount.TryGetValue(line, out var c)) dedupCount[line] = c + 1;
+                else { dedupCount[line] = 1; dedupOrder.Add((line, el)); }
+                return true; // cap is applied in the deferred render below
+            }
             if (maxElements > 0 && emitted >= maxElements) { truncated = true; return false; }
             sb.AppendLine(line);
             emitted++;
@@ -108,7 +120,7 @@ public class UmlRuleProcessor
                     {
                         // If already active, still emit (mermaid tolerates re-activate) and record state
                         activeParticipants.Add(participant);
-                        if (!Emit(_translator.GenerateElement(element))) break;
+                        if (!Handle(element)) break;
                     }
                     else
                     {
@@ -121,7 +133,7 @@ public class UmlRuleProcessor
                     if (!string.IsNullOrEmpty(participant) && activeParticipants.Contains(participant))
                     {
                         activeParticipants.Remove(participant);
-                        if (!Emit(_translator.GenerateElement(element))) break;
+                        if (!Handle(element)) break;
                     }
                     else
                     {
@@ -131,13 +143,29 @@ public class UmlRuleProcessor
                 else if (type == "groupend")
                 {
                     // groupend is emitted as 'end' in translator; always emit to avoid leaving blocks open
-                    if (!Emit(_translator.GenerateElement(element))) break;
+                    if (!Handle(element)) break;
                 }
                 else
                 {
                     // Regular elements (message, note, delay, divider, etc.)
-                    if (!Emit(_translator.GenerateElement(element))) break;
+                    if (!Handle(element)) break;
                 }
+            }
+        }
+
+        // Deferred render for dedupe mode: emit each unique element once, annotating repeats with "×N"
+        // so the count of collapsed occurrences isn't lost. Respects the same hard cap.
+        if (dedupe)
+        {
+            foreach (var (sig, el) in dedupOrder)
+            {
+                if (maxElements > 0 && emitted >= maxElements) { truncated = true; break; }
+                int c = dedupCount[sig];
+                string line = (c > 1 && !string.IsNullOrEmpty(el.Text))
+                    ? _translator.GenerateElement(WithText(el, $"{el.Text} ×{c}"))
+                    : sig;
+                sb.AppendLine(line);
+                emitted++;
             }
         }
 
@@ -170,6 +198,32 @@ public class UmlRuleProcessor
         return sb.ToString();
     }
 
+    /// <summary>Clone a resolved element with replaced text (used to append the dedupe "×N" count).</summary>
+    private static ResolvedUmlElement WithText(ResolvedUmlElement el, string text) => new()
+    {
+        Type = el.Type,
+        From = el.From,
+        To = el.To,
+        Text = text,
+        ArrowStyle = el.ArrowStyle,
+        NotePosition = el.NotePosition,
+        Timestamp = el.Timestamp,
+    };
+
+    // Compiled-regex cache. ProcessMessages matches every rule against every row (millions of calls on
+    // a big log), so compiling each pattern once and reusing it beats the static Regex.IsMatch cache,
+    // which re-hashes the pattern on every call. Keyed by pattern string.
+    private readonly Dictionary<string, Regex?> _regexCache = new();
+
+    private Regex? GetRegex(string pattern)
+    {
+        if (_regexCache.TryGetValue(pattern, out var rx)) return rx;
+        try { rx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant); }
+        catch { rx = null; } // invalid pattern → caller falls back to substring
+        _regexCache[pattern] = rx;
+        return rx;
+    }
+
     private bool MatchesRule(LogMessage message, UmlRule rule)
     {
         var content = message.Content ?? string.Empty;
@@ -177,7 +231,8 @@ public class UmlRuleProcessor
         // If rule explicitly requests regex, use it and fail on invalid regex
         if (rule.UseRegex == true)
         {
-            if (!Regex.IsMatch(content, rule.Match, RegexOptions.IgnoreCase))
+            var rx = GetRegex(rule.Match);
+            if (rx == null || !rx.IsMatch(content))
                 return false;
         }
         else if (rule.UseRegex == false)
@@ -189,30 +244,24 @@ public class UmlRuleProcessor
         else
         {
             // Default: try regex first, fall back to substring
-            try
+            var rx = GetRegex(rule.Match);
+            if (rx != null)
             {
-                if (!Regex.IsMatch(content, rule.Match, RegexOptions.IgnoreCase))
-                    return false;
+                if (!rx.IsMatch(content)) return false;
             }
-            catch
-            {
-                if (!content.Contains(rule.Match, StringComparison.OrdinalIgnoreCase))
-                    return false;
-            }
+            else if (!content.Contains(rule.Match, StringComparison.OrdinalIgnoreCase))
+                return false;
         }
 
         if (!string.IsNullOrEmpty(rule.Unmatch))
         {
-            try
+            var rx = GetRegex(rule.Unmatch);
+            if (rx != null)
             {
-                if (Regex.IsMatch(content, rule.Unmatch, RegexOptions.IgnoreCase))
-                    return false;
+                if (rx.IsMatch(content)) return false;
             }
-            catch
-            {
-                if (content.Contains(rule.Unmatch, StringComparison.OrdinalIgnoreCase))
-                    return false;
-            }
+            else if (content.Contains(rule.Unmatch, StringComparison.OrdinalIgnoreCase))
+                return false;
         }
 
         return true;

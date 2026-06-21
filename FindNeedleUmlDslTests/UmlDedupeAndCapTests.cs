@@ -33,12 +33,29 @@ public class UmlDedupeAndCapTests
         => diagram.Split('\n').Count(l => l.Contains("->>") || l.Contains("-->>"));
 
     [TestMethod]
-    public void Dedupe_CollapsesIdenticalMessages_ToOne()
+    public void Dedupe_CollapsesIdenticalMessages_ToOne_WithCount()
     {
         var p = new UmlRuleProcessor(new MermaidSyntaxTranslator());
         p.LoadRules(OneMessageRule(dedupe: true, maxElements: 0));
         var diagram = p.ProcessMessages(Pings(100));
         Assert.AreEqual(1, CountArrows(diagram), "100 identical interactions collapse to one");
+        StringAssert.Contains(diagram, "×100", "the collapsed count is preserved as an annotation");
+    }
+
+    [TestMethod]
+    public void Dedupe_DistinctMessages_KeptSeparately()
+    {
+        // Different extracted/text content must NOT be merged — only identical interactions collapse.
+        var def = OneMessageRule(dedupe: true, maxElements: 0);
+        var p = new UmlRuleProcessor(new MermaidSyntaxTranslator());
+        p.LoadRules(def);
+        var msgs = new List<LogMessage>
+        {
+            new() { Content = "ping" }, new() { Content = "ping" }, new() { Content = "ping" },
+        };
+        var diagram = p.ProcessMessages(msgs);
+        Assert.AreEqual(1, CountArrows(diagram));
+        StringAssert.Contains(diagram, "×3");
     }
 
     [TestMethod]
