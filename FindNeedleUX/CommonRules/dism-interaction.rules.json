@@ -19,7 +19,7 @@
             "syntax": "mermaid",
             "path": "{output}/dism_interaction_{datetime}.mmd",
             "rulesFile": "CommonRules/dism-interaction-uml.rules.json",
-            "generateImage": true
+            "generateImage": false
           }
         }
       ]

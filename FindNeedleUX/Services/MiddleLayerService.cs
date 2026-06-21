@@ -275,8 +275,13 @@ public class MiddleLayerService
                     if (System.IO.File.Exists(rulesPath))
                     {
                         var ruleDslProcessor = new FindNeedleRuleDSL.FindNeedleRuleDSLPlugin("*", rulesPath);
-                        enabledProcessors.Add(ruleDslProcessor);
                         LastRuleProcessors.Add(ruleDslProcessor);
+                        // Only rules with filter/enrichment sections need a Step3 processor (which forces
+                        // the full result list to materialize). Output-only rules — e.g. a UML diagram —
+                        // run via the rules-output path (Step4 / GenerateOutputsNow) instead, so adding
+                        // them as processors would needlessly consolidate 1.4M rows on every search.
+                        if (RuleFileHasProcessableSections(rulesPath))
+                            enabledProcessors.Add(ruleDslProcessor);
                         System.Diagnostics.Debug.WriteLine($"Added RuleDSL processor for: {rulesPath}");
                     }
                 }
@@ -333,6 +338,34 @@ public class MiddleLayerService
             return files;
         }
         return new List<string>();
+    }
+
+    /// <summary>
+    /// True if a rule file has any non-output section (filter / enrichment / unspecified) — i.e. it does
+    /// work in Step2/Step3 and so needs the full result list. An all-output ruleset (e.g. a UML diagram)
+    /// returns false: its output runs lazily on demand, so it shouldn't force consolidation every search.
+    /// Conservative: any parse problem or unknown shape returns true.
+    /// </summary>
+    internal static bool RuleFileHasProcessableSections(string path)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("sections", out var secs) && !root.TryGetProperty("Sections", out secs))
+                return true; // unknown shape → assume it needs processing
+            if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) return true;
+            foreach (var s in secs.EnumerateArray())
+            {
+                string purpose = null;
+                if (s.TryGetProperty("purpose", out var p) || s.TryGetProperty("Purpose", out p))
+                    purpose = p.GetString();
+                if (!string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase))
+                    return true; // a filter/enrichment/unspecified section → needs the list
+            }
+            return false; // every section is output-only
+        }
+        catch { return true; }
     }
 
     /// <summary>Whether the current search has output rules/outputs to generate (drives the UI button).</summary>
