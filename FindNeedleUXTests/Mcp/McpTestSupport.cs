@@ -87,6 +87,7 @@ internal sealed class FakeViewerController : IMcpViewerController
     public Task<bool> SelectRowAsync(long rowId) => Task.FromResult(true);
     public Task<bool> TagRowAsync(long rowId, string tag, string text) { LastTagId = rowId; LastTag = tag; LastTagText = text; return Task.FromResult(true); }
     public Task<bool> ClearTagAsync(long rowId) => Task.FromResult(true);
+    public Task ReloadAsync() => Task.CompletedTask;
     public Task SetDetailsModeAsync(string mode) => Task.CompletedTask;
     public Task<ExportResultDto> ExportAsync(string format, string destPath)
         => Task.FromResult(new ExportResultDto { Path = destPath ?? "C:/tmp/x.csv", RowCount = 7 });

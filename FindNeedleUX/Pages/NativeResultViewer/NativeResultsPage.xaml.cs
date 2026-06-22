@@ -224,6 +224,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         _lazyPromptShown = false;
         MiddleLayerService.StateChanged -= OnMiddleLayerStateChanged;
         MiddleLayerService.StateChanged += OnMiddleLayerStateChanged;
+        MiddleLayerService.WorkspaceCleared -= OnWorkspaceCleared;
+        MiddleLayerService.WorkspaceCleared += OnWorkspaceCleared;
         UpdateIndexingIndicator();
 
         // Now that the row count is known, seed the adaptive search-submit mode.
@@ -361,7 +363,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             return;
         }
 
-        bool filtersHidAll = ViewModel.TotalCount > 0; // rows exist but none pass the current filters
+        // "Filters hid everything" only when filters are actually active — not merely because rows
+        // exist. (TotalCount is set before TotalFilteredCount during load, so inferring it from
+        // TotalCount>0 would wrongly flash the filter message on an unfiltered, still-loading view.)
+        bool filtersHidAll = ViewModel.HasActiveFilter() && ViewModel.TotalCount > 0;
         EmptyOverlayClearFilters.Visibility = filtersHidAll ? Visibility.Visible : Visibility.Collapsed;
         if (filtersHidAll)
         {
@@ -682,6 +687,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ResultsViewerSettings.Changed -= OnSettingsChanged;
         ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         MiddleLayerService.StateChanged -= OnMiddleLayerStateChanged;
+        MiddleLayerService.WorkspaceCleared -= OnWorkspaceCleared;
         FindNeedlePluginLib.FlowProgress.Updated -= OnFlowProgress;
         _lazyIndexTimer.Stop();
         ViewModel.DetachFromStreaming();
@@ -700,6 +706,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     // ----- Deferred search-index (lazy/background) UX -----
 
     private void OnMiddleLayerStateChanged() => UpdateIndexingIndicator();
+
+    /// <summary>The workspace was cleared — empty the grid. Runs synchronously when already on the UI
+    /// thread (the normal case: menu + MCP both clear on the UI thread) so the source detaches before
+    /// the cleared storage is disposed.</summary>
+    private void OnWorkspaceCleared()
+    {
+        void Reset()
+        {
+            ViewModel.ResetToEmpty();
+            RebindGrid();
+            UpdateDecodeBanner();
+            UpdateStreamingIcon();
+            UpdateEmptyState();
+        }
+        if (DispatcherQueue.HasThreadAccess) Reset();
+        else DispatcherQueue.TryEnqueue(Reset);
+    }
 
     /// <summary>Show/refresh the "building search index… N%" indicator from the current build state.</summary>
     private void UpdateIndexingIndicator()
@@ -1524,7 +1547,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void OnViewModelPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalCount))
-            DispatcherQueue.TryEnqueue(() => { RefreshSearchSubmitMode(); UpdateEmptyState(); });
+            DispatcherQueue.TryEnqueue(RefreshSearchSubmitMode);
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalFilteredCount))
             DispatcherQueue.TryEnqueue(UpdateEmptyState);
         // When a streaming load finishes, re-check the decode banner — the new file's stats are now

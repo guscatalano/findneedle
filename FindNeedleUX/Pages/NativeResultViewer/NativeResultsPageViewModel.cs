@@ -595,7 +595,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private bool _liveRefreshInFlight;
 
     /// <summary>True when any filter/search is narrowing the view.</summary>
-    private bool HasActiveFilter() =>
+    public bool HasActiveFilter() =>
         !string.IsNullOrEmpty(_searchText) || !string.IsNullOrEmpty(_providerFilter) ||
         !string.IsNullOrEmpty(_taskNameFilter) || !string.IsNullOrEmpty(_messageFilter) ||
         !string.IsNullOrEmpty(_sourceFilter) || !string.IsNullOrEmpty(_levelFilter) ||
@@ -713,6 +713,27 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         if (_source != null) _source.RowsAvailable -= OnStreamingRowsAvailable;
         try { _refreshTimer?.Stop(); } catch { /* ignore */ }
+    }
+
+    /// <summary>Drop all loaded data and show an empty view — called when the workspace is cleared.
+    /// Runs synchronously so the source is detached before the owning storage is disposed (otherwise
+    /// the viewer could read a closed SQLite connection). Filters are reset too, so the empty view
+    /// reads as "No results" rather than "filters hid everything".</summary>
+    public void ResetToEmpty()
+    {
+        DetachFromStreaming();
+        ResetRuleViewFilter();
+        ClearFiltersNoReload();
+        try { _source?.Dispose(); } catch { /* ignore */ }
+        _source = new InMemoryPagedSource(Array.Empty<LogLine>());
+        Results.ReplaceAll(Array.Empty<LogLine>());
+        IsStreaming = false;
+        HasPendingRows = false;
+        TotalCount = 0;
+        TotalFilteredCount = 0;
+        OnPropertyChanged(nameof(CurrentPage));
+        OnPropertyChanged(nameof(TotalPages));
+        OnPropertyChanged(nameof(PageRangeText));
     }
 
     /// <summary>Cancel the in-flight streaming search, if any.</summary>

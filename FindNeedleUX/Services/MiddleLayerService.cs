@@ -54,6 +54,16 @@ public class MiddleLayerService
 
     public static void NotifyStateChanged() => StateChanged?.Invoke();
 
+    /// <summary>Raised by <see cref="ClearWorkspace"/> so an already-open result viewer drops its
+    /// loaded rows. Fires (on the UI thread) before any storage is released, so the viewer detaches
+    /// its paged source before the underlying SQLite connection goes away.</summary>
+    public static event Action WorkspaceCleared;
+
+    // Set by ClearWorkspace, reset the moment a new result set is established (UpdateSearchQuery /
+    // OpenCachedResult). While set, GetSearchStorage returns null so a re-navigate to the viewer
+    // doesn't re-materialize the previous search's rows from the still-undisposed query storage.
+    private static bool _workspaceCleared;
+
     public static void AddFolderLocation(string location)
     {
         // Don't add the same folder/file twice — repeated adds (e.g. an agent calling add_folder per run)
@@ -89,9 +99,16 @@ public class MiddleLayerService
     {
         try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
         CurrentStreamingSearch = null;
-        ClearOverrideStorage();
         Locations.Clear();
         Filters.Clear();
+        SearchResults.Clear();
+        LastRunSummary = null;
+        _workspaceCleared = true; // GetSearchStorage now reports "nothing to show"
+        // Tell an open viewer to drop its source BEFORE we dispose any storage (avoids reading a
+        // closed SQLite connection). Both callers (menu + MCP) run this on the UI thread, so the
+        // handler completes synchronously here.
+        try { WorkspaceCleared?.Invoke(); } catch { /* a viewer handler shouldn't block the clear */ }
+        ClearOverrideStorage();
         NotifyStateChanged();
     }
 
@@ -253,6 +270,7 @@ public class MiddleLayerService
 
     public static void UpdateSearchQuery()
     {
+        _workspaceCleared = false; // a new search establishes a fresh result set
         // Update the processor list in the query based on the current plugin config
         var pluginManager = PluginManager.GetSingleton();
         var config = pluginManager.config;
@@ -1005,6 +1023,7 @@ public class MiddleLayerService
 
     public static FindNeedlePluginLib.Interfaces.ISearchStorage? GetSearchStorage()
     {
+        if (_workspaceCleared) return null; // workspace was cleared; don't expose the old query's rows
         if (_overrideStorage != null) return _overrideStorage;
         // NuSearchQuery exposes ResultStorage; older SearchQuery types don't.
         var query = SearchQueryUX?.CurrentQuery;
@@ -1024,6 +1043,7 @@ public class MiddleLayerService
         CancelBackgroundIndexBuild();
         try { _overrideStorage?.Dispose(); } catch { /* ignore */ }
         _overrideStorage = FindPluginCore.Implementations.Storage.SqliteStorage.OpenExistingCache(dbPath);
+        _workspaceCleared = false; // viewing a cache is a fresh result set
         OpenCacheDbPath = dbPath;
         LastStats = null; // the cache has no live SearchStatistics
         NotifyStateChanged();
