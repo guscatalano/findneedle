@@ -853,7 +853,12 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         double size = ResultsViewerSettings.RowFontSize;
         if (size == _appliedRowFontSize) return;
         _appliedRowFontSize = size;
-        ResultsGrid.FontSize = size; // CommunityToolkit DataGrid propagates this to its text columns
+        // The grid's own FontSize does NOT cascade to cell text — each column owns its font. Set it
+        // per text column so the row text actually resizes (the caller rebinds the grid so any
+        // realized cells re-render at the new size).
+        ResultsGrid.FontSize = size;
+        foreach (var col in ResultsGrid.Columns)
+            if (col is DataGridTextColumn tc) tc.FontSize = size;
         // Keep the row height proportional. 26px fits the 12px default; scale up from there. Floor at
         // the default so smaller fonts don't cram rows together below the comfortable baseline.
         ResultsGrid.RowHeight = Math.Max(26, Math.Ceiling(size * 1.9));

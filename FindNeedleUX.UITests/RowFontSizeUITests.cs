@@ -67,58 +67,76 @@ namespace FindNeedleUX.UITests
             try { if (_tempLogPath != null && File.Exists(_tempLogPath)) File.Delete(_tempLogPath); } catch { }
         }
 
-        /// <summary>Median height of the realized data rows. Median (not min/first) so the taller
-        /// selected/details row or a virtualization-race partial row doesn't skew it.</summary>
-        private static double MedianRealizedRowHeight(AutomationElement grid)
+        /// <summary>Median height of the realized cell TEXT elements — this tracks the actual font
+        /// size, unlike the row height (which the viewer sets independently via RowHeight, so it would
+        /// grow even if the text didn't). Median ignores the odd partial/clipped cell.</summary>
+        private static double MedianCellTextHeight(AutomationElement grid)
         {
-            var heights = grid.FindAllDescendants(cf => cf.ByControlType(ControlType.DataItem))
-                .Select(r => { try { return (double)r.BoundingRectangle.Height; } catch { return 0.0; } })
-                .Where(h => h > 1)
-                .OrderBy(h => h)
-                .ToList();
+            var heights = new System.Collections.Generic.List<double>();
+            foreach (var row in grid.FindAllDescendants(cf => cf.ByControlType(ControlType.DataItem)))
+            {
+                foreach (var cell in row.FindAllDescendants(cf => cf.ByControlType(ControlType.Text)))
+                {
+                    try
+                    {
+                        var h = (double)cell.BoundingRectangle.Height;
+                        // Only count cells that actually have text (empty cells can report odd sizes).
+                        if (h > 1 && !string.IsNullOrWhiteSpace(UiTestHelpers.SafeName(cell))) heights.Add(h);
+                    }
+                    catch { /* virtualization race — skip */ }
+                }
+            }
             if (heights.Count == 0) return 0;
+            heights.Sort();
             return heights[heights.Count / 2];
         }
 
-        /// <summary>Open a top MenuBar item and click one of its flyout entries by AutomationId
-        /// (the XAML x:Name). The flyout opens in a popup that isn't always under the main window's
-        /// element, so the item is polled for across the whole desktop.</summary>
-        private void ClickMenu(string menuName, string itemAutomationId)
+        /// <summary>Open a top MenuBar item and invoke one of its flyout entries (by AutomationId, with
+        /// a Name fallback). Returns false instead of throwing so callers can retry the whole nav — the
+        /// WinUI flyout opens in a popup with flaky timing and a single click sometimes doesn't take.</summary>
+        private bool TryClickMenu(string menuName, string itemAutomationId, string itemName = null)
         {
             var desktop = _automation.GetDesktop();
             AutomationElement item = null;
 
-            // The WinUI flyout opens in a popup with variable timing and sometimes needs a second
-            // nudge, so retry the whole open+find a few times before giving up.
-            for (int attempt = 0; attempt < 4 && item == null; attempt++)
+            for (int attempt = 0; attempt < 5 && item == null; attempt++)
             {
                 var menu = _mainWindow.FindFirstDescendant(cf =>
                     cf.ByControlType(ControlType.MenuItem).And(cf.ByName(menuName)));
-                Assert.IsNotNull(menu, $"Menu '{menuName}' should exist");
+                if (menu == null) { Thread.Sleep(400); continue; }
+                // Open only if not already open — Expand on an open menu can toggle it shut.
                 var ecp = menu.Patterns.ExpandCollapse.PatternOrDefault;
-                if (ecp != null) { try { ecp.Expand(); } catch { menu.Click(); } } else { menu.Click(); }
+                bool open = ecp != null &&
+                    ecp.ExpandCollapseState.ValueOrDefault == ExpandCollapseState.Expanded;
+                if (!open) { if (ecp != null) { try { ecp.Expand(); } catch { menu.Click(); } } else menu.Click(); }
 
-                var deadline = DateTime.Now.AddSeconds(3);
+                var deadline = DateTime.Now.AddSeconds(2.5);
                 while (DateTime.Now < deadline)
                 {
-                    item = _mainWindow.FindFirstDescendant(cf => cf.ByAutomationId(itemAutomationId))
+                    item = menu.FindFirstChild(cf => cf.ByAutomationId(itemAutomationId))
+                           ?? menu.FindFirstDescendant(cf => cf.ByAutomationId(itemAutomationId))
                            ?? desktop.FindFirstDescendant(cf => cf.ByAutomationId(itemAutomationId));
+                    if (item == null && itemName != null)
+                        item = desktop.FindFirstDescendant(cf =>
+                            cf.ByControlType(ControlType.MenuItem).And(cf.ByName(itemName)));
                     if (item != null) break;
                     Thread.Sleep(200);
                 }
             }
-            Assert.IsNotNull(item, $"Menu item '{itemAutomationId}' should appear under '{menuName}'");
-            // Invoke is more reliable than Click for flyout items that may be partially off-screen.
+            if (item == null) return false;
             var inv = item.Patterns.Invoke.PatternOrDefault;
             if (inv != null) { try { inv.Invoke(); } catch { item.Click(); } } else { item.Click(); }
             Thread.Sleep(900);
+            return true;
         }
 
         /// <summary>On the Preferences page, set "Row text size" to the option whose label contains
         /// <paramref name="labelContains"/>. (Caller navigates there and back.)</summary>
         private void SetRowFont(string labelContains)
         {
-            ClickMenu("Settings", "settings_resultviewer");
+            bool opened = false;
+            for (int i = 0; i < 3 && !opened; i++) opened = TryClickMenu("Settings", "settings_resultviewer", "Preferences...");
+            Assert.IsTrue(opened, "Could not open Settings ▸ Preferences.");
             var combo = UiTestHelpers.FindByIdSkippingGrid(_mainWindow, "RowFontSizeCombo", 15000);
             Assert.IsNotNull(combo, "RowFontSizeCombo not found on the Preferences page.");
             var box = combo.AsComboBox();
@@ -138,10 +156,10 @@ namespace FindNeedleUX.UITests
         /// which is a UI-automation flake, not an app hang). Returns the populated grid, or null.</summary>
         private AutomationElement ReturnToResultsGrid()
         {
-            for (int attempt = 0; attempt < 3; attempt++)
+            for (int attempt = 0; attempt < 5; attempt++)
             {
-                ClickMenu("Run & Results", "results_viewnative");
-                var grid = UiTestHelpers.WaitForPopulatedGrid(_mainWindow, 12000);
+                if (!TryClickMenu("Run & Results", "results_viewnative", "Results")) continue;
+                var grid = UiTestHelpers.WaitForPopulatedGrid(_mainWindow, 10000);
                 if (grid?.FindFirstDescendant(cf => cf.ByControlType(ControlType.DataItem)) != null)
                     return grid;
             }
@@ -168,22 +186,24 @@ namespace FindNeedleUX.UITests
             var smallGrid = ReturnToResultsGrid();
             swSmall.Stop();
             Assert.IsNotNull(smallGrid, "ResultsGrid did not return after setting a small font (possible freeze).");
-            double smallHeight = MedianRealizedRowHeight(smallGrid);
+            double smallText = MedianCellTextHeight(smallGrid);
 
             var swLarge = Stopwatch.StartNew();
             SetRowFont("Extra large");
             var largeGrid = ReturnToResultsGrid();
             swLarge.Stop();
             Assert.IsNotNull(largeGrid, "ResultsGrid did not return after setting a large font (possible freeze).");
-            double largeHeight = MedianRealizedRowHeight(largeGrid);
+            double largeText = MedianCellTextHeight(largeGrid);
 
             TestContext.WriteLine(
-                $"Row height: Compact(9)={smallHeight:F0}px, Extra large(20)={largeHeight:F0}px. " +
+                $"Cell text height: Compact(9)={smallText:F0}px, Extra large(20)={largeText:F0}px. " +
                 $"Change round trips took {swSmall.ElapsedMilliseconds} ms / {swLarge.ElapsedMilliseconds} ms.");
 
-            // Rows must be clearly taller at the large font (RowHeight 26 -> ceil(20*1.9)=38).
-            Assert.IsTrue(largeHeight > smallHeight + 5,
-                $"Rows did not grow with a larger font: Compact={smallHeight:F0}px, Extra large={largeHeight:F0}px.");
+            Assert.IsTrue(smallText > 1 && largeText > 1, "Could not measure cell text heights.");
+            // The TEXT itself must be clearly larger (font 9 -> 20). This is what actually proves the
+            // font changed — row height alone would grow even if the text didn't.
+            Assert.IsTrue(largeText > smallText + 4,
+                $"Cell text did not grow with a larger font: Compact={smallText:F0}px, Extra large={largeText:F0}px.");
 
             // Freeze guard: each round trip (incl. navigation + its retries) should finish well under
             // a minute. A genuine UI-thread hang on applying the font would blow this.
