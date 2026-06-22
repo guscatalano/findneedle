@@ -29,6 +29,13 @@ public sealed class RecordDto
     public string Username { get; set; }
     public string OpCode { get; set; }
     public string SearchableData { get; set; }
+    // Correlation / detail columns — also where field-extraction enrichment writes (e.g. an
+    // extracted HRESULT into EventId). Populated only for a full single-record fetch.
+    public string EventId { get; set; }
+    public string ProcessName { get; set; }
+    public string ActivityId { get; set; }
+    public string Keywords { get; set; }
+    public string Channel { get; set; }
 }
 
 public sealed class PageDto

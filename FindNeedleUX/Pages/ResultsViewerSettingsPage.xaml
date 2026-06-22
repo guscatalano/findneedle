@@ -179,6 +179,27 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Row text size -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row text size" FontWeight="SemiBold"/>
+                            <TextBlock Text="Font size of the result grid's rows. Smaller fits more rows on screen; larger is easier to read."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="RowFontSizeCombo" Width="220"
+                                      SelectionChanged="RowFontSizeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Row text size">
+                                <ComboBoxItem Content="Compact (9)"  Tag="9"/>
+                                <ComboBoxItem Content="Small (11)"   Tag="11"/>
+                                <ComboBoxItem Content="Default (12)" Tag="12"/>
+                                <ComboBoxItem Content="Medium (14)"  Tag="14"/>
+                                <ComboBoxItem Content="Large (16)"   Tag="16"/>
+                                <ComboBoxItem Content="Extra large (20)" Tag="20"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Per-level colors -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

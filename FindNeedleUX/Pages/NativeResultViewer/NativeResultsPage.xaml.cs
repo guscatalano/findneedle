@@ -67,6 +67,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // scrollbars pick it up; MouseIndicator keeps the (thicker) bar shown rather than collapsing
         // to the thin auto-hide line. Re-applied live via OnSettingsChanged for an open viewer.
         ApplyScrollBarSize();
+        ApplyRowFontSize();
 
         // Keep this page instance alive across Frame navigations. First switch from another
         // viewer still pays the construction cost (XAML + DataGrid init), but every subsequent
@@ -243,6 +244,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // The grid's scrollbars exist in the visual tree now, so push the configured thickness onto
         // them (the constructor only set the resource, before the template realized).
         ApplyScrollBarSize();
+        ApplyRowFontSize();
 
         UpdateRuleFilterToggleState();
         UpdateSourcesButtonState();
@@ -834,6 +836,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             ApplyPersistedSettings();
             ApplyPersistedLevelOverrides();
             ApplyScrollBarSize();
+            ApplyRowFontSize();
             RebindGrid();
         });
     }
@@ -841,6 +844,18 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// <summary>Apply the user's configured scrollbar thickness. Overrides the WinUI
     /// <c>ScrollBarSize</c> resource at page scope (picked up when scrollbars (re)template) and, for an
     /// already-realized grid, pushes the size onto the live scrollbars so the change shows immediately.</summary>
+    /// <summary>Apply the user's configured row text size to the grid, scaling the (fixed, for
+    /// scroll perf) row height to match so larger text isn't clipped.</summary>
+    private void ApplyRowFontSize()
+    {
+        if (ResultsGrid == null) return;
+        double size = ResultsViewerSettings.RowFontSize;
+        ResultsGrid.FontSize = size; // CommunityToolkit DataGrid propagates this to its text columns
+        // Keep the row height proportional. 26px fits the 12px default; scale up from there. Floor at
+        // the default so smaller fonts don't cram rows together below the comfortable baseline.
+        ResultsGrid.RowHeight = Math.Max(26, Math.Ceiling(size * 1.9));
+    }
+
     private void ApplyScrollBarSize()
     {
         double size = ResultsViewerSettings.ScrollBarSize;
@@ -2164,6 +2179,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             dto.Username = l.Username;
             dto.OpCode = l.OpCode;
             dto.SearchableData = l.SearchableData;
+            dto.EventId = l.EventId;
+            dto.ProcessName = l.ProcessName;
+            dto.ActivityId = l.ActivityId;
+            dto.Keywords = l.Keywords;
+            dto.Channel = l.Channel;
         }
         return dto;
     }

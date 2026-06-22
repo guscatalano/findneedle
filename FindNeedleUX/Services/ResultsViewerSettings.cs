@@ -454,6 +454,23 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Font size (in px) of the result grid's row text. WinUI's default body size is ~14; this lets
+    /// the user shrink it to fit more rows or grow it for readability. Clamped to a sane range so a
+    /// corrupt value can't make text invisible or blow out the row height. The viewer scales the row
+    /// height to match. Broadcasts Changed so an open viewer reflows live.
+    /// </summary>
+    public const double DefaultRowFontSize = 12;
+    public const double MinRowFontSize = 9;
+    public const double MaxRowFontSize = 24;
+    public static double ClampRowFontSize(double v) =>
+        v < MinRowFontSize ? MinRowFontSize : v > MaxRowFontSize ? MaxRowFontSize : v;
+    public static double RowFontSize
+    {
+        get => ClampRowFontSize(Data.RowFontSize ?? DefaultRowFontSize);
+        set { Data.RowFontSize = ClampRowFontSize(value); Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>
     /// Per-level hex color overrides ("#AARRGGBB" / "#RRGGBB" / "Transparent").
     /// Returns a copy; mutate via <see cref="SetLevelColor"/> or <see cref="ClearLevelColors"/>.
     /// </summary>
@@ -538,6 +555,7 @@ public static class ResultsViewerSettings
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }
         public double? ScrollBarSize { get; set; }
+        public double? RowFontSize { get; set; }
         public Dictionary<string, bool> DetailFieldVisibility { get; set; }
     }
 }

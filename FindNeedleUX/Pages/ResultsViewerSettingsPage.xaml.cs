@@ -77,6 +77,10 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(ScrollBarSizeCombo,
                 ((int)ResultsViewerSettings.ScrollBarSize).ToString());
 
+            // --- Row text size ---
+            SelectComboItemByTag(RowFontSizeCombo,
+                ((int)ResultsViewerSettings.RowFontSize).ToString());
+
             // --- Levels: start from the active theme preset, then layer per-level overrides. ---
             RebuildLevelEditor();
 
@@ -224,6 +228,15 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (ScrollBarSizeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
             && double.TryParse(tag, out var size))
             ResultsViewerSettings.ScrollBarSize = size;
+    }
+
+    // ----- Row text size -----
+    private void RowFontSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (RowFontSizeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && double.TryParse(tag, out var size))
+            ResultsViewerSettings.RowFontSize = size;
     }
 
     // ----- Per-level color editor -----
