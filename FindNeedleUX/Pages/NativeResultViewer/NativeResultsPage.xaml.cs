@@ -208,6 +208,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ApplyPersistedLevelOverrides();
         SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
+        UpdateEmptyState();
         ApplyAllColumnVisibility();
         RebindGrid();
 
@@ -277,6 +278,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         finally
         {
             LoadingOverlay.Visibility = Visibility.Collapsed;
+        UpdateEmptyState();
             RuleFilterToggle.IsEnabled = (MiddleLayerService.LastRuleProcessors?.Count ?? 0) > 0;
             RebindGrid();
         }
@@ -297,6 +299,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ApplyPersistedLevelOverrides();
         SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
+        UpdateEmptyState();
         ApplyAllColumnVisibility();
         RebindGrid();
         RefreshSearchSubmitMode();
@@ -345,6 +348,37 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// Show/hide the warning banner that explains why results are empty or partial (currently:
     /// WPP ETL with missing symbols/TMFs). Pulled from the last search's decode stats.
     /// </summary>
+    /// <summary>Show a centered empty-state over the grid when a finished load has zero rows, so the user
+    /// sees *why* it's blank instead of an empty grid. Distinguishes "no rows at all" (empty source /
+    /// nothing decoded) from "filters hid everything" (offers Clear filters). No-op while loading.</summary>
+    private void UpdateEmptyState()
+    {
+        if (EmptyOverlay == null) return; // during initial parse
+        bool loading = LoadingOverlay.Visibility == Visibility.Visible || ViewModel.IsStreaming;
+        if (loading || ViewModel.TotalFilteredCount > 0)
+        {
+            EmptyOverlay.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        bool filtersHidAll = ViewModel.TotalCount > 0; // rows exist but none pass the current filters
+        EmptyOverlayClearFilters.Visibility = filtersHidAll ? Visibility.Visible : Visibility.Collapsed;
+        if (filtersHidAll)
+        {
+            EmptyOverlayTitle.Text = "No matching rows";
+            EmptyOverlayText.Text = $"All {ViewModel.TotalCount:N0} loaded rows are hidden by the current filters.";
+        }
+        else
+        {
+            EmptyOverlayTitle.Text = "No results";
+            var warn = MiddleLayerService.GetDecodeWarning();
+            EmptyOverlayText.Text = warn?.headline is { Length: > 0 } h
+                ? h + " — nothing was decoded from this source."
+                : "This search returned no rows — the source was empty, or nothing matched/decoded.";
+        }
+        EmptyOverlay.Visibility = Visibility.Visible;
+    }
+
     private void UpdateDecodeBanner()
     {
         var warn = MiddleLayerService.GetDecodeWarning();
@@ -1490,12 +1524,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void OnViewModelPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalCount))
-            DispatcherQueue.TryEnqueue(RefreshSearchSubmitMode);
+            DispatcherQueue.TryEnqueue(() => { RefreshSearchSubmitMode(); UpdateEmptyState(); });
+        else if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalFilteredCount))
+            DispatcherQueue.TryEnqueue(UpdateEmptyState);
         // When a streaming load finishes, re-check the decode banner — the new file's stats are now
         // captured, so a stale "missing symbols" warning clears (or the new file's own appears) — and
         // enable the Rule filter toggle (it was disabled while the load was still streaming).
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming) && !ViewModel.IsStreaming)
-            DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); });
+            DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); UpdateEmptyState(); });
     }
     private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
     private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;

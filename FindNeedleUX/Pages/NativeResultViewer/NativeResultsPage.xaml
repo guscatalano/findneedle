@@ -465,6 +465,24 @@
                 </StackPanel>
             </Border>
 
+            <!-- Empty-state overlay: shown when a finished load has zero rows, so the grid never just
+                 sits blank. Adapts: "no rows at all" vs "filters hid everything" (offers Clear filters). -->
+            <Border x:Name="EmptyOverlay" Visibility="Collapsed"
+                    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                    AutomationProperties.LiveSetting="Polite">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="440">
+                    <FontIcon Glyph="&#xE7BA;" FontSize="32" HorizontalAlignment="Center"
+                              Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    <TextBlock x:Name="EmptyOverlayTitle" Text="No results" FontSize="18" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="EmptyOverlayText" TextWrapping="Wrap" TextAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="This search returned no rows."/>
+                    <Button x:Name="EmptyOverlayClearFilters" Content="Clear filters" HorizontalAlignment="Center"
+                            Margin="0,4,0,0" Visibility="Collapsed" Click="ClearFiltersButton_Click"/>
+                </StackPanel>
+            </Border>
+
         </Grid>
 
         <!-- Details panel (Grid.Row=3). The DataGrid's per-row expandable details are disabled
