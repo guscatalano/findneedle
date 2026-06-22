@@ -53,5 +53,10 @@
     "File": "wu-fields.rules.json",
     "Name": "Windows Update message cleanup (strip task/level echo)",
     "Condition": { "Providers": ["WUTraceLogging"] }
+  },
+  {
+    "File": "panther-fields.rules.json",
+    "Name": "Windows Setup (Panther) field extraction (component / Result code)",
+    "Condition": { "PathGlobs": ["*panther*", "*Panther*", "*setupact*", "*setuperr*"] }
   }
 ]
