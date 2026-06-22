@@ -580,7 +580,9 @@ public class RuleEvaluationEngine
         var pattern = GetStringProp(action, "Pattern") ?? GetStringProp(action, "pattern");
         if (string.IsNullOrEmpty(pattern)) return;
         var setMap = GetSetMap(action);
-        if (setMap == null || setMap.Count == 0) return;
+        var strip = GetBoolProp(action, "strip") ?? GetBoolProp(action, "Strip") ?? false;
+        // A rule may set fields, strip text, or both. Nothing to do if it does neither.
+        if ((setMap == null || setMap.Count == 0) && !strip) return;
 
         var rx = GetCachedExtractRegex(pattern);
         if (rx == null) return;
@@ -594,16 +596,18 @@ public class RuleEvaluationEngine
         catch { return; }
         if (!m.Success) return;
 
-        foreach (var kv in setMap)
+        if (setMap != null)
         {
-            var value = ResolveTemplate(kv.Value, m);
-            if (!string.IsNullOrEmpty(value))
-                evalResult.Fields[kv.Key] = value;
+            foreach (var kv in setMap)
+            {
+                var value = ResolveTemplate(kv.Value, m);
+                if (!string.IsNullOrEmpty(value))
+                    evalResult.Fields[kv.Key] = value;
+            }
         }
 
         // strip:true — record the matched span so the displayed Message can have the pulled-out text
         // removed (the span is relative to the field matched, which is the message by default).
-        var strip = GetBoolProp(action, "strip") ?? GetBoolProp(action, "Strip") ?? false;
         if (strip && m.Length > 0)
             evalResult.MessageStrips.Add((m.Index, m.Length));
     }

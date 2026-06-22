@@ -60,6 +60,24 @@ public class EnrichmentTests
     }
 
     [TestMethod]
+    public void Extract_StripOnly_RecordsSpan_NoFields()
+    {
+        const string json = @"{ ""rules"": [
+          { ""name"":""lvl"", ""field"":""message"", ""match"":""\\bDISM\\b"",
+            ""action"": { ""type"":""extract"", ""pattern"":"",\\s+(?<lvl>Info|Warning|Error)\\b"", ""strip"": true } } ] }";
+        var engine = new RuleEvaluationEngine();
+        using var doc = JsonDocument.Parse(json);
+        var r = new StubResult { Text = "2026-06-20 09:33:36, Info  DISM  payload" };
+
+        var eval = engine.EvaluateRules(r, doc.RootElement);
+
+        Assert.AreEqual(0, eval.Fields.Count, "strip-only sets no fields");
+        Assert.AreEqual(1, eval.MessageStrips.Count, "strip-only still records the matched span");
+        var (start, len) = eval.MessageStrips[0];
+        Assert.AreEqual(", Info", r.Text.Substring(start, len));
+    }
+
+    [TestMethod]
     public void Extract_NoMatch_ProducesNoFields()
     {
         var engine = new RuleEvaluationEngine();

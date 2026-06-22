@@ -23,6 +23,29 @@
           }
         },
         {
+          "name": "dism-component",
+          "field": "message",
+          "match": "\\bDISM\\b",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "DISM\\s+(?<comp>[A-Za-z][A-Za-z0-9 .]*?):",
+            "set": { "TaskName": "{comp}" },
+            "strip": true
+          }
+        },
+        {
+          "name": "dism-level",
+          "field": "message",
+          "match": "\\bDISM\\b",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": ",\\s+(?<lvl>Info|Warning|Error|Verbose|Debug)\\b",
+            "strip": true
+          }
+        },
+        {
           "name": "dism-pid-tid",
           "field": "message",
           "match": "PID=\\d+\\s+TID=\\d+",
