@@ -836,6 +836,10 @@ public sealed partial class MainWindow : Window
                 MiddleLayerService.NewWorkspace();
                 Logger.Instance.Log("Navigated: NewWorkspace (workspace reset)");
                 break;
+            case "clearworkspace":
+                MiddleLayerService.ClearWorkspace();
+                Logger.Instance.Log("Cleared workspace (locations + filters removed, search cancelled)");
+                break;
             case "saveworkspace":
                 SaveCommand();
                 Logger.Instance.Log("Navigated: SaveWorkspace");

@@ -24,6 +24,8 @@
                 <MenuFlyoutItem Text="New" Click="MenuFlyoutItem_Click" Name="NewWorkspace" />
                 <MenuFlyoutItem Text="Open..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
                 <MenuFlyoutItem Text="Save" Click="MenuFlyoutItem_Click" Name="SaveWorkspace"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Clear workspace" Click="MenuFlyoutItem_Click" Name="ClearWorkspace"/>
             </MenuBarItem>
             <MenuBarItem Title="Configure">
                 <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="search_location"/>

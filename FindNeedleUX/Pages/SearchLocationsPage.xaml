@@ -101,16 +101,7 @@
             </Border>
 
             <StackPanel Spacing="8">
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Configured Locations" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <Button Grid.Column="1" Content="Clear workspace" Click="Button_ClearWorkspace"
-                            ToolTipService.ToolTip="Remove all loaded locations and start fresh"
-                            AutomationProperties.Name="Clear all loaded locations"/>
-                </Grid>
+                <TextBlock Text="Configured Locations" FontWeight="SemiBold"/>
                 <ItemsRepeaterScrollHost>
                     <ScrollViewer>
                         <ItemsRepeater x:Name="VariedImageSizeRepeater"
