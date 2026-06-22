@@ -39,6 +39,29 @@ public class StructuredPayloadFormatterTests
             StructuredPayloadFormatter.Render(Json, PayloadFormat.Custom));
 
     [TestMethod]
+    public void Reformat_SwapsPayloadSuffix_TemplatelessAndTemplated()
+    {
+        // templateless: whole message is the KeyValueQuoted payload → fully reformatted.
+        var kvq = StructuredPayloadFormatter.Render(Json, PayloadFormat.KeyValueQuoted);
+        Assert.AreEqual(Json, StructuredPayloadFormatter.Reformat(kvq, Json, PayloadFormat.KeyValueQuoted, PayloadFormat.Json));
+
+        // templated: "<message> == <payload>" → only the payload suffix changes.
+        var templated = "User logged in == " + kvq;
+        Assert.AreEqual("User logged in == " + Json,
+            StructuredPayloadFormatter.Reformat(templated, Json, PayloadFormat.KeyValueQuoted, PayloadFormat.Json));
+    }
+
+    [TestMethod]
+    public void Reformat_LeavesUnrelatedMessageUnchanged()
+    {
+        // A message that doesn't end with the from-render (e.g. a CSV/JSON row) is untouched.
+        const string other = "some plain message text";
+        Assert.AreEqual(other, StructuredPayloadFormatter.Reformat(other, Json, PayloadFormat.KeyValueQuoted, PayloadFormat.Json));
+        // No-op when from == to.
+        Assert.AreEqual("x", StructuredPayloadFormatter.Reformat("x", Json, PayloadFormat.KeyValueQuoted, PayloadFormat.KeyValueQuoted));
+    }
+
+    [TestMethod]
     public void EmptyOrNonObject_YieldsEmpty()
     {
         Assert.AreEqual("", StructuredPayloadFormatter.Render("", PayloadFormat.KeyValueQuoted));

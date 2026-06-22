@@ -85,6 +85,13 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(RowHeightRatioCombo,
                 ResultsViewerSettings.RowHeightRatio.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
+            // --- Event payload format ---
+            SelectComboItemByTag(PayloadFormatCombo, ResultsViewerSettings.EtwPayloadFormat.ToString());
+            PayloadCustomTemplateBox.Text = ResultsViewerSettings.EtwPayloadCustomTemplate;
+            PayloadCustomPanel.Visibility =
+                ResultsViewerSettings.EtwPayloadFormat == FindNeedlePluginUtils.StructuredLog.PayloadFormat.Custom
+                    ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
             // --- Levels: start from the active theme preset, then layer per-level overrides. ---
             RebuildLevelEditor();
 
@@ -251,6 +258,25 @@ public sealed partial class ResultsViewerSettingsPage : Page
             && double.TryParse(tag, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var ratio))
             ResultsViewerSettings.RowHeightRatio = ratio;
+    }
+
+    // ----- Event payload format -----
+    private void PayloadFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (PayloadFormatCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && Enum.TryParse<FindNeedlePluginUtils.StructuredLog.PayloadFormat>(tag, out var fmt))
+        {
+            ResultsViewerSettings.EtwPayloadFormat = fmt;
+            PayloadCustomPanel.Visibility = fmt == FindNeedlePluginUtils.StructuredLog.PayloadFormat.Custom
+                ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+        }
+    }
+
+    private void PayloadCustomTemplate_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.EtwPayloadCustomTemplate = PayloadCustomTemplateBox.Text ?? "";
     }
 
     // ----- Per-level color editor -----

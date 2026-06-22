@@ -50,7 +50,16 @@ public class LogLine
         ProcessName = NormalizeMissing(searchResult.GetProcessName());
         StructuredData = searchResult.GetStructuredData() ?? ""; // JSON; left as-is (not normalized)
         SearchableData = searchResult.GetSearchableData(); // unmodified original; used for filtering fallback
-        Message = CleanMessage(searchResult.GetMessage(), LogTime, Level);
+        // ETW rows carry their payload as JSON in StructuredData and render it into the message in the
+        // parse-time default (KeyValueQuoted). If the user picked a different payload format, re-render
+        // that suffix here at display time — instant, no re-scan. No-op for the default and for rows
+        // whose message isn't a payload render (CSV/JSON/text).
+        var rawMessage = FindNeedlePluginUtils.StructuredLog.StructuredPayloadFormatter.Reformat(
+            searchResult.GetMessage() ?? "", StructuredData,
+            FindNeedlePluginUtils.StructuredLog.PayloadFormat.KeyValueQuoted,
+            FindNeedleUX.Services.ResultsViewerSettings.EtwPayloadFormat,
+            FindNeedleUX.Services.ResultsViewerSettings.EtwPayloadCustomTemplate);
+        Message = CleanMessage(rawMessage, LogTime, Level);
     }
 
     /// <summary>

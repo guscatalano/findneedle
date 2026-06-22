@@ -219,6 +219,33 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Event payload format (ETW TraceLogging etc.) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Event payload format" FontWeight="SemiBold"/>
+                            <TextBlock Text="How a structured event's fields (e.g. ETW TraceLogging) are shown in the Message column. Applies instantly — no re-scan."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="PayloadFormatCombo" Width="260"
+                                      SelectionChanged="PayloadFormatCombo_SelectionChanged"
+                                      AutomationProperties.Name="Event payload format">
+                                <ComboBoxItem Content="key=&quot;value&quot; (PerfView)" Tag="KeyValueQuoted"/>
+                                <ComboBoxItem Content="key=value (logfmt)"         Tag="KeyValue"/>
+                                <ComboBoxItem Content="JSON"                        Tag="Json"/>
+                                <ComboBoxItem Content="key: value | (legacy)"      Tag="Pipe"/>
+                                <ComboBoxItem Content="Custom template…"            Tag="Custom"/>
+                            </ComboBox>
+                            <StackPanel x:Name="PayloadCustomPanel" Spacing="4" Visibility="Collapsed">
+                                <TextBlock Text="Custom template — tokens {name} and {value}, applied per field (include your own separator):"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                                <TextBox x:Name="PayloadCustomTemplateBox" Width="360" FontFamily="Consolas"
+                                         LostFocus="PayloadCustomTemplate_LostFocus"
+                                         AutomationProperties.Name="Custom payload template"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Per-level colors -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

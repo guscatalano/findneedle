@@ -40,6 +40,20 @@ public static class StructuredPayloadFormatter
         return Render(fields, format, customTemplate);
     }
 
+    /// <summary>Re-render the payload portion of a message that was originally rendered with
+    /// <paramref name="from"/>, into <paramref name="to"/>. Only rewrites when the message actually
+    /// ends with the <paramref name="from"/>-render of <paramref name="structuredJson"/> — so a row
+    /// without that payload (or rendered some other way) is returned unchanged. Lets the viewer switch
+    /// ETW payload formats at display time without re-parsing the file.</summary>
+    public static string Reformat(string message, string? structuredJson, PayloadFormat from, PayloadFormat to, string? customTemplate = null)
+    {
+        if (from == to || string.IsNullOrEmpty(message) || string.IsNullOrWhiteSpace(structuredJson)) return message;
+        var fromRender = Render(structuredJson, from);
+        if (string.IsNullOrEmpty(fromRender) || !message.EndsWith(fromRender, StringComparison.Ordinal)) return message;
+        var toRender = Render(structuredJson, to, customTemplate);
+        return message.Substring(0, message.Length - fromRender.Length) + toRender;
+    }
+
     public static string Render(IReadOnlyList<KeyValuePair<string, string>> fields, PayloadFormat format, string? customTemplate = null)
     {
         switch (format)

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using FindNeedlePluginUtils.StructuredLog;
 
 namespace FindNeedleUX.Services;
 
@@ -488,6 +489,28 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// How a structured event's payload (e.g. an ETW TraceLogging event's fields) is rendered into the
+    /// message column. The payload is kept as JSON in StructuredData, so this is re-applied at display
+    /// time — switching is instant, no re-scan. Broadcasts Changed.
+    /// </summary>
+    public const PayloadFormat DefaultEtwPayloadFormat = PayloadFormat.KeyValueQuoted;
+    public static PayloadFormat EtwPayloadFormat
+    {
+        get => !string.IsNullOrEmpty(Data.EtwPayloadFormat)
+               && Enum.TryParse<PayloadFormat>(Data.EtwPayloadFormat, ignoreCase: true, out var p)
+            ? p : DefaultEtwPayloadFormat;
+        set { Data.EtwPayloadFormat = value.ToString(); Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>Per-field template for <see cref="PayloadFormat.Custom"/> (tokens {name} / {value}).</summary>
+    public static string EtwPayloadCustomTemplate
+    {
+        get => string.IsNullOrEmpty(Data.EtwPayloadCustomTemplate)
+            ? StructuredPayloadFormatter.DefaultCustomTemplate : Data.EtwPayloadCustomTemplate;
+        set { Data.EtwPayloadCustomTemplate = value ?? ""; Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>
     /// Per-level hex color overrides ("#AARRGGBB" / "#RRGGBB" / "Transparent").
     /// Returns a copy; mutate via <see cref="SetLevelColor"/> or <see cref="ClearLevelColors"/>.
     /// </summary>
@@ -574,6 +597,8 @@ public static class ResultsViewerSettings
         public double? ScrollBarSize { get; set; }
         public double? RowFontSize { get; set; }
         public double? RowHeightRatio { get; set; }
+        public string EtwPayloadFormat { get; set; }
+        public string EtwPayloadCustomTemplate { get; set; }
         public Dictionary<string, bool> DetailFieldVisibility { get; set; }
     }
 }

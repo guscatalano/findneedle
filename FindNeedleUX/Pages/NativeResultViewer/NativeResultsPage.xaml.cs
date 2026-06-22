@@ -828,6 +828,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ViewModel.RefreshNow();
     }
 
+    private FindNeedlePluginUtils.StructuredLog.PayloadFormat _appliedPayloadFormat =
+        ResultsViewerSettings.EtwPayloadFormat;
+    private string _appliedPayloadTemplate = ResultsViewerSettings.EtwPayloadCustomTemplate;
+
     private void OnSettingsChanged()
     {
         // Settings page edited the prefs while the viewer is open — reapply.
@@ -837,7 +841,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             ApplyPersistedLevelOverrides();
             ApplyScrollBarSize();
             ApplyRowFontSize();
-            RebindGrid();
+            // The payload format is baked into each LogLine's message when the page is built, so a
+            // change needs a re-fetch (rebuilds the rows from storage with the new render).
+            if (ResultsViewerSettings.EtwPayloadFormat != _appliedPayloadFormat
+                || ResultsViewerSettings.EtwPayloadCustomTemplate != _appliedPayloadTemplate)
+            {
+                _appliedPayloadFormat = ResultsViewerSettings.EtwPayloadFormat;
+                _appliedPayloadTemplate = ResultsViewerSettings.EtwPayloadCustomTemplate;
+                ViewModel.RefreshNow();
+            }
+            else
+            {
+                RebindGrid();
+            }
         });
     }
 
