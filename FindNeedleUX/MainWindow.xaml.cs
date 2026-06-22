@@ -126,8 +126,8 @@ public sealed partial class MainWindow : Window
             case "open_kusto":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "kusto"); break;
             case "cached":            contentFrame.Navigate(typeof(FindNeedleUX.Pages.CachedSearchesPage)); break;
             case "locations":         contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)); break;
-            case "rules_config":      contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage)); break;
-            case "auto_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.AutoAddRulesPage)); break;
+            case "rules_config":      contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"); break;
+            case "auto_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "autoadd"); break;
             case "run_search":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage)); break;
             case "results":           NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage)); break;
             case "processor_output":  contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)); break;
@@ -543,7 +543,7 @@ public sealed partial class MainWindow : Window
                 var filters = MiddleLayerService.Filters?.Count ?? 0;
                 if (filters == 0) return null;
                 return MakeStatusSegment(Symbol.Find, "Filters", filters.ToString(), "Active filters", null,
-                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage)));
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"));
             }
             case "rules":
             {
@@ -552,7 +552,7 @@ public sealed partial class MainWindow : Window
                     ? string.Join("\n", rulePaths.Select(p => { try { return System.IO.Path.GetFileName(p); } catch { return p; } }))
                     : "No rules configured";
                 return MakeStatusSegment(Symbol.List, "Rules", rulePaths.Count.ToString(), tip, null,
-                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage)));
+                    () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"));
             }
             case "lastrun":
             {
@@ -856,21 +856,23 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: LogFinderPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.LogFinderPage));
                 break;
+            // All rule configuration now lives behind one tabbed Rules hub.
+            case "rules":
+                Logger.Instance.Log("Navigated: RulesPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage));
+                break;
+            // Back-compat aliases (status bar / quick actions) → open the matching tab.
             case "search_rules":
-                Logger.Instance.Log("Navigated: SearchRulesPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchRulesPage));
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files");
                 break;
             case "reformat_rules":
-                Logger.Instance.Log("Navigated: ReformatRulesPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.ReformatRulesPage));
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "fields");
                 break;
             case "auto_rules":
-                Logger.Instance.Log("Navigated: AutoAddRulesPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.AutoAddRulesPage));
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "autoadd");
                 break;
             case "search_processors":
-                Logger.Instance.Log("Navigated: SearchProcessorsPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchProcessorsPage));
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "active");
                 break;
             case "search_plugins":
                 Logger.Instance.Log("Navigated: PluginsPage");
@@ -909,8 +911,7 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
                 break;
             case "rules_uml":
-                Logger.Instance.Log("Navigated: DiagramToolsPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "uml");
                 break;
             case "logs":
                 Logger.Instance.Log("Navigated: LogsPage");

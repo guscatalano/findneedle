@@ -1,0 +1,31 @@
+<Page
+    x:Class="FindNeedleUX.Pages.RulesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <!-- One place for all rule configuration. Each tab hosts the existing page in a Frame. -->
+    <NavigationView x:Name="RulesNav" PaneDisplayMode="Top"
+                    IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+                    SelectionChanged="RulesNav_SelectionChanged">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Active" Tag="active">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE9D2;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Rule files" Tag="files">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE8A5;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Auto-add" Tag="autoadd">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE945;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Field extraction" Tag="fields">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE8AC;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Diagrams (UML)" Tag="uml">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE9F9;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
+
+        <Frame x:Name="RulesContent"/>
+    </NavigationView>
+</Page>

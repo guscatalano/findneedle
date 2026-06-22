@@ -29,11 +29,7 @@
                 <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="search_location"/>
                 <MenuFlyoutItem Text="Log Finder" Click="MenuFlyoutItem_Click" Name="log_finder"/>
                 <MenuFlyoutItem Text="Connections" Click="MenuFlyoutItem_Click" Name="connections"/>
-                <MenuFlyoutItem Text="Rules" Click="MenuFlyoutItem_Click" Name="search_rules"/>
-                <MenuFlyoutItem Text="Reformat rules" Click="MenuFlyoutItem_Click" Name="reformat_rules"/>
-                <MenuFlyoutItem Text="Auto-add rules" Click="MenuFlyoutItem_Click" Name="auto_rules"/>
-                <MenuFlyoutItem Text="Active rules" Click="MenuFlyoutItem_Click" Name="search_processors"/>
-                <MenuFlyoutItem Text="UML" Click="MenuFlyoutItem_Click" Name="rules_uml"/>
+                <MenuFlyoutItem Text="Rules" Click="MenuFlyoutItem_Click" Name="rules"/>
             </MenuBarItem>
             <MenuBarItem Title="Run &amp; Results">
                 <MenuFlyoutItem Text="Run Search" Click="MenuFlyoutItem_Click" Name="results_get"/>

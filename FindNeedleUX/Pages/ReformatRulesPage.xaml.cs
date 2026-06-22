@@ -14,10 +14,25 @@ namespace FindNeedleUX.Pages;
 /// A live tester shows how the enabled rules break up a pasted message.</summary>
 public sealed partial class ReformatRulesPage : Page
 {
+    private bool _suppressEnrichmentEvent;
+
     public ReformatRulesPage()
     {
         this.InitializeComponent();
-        Loaded += (_, _) => RenderList();
+        Loaded += (_, _) =>
+        {
+            // Reflect the persisted enrichment toggle (moved here from Settings → Integrations).
+            _suppressEnrichmentEvent = true;
+            EnrichmentEnabledCheck.IsChecked = ResultsViewerSettings.EnrichmentEnabled;
+            _suppressEnrichmentEvent = false;
+            RenderList();
+        };
+    }
+
+    private void EnrichmentEnabledCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEnrichmentEvent) return;
+        ResultsViewerSettings.EnrichmentEnabled = EnrichmentEnabledCheck.IsChecked == true;
     }
 
     private void RenderList()

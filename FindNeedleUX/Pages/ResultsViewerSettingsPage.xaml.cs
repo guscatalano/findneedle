@@ -108,9 +108,6 @@ public sealed partial class ResultsViewerSettingsPage : Page
             McpPortBox.Text = ResultsViewerSettings.McpServerPort.ToString();
             UpdateMcpStatus();
 
-            // --- Field-extraction enrichment ---
-            EnrichmentEnabledCheck.IsChecked = ResultsViewerSettings.EnrichmentEnabled;
-
             // --- WPP / tracefmt TMF path ---
             TmfPathBox.Text = ResultsViewerSettings.TraceFormatSearchPath;
             SymbolSourceBox.Text = ResultsViewerSettings.SymbolSourcePath;
@@ -502,12 +499,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
         ResultsViewerSettings.McpServerEnabled = McpEnabledCheck.IsChecked == true;
     }
 
-    private void EnrichmentEnabledCheck_Changed(object sender, RoutedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        // Applies to the next search (enriched scans use a separate cache, so no forced rescan).
-        ResultsViewerSettings.EnrichmentEnabled = EnrichmentEnabledCheck.IsChecked == true;
-    }
+    // (Field-extraction enrichment toggle moved to the Rules → Field extraction tab.)
 
     private void McpPortBox_LostFocus(object sender, RoutedEventArgs e)
     {

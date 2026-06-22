@@ -17,9 +17,19 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="2">
-            <TextBlock Text="Reformat rules" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock Text="Field extraction" FontSize="26" FontWeight="SemiBold"/>
             <TextBlock FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
-                       Text="Break dense one-line messages into readable named fields in the results details panel. Each rule is a regex with named groups (?&lt;Field&gt;...) — the groups become the fields. Built-ins cover DISM and CBS; add your own for any log."/>
+                       Text="Pull structured values out of dense one-line messages using a regex with named groups (?&lt;Field&gt;...). Built-ins cover DISM and CBS; add your own for any log."/>
+
+            <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6"
+                    Padding="12" Margin="0,8,0,0" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                <StackPanel Spacing="4">
+                    <CheckBox x:Name="EnrichmentEnabledCheck" Content="Store extracted fields as columns (enrichment)"
+                              Checked="EnrichmentEnabledCheck_Changed" Unchecked="EnrichmentEnabledCheck_Changed"/>
+                    <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                               Text="Off: fields show only in the results details panel. On: the rules also run during the scan and write the values into real, filterable/sortable columns (ProcessId, ThreadId, Provider, …) — also visible to exports, diagrams, and the MCP server. The per-row regex is a scan-time cost; enriched scans use a separate cache, so flipping this doesn't force a rescan once both are warm. Applies on the next search."/>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <Button Grid.Row="1" HorizontalAlignment="Left" Click="Button_AddRule">
