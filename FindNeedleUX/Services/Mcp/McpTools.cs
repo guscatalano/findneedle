@@ -224,6 +224,20 @@ internal static class McpTools
         },
         new ToolDef
         {
+            Name = "generate_outputs",
+            Description = "Run the deferred RuleDSL output rules now — e.g. generate the UML diagram from the current results — and return the produced files plus per-diagram generation stats: generationMs (time to build the markup), sourceRows, matchedRows, participants, interactions, lines/chars, and rulesFired/rulesTotal. Also returns totalMs (full wall time). Requires an output/UML rule to be enabled. Use this to test and time diagram generation.",
+            InputSchema = Obj(new { }),
+            Invoke = async _ => await B.GenerateOutputsAsync(),
+        },
+        new ToolDef
+        {
+            Name = "open_results",
+            Description = "Open the results viewer — navigate the app to the native results page so a viewer registers and the current search is displayed. Use this after run_search when no viewer is open yet, so viewer tools (get_view/get_page/get_record/summary/histogram/facets) become usable. Returns whether a viewer is ready.",
+            InputSchema = Obj(new { timeoutMs = I("Max wait for the viewer to register in ms (default 10000, max 120000).") }),
+            Invoke = async a => new { ready = await B.OpenResultsViewerAsync(Int(a, "timeoutMs", 10_000)) },
+        },
+        new ToolDef
+        {
             Name = "get_diagnostics",
             Description = "Read FindNeedle's OWN diagnostic logs — NOT the logs being analyzed. Two sources: 'perf' is the structured timing log (search.run / location.* / viewer.* / cache.* / storage.* events with elapsed_ms) that shows how the app is performing — load times, cache hits, storage tier; 'app' is the human-readable message log (info / warnings / errors) for this run. Use this to understand the user's experience and diagnose slow loads or failures. Always succeeds.",
             InputSchema = Obj(new

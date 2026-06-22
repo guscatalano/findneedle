@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FindNeedlePluginLib.Interfaces;
 
@@ -210,6 +211,55 @@ public sealed class McpViewerBridge
     }
 
     public Task CancelSearchAsync() => RunOnUiAsync(() => MiddleLayerService.CurrentStreamingSearch?.Stop());
+
+    /// <summary>
+    /// Navigate the app to the native results page so a viewer registers (making viewer tools usable)
+    /// and the current search is displayed. The navigation marshals to the UI thread itself. Returns
+    /// whether a viewer became ready within <paramref name="timeoutMs"/>.
+    /// </summary>
+    public async Task<bool> OpenResultsViewerAsync(int timeoutMs)
+    {
+        if (HasViewer) return true;
+        await RunOnUiAsync(() => MainWindowActions.NavigateToNativeResultsPage()).ConfigureAwait(false);
+        return await WaitForViewerAsync(timeoutMs).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Run the (deferred) RuleDSL output rules / outputs now — e.g. generate the UML diagram — and
+    /// return the produced files plus per-diagram generation stats (timing, rows in/matched,
+    /// participants, interactions, size). Runs off the UI thread (the generation scans results). The
+    /// total wall time is measured here; per-diagram timing comes from the generator itself.
+    /// </summary>
+    public Task<object> GenerateOutputsAsync() => Task.Run<object>(() =>
+    {
+        if (MiddleLayerService.SearchQueryUX?.CurrentQuery is not FindPluginCore.Searching.NuSearchQuery nu)
+            return new { ok = false, reason = "no active search" };
+        if (!nu.HasOutputRules)
+            return new { ok = false, reason = "no output rules to generate (enable a UML/output rule first)" };
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var files = MiddleLayerService.GenerateRuleOutputs();
+        sw.Stop();
+
+        var diagrams = (nu.GeneratedDiagramUsages ?? new List<FindNeedleRuleDSL.UmlDiagramUsage>())
+            .Select(u => new
+            {
+                file = u.FilePath,
+                title = u.Title,
+                generationMs = u.GenerationMs,
+                sourceRows = u.SourceRowCount,
+                matchedRows = u.MatchedRowCount,
+                participants = u.ParticipantCount,
+                interactions = u.InteractionCount,
+                lines = u.DiagramLineCount,
+                chars = u.DiagramCharCount,
+                rulesFired = u.Rules.Count(r => r.Count > 0),
+                rulesTotal = u.Rules.Count,
+            })
+            .ToList();
+
+        return new { ok = true, totalMs = sw.ElapsedMilliseconds, fileCount = files.Count, files, diagrams };
+    });
 
     // ----- UI-thread marshaling -----
 
