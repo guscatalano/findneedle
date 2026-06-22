@@ -341,6 +341,13 @@ jobs:
   set-msix-version:
     needs: [create-release]
     runs-on: windows-latest
+    # Serialize the manifest version bump across overlapping runs. Two runs bumping the same
+    # <Identity Version> line at once conflict on rebase (and strand the job on a detached HEAD).
+    # cancel-in-progress means the newest push wins and any stale bump job is cancelled instead of
+    # racing — only one run ever pushes a version-bump commit.
+    concurrency:
+      group: msix-version-${{ github.ref }}
+      cancel-in-progress: true
     outputs:
       releasetag: ${{ steps.setver.outputs.releasetag }}
       version: ${{ steps.setver.outputs.version }}
