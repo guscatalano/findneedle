@@ -842,26 +842,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     }
 
     private double _appliedRowFontSize = -1;
+    private double _appliedRowHeightRatio = -1;
 
     /// <summary>Apply the user's configured row text size to the grid, scaling the (fixed, for
     /// scroll perf) row height to match so larger text isn't clipped. Idempotent: OnSettingsChanged
-    /// fires for any preference, so skip the (re-layout-triggering) FontSize/RowHeight writes when the
-    /// size hasn't actually changed — otherwise every unrelated setting tweak re-lays-out the grid.</summary>
+    /// fires for any preference, so skip the (re-layout-triggering) FontSize/RowHeight writes when
+    /// neither the size nor the row-height ratio changed — otherwise every unrelated setting tweak
+    /// re-lays-out the grid.</summary>
     private void ApplyRowFontSize()
     {
         if (ResultsGrid == null) return;
         double size = ResultsViewerSettings.RowFontSize;
-        if (size == _appliedRowFontSize) return;
+        double ratio = ResultsViewerSettings.RowHeightRatio;
+        if (size == _appliedRowFontSize && ratio == _appliedRowHeightRatio) return;
         _appliedRowFontSize = size;
+        _appliedRowHeightRatio = ratio;
         // The grid's own FontSize does NOT cascade to cell text — each column owns its font. Set it
         // per text column so the row text actually resizes (the caller rebinds the grid so any
         // realized cells re-render at the new size).
         ResultsGrid.FontSize = size;
         foreach (var col in ResultsGrid.Columns)
             if (col is DataGridTextColumn tc) tc.FontSize = size;
-        // Keep the row height proportional. 26px fits the 12px default; scale up from there. Floor at
-        // the default so smaller fonts don't cram rows together below the comfortable baseline.
-        ResultsGrid.RowHeight = Math.Max(26, Math.Ceiling(size * 1.9));
+        // Keep the row height proportional to the text. The ratio is a user-selectable density preset
+        // (default 1.9); floor at 26px so rows never collapse below the comfortable baseline.
+        ResultsGrid.RowHeight = Math.Max(26, Math.Ceiling(size * ratio));
     }
 
     /// <summary>Apply the user's configured scrollbar thickness. Overrides the WinUI

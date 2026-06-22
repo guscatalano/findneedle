@@ -81,6 +81,10 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(RowFontSizeCombo,
                 ((int)ResultsViewerSettings.RowFontSize).ToString());
 
+            // --- Row height (density) ---
+            SelectComboItemByTag(RowHeightRatioCombo,
+                ResultsViewerSettings.RowHeightRatio.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
             // --- Levels: start from the active theme preset, then layer per-level overrides. ---
             RebuildLevelEditor();
 
@@ -237,6 +241,16 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (RowFontSizeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
             && double.TryParse(tag, out var size))
             ResultsViewerSettings.RowFontSize = size;
+    }
+
+    // ----- Row height (density) -----
+    private void RowHeightRatioCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (RowHeightRatioCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && double.TryParse(tag, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var ratio))
+            ResultsViewerSettings.RowHeightRatio = ratio;
     }
 
     // ----- Per-level color editor -----

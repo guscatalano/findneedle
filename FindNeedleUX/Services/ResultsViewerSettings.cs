@@ -471,6 +471,23 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Row height as a multiple of the row text size (the viewer sets RowHeight = ceil(fontSize ×
+    /// this), floored at the default). Lets the user pick how tight or roomy rows feel. 1.9 is the
+    /// default (comfortable line height); smaller packs more rows on screen, larger gives more
+    /// breathing room. Clamped so a corrupt value can't collapse or balloon the rows.
+    /// </summary>
+    public const double DefaultRowHeightRatio = 1.9;
+    public const double MinRowHeightRatio = 1.2;
+    public const double MaxRowHeightRatio = 3.5;
+    public static double ClampRowHeightRatio(double v) =>
+        v < MinRowHeightRatio ? MinRowHeightRatio : v > MaxRowHeightRatio ? MaxRowHeightRatio : v;
+    public static double RowHeightRatio
+    {
+        get => ClampRowHeightRatio(Data.RowHeightRatio ?? DefaultRowHeightRatio);
+        set { Data.RowHeightRatio = ClampRowHeightRatio(value); Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>
     /// Per-level hex color overrides ("#AARRGGBB" / "#RRGGBB" / "Transparent").
     /// Returns a copy; mutate via <see cref="SetLevelColor"/> or <see cref="ClearLevelColors"/>.
     /// </summary>
@@ -556,6 +573,7 @@ public static class ResultsViewerSettings
         public double? DetailsPanelHeight { get; set; }
         public double? ScrollBarSize { get; set; }
         public double? RowFontSize { get; set; }
+        public double? RowHeightRatio { get; set; }
         public Dictionary<string, bool> DetailFieldVisibility { get; set; }
     }
 }

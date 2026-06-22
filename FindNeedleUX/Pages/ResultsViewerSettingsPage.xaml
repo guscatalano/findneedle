@@ -200,6 +200,25 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Row height (density) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row height" FontWeight="SemiBold"/>
+                            <TextBlock Text="How tall each row is relative to its text. Tighter fits more rows on screen; roomier is easier to scan."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="RowHeightRatioCombo" Width="220"
+                                      SelectionChanged="RowHeightRatioCombo_SelectionChanged"
+                                      AutomationProperties.Name="Row height">
+                                <ComboBoxItem Content="Tight"            Tag="1.4"/>
+                                <ComboBoxItem Content="Comfortable (default)" Tag="1.9"/>
+                                <ComboBoxItem Content="Roomy"            Tag="2.4"/>
+                                <ComboBoxItem Content="Spacious"         Tag="3"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Per-level colors -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
