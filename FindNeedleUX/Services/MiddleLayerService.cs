@@ -269,6 +269,27 @@ public class MiddleLayerService
             }
             SkipAutoRulesForNextSearch = false; // one-shot opt-out
 
+            // When field-extraction enrichment is ON, auto-attach the bundled "extract" enrichment rules
+            // whose condition matches these locations — regardless of whether the user enabled them as an
+            // auto-add rule. This makes the enrichment toggle self-sufficient: flip it on and the shipped
+            // extract rules (e.g. DISM PID/TID/Provider) apply, instead of silently doing nothing until a
+            // separate rule is enabled. Reuses AutoRuleResolver.Matches (the same condition matcher).
+            bool enrichOn = EnrichmentOverride ?? ResultsViewerSettings.EnrichmentEnabled;
+            if (enrichOn)
+            {
+                foreach (var lib in FindPluginCore.Searching.AutoRules.CommonRuleLibrary.Discover())
+                {
+                    if (string.IsNullOrEmpty(lib.RulePath) || !System.IO.File.Exists(lib.RulePath)) continue;
+                    if (!RuleFileHasExtractEnrichment(lib.RulePath)) continue;
+                    if (!FindPluginCore.Searching.AutoRules.AutoRuleResolver.Matches(lib.Condition, ctx)) continue;
+                    if (!query.RulesConfigPaths.Any(x => string.Equals(x, lib.RulePath, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        query.RulesConfigPaths.Add(lib.RulePath);
+                        LastAutoAddedRules.Add(lib.RulePath);
+                    }
+                }
+            }
+
             // Add RuleDSL processors for each rules config file. Keep references to the instances so the
             // "Active rules" page can read their per-run stats (matched count + tag counts) after search.
             LastRuleProcessors = new List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin>();
@@ -384,6 +405,36 @@ public class MiddleLayerService
             return false; // only filter/output/extract-enrichment sections → no Step3 processor needed
         }
         catch { return true; }
+    }
+
+    /// <summary>True if the rule file has at least one enrichment section containing an "extract" action —
+    /// i.e. it's a field-extraction enrichment rule the enrichment toggle should auto-attach.</summary>
+    internal static bool RuleFileHasExtractEnrichment(string path)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            if (!doc.RootElement.TryGetProperty("sections", out var secs) && !doc.RootElement.TryGetProperty("Sections", out secs))
+                return false;
+            if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+            foreach (var s in secs.EnumerateArray())
+            {
+                string purpose = null;
+                if (s.TryGetProperty("purpose", out var p) || s.TryGetProperty("Purpose", out p)) purpose = p.GetString();
+                if (!string.Equals(purpose, "enrichment", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!s.TryGetProperty("rules", out var rules) && !s.TryGetProperty("Rules", out rules)) continue;
+                if (rules.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+                foreach (var rule in rules.EnumerateArray())
+                {
+                    if (!rule.TryGetProperty("action", out var action) && !rule.TryGetProperty("Action", out action)) continue;
+                    string type = null;
+                    if (action.TryGetProperty("type", out var t) || action.TryGetProperty("Type", out t)) type = t.GetString();
+                    if (string.Equals(type, "extract", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+        }
+        catch { /* unreadable → not an extract rule */ }
+        return false;
     }
 
     /// <summary>True if every rule in the section has an "extract" action (so the whole section is handled
