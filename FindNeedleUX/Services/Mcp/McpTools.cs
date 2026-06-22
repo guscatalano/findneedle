@@ -43,6 +43,16 @@ internal static class McpTools
 
     private static object Ok(object extra = null) => extra ?? new { ok = true };
 
+    /// <summary>Read a JSON string array argument into a list (skips non-strings; empty if absent).</summary>
+    private static List<string> StrArray(JsonElement a, string n)
+    {
+        var list = new List<string>();
+        if (Has(a, n) && a.GetProperty(n).ValueKind == JsonValueKind.Array)
+            foreach (var e in a.GetProperty(n).EnumerateArray())
+                if (e.ValueKind == JsonValueKind.String) list.Add(e.GetString());
+        return list;
+    }
+
     /// <summary>Project the Log Finder catalog for the <c>list_log_catalog</c> tool. Pure read of
     /// <see cref="LogCatalog"/> (a file-backed static, no UI needed); <c>Exists</c> stats each path.</summary>
     private static object ListLogCatalog(bool includeMissing)
@@ -136,6 +146,13 @@ internal static class McpTools
             Description = "List the RuleDSL rule files applied to the current search.",
             InputSchema = Obj(new { }),
             Invoke = async _ => await B.ListRulesAsync(),
+        },
+        new ToolDef
+        {
+            Name = "set_rules",
+            Description = "Set the RuleDSL rule files applied to the search (replaces the current list). Accepts absolute paths or bare names resolved against the app's CommonRules folder (e.g. \"dism-fields.rules.json\"). Auto-rules matching the loaded locations are still added on top at run_search. Returns the resolved paths and any not found. Call before run_search.",
+            InputSchema = Obj(new { paths = new { type = "array", items = S("Rule file path or CommonRules file name."), description = "Rule files to apply (replaces the current set)." } }, "paths"),
+            Invoke = async a => await B.SetRulesAsync(StrArray(a, "paths")),
         },
         new ToolDef
         {

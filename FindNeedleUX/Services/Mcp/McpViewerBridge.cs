@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using FindNeedlePluginLib.Interfaces;
@@ -154,6 +155,45 @@ public sealed class McpViewerBridge
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path is required");
         MiddleLayerService.AddFolderLocation(path);
     });
+
+    /// <summary>
+    /// Replace the RuleDSL rule files applied to the search. Accepts absolute paths or bare names
+    /// resolved against the app's CommonRules folder. Set on the current query's RulesConfigPaths
+    /// (carried into the next search); auto-rules matching the locations are still folded in at
+    /// run_search. Returns the resolved paths and any that couldn't be found.
+    /// </summary>
+    public Task<object> SetRulesAsync(IReadOnlyList<string> paths) => RunOnUiAsync<object>(() =>
+    {
+        var q = MiddleLayerService.SearchQueryUX?.CurrentQuery
+            ?? throw new InvalidOperationException("no active search query");
+        var resolved = new List<string>();
+        var missing = new List<string>();
+        foreach (var raw in paths ?? Array.Empty<string>())
+        {
+            var r = ResolveRulePath(raw);
+            if (r != null) resolved.Add(r); else missing.Add(raw);
+        }
+        q.RulesConfigPaths = resolved;
+        return new { set = resolved, missing };
+    });
+
+    /// <summary>Resolve a rule path: as-is, else under the app's CommonRules folder, else under the app
+    /// base. Returns null if it can't be found (so the caller can report it as missing).</summary>
+    private static string ResolveRulePath(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        try
+        {
+            if (File.Exists(raw)) return Path.GetFullPath(raw);
+            var baseDir = AppContext.BaseDirectory;
+            var underCommon = Path.Combine(baseDir, "CommonRules", raw);
+            if (File.Exists(underCommon)) return underCommon;
+            var underBase = Path.Combine(baseDir, raw);
+            if (File.Exists(underBase)) return underBase;
+        }
+        catch { /* fall through to not-found */ }
+        return null;
+    }
 
     public Task AddKustoAsync(string cluster, string database, string kql, string authMode, long rowLimit)
         => RunOnUiAsync(() =>
