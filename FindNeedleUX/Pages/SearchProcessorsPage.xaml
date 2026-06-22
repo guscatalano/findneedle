@@ -68,6 +68,11 @@
                                 <TextBlock Text="{x:Bind TagSummary}" FontSize="12" TextWrapping="Wrap"
                                            Visibility="{x:Bind TagVisibility}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                                <!-- Per-rule field-extraction cost (matches · ms) -->
+                                <TextBlock Text="{x:Bind TimingSummary}" FontSize="12" FontFamily="Consolas"
+                                           TextWrapping="Wrap" Visibility="{x:Bind TimingVisibility}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
                         </Border>
                     </DataTemplate>

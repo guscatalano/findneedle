@@ -102,6 +102,12 @@ public class MiddleLayerService
     /// page reads their per-run stats (matched count + tag counts) after the search completes.</summary>
     public static List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin> LastRuleProcessors { get; private set; } = new();
 
+    /// <summary>Per-rule cost of in-scan field-extraction enrichment from the most recent fresh scan
+    /// (rule name → matches + ms). The Active rules page shows these so enrichment rules report real
+    /// match counts (not 0) and the user can see/disable a slow rule. Empty after a warm cache reuse.</summary>
+    public static IReadOnlyList<FindPluginCore.Searching.NuSearchQuery.EnrichmentRuleStat> LastEnrichmentRuleStats { get; private set; }
+        = new List<FindPluginCore.Searching.NuSearchQuery.EnrichmentRuleStat>();
+
     // Provider/build metadata pre-scanned for the current search (populated by
     // PreparePendingAutoRuleMetadata before UpdateSearchQuery, cleared right after). Only computed when
     // an enabled auto-rule actually needs it, so the common case pays nothing.
@@ -781,6 +787,11 @@ public class MiddleLayerService
     {
         try
         {
+            // Per-rule enrichment cost from this scan (empty after a cache reuse). Captured before the
+            // early-return so the Active rules page can show real matches + ms.
+            try { if (nu != null) LastEnrichmentRuleStats = nu.EnrichmentRuleStats; }
+            catch { /* best-effort */ }
+
             var stats = nu?.GetSearchStatistics();
             if (stats == null) { LastStats = null; return; }
 

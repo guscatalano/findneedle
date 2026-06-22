@@ -90,6 +90,22 @@ public class EnrichmentTests
     }
 
     [TestMethod]
+    public void RuleStats_CountMatchesPerRule_WhenCollecting()
+    {
+        var engine = new RuleEvaluationEngine { CollectRuleStats = true };
+        using var doc = JsonDocument.Parse(DismSectionJson);
+
+        engine.EvaluateRules(new StubResult { Text = "DISM PID=1 TID=2 alpha" }, doc.RootElement);
+        engine.EvaluateRules(new StubResult { Text = "DISM PID=3 TID=4 beta" }, doc.RootElement);
+        engine.EvaluateRules(new StubResult { Text = "a plain line, nothing here" }, doc.RootElement);
+
+        // 'prov' gate (\bDISM\b) and 'pidtid' gate (PID=… TID=…) each match the 2 DISM rows, not the 3rd.
+        Assert.AreEqual(2, engine.RuleStats["prov"].Matches);
+        Assert.AreEqual(2, engine.RuleStats["pidtid"].Matches);
+        Assert.IsTrue(engine.RuleStats["prov"].Ticks >= 0, "timing accumulated");
+    }
+
+    [TestMethod]
     public void EnrichedSearchResult_OverridesSetFields_DelegatesRest()
     {
         ISearchResult baseR = new StubResult { Text = "the message" };

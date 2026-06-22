@@ -21,8 +21,10 @@ public sealed class ActiveRuleRow
     public string MatchedSummary { get; init; } = "";
     public string StructureSummary { get; init; } = "";
     public string TagSummary { get; init; } = "";
+    public string TimingSummary { get; init; } = "";
     public Visibility AutoAddedVisibility => AutoAdded ? Visibility.Visible : Visibility.Collapsed;
     public Visibility TagVisibility => string.IsNullOrEmpty(TagSummary) ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility TimingVisibility => string.IsNullOrEmpty(TimingSummary) ? Visibility.Collapsed : Visibility.Visible;
 }
 
 /// <summary>
@@ -62,14 +64,45 @@ public sealed partial class SearchProcessorsPage : Page
         }
 
         EmptyBar.IsOpen = false;
-        int totalMatched = 0;
+        long totalMatched = 0;
+
+        // Per-rule in-scan enrichment stats (name → matches + ms). These rules don't run as Step3
+        // processors, so the processor's MatchedCount is 0 — we show the real numbers from here instead.
+        var enrichByName = (MiddleLayerService.LastEnrichmentRuleStats
+                ?? new List<FindPluginCore.Searching.NuSearchQuery.EnrichmentRuleStat>())
+            .GroupBy(s => s.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
         foreach (var p in processors)
         {
             var path = p.RulesFilePath ?? "(built-in default)";
-            var (title, structure) = ParseStructure(path);
-            int matched = p.MatchedCount;
-            totalMatched += matched;
+            var (title, structure, ruleNames) = ParseStructure(path);
+
+            // Sum this file's enrichment-rule stats (if any) + build a per-rule breakdown.
+            long enrichMatches = 0; double enrichMs = 0;
+            var breakdown = new List<string>();
+            foreach (var n in ruleNames)
+            {
+                if (enrichByName.TryGetValue(n, out var st) && (st.Matches > 0 || st.Ms > 0))
+                {
+                    enrichMatches += st.Matches; enrichMs += st.Ms;
+                    breakdown.Add($"{n}: {st.Matches:N0} matched · {st.Ms:N0} ms");
+                }
+            }
+
+            string matchedSummary; string timingSummary = "";
+            if (breakdown.Count > 0)
+            {
+                matchedSummary = $"Matched {enrichMatches:N0} result{(enrichMatches == 1 ? "" : "s")} · {enrichMs:N0} ms (field extraction)";
+                timingSummary = string.Join("\n", breakdown);
+                totalMatched += enrichMatches;
+            }
+            else
+            {
+                int matched = p.MatchedCount;
+                matchedSummary = $"Matched {matched:N0} result{(matched == 1 ? "" : "s")}";
+                totalMatched += matched;
+            }
 
             var tags = p.TagCounts;
             string tagSummary = tags.Count > 0
@@ -81,9 +114,10 @@ public sealed partial class SearchProcessorsPage : Page
                 Title = string.IsNullOrWhiteSpace(title) ? Path.GetFileName(path) : title,
                 FilePath = path,
                 AutoAdded = autoAdded.Contains(path),
-                MatchedSummary = $"Matched {matched:N0} result{(matched == 1 ? "" : "s")}",
+                MatchedSummary = matchedSummary,
                 StructureSummary = structure,
                 TagSummary = tagSummary,
+                TimingSummary = timingSummary,
             });
         }
 
@@ -93,17 +127,18 @@ public sealed partial class SearchProcessorsPage : Page
 
     /// <summary>Parse a rule file for its title + a structure summary (sections, enabled rule count,
     /// and a breakdown by action type). Best-effort — a parse failure yields an empty summary.</summary>
-    private static (string title, string structure) ParseStructure(string path)
+    private static (string title, string structure, List<string> ruleNames) ParseStructure(string path)
     {
         try
         {
-            if (!File.Exists(path)) return ("", "(rule file not found)");
+            if (!File.Exists(path)) return ("", "(rule file not found)", new());
             var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var set = JsonSerializer.Deserialize<UnifiedRuleSet>(File.ReadAllText(path), opts);
-            if (set == null) return ("", "(could not parse rule file)");
+            if (set == null) return ("", "(could not parse rule file)", new());
 
             int sectionCount = set.Sections?.Count ?? 0;
             var rules = (set.Sections ?? new()).SelectMany(s => s.Rules ?? new()).Where(r => r.Enabled).ToList();
+            var ruleNames = rules.Select(r => r.Name).Where(n => !string.IsNullOrEmpty(n)).ToList();
             var byAction = rules
                 .GroupBy(r => string.IsNullOrEmpty(r.Action?.Type) ? "other" : r.Action.Type)
                 .OrderByDescending(g => g.Count())
@@ -112,11 +147,11 @@ public sealed partial class SearchProcessorsPage : Page
             var summary = $"{sectionCount} section{(sectionCount == 1 ? "" : "s")} · "
                 + $"{rules.Count} rule{(rules.Count == 1 ? "" : "s")}"
                 + (byAction.Any() ? " (" + string.Join(", ", byAction) + ")" : "");
-            return (set.Title ?? "", summary);
+            return (set.Title ?? "", summary, ruleNames);
         }
         catch (Exception ex)
         {
-            return ("", $"(parse error: {ex.Message})");
+            return ("", $"(parse error: {ex.Message})", new());
         }
     }
 }

@@ -31,6 +31,13 @@ public class RuleEvaluationEngine
         public List<(int Start, int Length)> MessageStrips { get; } = new();
     }
 
+    /// <summary>Per-rule run stats accumulated while <see cref="CollectRuleStats"/> is on: rule name →
+    /// (rows the gate matched, total CPU ticks). Lets the UI show which enrichment rule is the cost and
+    /// fixes the "0 matched" the Active rules page showed for in-scan enrichment. Caller clears/reads it.</summary>
+    public sealed class RuleStat { public int Matches; public long Ticks; }
+    public Dictionary<string, RuleStat> RuleStats { get; } = new(StringComparer.Ordinal);
+    public bool CollectRuleStats { get; set; }
+
     // Compiled regexes for "extract" actions, cached by pattern (these run per-row at scan time).
     private static readonly Dictionary<string, Regex?> _extractRegexCache = new();
     private static readonly object _extractRegexLock = new();
@@ -277,7 +284,18 @@ public class RuleEvaluationEngine
                 if (!enabled)
                     continue;
 
-                if (EvaluateRule(result, rule))
+                if (CollectRuleStats)
+                {
+                    var name = GetStringProp(rule, "Name") ?? GetStringProp(rule, "name") ?? "(unnamed)";
+                    long start = System.Diagnostics.Stopwatch.GetTimestamp();
+                    bool matched = EvaluateRule(result, rule);
+                    if (matched) ExecuteActions(rule, evalResult, result);
+                    long ticks = System.Diagnostics.Stopwatch.GetTimestamp() - start;
+                    if (!RuleStats.TryGetValue(name, out var st)) { st = new RuleStat(); RuleStats[name] = st; }
+                    st.Ticks += ticks;
+                    if (matched) st.Matches++;
+                }
+                else if (EvaluateRule(result, rule))
                 {
                     ExecuteActions(rule, evalResult, result);
                 }

@@ -100,6 +100,23 @@ public class NuSearchQuery : ISearchQuery
     /// results viewer can tag the rows that fed a diagram.</summary>
     public IReadOnlyList<FindNeedleRuleDSL.UmlRowTag> UmlMatchedRows => _outputProcessor.UmlMatchedRows;
 
+    /// <summary>Per-rule cost of the in-scan field-extraction enrichment from the last fresh scan: the
+    /// rule name, how many rows its gate matched, and the wall time it took. Lets the UI show which rule
+    /// is slow (and replaces the bogus "0 matched" the Active rules page showed for in-scan enrichment).
+    /// Empty after a warm cache reuse (no scan ran).</summary>
+    public sealed record EnrichmentRuleStat(string Name, int Matches, double Ms);
+    public IReadOnlyList<EnrichmentRuleStat> EnrichmentRuleStats
+    {
+        get
+        {
+            var list = new List<EnrichmentRuleStat>(_ruleEngine.RuleStats.Count);
+            foreach (var kv in _ruleEngine.RuleStats)
+                list.Add(new EnrichmentRuleStat(kv.Key, kv.Value.Matches,
+                    kv.Value.Ticks * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
+            return list;
+        }
+    }
+
     public SearchStepNotificationSink SearchStepNotificationSink
     {
         get => _stepnotifysink;
@@ -668,7 +685,12 @@ public class NuSearchQuery : ISearchQuery
         _enrichmentSections = (EnrichmentEnabled && LoadedRules != null)
             ? _ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment")
             : null;
-        if (_enrichmentSections != null && _enrichmentSections.Count > 0)
+        bool enrichActive = _enrichmentSections != null && _enrichmentSections.Count > 0;
+        // Collect per-rule match/time stats during the scan so the UI can show which enrichment rule
+        // costs what (and so the Active rules page stops showing "0 matched" for in-scan enrichment).
+        _ruleEngine.RuleStats.Clear();
+        _ruleEngine.CollectRuleStats = enrichActive;
+        if (enrichActive)
             Logger.Instance.Log($"Step2: enrichment ON ({_enrichmentSections.Count} section(s)) — extracting fields per-row");
 
         FlowProgress.Begin(FlowPhase.ReadParse);
@@ -916,6 +938,14 @@ public class NuSearchQuery : ISearchQuery
                 ("elapsed_ms", Environment.TickCount64 - locStart));
             count++;
         }
+
+        // Per-rule enrichment cost (this scan) → perf log, so it's queryable via get_diagnostics.
+        if (_ruleEngine.CollectRuleStats)
+        {
+            foreach (var s in EnrichmentRuleStats)
+                PerfLog.Log("enrich.rule", ("name", s.Name), ("matches", s.Matches), ("ms", (long)s.Ms));
+        }
+
         // ----- Decide whether to materialize the full result list in RAM -----
         // The list is only meaningful if something downstream walks it. Step3 walks it iff
         // processors are configured or rule-enrichment is loaded; Step4 walks it iff outputs

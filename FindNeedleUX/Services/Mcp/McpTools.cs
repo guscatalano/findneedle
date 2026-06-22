@@ -104,7 +104,11 @@ internal static class McpTools
         }
 
         bool enrichmentEnabled = MiddleLayerService.EnrichmentOverride ?? ResultsViewerSettings.EnrichmentEnabled;
-        return new { perfLogPath = perfPath, enrichmentEnabled, perfLineCount = perf?.Count ?? 0, appLineCount = app?.Count ?? 0, perf, app };
+        var ruleStats = (MiddleLayerService.LastEnrichmentRuleStats
+                ?? new List<FindPluginCore.Searching.NuSearchQuery.EnrichmentRuleStat>())
+            .Select(s => new { name = s.Name, matches = s.Matches, ms = Math.Round(s.Ms, 1) })
+            .ToList();
+        return new { perfLogPath = perfPath, enrichmentEnabled, enrichmentRuleStats = ruleStats, perfLineCount = perf?.Count ?? 0, appLineCount = app?.Count ?? 0, perf, app };
     }
 
     /// <summary>Read a text file's lines with a shared read lock, so reading the perf log never
