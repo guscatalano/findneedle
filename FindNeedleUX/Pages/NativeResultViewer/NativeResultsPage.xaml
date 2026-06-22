@@ -118,6 +118,8 @@
                                 Click="DecodeBannerAction_Click"/>
                         <Button x:Name="DecodeBannerForce" Content="Decode anyway" Click="DecodeAnyway_Click"
                                 ToolTipService.ToolTip="Decode whatever can be read, even if most events are unformatted garbage"/>
+                        <Button x:Name="DecodeBannerCopy" Content="Copy" Click="DecodeBannerCopy_Click"
+                                ToolTipService.ToolTip="Copy the missing TMF GUIDs and error detail to clipboard"/>
                     </StackPanel>
                 </InfoBar.Content>
             </InfoBar>

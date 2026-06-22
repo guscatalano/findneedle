@@ -384,6 +384,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         EmptyOverlay.Visibility = Visibility.Visible;
     }
 
+    // Full detail text from the last decode warning — used by the copy button.
+    private string? _decodeBannerCopyText;
+
     private void UpdateDecodeBanner()
     {
         var warn = MiddleLayerService.GetDecodeWarning();
@@ -391,6 +394,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             DecodeBanner.IsOpen = false;
             DecodeBanner.Visibility = Visibility.Collapsed;
+            _decodeBannerCopyText = null;
             return;
         }
         DecodeBanner.Title = warn.Value.headline;
@@ -400,8 +404,31 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning;
         // "Decode anyway" only makes sense when ~nothing decoded — a partial decode already shows rows.
         DecodeBannerForce.Visibility = warn.Value.hardFailure ? Visibility.Visible : Visibility.Collapsed;
+        // Build copy text: if there are specific GUIDs/TMF identifiers, put them first so they're
+        // easy to paste into a symbol server query; follow with the full detail for context.
+        _decodeBannerCopyText = string.IsNullOrEmpty(warn.Value.missingTmfs)
+            ? warn.Value.detail
+            : $"Missing TMF GUIDs: {warn.Value.missingTmfs}\n\n{warn.Value.detail}";
         DecodeBanner.Visibility = Visibility.Visible;
         DecodeBanner.IsOpen = true;
+    }
+
+    private void DecodeBannerCopy_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_decodeBannerCopyText)) return;
+        var dp = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
+        dp.SetText(_decodeBannerCopyText);
+        global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+        // Brief button label change so the user knows it worked.
+        if (sender is Button btn)
+        {
+            btn.Content = "Copied!";
+            var timer = DispatcherQueue.CreateTimer();
+            timer.Interval = TimeSpan.FromSeconds(2);
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) => { btn.Content = "Copy"; timer.Stop(); };
+            timer.Start();
+        }
     }
 
     private void DecodeBannerAction_Click(object sender, RoutedEventArgs e)

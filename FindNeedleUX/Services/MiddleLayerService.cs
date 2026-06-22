@@ -879,7 +879,7 @@ public class MiddleLayerService
     /// it was a hard failure (nothing decoded). Returns null when nothing's wrong. Drives the viewer's
     /// "why is this empty?" banner.
     /// </summary>
-    public static (string headline, string detail, bool hardFailure)? GetDecodeWarning()
+    public static (string headline, string detail, bool hardFailure, string? missingTmfs)? GetDecodeWarning()
     {
         var stats = GetStats();
         if (stats?.componentReports == null) return null;
@@ -906,14 +906,14 @@ public class MiddleLayerService
                         detail +=
                             "\n\nTo fix: open WPP symbol settings below, point it at the folder with the matching PDBs " +
                             "(or a symbol path / symbol server), click “Build TMFs from symbols,” then reopen this file.";
-                        return ("Couldn’t decode this ETL — missing WPP symbols", detail, true);
+                        return ("Couldn’t decode this ETL — missing WPP symbols", detail, true, missing);
                     }
                     if (!string.IsNullOrEmpty(missing))
                     {
                         return ("Some events couldn’t be decoded — missing WPP symbols",
                             $"“{file}” has events with no matching WPP symbols (TMF), so they show as raw/unformatted.\n\n" +
                             $"Needs TMF: {missing}\n\nSet a symbol/TMF path in WPP symbol settings below and reopen for full text.",
-                            false);
+                            false, missing);
                     }
                 }
             }
