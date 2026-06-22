@@ -1,0 +1,2 @@
+{"timestamp":"2026-06-19T08:00:01Z","level":"Information","logger":"Auth","threadId":1234,"message":"User logged in","region":"US"}
+{"timestamp":"2026-06-19T08:00:02Z","level":"Error","logger":"Auth","threadId":1235,"message":"Login failed","region":"EU"}

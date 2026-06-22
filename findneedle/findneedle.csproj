@@ -29,6 +29,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
+    <ProjectReference Include="..\CsvPlugin\CsvPlugin.csproj" />
+    <ProjectReference Include="..\JsonPlugin\JsonPlugin.csproj" />
     <ProjectReference Include="..\ETWPlugin\ETWPlugin.csproj" />
     <ProjectReference Include="..\EventLogPlugin\EventLogPlugin.csproj" />
     <ProjectReference Include="..\FakeLoadPlugin\FakeLoadPlugin.csproj" />

@@ -1,0 +1,4 @@
+Timestamp,Level,Provider,ThreadId,Message,Region
+2026-06-19 08:00:01,Info,Auth,1234,User logged in,US
+2026-06-19 08:00:02,Error,Auth,1235,"Login failed, retrying",EU
+2026-06-19 08:00:03,Warning,Db,1236,Slow query,US

@@ -123,6 +123,8 @@
     <ProjectReference Include="..\FindNeedleToolInstallers\FindNeedleToolInstallers.csproj" />
     <ProjectReference Include="..\FindNeedleUmlDsl\FindNeedleUmlDsl.csproj" />
     <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
+    <ProjectReference Include="..\CsvPlugin\CsvPlugin.csproj" />
+    <ProjectReference Include="..\JsonPlugin\JsonPlugin.csproj" />
     <ProjectReference Include="..\Plugins\Kusto\KustoPlugin\KustoPlugin.csproj" />
     <ProjectReference Include="..\Plugins\ADO\ADOPlugin\ADOPlugin.csproj" />
     <ProjectReference Include="..\Plugins\Github\GithubPlugin\GithubPlugin.csproj" />
