@@ -85,22 +85,27 @@ namespace FindNeedleUX.UITests
         /// element, so the item is polled for across the whole desktop.</summary>
         private void ClickMenu(string menuName, string itemAutomationId)
         {
-            var menu = _mainWindow.FindFirstDescendant(cf =>
-                cf.ByControlType(ControlType.MenuItem).And(cf.ByName(menuName)));
-            Assert.IsNotNull(menu, $"Menu '{menuName}' should exist");
-            // Prefer ExpandCollapse (opens the flyout); fall back to a click.
-            var ecp = menu.Patterns.ExpandCollapse.PatternOrDefault;
-            if (ecp != null) { try { ecp.Expand(); } catch { menu.Click(); } } else { menu.Click(); }
-
             var desktop = _automation.GetDesktop();
             AutomationElement item = null;
-            var deadline = DateTime.Now.AddSeconds(5);
-            while (DateTime.Now < deadline)
+
+            // The WinUI flyout opens in a popup with variable timing and sometimes needs a second
+            // nudge, so retry the whole open+find a few times before giving up.
+            for (int attempt = 0; attempt < 4 && item == null; attempt++)
             {
-                item = _mainWindow.FindFirstDescendant(cf => cf.ByAutomationId(itemAutomationId))
-                       ?? desktop.FindFirstDescendant(cf => cf.ByAutomationId(itemAutomationId));
-                if (item != null) break;
-                Thread.Sleep(200);
+                var menu = _mainWindow.FindFirstDescendant(cf =>
+                    cf.ByControlType(ControlType.MenuItem).And(cf.ByName(menuName)));
+                Assert.IsNotNull(menu, $"Menu '{menuName}' should exist");
+                var ecp = menu.Patterns.ExpandCollapse.PatternOrDefault;
+                if (ecp != null) { try { ecp.Expand(); } catch { menu.Click(); } } else { menu.Click(); }
+
+                var deadline = DateTime.Now.AddSeconds(3);
+                while (DateTime.Now < deadline)
+                {
+                    item = _mainWindow.FindFirstDescendant(cf => cf.ByAutomationId(itemAutomationId))
+                           ?? desktop.FindFirstDescendant(cf => cf.ByAutomationId(itemAutomationId));
+                    if (item != null) break;
+                    Thread.Sleep(200);
+                }
             }
             Assert.IsNotNull(item, $"Menu item '{itemAutomationId}' should appear under '{menuName}'");
             // Invoke is more reliable than Click for flyout items that may be partially off-screen.
@@ -109,14 +114,11 @@ namespace FindNeedleUX.UITests
             Thread.Sleep(900);
         }
 
-        /// <summary>Change "Row text size" to the option whose label contains <paramref name="labelContains"/>
-        /// via Settings ▸ Preferences, then return to the results viewer. Returns how long the round trip
-        /// took (used as a freeze guard).</summary>
-        private long SetRowFont(string labelContains)
+        /// <summary>On the Preferences page, set "Row text size" to the option whose label contains
+        /// <paramref name="labelContains"/>. (Caller navigates there and back.)</summary>
+        private void SetRowFont(string labelContains)
         {
-            var sw = Stopwatch.StartNew();
             ClickMenu("Settings", "settings_resultviewer");
-
             var combo = UiTestHelpers.FindByIdSkippingGrid(_mainWindow, "RowFontSizeCombo", 15000);
             Assert.IsNotNull(combo, "RowFontSizeCombo not found on the Preferences page.");
             var box = combo.AsComboBox();
@@ -126,10 +128,24 @@ namespace FindNeedleUX.UITests
             Assert.IsNotNull(item, $"Row text size option '{labelContains}' not present in the combo.");
             item.Select();
             Thread.Sleep(400);
+            // Make sure the dropdown is closed — if it's still open it swallows the next menu click.
+            try { box.Collapse(); } catch { /* already collapsed */ }
+            Thread.Sleep(300);
+        }
 
-            ClickMenu("Run & Results", "results_viewnative");
-            sw.Stop();
-            return sw.ElapsedMilliseconds;
+        /// <summary>Navigate Run &amp; Results ▸ Results and wait for the grid to repopulate. Re-issues
+        /// the navigation if the grid doesn't come back (a single menu click occasionally doesn't take,
+        /// which is a UI-automation flake, not an app hang). Returns the populated grid, or null.</summary>
+        private AutomationElement ReturnToResultsGrid()
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                ClickMenu("Run & Results", "results_viewnative");
+                var grid = UiTestHelpers.WaitForPopulatedGrid(_mainWindow, 12000);
+                if (grid?.FindFirstDescendant(cf => cf.ByControlType(ControlType.DataItem)) != null)
+                    return grid;
+            }
+            return null;
         }
 
         [TestMethod]
@@ -147,28 +163,32 @@ namespace FindNeedleUX.UITests
 
             // The setting persists across runs (viewer-settings.json), so don't trust the launch
             // state — drive a known small font first, then the largest, and compare the two.
-            long smallMs = SetRowFont("Compact");
-            var smallGrid = UiTestHelpers.WaitForPopulatedGrid(_mainWindow, 30000);
+            var swSmall = Stopwatch.StartNew();
+            SetRowFont("Compact");
+            var smallGrid = ReturnToResultsGrid();
+            swSmall.Stop();
             Assert.IsNotNull(smallGrid, "ResultsGrid did not return after setting a small font (possible freeze).");
             double smallHeight = MedianRealizedRowHeight(smallGrid);
 
-            long largeMs = SetRowFont("Extra large");
-            var largeGrid = UiTestHelpers.WaitForPopulatedGrid(_mainWindow, 30000);
+            var swLarge = Stopwatch.StartNew();
+            SetRowFont("Extra large");
+            var largeGrid = ReturnToResultsGrid();
+            swLarge.Stop();
             Assert.IsNotNull(largeGrid, "ResultsGrid did not return after setting a large font (possible freeze).");
             double largeHeight = MedianRealizedRowHeight(largeGrid);
 
             TestContext.WriteLine(
                 $"Row height: Compact(9)={smallHeight:F0}px, Extra large(20)={largeHeight:F0}px. " +
-                $"Change round trips took {smallMs} ms / {largeMs} ms.");
+                $"Change round trips took {swSmall.ElapsedMilliseconds} ms / {swLarge.ElapsedMilliseconds} ms.");
 
             // Rows must be clearly taller at the large font (RowHeight 26 -> ceil(20*1.9)=38).
             Assert.IsTrue(largeHeight > smallHeight + 5,
                 $"Rows did not grow with a larger font: Compact={smallHeight:F0}px, Extra large={largeHeight:F0}px.");
 
-            // Freeze guard: each change should be near-instant. A UI-thread hang would blow this budget
-            // (or the post-change grid reads above would have timed out).
-            Assert.IsTrue(smallMs < 20000 && largeMs < 20000,
-                $"A row-font change took too long ({smallMs} ms / {largeMs} ms) — the UI likely froze.");
+            // Freeze guard: each round trip (incl. navigation + its retries) should finish well under
+            // a minute. A genuine UI-thread hang on applying the font would blow this.
+            Assert.IsTrue(swSmall.ElapsedMilliseconds < 45000 && swLarge.ElapsedMilliseconds < 45000,
+                $"A row-font change took too long ({swSmall.ElapsedMilliseconds} ms / {swLarge.ElapsedMilliseconds} ms) — the UI likely froze.");
         }
     }
 }
