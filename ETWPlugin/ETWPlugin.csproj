@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FindNeedleCoreUtils\FindNeedleCoreUtils.csproj" />
     <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+    <ProjectReference Include="..\FindNeedlePluginUtils\FindNeedlePluginUtils.csproj" />
   </ItemGroup>
 
 </Project>

@@ -177,7 +177,7 @@ public sealed class GeneratedEtlEndToEndTests
             // Pick one of OUR events (its payload has a "message" field) — not the ETW session-header
             // "EventTrace" row. It must carry the payload, have its TaskName captured, and NOT re-echo
             // the event name ("<TaskName> == …") in the message (that would duplicate the column).
-            var ours = rows.First(r => r.GetMessage().Contains("message:"));
+            var ours = rows.First(r => r.GetMessage().Contains("message="));
             Assert.IsFalse(string.IsNullOrWhiteSpace(ours.GetTaskName()),
                 "TaskName should be captured from the TraceLogging event");
             Assert.IsFalse(ours.GetMessage().StartsWith(ours.GetTaskName() + " ==", StringComparison.Ordinal),

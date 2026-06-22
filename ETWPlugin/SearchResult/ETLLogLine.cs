@@ -136,36 +136,34 @@ public class ETLLogLine : ISearchResult
         this.provider = obj.ProviderName;
         this.tasktxt = obj.TaskName;
         
-        // Prefer the provider's rendered message (manifest events with a message template). For
-        // TraceLogging there's no template, so we render the payload fields instead. We do NOT prepend
-        // the event name in that case — it's already the TaskName column, and repeating it ("Name ==
-        // …") just duplicates that column in the message. Keeps the manifest "<message> == fields"
-        // shape unchanged.
-        var formatted = obj.FormattedMessage;
-        bool hadFormatted = !string.IsNullOrEmpty(formatted);
-        this.eventtxt = hadFormatted ? formatted! : string.Empty;
-
-        //This is probably expensive
-        List<string> props = obj.GetDynamicMemberNames().ToList();
-        if (props.Count() > 0 && hadFormatted)
-        {
-            this.eventtxt += " == ";
-        }
+        // Collect the payload fields once (kept as JSON in StructuredData; the message is just a
+        // rendering of them, so the viewer can re-render in a different format without a re-scan).
         var structured = new Dictionary<string, string>();
-        foreach(var prop in props)
+        foreach (var prop in obj.GetDynamicMemberNames())
         {
-            var val = obj.PayloadStringByName(prop);
-            this.eventtxt += prop + ": " + val + " | ";
-            if (!string.IsNullOrEmpty(prop) && !structured.ContainsKey(prop)) structured[prop] = val ?? "";
+            if (string.IsNullOrEmpty(prop) || structured.ContainsKey(prop)) continue;
+            structured[prop] = obj.PayloadStringByName(prop) ?? "";
         }
-        // Never leave the message blank: an event with no template and no payload still has a name.
-        if (string.IsNullOrEmpty(this.eventtxt)) this.eventtxt = obj.EventName ?? string.Empty;
         try
         {
             this.processName = obj.ProcessName ?? "";
             if (structured.Count > 0) this.structuredData = System.Text.Json.JsonSerializer.Serialize(structured);
         }
         catch { }
+
+        // Prefer the provider's rendered message (manifest events with a template). For TraceLogging
+        // there's no template, so render the payload fields (PerfView-style key="value" default). The
+        // event name is NOT prepended — it's already the TaskName column, so repeating it just
+        // duplicates that column.
+        var formatted = obj.FormattedMessage;
+        string payload = structured.Count > 0
+            ? FindNeedlePluginUtils.StructuredLog.StructuredPayloadFormatter.Render(
+                this.structuredData, FindNeedlePluginUtils.StructuredLog.PayloadFormat.KeyValueQuoted)
+            : string.Empty;
+        if (!string.IsNullOrEmpty(formatted))
+            this.eventtxt = payload.Length > 0 ? formatted + " == " + payload : formatted!;
+        else
+            this.eventtxt = payload.Length > 0 ? payload : (obj.EventName ?? string.Empty);
 
         // Carry the precise event time directly (round-trip string keeps sub-second precision; the
         // metadatetime field is what GetLogTime returns, avoiding the lossy ToString()/re-parse).
