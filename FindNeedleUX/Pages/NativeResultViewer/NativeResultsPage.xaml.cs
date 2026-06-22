@@ -1743,6 +1743,45 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         var flyout = new MenuFlyout();
 
+        // ----- Bulk actions when multiple rows are selected (and the clicked row is among them) -----
+        var selected = ResultsGrid.SelectedItems.OfType<LogLine>().ToList();
+        if (selected.Count > 1 && selected.Any(l => l.RowId == row.RowId))
+        {
+            flyout.Items.Add(new MenuFlyoutItem { Text = $"{selected.Count:N0} rows selected", IsEnabled = false });
+
+            var copySelJson = new MenuFlyoutItem { Text = $"Copy {selected.Count:N0} selected as JSON", Icon = new SymbolIcon(Symbol.Copy) };
+            copySelJson.Click += (_, __) => CopyToClipboard(RowsAsJson(selected));
+            flyout.Items.Add(copySelJson);
+
+            var copySelCsv = new MenuFlyoutItem { Text = $"Copy {selected.Count:N0} selected as CSV" };
+            copySelCsv.Click += (_, __) => CopyToClipboard(RowsAsCsv(selected));
+            flyout.Items.Add(copySelCsv);
+
+            var tagSelSub = new MenuFlyoutSubItem { Text = $"Tag {selected.Count:N0} selected" };
+            foreach (var (name, _) in TagOptions)
+            {
+                var capturedSel = name;
+                var it = new MenuFlyoutItem { Text = name };
+                it.Click += (_, __) =>
+                {
+                    foreach (var l in selected)
+                    {
+                        var note = _rowTags.TryGetValue(l.RowId, out var ex) ? ex.Text : null;
+                        _rowTags[l.RowId] = new RowTag(capturedSel, note);
+                    }
+                    RerenderRowsPreservingView();
+                };
+                tagSelSub.Items.Add(it);
+            }
+            tagSelSub.Items.Add(new MenuFlyoutSeparator());
+            var clearSel = new MenuFlyoutItem { Text = "Clear tags" };
+            clearSel.Click += (_, __) => { foreach (var l in selected) _rowTags.Remove(l.RowId); RerenderRowsPreservingView(); };
+            tagSelSub.Items.Add(clearSel);
+            flyout.Items.Add(tagSelSub);
+
+            flyout.Items.Add(new MenuFlyoutSeparator());
+        }
+
         // ----- Tag (mark this row) -----
         var key = row.RowId;
         var tagSub = new MenuFlyoutSubItem { Text = "Tag" };
@@ -1880,6 +1919,32 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         return System.Text.Json.JsonSerializer.Serialize(line,
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>JSON array of multiple rows (for "copy N selected").</summary>
+    private static string RowsAsJson(System.Collections.Generic.IReadOnlyList<LogLine> rows)
+        => System.Text.Json.JsonSerializer.Serialize(rows,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+    /// <summary>CSV with one header + one line per row (same columns as <see cref="RowAsCsv"/>).</summary>
+    private static string RowsAsCsv(System.Collections.Generic.IReadOnlyList<LogLine> rows)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Index,Time,Provider,TaskName,Message,Source,Level,MachineName,Username,OpCode\n");
+        foreach (var line in rows)
+        {
+            sb.Append(EscapeCsv(line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture))).Append(',');
+            sb.Append(EscapeCsv(line.Time)).Append(',');
+            sb.Append(EscapeCsv(line.Provider)).Append(',');
+            sb.Append(EscapeCsv(line.TaskName)).Append(',');
+            sb.Append(EscapeCsv(line.Message)).Append(',');
+            sb.Append(EscapeCsv(line.Source)).Append(',');
+            sb.Append(EscapeCsv(line.Level)).Append(',');
+            sb.Append(EscapeCsv(line.MachineName)).Append(',');
+            sb.Append(EscapeCsv(line.Username)).Append(',');
+            sb.Append(EscapeCsv(line.OpCode)).Append('\n');
+        }
+        return sb.ToString();
     }
 
     /// <summary>

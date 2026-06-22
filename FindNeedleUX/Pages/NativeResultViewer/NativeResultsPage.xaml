@@ -429,7 +429,8 @@
                               SelectionChanged="ResultsGrid_SelectionChanged"
                               RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
                               RowDetailsVisibilityMode="VisibleWhenSelected"
-                              SelectionMode="Single"
+                              SelectionMode="Extended"
+                              ClipboardCopyMode="IncludeHeader"
                               AutomationProperties.Name="Search results">
                 <ctWinUI:DataGrid.Columns>
                     <ctWinUI:DataGridTextColumn Header="Index"    Binding="{Binding Index}"    Width="70"/>
