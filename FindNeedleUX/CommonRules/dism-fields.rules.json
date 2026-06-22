@@ -11,13 +11,13 @@
       "providers": ["*"],
       "rules": [
         {
-          "name": "dism-provider",
+          "name": "dism-line",
           "field": "message",
-          "match": "\\bDISM\\b",
+          "match": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}",
           "enabled": true,
           "action": {
             "type": "extract",
-            "pattern": "\\bDISM\\b",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}(\\.\\d+)?",
             "set": { "Source": "DISM" },
             "strip": true
           }
@@ -37,22 +37,11 @@
         {
           "name": "dism-level",
           "field": "message",
-          "match": "\\bDISM\\b",
+          "match": ",\\s+(Info|Warning|Error|Verbose|Debug)\\b",
           "enabled": true,
           "action": {
             "type": "extract",
             "pattern": ",\\s+(?<lvl>Info|Warning|Error|Verbose|Debug)\\b",
-            "strip": true
-          }
-        },
-        {
-          "name": "dism-timestamp",
-          "field": "message",
-          "match": "\\bDISM\\b",
-          "enabled": true,
-          "action": {
-            "type": "extract",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}(\\.\\d+)?",
             "strip": true
           }
         },

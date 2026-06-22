@@ -56,6 +56,15 @@ public class MiddleLayerService
 
     public static void AddFolderLocation(string location)
     {
+        // Don't add the same folder/file twice — repeated adds (e.g. an agent calling add_folder per run)
+        // would otherwise scan it N times. Skip if a folder location with this path is already loaded.
+        if (Locations.Any(l => l is FolderLocation f
+                && string.Equals(f.path, location, StringComparison.OrdinalIgnoreCase)))
+        {
+            NotifyStateChanged();
+            return;
+        }
+
         var folderloc = new FolderLocation() { path = location };
         //Setup file extension processors
         var extensions = PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IFileExtensionProcessor>();
@@ -71,6 +80,18 @@ public class MiddleLayerService
     {
         if (location == null) return;
         Locations.Add(location);
+        NotifyStateChanged();
+    }
+
+    /// <summary>Remove all loaded locations + filters and cancel any in-flight search, so the workspace
+    /// starts fresh. Surfaced as the "Clear workspace" button and the MCP clear_workspace tool.</summary>
+    public static void ClearWorkspace()
+    {
+        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
+        CurrentStreamingSearch = null;
+        ClearOverrideStorage();
+        Locations.Clear();
+        Filters.Clear();
         NotifyStateChanged();
     }
 

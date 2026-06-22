@@ -2028,6 +2028,21 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return tcs.Task;
     }
 
+    /// <summary>Marshal an async action to the UI thread and await its completion (so the caller can
+    /// await e.g. a reload finishing before reading results).</summary>
+    private Task McpOnUiAsync(Func<System.Threading.Tasks.Task> f)
+    {
+        var dq = DispatcherQueue;
+        if (dq == null || dq.HasThreadAccess) return f();
+        var tcs = new TaskCompletionSource();
+        if (!dq.TryEnqueue(async () => { try { await f(); tcs.TrySetResult(); } catch (Exception ex) { tcs.TrySetException(ex); } }))
+            return f();
+        return tcs.Task;
+    }
+
+    /// <summary>MCP: reload the viewer so it rebinds to the current (freshly-run) streaming search.</summary>
+    public Task ReloadAsync() => McpOnUiAsync(() => ReloadResultsAsync());
+
     private Task<T> McpOnUiAsync<T>(Func<T> f)
     {
         var dq = DispatcherQueue;

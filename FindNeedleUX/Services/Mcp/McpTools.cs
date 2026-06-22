@@ -193,6 +193,13 @@ internal static class McpTools
         },
         new ToolDef
         {
+            Name = "clear_workspace",
+            Description = "Remove ALL loaded locations (and clear filters) and cancel any in-flight search, so the workspace starts fresh. Use before adding a new source to avoid accumulating duplicates.",
+            InputSchema = Obj(new { }),
+            Invoke = async _ => { await B.ClearWorkspaceAsync(); return Ok(); },
+        },
+        new ToolDef
+        {
             Name = "list_log_catalog",
             Description = "List the Log Finder catalog — the user's saved + built-in known log locations (e.g. Windows Event Logs, CBS, DISM, Panther, Windows Update, Defender, Temp). Each entry has an id, name, resolved path, category, kind (folder/file), and whether it exists on this machine. Load one with add_log_location(id), then run_search.",
             InputSchema = Obj(new { includeMissing = Bn("Include entries whose path doesn't exist on this machine (default false).") }),

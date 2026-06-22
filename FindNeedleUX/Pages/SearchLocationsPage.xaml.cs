@@ -123,6 +123,12 @@ public sealed partial class SearchLocationsPage : Page
         }
     }
 
+    private void Button_ClearWorkspace(object sender, RoutedEventArgs e)
+    {
+        MiddleLayerService.ClearWorkspace();
+        _viewModel.Refresh();
+    }
+
     private void Button_AddFolder(object sender, RoutedEventArgs e)
     {
         var window = WindowUtil.GetWindowForElement(this);

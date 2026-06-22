@@ -22,6 +22,10 @@ public interface IMcpViewerController
     /// <summary>One row by stable id, with all fields (full Message). Null if no such row.</summary>
     Task<RecordDto> GetRecordAsync(long rowId);
 
+    /// <summary>Reload the viewer from the current search — rebinds to the live streaming source so an
+    /// already-open viewer picks up a freshly-run search (instead of reading the previous, disposed store).</summary>
+    Task ReloadAsync();
+
     Task<SummaryDto> GetSummaryAsync();
 
     Task<List<HistogramBucketDto>> GetHistogramAsync(int buckets);

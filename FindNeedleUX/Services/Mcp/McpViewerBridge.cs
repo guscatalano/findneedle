@@ -59,6 +59,17 @@ public sealed class McpViewerBridge
 
     public bool HasViewer { get { lock (_sync) return _controller != null; } }
 
+    /// <summary>The registered viewer or null (no throw) — for best-effort calls like a post-search reload.</summary>
+    private IMcpViewerController TryViewer { get { lock (_sync) return _controller; } }
+
+    /// <summary>Rebind the open viewer (if any) to the current search's storage. Called after a re-run so
+    /// the viewer doesn't keep reading the previous, now-disposed store ("connection open" errors).</summary>
+    private async Task ReloadViewerAsync()
+    {
+        var v = TryViewer;
+        if (v != null) { try { await v.ReloadAsync().ConfigureAwait(false); } catch { /* best-effort */ } }
+    }
+
     /// <summary>
     /// Wait up to <paramref name="timeoutMs"/> for a result viewer to register (e.g. just after app
     /// launch or a search that opens the viewer). Returns true if one is registered by then. Lets an
@@ -206,6 +217,8 @@ public sealed class McpViewerBridge
         MiddleLayerService.AddLocation(new KustoPlugin.Location.KustoLocation(cluster, database, kql, mode, rowLimit));
     });
 
+    public Task ClearWorkspaceAsync() => RunOnUiAsync(() => MiddleLayerService.ClearWorkspace());
+
     public Task<bool> RemoveLocationAsync(string name) => RunOnUiAsync(() =>
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
@@ -246,9 +259,11 @@ public sealed class McpViewerBridge
                 // any, picks up the new results on its next load.
                 await RunOnUiAsync(() => { MiddleLayerService.RunSearchStreaming(); }).ConfigureAwait(false);
             }
-            // If a viewer isn't up yet (e.g. it's opening as part of this search), give it a moment to
-            // register so a follow-up viewer tool doesn't hit the "no viewer" race. No-op if one's open.
-            if (!HasViewer) await WaitForViewerAsync(8_000).ConfigureAwait(false);
+            // Rebind the (already-open) viewer to this search's new storage — without it, a viewer left
+            // open from a previous run keeps reading the now-disposed store and throws "connection open".
+            // If none is open yet, wait briefly for one to register (then it loads the new search itself).
+            if (HasViewer) await ReloadViewerAsync().ConfigureAwait(false);
+            else if (await WaitForViewerAsync(8_000).ConfigureAwait(false)) await ReloadViewerAsync().ConfigureAwait(false);
         }
         finally
         {
@@ -270,7 +285,9 @@ public sealed class McpViewerBridge
     /// </summary>
     public async Task<bool> OpenResultsViewerAsync(int timeoutMs)
     {
-        if (HasViewer) return true;
+        // Already open: rebind it to the current search (don't just early-return, or it keeps showing
+        // the previous run / reads a disposed store).
+        if (HasViewer) { await ReloadViewerAsync().ConfigureAwait(false); return true; }
         await RunOnUiAsync(() => MainWindowActions.NavigateToNativeResultsPage()).ConfigureAwait(false);
         return await WaitForViewerAsync(timeoutMs).ConfigureAwait(false);
     }
