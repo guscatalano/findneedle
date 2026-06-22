@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "CBS field extraction",
+  "description": "Enrichment rules that pull Source / component (TaskName) / level / HRESULT out of Windows Component-Based Servicing (CBS.log) lines into real, queryable columns. CBS shares DISM's '<timestamp>, <Level>  <Component>  <message>' shape, so these mirror the DISM field-extraction rules. Requires field-extraction enrichment to be enabled.",
+  "sections": [
+    {
+      "name": "CbsFields",
+      "description": "Extract Source/component/level and the HRESULT result code from CBS message lines into stored fields",
+      "purpose": "enrichment",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "cbs-line",
+          "field": "message",
+          "match": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}(\\.\\d+)?",
+            "set": { "Source": "CBS" },
+            "strip": true
+          }
+        },
+        {
+          "name": "cbs-level",
+          "field": "message",
+          "match": ",\\s+(Info|Warning|Error|Verbose|Debug)\\b",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": ",\\s+(?<lvl>Info|Warning|Error|Verbose|Debug)\\b",
+            "strip": true
+          }
+        },
+        {
+          "name": "cbs-component",
+          "field": "message",
+          "match": ",\\s+(?:Info|Warning|Error|Verbose|Debug)\\s+(?:CBS|CSI|SXS|DPX|DWLD|WSP|SQM)\\b",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "(?<=,\\s{1,4}(?:Info|Warning|Error|Verbose|Debug)\\s{1,40})(?<comp>CBS|CSI|SXS|DPX|DWLD|WSP|SQM)\\b",
+            "set": { "TaskName": "{comp}" },
+            "strip": true
+          }
+        },
+        {
+          "name": "cbs-hresult",
+          "field": "message",
+          "match": "\\[HRESULT = 0x[0-9A-Fa-f]+",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "\\[HRESULT = (?<hr>0x[0-9A-Fa-f]+)",
+            "set": { "EventId": "{hr}" },
+            "strip": false
+          }
+        }
+      ]
+    }
+  ]
+}

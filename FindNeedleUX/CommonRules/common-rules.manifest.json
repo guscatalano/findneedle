@@ -43,5 +43,10 @@
     "File": "dism-fields.rules.json",
     "Name": "DISM field extraction (PID / TID / Provider)",
     "Condition": { "PathGlobs": ["*dism*"] }
+  },
+  {
+    "File": "cbs-fields.rules.json",
+    "Name": "CBS field extraction (Source / component / HRESULT)",
+    "Condition": { "PathGlobs": ["*cbs*", "*CBS*"] }
   }
 ]
