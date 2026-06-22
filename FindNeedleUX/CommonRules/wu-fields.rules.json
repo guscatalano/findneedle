@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Windows Update message cleanup",
+  "description": "Strips the redundant '<Task> == <Level>:' prefix and the trailing ' | ' from WUTraceLogging (Windows Update) trace messages. The task is already in the TaskName column and the level in Level, so echoing them in the message is just noise. Requires field-extraction enrichment to be enabled.",
+  "sections": [
+    {
+      "name": "WuMessageCleanup",
+      "description": "Remove the task/level echo and trailing pipe that WU trace lines duplicate from their columns",
+      "purpose": "enrichment",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "wu-task-level-prefix",
+          "field": "message",
+          "match": "^.+? == (Info|Warning|Error|Verbose|Debug|Critical|Trace):",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "^.+? == (?:Info|Warning|Error|Verbose|Debug|Critical|Trace):\\s*",
+            "strip": true
+          }
+        },
+        {
+          "name": "wu-trailing-pipe",
+          "field": "message",
+          "match": "\\|\\s*$",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "\\s*\\|\\s*$",
+            "strip": true
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -48,5 +48,10 @@
     "File": "cbs-fields.rules.json",
     "Name": "CBS field extraction (Source / component / HRESULT)",
     "Condition": { "PathGlobs": ["*cbs*", "*CBS*"] }
+  },
+  {
+    "File": "wu-fields.rules.json",
+    "Name": "Windows Update message cleanup (strip task/level echo)",
+    "Condition": { "Providers": ["WUTraceLogging"] }
   }
 ]
