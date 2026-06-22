@@ -103,7 +103,8 @@ public class MiddleLayerService
         Filters.Clear();
         SearchResults.Clear();
         LastRunSummary = null;
-        _workspaceCleared = true; // GetSearchStorage now reports "nothing to show"
+        LastStats = null; // drop the previous run's decode-warning stats so its banner clears
+        _workspaceCleared = true; // GetSearchStorage / GetStats now report "nothing to show"
         // Tell an open viewer to drop its source BEFORE we dispose any storage (avoids reading a
         // closed SQLite connection). Both callers (menu + MCP) run this on the UI thread, so the
         // handler completes synchronously here.
@@ -868,6 +869,7 @@ public class MiddleLayerService
 
     public static SearchStatistics GetStats()
     {
+        if (_workspaceCleared) return null; // cleared workspace has no stats — drops the decode banner
         // Prefer the captured run; fall back to the current query (covers legacy SearchQuery and
         // NuSearchQuery — GetSearchStatistics() is on the ISearchQuery interface).
         return LastStats ?? SearchQueryUX.CurrentQuery?.GetSearchStatistics();
@@ -902,7 +904,7 @@ public class MiddleLayerService
                             $"“{file}” is a WPP trace, and the formatting symbols (TMF files) needed to turn its " +
                             "events into readable text aren't available — so almost nothing could be decoded.";
                         if (!string.IsNullOrEmpty(missing))
-                            detail += $"\n\nNeeds TMF: {missing}";
+                            detail += $"\n\n{SummarizeTmfs(missing)}";
                         detail +=
                             "\n\nTo fix: open WPP symbol settings below, point it at the folder with the matching PDBs " +
                             "(or a symbol path / symbol server), click “Build TMFs from symbols,” then reopen this file.";
@@ -912,7 +914,7 @@ public class MiddleLayerService
                     {
                         return ("Some events couldn’t be decoded — missing WPP symbols",
                             $"“{file}” has events with no matching WPP symbols (TMF), so they show as raw/unformatted.\n\n" +
-                            $"Needs TMF: {missing}\n\nSet a symbol/TMF path in WPP symbol settings below and reopen for full text.",
+                            $"{SummarizeTmfs(missing)}\n\nSet a symbol/TMF path in WPP symbol settings below and reopen for full text.",
                             false, missing);
                     }
                 }
@@ -921,7 +923,20 @@ public class MiddleLayerService
         return null;
     }
 
-
+    /// <summary>Summarize the missing-TMF GUID list for the decode banner. Each GUID is 36 chars, so a
+    /// raw comma-joined list of many wraps into a wall of text that buries the actionable message —
+    /// show the count and the first few, and point at the Copy button for the rest (Copy still puts the
+    /// full list on the clipboard).</summary>
+    private static string SummarizeTmfs(string missing)
+    {
+        if (string.IsNullOrEmpty(missing)) return "";
+        var guids = missing.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
+        const int show = 4;
+        if (guids.Length <= show)
+            return $"Needs TMF ({guids.Length}): {missing}";
+        var shown = string.Join(", ", guids.Take(show));
+        return $"Needs TMF ({guids.Length}): {shown} — and {guids.Length - show} more (click Copy for the full list).";
+    }
 
     public static void OpenWorkspace(string filename)
     {
