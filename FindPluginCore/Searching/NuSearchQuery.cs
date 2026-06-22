@@ -1214,16 +1214,70 @@ public class NuSearchQuery : ISearchQuery
     private ISearchResult EnrichRow(ISearchResult r)
     {
         Dictionary<string, string>? fields = null;
+        List<(int Start, int Length)>? strips = null;
         foreach (var section in _enrichmentSections!)
         {
             RuleEvaluationEngine.EvaluationResult eval;
             try { eval = _ruleEngine.EvaluateRules(r, section); }
             catch { continue; }
-            if (eval.Fields.Count == 0) continue;
-            fields ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in eval.Fields) fields[kv.Key] = kv.Value;
+            if (eval.Fields.Count > 0)
+            {
+                fields ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in eval.Fields) fields[kv.Key] = kv.Value;
+            }
+            if (eval.MessageStrips.Count > 0)
+            {
+                strips ??= new List<(int, int)>();
+                strips.AddRange(eval.MessageStrips);
+            }
+        }
+        if (fields == null && strips == null) return r;
+        // strip:true rules rewrite the displayed Message by removing the text they pulled out.
+        if (strips != null)
+        {
+            var rewritten = ApplyMessageStrips(r.GetMessage(), strips);
+            if (rewritten != null)
+            {
+                fields ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                fields["Message"] = rewritten;
+            }
         }
         return fields != null ? new findneedle.RuleDSL.EnrichedSearchResult(r, fields) : r;
+    }
+
+    /// <summary>Remove the matched spans from the message (the text strip:true rules pulled out) and
+    /// tidy the whitespace left behind, so the displayed line gets cleaner as fields move to columns.
+    /// Returns null if nothing valid to remove. Out-of-range spans are skipped; overlaps are merged.</summary>
+    private static string? ApplyMessageStrips(string message, List<(int Start, int Length)> strips)
+    {
+        if (string.IsNullOrEmpty(message) || strips == null || strips.Count == 0) return null;
+        var valid = strips
+            .Where(s => s.Start >= 0 && s.Length > 0 && s.Start + s.Length <= message.Length)
+            .OrderBy(s => s.Start).ToList();
+        if (valid.Count == 0) return null;
+
+        // Merge overlapping/adjacent spans into [start,end) ranges.
+        var merged = new List<(int Start, int End)>();
+        foreach (var (st, len) in valid)
+        {
+            int end = st + len;
+            if (merged.Count > 0 && st <= merged[^1].End)
+                merged[^1] = (merged[^1].Start, Math.Max(merged[^1].End, end));
+            else
+                merged.Add((st, end));
+        }
+
+        var sb = new StringBuilder(message.Length);
+        int pos = 0;
+        foreach (var (st, end) in merged)
+        {
+            if (st > pos) sb.Append(message, pos, st - pos);
+            pos = end;
+        }
+        if (pos < message.Length) sb.Append(message, pos, message.Length - pos);
+
+        // Collapse the gaps left by removal (and the source's padding) so the line reads cleanly.
+        return System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"\s{2,}", " ").Trim();
     }
 
     /// <summary>

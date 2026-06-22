@@ -34,7 +34,7 @@ public class EnrichmentEndToEndTests
             ""action"": { ""type"":""extract"", ""pattern"":""\\bDISM\\b"", ""set"": { ""Source"":""DISM"" } } },
           { ""name"":""pidtid"", ""field"":""message"", ""match"":""PID=\\d+\\s+TID=\\d+"",
             ""action"": { ""type"":""extract"", ""pattern"":""PID=(?<pid>\\d+)\\s+TID=(?<tid>\\d+)"",
-                          ""set"": { ""ProcessId"":""{pid}"", ""ThreadId"":""{tid}"" } } }
+                          ""set"": { ""ProcessId"":""{pid}"", ""ThreadId"":""{tid}"" }, ""strip"": true } }
         ] } ] }";
 
     [TestInitialize]
@@ -85,6 +85,13 @@ public class EnrichmentEndToEndTests
         Assert.AreEqual("15484", dism.GetThreadId(), "TID extracted into ThreadId");
         Assert.AreEqual("DISM", dism.GetSource(), "Provider set to DISM");
 
+        // strip:true rewrote the Message — the pulled-out PID/TID text is gone, the payload remains.
+        Assert.IsFalse(dism.GetMessage().Contains("PID=24288"), "strip removes the PID text from the message");
+        Assert.IsFalse(dism.GetMessage().Contains("TID=15484"), "strip removes the TID text from the message");
+        Assert.IsTrue(dism.GetMessage().Contains("Successfully loaded"), "the payload stays");
+        // SearchableData keeps the raw text so search still matches the pulled-out values.
+        Assert.IsTrue(dism.GetSearchableData().Contains("PID=24288"), "search still matches the raw text");
+
         // A non-DISM line is left alone.
         var other = rows.First(r => r.GetMessage().Contains("unrelated"));
         Assert.AreEqual("", other.GetProcessId());
@@ -100,5 +107,6 @@ public class EnrichmentEndToEndTests
         Assert.AreEqual("", dism.GetProcessId(), "no enrichment ⇒ ProcessId stays empty");
         Assert.AreEqual("", dism.GetThreadId());
         Assert.AreEqual("dism.log", dism.GetSource(), "no enrichment ⇒ provider stays the file basename");
+        Assert.IsTrue(dism.GetMessage().Contains("PID=24288"), "no enrichment ⇒ message unchanged");
     }
 }

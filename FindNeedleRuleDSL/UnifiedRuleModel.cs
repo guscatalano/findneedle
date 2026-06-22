@@ -218,6 +218,9 @@ public class UnifiedRuleAction
     [JsonPropertyName("set")]
     public Dictionary<string, string>? Set { get; set; } // For "extract": target field -> template ("{group}" capture refs and/or literal text)
 
+    [JsonPropertyName("strip")]
+    public bool Strip { get; set; } // For "extract": also remove the matched text from the Message (rewrites the displayed line)
+
     [JsonPropertyName("replacement")]
     public string? Replacement { get; set; } // For "redact" action: the mask text (default "[REDACTED]")
 

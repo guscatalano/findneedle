@@ -24,6 +24,11 @@ public class RuleEvaluationEngine
         /// (ProcessId / ThreadId / Source / …) → extracted value. Applied to the row via
         /// <c>EnrichedSearchResult</c> before storage so the values become real, queryable columns.</summary>
         public Dictionary<string, string> Fields { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Spans (start, length) in the message that "extract" rules with <c>strip:true</c>
+        /// matched — removed from the displayed Message so the line gets cleaner as fields move to
+        /// columns. Composed against the original message in <c>NuSearchQuery.EnrichRow</c>.</summary>
+        public List<(int Start, int Length)> MessageStrips { get; } = new();
     }
 
     // Compiled regexes for "extract" actions, cached by pattern (these run per-row at scan time).
@@ -595,6 +600,12 @@ public class RuleEvaluationEngine
             if (!string.IsNullOrEmpty(value))
                 evalResult.Fields[kv.Key] = value;
         }
+
+        // strip:true — record the matched span so the displayed Message can have the pulled-out text
+        // removed (the span is relative to the field matched, which is the message by default).
+        var strip = GetBoolProp(action, "strip") ?? GetBoolProp(action, "Strip") ?? false;
+        if (strip && m.Length > 0)
+            evalResult.MessageStrips.Add((m.Index, m.Length));
     }
 
     private static Regex? GetCachedExtractRegex(string pattern)

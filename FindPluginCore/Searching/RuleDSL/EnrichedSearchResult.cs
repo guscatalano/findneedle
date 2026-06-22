@@ -33,7 +33,9 @@ public sealed class EnrichedSearchResult : ISearchResult
     // Identity / typed fields always delegate.
     public DateTime GetLogTime() => _base.GetLogTime();
     public Level GetLevel() => _base.GetLevel();
-    public string GetMessage() => _base.GetMessage();
+    // Message can be rewritten by a strip:true extract rule (the pulled-out text is removed); the
+    // SearchableData stays the original so search/filter still match the raw text.
+    public string GetMessage() => Or("Message", _base.GetMessage);
     public string GetSearchableData() => _base.GetSearchableData();
     public long GetRowId() => _base.GetRowId();
     public void WriteToConsole() => _base.WriteToConsole();

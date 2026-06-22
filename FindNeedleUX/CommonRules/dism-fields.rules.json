@@ -18,7 +18,8 @@
           "action": {
             "type": "extract",
             "pattern": "\\bDISM\\b",
-            "set": { "Source": "DISM" }
+            "set": { "Source": "DISM" },
+            "strip": true
           }
         },
         {
@@ -29,7 +30,8 @@
           "action": {
             "type": "extract",
             "pattern": "PID=(?<pid>\\d+)\\s+TID=(?<tid>\\d+)",
-            "set": { "ProcessId": "{pid}", "ThreadId": "{tid}" }
+            "set": { "ProcessId": "{pid}", "ThreadId": "{tid}" },
+            "strip": true
           }
         },
         {
@@ -40,7 +42,8 @@
           "action": {
             "type": "extract",
             "pattern": "^\\[(?<pid>\\d+)\\.(?<tid>\\d+)\\]",
-            "set": { "ProcessId": "{pid}", "ThreadId": "{tid}", "Source": "DISM" }
+            "set": { "ProcessId": "{pid}", "ThreadId": "{tid}", "Source": "DISM" },
+            "strip": true
           }
         }
       ]

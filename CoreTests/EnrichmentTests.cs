@@ -37,7 +37,7 @@ public class EnrichmentTests
           ""action"": { ""type"":""extract"", ""pattern"":""\\bDISM\\b"", ""set"": { ""Source"":""DISM"" } } },
         { ""name"":""pidtid"", ""field"":""message"", ""match"":""PID=\\d+\\s+TID=\\d+"",
           ""action"": { ""type"":""extract"", ""pattern"":""PID=(?<pid>\\d+)\\s+TID=(?<tid>\\d+)"",
-                        ""set"": { ""ProcessId"":""{pid}"", ""ThreadId"":""{tid}"" } } }
+                        ""set"": { ""ProcessId"":""{pid}"", ""ThreadId"":""{tid}"" }, ""strip"": true } }
       ] }";
 
     [TestMethod]
@@ -52,6 +52,11 @@ public class EnrichmentTests
         Assert.AreEqual("24288", eval.Fields["ProcessId"]);
         Assert.AreEqual("15484", eval.Fields["ThreadId"]);
         Assert.AreEqual("DISM", eval.Fields["Source"]);
+
+        // strip:true on the pid/tid rule records the matched span (the "PID=… TID=…" text to remove).
+        Assert.AreEqual(1, eval.MessageStrips.Count);
+        var (start, len) = eval.MessageStrips[0];
+        Assert.AreEqual("PID=24288 TID=15484", r.Text.Substring(start, len));
     }
 
     [TestMethod]
@@ -75,14 +80,16 @@ public class EnrichmentTests
             ["ProcessId"] = "24288",
             ["ThreadId"] = "15484",
             ["Source"] = "DISM",
+            ["Message"] = "rewritten clean line",
         });
 
         // Overridden:
         Assert.AreEqual("24288", dec.GetProcessId());
         Assert.AreEqual("15484", dec.GetThreadId());
         Assert.AreEqual("DISM", dec.GetSource());
-        // Delegated (not in the override map):
-        Assert.AreEqual("the message", dec.GetMessage());
+        Assert.AreEqual("rewritten clean line", dec.GetMessage()); // Message can be rewritten
+        // SearchableData stays the original even when Message is rewritten (search still matches raw):
+        Assert.AreEqual("the message", dec.GetSearchableData());
         Assert.AreEqual(baseR.GetResultSource(), dec.GetResultSource());
         Assert.AreEqual(Level.Info, dec.GetLevel());
         Assert.AreEqual("", dec.GetOpCode());
