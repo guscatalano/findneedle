@@ -25,6 +25,7 @@ public class ETLLogLine : ISearchResult
     public string relatedActivityId = string.Empty;
     public string providerGuid = string.Empty;
     public string opcodeName = string.Empty;
+    public int eventLevel = -1; // ETW TraceEventLevel (1=Critical..5=Verbose); -1 = unknown/not captured
     public string processName = string.Empty;
     public string structuredData = string.Empty;
     public string datetime = string.Empty;
@@ -171,6 +172,10 @@ public class ETLLogLine : ISearchResult
         try { this.relatedActivityId = obj.RelatedActivityID == Guid.Empty ? "" : obj.RelatedActivityID.ToString(); } catch { }
         try { this.providerGuid = obj.ProviderGuid == Guid.Empty ? "" : obj.ProviderGuid.ToString(); } catch { }
         try { this.opcodeName = obj.OpcodeName ?? ""; } catch { }
+        // Capture the event's severity. TraceLogging (and manifest) events carry it on the TraceEvent
+        // itself, not in the WPP "meta" JSON that GetLevel otherwise reads — without this every
+        // TraceEvent-sourced row (the whole TraceLogging path) fell through to Level.Info.
+        try { this.eventLevel = (int)obj.Level; } catch { }
     }
 
     public ETLLogLine(string textline, string filename)
@@ -281,6 +286,21 @@ public class ETLLogLine : ISearchResult
     }
     public Level GetLevel()
     {
+        // TraceEvent-sourced rows (live capture + TraceLogging/manifest events from .etl) carry the
+        // severity directly on the event. Use it first — the keyjson "meta.level" below only exists on
+        // the WPP/tracefmt text path. ETW level scheme: 1=Critical,2=Error,3=Warning,4=Info,5=Verbose.
+        if (eventLevel >= 0)
+        {
+            return eventLevel switch
+            {
+                1 => Level.Catastrophic,
+                2 => Level.Error,
+                3 => Level.Warning,
+                4 => Level.Info,
+                5 => Level.Verbose,
+                _ => Level.Info, // 0 = LogAlways / unknown
+            };
+        }
         // Try to extract from JSON if available
         if (keyjson != null && keyjson.ContainsKey("meta"))
         {

@@ -59,6 +59,26 @@ public sealed class GeneratedEtlEndToEndTests
         }
     }
 
+    /// <summary>Emit TraceLogging events at distinct severities + event names so we can verify the
+    /// TraceEvent-decode path captures Level and TaskName (not just Message). EnableProvider at Verbose
+    /// so Error/Warning/Info events are all captured.</summary>
+    private static void GenerateTraceLoggingEtlWithLevels(string etlPath, int eventsPerLevel)
+    {
+        using var es = new EventSource("FindNeedle-TLLevelTest", EventSourceSettings.EtwSelfDescribingEventFormat);
+        using (var session = new TraceEventSession("FindNeedle_GenTLLevel_Session", etlPath))
+        {
+            session.EnableProvider(es.Guid, Microsoft.Diagnostics.Tracing.TraceEventLevel.Verbose);
+            Thread.Sleep(300);
+            for (int i = 0; i < eventsPerLevel; i++)
+            {
+                es.Write("ErrorTick", new EventSourceOptions { Level = EventLevel.Error }, new { id = i, message = $"err {i}" });
+                es.Write("WarnTick", new EventSourceOptions { Level = EventLevel.Warning }, new { id = i, message = $"warn {i}" });
+                es.Write("InfoTick", new EventSourceOptions { Level = EventLevel.Informational }, new { id = i, message = $"info {i}" });
+            }
+            Thread.Sleep(500);
+        }
+    }
+
     /// <summary>Generate an .etl with <paramref name="generate"/>, run it through the full pipeline,
     /// and assert results loaded. Shared by the manifest and TraceLogging cases.</summary>
     private void GenerateThenAssertLoads(string label, Action<string> generate)
@@ -121,6 +141,48 @@ public sealed class GeneratedEtlEndToEndTests
     [Timeout(180000)]
     public void GenerateTraceLoggingEtl_FullPipeline_LoadsResults()
         => GenerateThenAssertLoads("tracelogging", etl => GenerateTraceLoggingEtl(etl, events: 2000));
+
+    [TestMethod]
+    [TestCategory("Performance")]
+    [Timeout(180000)]
+    public void GenerateTraceLoggingEtl_CapturesLevelAndTaskName()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"FN_tllevel_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var etl = Path.Combine(dir, "leveled.etl");
+        try
+        {
+            GenerateTraceLoggingEtlWithLevels(etl, eventsPerLevel: 300);
+            Assert.IsTrue(File.Exists(etl), "a real .etl should have been generated");
+            ETWTestUtils.UseTestTraceFmt();
+
+            var loc = new FolderLocation { path = etl };
+            loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new ETLProcessor() });
+            var query = new NuSearchQuery { OverrideStorageType = StorageType.InMemory };
+            query.Locations.Add(loc);
+            query.RunThrough();
+
+            var rows = new List<ISearchResult>();
+            query.ResultStorage!.GetFilteredResultsInBatches(b => rows.AddRange(b), 1000);
+            query.DisposeStorage();
+
+            Assert.IsTrue(rows.Count > 0, "the generated TraceLogging .etl should load results");
+            var levels = rows.Select(r => r.GetLevel()).Distinct().ToList();
+            TestContext.WriteLine($"levels seen: {string.Join(", ", levels)} over {rows.Count} rows");
+
+            // The fix: TraceLogging events must NOT all collapse to Info — Error/Warning events
+            // emitted above must come back as Error/Warning.
+            Assert.IsTrue(levels.Contains(Level.Error), "Error-level TraceLogging events should parse as Error");
+            Assert.IsTrue(levels.Contains(Level.Warning), "Warning-level TraceLogging events should parse as Warning");
+            // TaskName must be populated from the event (the event name).
+            Assert.IsTrue(rows.Any(r => !string.IsNullOrWhiteSpace(r.GetTaskName())),
+                "TaskName should be captured from the TraceLogging event");
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
 
     [TestMethod]
     [TestCategory("Performance")]
