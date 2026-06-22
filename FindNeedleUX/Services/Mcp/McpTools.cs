@@ -37,6 +37,9 @@ internal static class McpTools
         => Has(a, n) && a.GetProperty(n).TryGetInt32(out var v) ? v : def;
     private static long Lng(JsonElement a, string n, long def)
         => Has(a, n) && a.GetProperty(n).TryGetInt64(out var v) ? v : def;
+    /// <summary>Read the stable row id from either "id" or "rowId" — get_page emits rows keyed
+    /// "rowId", so an agent that passes that key straight back shouldn't silently get -1.</summary>
+    private static long RowId(JsonElement a) => Has(a, "id") ? Lng(a, "id", -1) : Lng(a, "rowId", -1);
     private static bool Bool(JsonElement a, string n, bool def)
         => Has(a, n) && (a.GetProperty(n).ValueKind == JsonValueKind.True || a.GetProperty(n).ValueKind == JsonValueKind.False)
             ? a.GetProperty(n).GetBoolean() : def;
@@ -313,8 +316,8 @@ internal static class McpTools
         {
             Name = "get_record",
             Description = "Get one row by its stable id (from get_page), with all fields and full Message.",
-            InputSchema = Obj(new { id = I("Stable row id (RowId).") }, "id"),
-            Invoke = async a => await B.GetRecordAsync(Lng(a, "id", -1)),
+            InputSchema = Obj(new { id = I("Stable row id (the rowId field from get_page).") }, "id"),
+            Invoke = async a => await B.GetRecordAsync(RowId(a)),
         },
         new ToolDef
         {
@@ -432,8 +435,8 @@ internal static class McpTools
         {
             Name = "select_row",
             Description = "Select (highlight + scroll to) a row by stable id, if it's on the current page.",
-            InputSchema = Obj(new { id = I("Stable row id.") }, "id"),
-            Invoke = async a => new { selected = await B.SelectRowAsync(Lng(a, "id", -1)) },
+            InputSchema = Obj(new { id = I("Stable row id (the rowId field from get_page).") }, "id"),
+            Invoke = async a => new { selected = await B.SelectRowAsync(RowId(a)) },
         },
         new ToolDef
         {
@@ -445,14 +448,14 @@ internal static class McpTools
                 tag = S("Tag category: Important, Question, Resolved, or Note."),
                 text = S("Optional free-text note to attach to the tag."),
             }, "id"),
-            Invoke = async a => new { tagged = await B.TagRowAsync(Lng(a, "id", -1), Str(a, "tag"), Str(a, "text")) },
+            Invoke = async a => new { tagged = await B.TagRowAsync(RowId(a), Str(a, "tag"), Str(a, "text")) },
         },
         new ToolDef
         {
             Name = "clear_tag",
             Description = "Remove the tag from a row by stable id.",
-            InputSchema = Obj(new { id = I("Stable row id.") }, "id"),
-            Invoke = async a => new { cleared = await B.ClearTagAsync(Lng(a, "id", -1)) },
+            InputSchema = Obj(new { id = I("Stable row id (the rowId field from get_page).") }, "id"),
+            Invoke = async a => new { cleared = await B.ClearTagAsync(RowId(a)) },
         },
         new ToolDef
         {
