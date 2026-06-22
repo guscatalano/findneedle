@@ -212,6 +212,12 @@ public class UnifiedRuleAction
     [JsonPropertyName("value")]
     public string? Value { get; set; } // For "tag" action: the tag value
 
+    [JsonPropertyName("pattern")]
+    public string? Pattern { get; set; } // For "extract" action: regex with named groups, run against the rule's Field (default message)
+
+    [JsonPropertyName("set")]
+    public Dictionary<string, string>? Set { get; set; } // For "extract": target field -> template ("{group}" capture refs and/or literal text)
+
     [JsonPropertyName("replacement")]
     public string? Replacement { get; set; } // For "redact" action: the mask text (default "[REDACTED]")
 

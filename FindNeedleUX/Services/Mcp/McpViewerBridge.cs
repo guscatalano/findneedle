@@ -174,21 +174,27 @@ public sealed class McpViewerBridge
         return MiddleLayerService.Locations.Count < before;
     });
 
-    public Task RunSearchAsync() => RunSearchAsync(false);
+    public Task RunSearchAsync() => RunSearchAsync(false, null);
 
     /// <param name="ignoreCache">Force a fresh scan: set the cache-mode override to Never for this
     /// run (captured/restored on the UI thread) so a warm cache is rescanned and no reuse prompt
     /// appears. The search consumes the override synchronously at kickoff, so restoring afterward is
     /// safe.</param>
-    public async Task RunSearchAsync(bool ignoreCache)
+    /// <param name="enrich">Optional per-run enrichment override (null = use the persisted setting):
+    /// true forces RuleDSL "extract" enrichment on for this run, false forces it off. Captured/restored
+    /// on the UI thread like the cache override.</param>
+    public async Task RunSearchAsync(bool ignoreCache, bool? enrich = null)
     {
         FindPluginCore.Searching.CacheReuseMode? prevOverride = null;
-        if (ignoreCache)
-            prevOverride = await RunOnUiAsync(() =>
+        bool? prevEnrich = null;
+        if (ignoreCache || enrich.HasValue)
+            (prevOverride, prevEnrich) = await RunOnUiAsync(() =>
             {
-                var p = MiddleLayerService.CacheModeOverride;
-                MiddleLayerService.CacheModeOverride = FindPluginCore.Searching.CacheReuseMode.Never;
-                return p;
+                var pc = MiddleLayerService.CacheModeOverride;
+                var pe = MiddleLayerService.EnrichmentOverride;
+                if (ignoreCache) MiddleLayerService.CacheModeOverride = FindPluginCore.Searching.CacheReuseMode.Never;
+                if (enrich.HasValue) MiddleLayerService.EnrichmentOverride = enrich.Value;
+                return (pc, pe);
             }).ConfigureAwait(false);
         try
         {
@@ -206,7 +212,12 @@ public sealed class McpViewerBridge
         }
         finally
         {
-            if (ignoreCache) await RunOnUiAsync(() => MiddleLayerService.CacheModeOverride = prevOverride).ConfigureAwait(false);
+            if (ignoreCache || enrich.HasValue)
+                await RunOnUiAsync(() =>
+                {
+                    if (ignoreCache) MiddleLayerService.CacheModeOverride = prevOverride;
+                    if (enrich.HasValue) MiddleLayerService.EnrichmentOverride = prevEnrich;
+                }).ConfigureAwait(false);
         }
     }
 

@@ -224,6 +224,19 @@ public static class ResultsViewerSettings
         set { Data.McpServerEnabled = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>
+    /// Whether RuleDSL "extract" enrichment runs during the scan (writing extracted fields like
+    /// ProcessId/ThreadId/Provider into the stored columns). Off by default — the per-row regex is a
+    /// scan-time cost, so it's opt-in. Enriched scans use a separate cache db, so toggling doesn't force
+    /// a rescan once both are warm.
+    /// </summary>
+    public const bool DefaultEnrichmentEnabled = false;
+    public static bool EnrichmentEnabled
+    {
+        get => Data.EnrichmentEnabled ?? DefaultEnrichmentEnabled;
+        set { Data.EnrichmentEnabled = value; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>TCP port for the in-app MCP server (bound to 127.0.0.1 only).</summary>
     public const int DefaultMcpServerPort = 8765;
     public static int McpServerPort
@@ -517,6 +530,7 @@ public static class ResultsViewerSettings
         public bool? ShowStatusBar { get; set; }
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }
+        public bool? EnrichmentEnabled { get; set; }
         public string TraceFormatSearchPath { get; set; }
         public string SymbolPath { get; set; }
         public string SymbolSourcePath { get; set; }

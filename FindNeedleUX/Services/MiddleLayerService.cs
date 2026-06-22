@@ -46,6 +46,10 @@ public class MiddleLayerService
     /// </summary>
     public static CacheReuseMode? CacheModeOverride { get; set; }
 
+    /// <summary>Optional enrichment on/off for the next search (null = use the persisted setting). The
+    /// MCP <c>run_search</c> <c>enrich</c> arg sets this for one run, like <see cref="CacheModeOverride"/>.</summary>
+    public static bool? EnrichmentOverride { get; set; }
+
     public static event Action StateChanged;
 
     public static void NotifyStateChanged() => StateChanged?.Invoke();
@@ -308,6 +312,9 @@ public class MiddleLayerService
             {
                 nu.CacheReuseMode = CacheModeOverride ?? ResultsViewerSettings.CacheReuseMode;
                 nu.CacheReusePrompt = CacheReusePromptService.Prompt;
+                // RuleDSL "extract" enrichment (off by default; the MCP run_search 'enrich' arg can
+                // force it per run via EnrichmentOverride).
+                nu.EnrichmentEnabled = EnrichmentOverride ?? ResultsViewerSettings.EnrichmentEnabled;
                 // Apply per-run storage / estimate overrides (set by the CLI load hook). These let
                 // the storage backend and the Auto-tier prediction be driven explicitly.
                 if (StorageOverride.HasValue) nu.OverrideStorageType = StorageOverride.Value;

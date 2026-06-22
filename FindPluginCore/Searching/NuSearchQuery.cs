@@ -153,6 +153,22 @@ public class NuSearchQuery : ISearchQuery
     public int? EstimatedRowCountOverride { get; set; }
 
     /// <summary>
+    /// When true, RuleDSL "extract" enrichment runs per-row during the Step 2 scan, writing the
+    /// extracted fields (ProcessId/ThreadId/Source/…) onto the row before it's stored — so they become
+    /// real, queryable columns. Off by default: the per-row regex is the cost, so it's opt-in. Set from
+    /// the UX (Settings → Results viewer) via <c>MiddleLayerService</c>. When false, the scan path is
+    /// byte-for-byte the same as before (no per-row work).
+    /// </summary>
+    public bool EnrichmentEnabled { get; set; }
+
+    // The enrichment sections to apply in-scan (resolved once per Step 2 from LoadedRules when
+    // EnrichmentEnabled). Null/empty ⇒ EnrichRow is a no-op.
+    private List<dynamic>? _enrichmentSections;
+    // Accumulated enrichment cost for the current location (logged at location.end for visibility).
+    private readonly System.Diagnostics.Stopwatch _enrichWatch = new();
+    private int _enrichedRowCount;
+
+    /// <summary>
     /// How the cache-reuse fast path in Step 1 should behave. Set from the UX layer based on
     /// the user's Settings → Results viewer choice. Default is <see cref="CacheReuseMode.Always"/>
     /// so callers that never set it (tests, plugins) get the silently-reuse behaviour.
@@ -189,8 +205,32 @@ public class NuSearchQuery : ISearchQuery
     /// </summary>
     public ISearchStorage PrepareStorage(CancellationToken cancellationToken = default)
     {
+        // Load rules now (idempotent) so the enrichment cache-key suffix can be computed here — the
+        // streaming entry point pre-creates storage on the UI thread, before Step 1 runs.
+        LoadRules();
         _resultStorage ??= CreateStorage(cancellationToken);
         return _resultStorage;
+    }
+
+    /// <summary>
+    /// Cache-key suffix that distinguishes an enriched scan's cache db from the plain one (and from a
+    /// different enrichment config). Empty when enrichment is off or no enrichment rules are loaded — so
+    /// the default key is unchanged and existing caches still match. Only affects the db *filename*
+    /// (hashed); the source signature still keys off the real log path.
+    /// </summary>
+    private string EnrichmentCacheSuffix()
+    {
+        if (!EnrichmentEnabled || LoadedRules == null) return string.Empty;
+        try
+        {
+            var sections = _ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment");
+            if (sections == null || sections.Count == 0) return string.Empty;
+            var json = System.Text.Json.JsonSerializer.Serialize(sections);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(json));
+            return "|enrich=" + Convert.ToHexString(hash, 0, 4).ToLowerInvariant(); // 8 hex chars
+        }
+        catch { return "|enrich=on"; }
     }
 
     /// <summary>
@@ -227,6 +267,9 @@ public class NuSearchQuery : ISearchQuery
     {
         var config = PluginManager.GetSingleton().config;
         var filePath = _locations.Count > 0 ? _locations[0].GetName() : "default";
+        // Enriched scans get their own cache db (different rows than a plain scan). Suffix only changes
+        // the hashed db filename; empty when enrichment is off so the default cache key is unchanged.
+        filePath += EnrichmentCacheSuffix();
         var requested = OverrideStorageType ?? config?.SearchStorageType;
         switch (requested)
         {
@@ -618,6 +661,16 @@ public class NuSearchQuery : ISearchQuery
         if (streamFilteredDuringScan)
             Logger.Instance.Log("Step2: streaming filtered rows straight to SQLite (constant memory, no rawResults retention)");
 
+        // Resolve enrichment "extract" sections once. Applied per-row in EnrichBatch before the storage
+        // insert (both the streaming and accumulate paths), so the extracted fields land in real columns.
+        // Off/empty ⇒ EnrichBatch is a no-op and the scan path is unchanged. Doesn't force the list and
+        // doesn't break the streaming fast path (it runs inside the scan).
+        _enrichmentSections = (EnrichmentEnabled && LoadedRules != null)
+            ? _ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment")
+            : null;
+        if (_enrichmentSections != null && _enrichmentSections.Count > 0)
+            Logger.Instance.Log($"Step2: enrichment ON ({_enrichmentSections.Count} section(s)) — extracting fields per-row");
+
         FlowProgress.Begin(FlowPhase.ReadParse);
         foreach (var loc in _locations)
         {
@@ -656,6 +709,7 @@ public class NuSearchQuery : ISearchQuery
             PerfLog.Log("location.start", ("idx", count), ("of", total), ("name", basename),
                 ("rows_before", SafeFilteredCount()), ("est_rows", estRows ?? -1));
             var locStart = Environment.TickCount64;
+            _enrichWatch.Reset(); _enrichedRowCount = 0; // per-location enrichment cost, logged at location.end
             loc.SetSearchDepth(_depth);
             List<ISearchResult> rawResults = new();
             // Running row count for the streaming path (rawResults stays empty there, so we can't
@@ -690,7 +744,7 @@ public class NuSearchQuery : ISearchQuery
                             // raw table too just doubles the SQLite insert work during the scan (on a
                             // 1.45M-row DISM folder that's the bulk of a ~21s load). See CaptureStats,
                             // which already treats raw as 0 on the streaming pipeline.
-                            _resultStorage.AddFilteredBatch(batch, cancellationToken);
+                            _resultStorage.AddFilteredBatch(EnrichBatch(batch), cancellationToken);
                             streamedCount += batch.Count;
                         }
                         else
@@ -781,6 +835,7 @@ public class NuSearchQuery : ISearchQuery
                 PerfLog.Log("location.end", ("idx", count), ("name", basename),
                     ("rows_total", SafeFilteredCount()),
                     ("rows_this_loc_raw", streamedCount),
+                    ("enriched", _enrichedRowCount), ("enrich_ms", _enrichWatch.ElapsedMilliseconds),
                     ("elapsed_ms", Environment.TickCount64 - locStart));
                 count++;
                 continue;
@@ -814,6 +869,9 @@ public class NuSearchQuery : ISearchQuery
                     if (pass) filteredBatch.Add(r);
                 }
             }
+
+            // Enrich (extract fields) before storing, so the values land in the filtered store's columns.
+            filteredBatch = EnrichBatch(filteredBatch);
 
             if (filteredBatch.Count > 0) FlowProgress.Begin(FlowPhase.StoreResults);
             if (filteredBatch.Count > 0 && _resultStorage is SqliteStorage sqlitePass)
@@ -854,6 +912,7 @@ public class NuSearchQuery : ISearchQuery
             PerfLog.Log("location.end", ("idx", count), ("name", basename),
                 ("rows_total", SafeFilteredCount()),
                 ("rows_this_loc_raw", rawResults?.Count ?? 0),
+                ("enriched", _enrichedRowCount), ("enrich_ms", _enrichWatch.ElapsedMilliseconds),
                 ("elapsed_ms", Environment.TickCount64 - locStart));
             count++;
         }
@@ -1012,8 +1071,8 @@ public class NuSearchQuery : ISearchQuery
     private bool LoadedRulesNeedListNow()
     {
         if (LoadedRules == null) return false;
-        // Enrichment transforms the in-RAM list in Step3 → always needs it.
-        if (_ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment").Count > 0) return true;
+        // Enrichment ("extract") is applied per-row during the Step 2 scan (see EnrichBatch), not over a
+        // consolidated list — so it does NOT force materialization and stays on the lazy/streaming path.
         // Filter rules only feed outputs (the viewer reads raw scanned rows and applies filter rules via
         // its rule-view toggle). So filtering alone doesn't force materialization during a plain search —
         // it's needed only when outputs actually run. When outputs are deferred, neither does.
@@ -1128,6 +1187,43 @@ public class NuSearchQuery : ISearchQuery
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Apply enrichment "extract" rules to a batch in place, replacing each row with an
+    /// <see cref="findneedle.RuleDSL.EnrichedSearchResult"/> when any field was extracted. No-op when
+    /// enrichment is off / has no sections / the batch is empty — so the fast scan path pays nothing.
+    /// Accumulates the per-location cost into <c>_enrichWatch</c>/<c>_enrichedRowCount</c>.
+    /// </summary>
+    private List<ISearchResult> EnrichBatch(List<ISearchResult> batch)
+    {
+        if (_enrichmentSections == null || _enrichmentSections.Count == 0 || batch == null || batch.Count == 0)
+            return batch;
+        _enrichWatch.Start();
+        for (int i = 0; i < batch.Count; i++)
+        {
+            var enriched = EnrichRow(batch[i]);
+            if (!ReferenceEquals(enriched, batch[i])) { batch[i] = enriched; _enrichedRowCount++; }
+        }
+        _enrichWatch.Stop();
+        return batch;
+    }
+
+    /// <summary>Evaluate the enrichment sections against one row; if any "extract" action produced
+    /// fields, wrap the row so those fields override the stored values. Later sections win on conflict.</summary>
+    private ISearchResult EnrichRow(ISearchResult r)
+    {
+        Dictionary<string, string>? fields = null;
+        foreach (var section in _enrichmentSections!)
+        {
+            RuleEvaluationEngine.EvaluationResult eval;
+            try { eval = _ruleEngine.EvaluateRules(r, section); }
+            catch { continue; }
+            if (eval.Fields.Count == 0) continue;
+            fields ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in eval.Fields) fields[kv.Key] = kv.Value;
+        }
+        return fields != null ? new findneedle.RuleDSL.EnrichedSearchResult(r, fields) : r;
     }
 
     /// <summary>

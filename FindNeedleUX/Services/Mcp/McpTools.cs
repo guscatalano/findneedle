@@ -93,7 +93,8 @@ internal static class McpTools
             catch (Exception ex) { app = new List<string> { "(app log unreadable: " + ex.Message + ")" }; }
         }
 
-        return new { perfLogPath = perfPath, perfLineCount = perf?.Count ?? 0, appLineCount = app?.Count ?? 0, perf, app };
+        bool enrichmentEnabled = MiddleLayerService.EnrichmentOverride ?? ResultsViewerSettings.EnrichmentEnabled;
+        return new { perfLogPath = perfPath, enrichmentEnabled, perfLineCount = perf?.Count ?? 0, appLineCount = app?.Count ?? 0, perf, app };
     }
 
     /// <summary>Read a text file's lines with a shared read lock, so reading the perf log never
@@ -195,9 +196,18 @@ internal static class McpTools
         new ToolDef
         {
             Name = "run_search",
-            Description = "Run the search over the loaded locations and refresh the viewer with the results. Set ignoreCache to force a fresh scan (skip the warm-cache reuse and its prompt) — e.g. to pick up changed parsing or re-measure load time.",
-            InputSchema = Obj(new { ignoreCache = Bn("Force a fresh rescan instead of reusing a warm cache (default false).") }),
-            Invoke = async a => { await B.RunSearchAsync(Bool(a, "ignoreCache", false)); return Ok(); },
+            Description = "Run the search over the loaded locations and refresh the viewer with the results. Set ignoreCache to force a fresh scan (skip the warm-cache reuse and its prompt). Set enrich to override RuleDSL field-extraction enrichment for this run (true=on, false=off; omit=use the persisted setting) — enrichment writes extracted fields (e.g. DISM ProcessId/ThreadId/Provider) into the stored columns.",
+            InputSchema = Obj(new
+            {
+                ignoreCache = Bn("Force a fresh rescan instead of reusing a warm cache (default false)."),
+                enrich = Bn("Override field-extraction enrichment for this run (true/false; omit to use the setting)."),
+            }),
+            Invoke = async a =>
+            {
+                bool? enrich = Has(a, "enrich") ? Bool(a, "enrich", false) : (bool?)null;
+                await B.RunSearchAsync(Bool(a, "ignoreCache", false), enrich);
+                return Ok();
+            },
         },
         new ToolDef
         {

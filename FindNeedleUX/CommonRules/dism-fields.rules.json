@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "DISM field extraction",
+  "description": "Enrichment rules that pull ProcessId / ThreadId / Provider out of DISM log lines into real, queryable columns (requires field-extraction enrichment to be enabled).",
+  "sections": [
+    {
+      "name": "DismFields",
+      "description": "Extract PID/TID and the DISM component from the message into stored fields",
+      "purpose": "enrichment",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "dism-provider",
+          "field": "message",
+          "match": "\\bDISM\\b",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "\\bDISM\\b",
+            "set": { "Source": "DISM" }
+          }
+        },
+        {
+          "name": "dism-pid-tid",
+          "field": "message",
+          "match": "PID=\\d+\\s+TID=\\d+",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "PID=(?<pid>\\d+)\\s+TID=(?<tid>\\d+)",
+            "set": { "ProcessId": "{pid}", "ThreadId": "{tid}" }
+          }
+        },
+        {
+          "name": "dism-bracket-pid-tid",
+          "field": "message",
+          "match": "^\\[\\d+\\.\\d+\\]",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "^\\[(?<pid>\\d+)\\.(?<tid>\\d+)\\]",
+            "set": { "ProcessId": "{pid}", "ThreadId": "{tid}", "Source": "DISM" }
+          }
+        }
+      ]
+    }
+  ]
+}

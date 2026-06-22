@@ -457,6 +457,20 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True"/>
                         </StackPanel>
                     </Border>
+
+                    <!-- Field-extraction enrichment -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Field extraction (enrichment)" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Run RuleDSL &quot;extract&quot; rules during the scan to pull structured fields out of a message into real columns (e.g. DISM ProcessId / ThreadId / Provider) — so they're filterable, sortable, and visible to exports, diagrams, and the MCP server. The per-row regex is a scan-time cost, so it's off by default. Enriched scans use a separate cache, so toggling doesn't force a rescan once both are warm."/>
+                            <CheckBox x:Name="EnrichmentEnabledCheck" Content="Enable field-extraction enrichment"
+                                      Checked="EnrichmentEnabledCheck_Changed" Unchecked="EnrichmentEnabledCheck_Changed"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <TextBlock Text="Settings file:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Margin="0,8,0,0"/>

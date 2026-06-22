@@ -19,7 +19,17 @@ public class RuleEvaluationEngine
         public bool Include { get; set; } = true;
         public List<string> Tags { get; set; } = new();
         public List<string> RouteTo { get; set; } = new();
+
+        /// <summary>Field overrides produced by "extract" enrichment actions: target field name
+        /// (ProcessId / ThreadId / Source / …) → extracted value. Applied to the row via
+        /// <c>EnrichedSearchResult</c> before storage so the values become real, queryable columns.</summary>
+        public Dictionary<string, string> Fields { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
+
+    // Compiled regexes for "extract" actions, cached by pattern (these run per-row at scan time).
+    private static readonly Dictionary<string, Regex?> _extractRegexCache = new();
+    private static readonly object _extractRegexLock = new();
+    private static readonly Regex _templateToken = new(@"\{(?<g>[A-Za-z0-9_]+)\}", RegexOptions.Compiled);
 
     // Convert JsonElement into CLR types (Dictionary/List/primitive) without using JsonDocument after conversion
     private object? ConvertJsonElementToClr(JsonElement el)
@@ -264,7 +274,7 @@ public class RuleEvaluationEngine
 
                 if (EvaluateRule(result, rule))
                 {
-                    ExecuteActions(rule, evalResult);
+                    ExecuteActions(rule, evalResult, result);
                 }
             }
         }
@@ -459,7 +469,7 @@ public class RuleEvaluationEngine
     /// <summary>
     /// Executes rule actions and populates evaluation result.
     /// </summary>
-    private void ExecuteActions(object rule, EvaluationResult evalResult)
+    private void ExecuteActions(object rule, EvaluationResult evalResult, ISearchResult result)
     {
         try
         {
@@ -497,7 +507,7 @@ public class RuleEvaluationEngine
 
             foreach (var action in actionsList)
             {
-                ExecuteAction(action, evalResult);
+                ExecuteAction(action, evalResult, result, rule);
             }
         }
         catch (Exception ex)
@@ -509,7 +519,7 @@ public class RuleEvaluationEngine
     /// <summary>
     /// Executes a single action.
     /// </summary>
-    private void ExecuteAction(object action, EvaluationResult evalResult)
+    private void ExecuteAction(object action, EvaluationResult evalResult, ISearchResult result, object rule)
     {
         var actionType = GetStringProp(action, "Type") ?? GetStringProp(action, "type") ?? string.Empty;
 
@@ -517,6 +527,10 @@ public class RuleEvaluationEngine
         {
             case "include":
                 evalResult.Include = true;
+                break;
+
+            case "extract":
+                ExecuteExtract(action, evalResult, result, rule);
                 break;
 
             case "exclude":
@@ -547,5 +561,87 @@ public class RuleEvaluationEngine
                 // Notification action - could trigger alerts
                 break;
         }
+    }
+
+    /// <summary>
+    /// "extract" enrichment: run the action's regex (named groups) against the rule's field (default
+    /// message) and write each "set" target → resolved value into <see cref="EvaluationResult.Fields"/>.
+    /// Targets are stored-column field names (ProcessId, ThreadId, Source, …). Values are templates:
+    /// "{group}" tokens resolve to captures, everything else is literal (so a fixed Provider name like
+    /// "DISM" works). Empty results are skipped.
+    /// </summary>
+    private void ExecuteExtract(object action, EvaluationResult evalResult, ISearchResult result, object rule)
+    {
+        var pattern = GetStringProp(action, "Pattern") ?? GetStringProp(action, "pattern");
+        if (string.IsNullOrEmpty(pattern)) return;
+        var setMap = GetSetMap(action);
+        if (setMap == null || setMap.Count == 0) return;
+
+        var rx = GetCachedExtractRegex(pattern);
+        if (rx == null) return;
+
+        // Field to match against: the rule's Field, defaulting to the message.
+        var fieldName = GetStringProp(rule, "Field");
+        var input = ExtractFieldValue(result, string.IsNullOrEmpty(fieldName) ? "message" : fieldName);
+
+        Match m;
+        try { m = rx.Match(input ?? string.Empty); }
+        catch { return; }
+        if (!m.Success) return;
+
+        foreach (var kv in setMap)
+        {
+            var value = ResolveTemplate(kv.Value, m);
+            if (!string.IsNullOrEmpty(value))
+                evalResult.Fields[kv.Key] = value;
+        }
+    }
+
+    private static Regex? GetCachedExtractRegex(string pattern)
+    {
+        lock (_extractRegexLock)
+        {
+            if (_extractRegexCache.TryGetValue(pattern, out var rx)) return rx;
+            try { rx = new Regex(pattern, RegexOptions.None, TimeSpan.FromMilliseconds(100)); }
+            catch { rx = null; }
+            _extractRegexCache[pattern] = rx;
+            return rx;
+        }
+    }
+
+    /// <summary>Resolve a "set" template: "{group}" tokens become captures, all other text is literal.
+    /// No tokens ⇒ pure literal (e.g. a fixed "DISM" provider name).</summary>
+    private static string ResolveTemplate(string? template, Match m)
+    {
+        if (string.IsNullOrEmpty(template)) return string.Empty;
+        if (template.IndexOf('{') < 0) return template.Trim();
+        var resolved = _templateToken.Replace(template, mm =>
+        {
+            var g = m.Groups[mm.Groups["g"].Value];
+            return g.Success ? g.Value : string.Empty;
+        });
+        return resolved.Trim();
+    }
+
+    /// <summary>Read an action's "set" map (target field → template) from a JsonElement / dictionary / POCO.</summary>
+    private Dictionary<string, string>? GetSetMap(object action)
+    {
+        var obj = GetObjectProp(action, "Set");
+        if (obj == null) return null;
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (obj is JsonElement je && je.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var p in je.EnumerateObject())
+                map[p.Name] = p.Value.ValueKind == JsonValueKind.String ? (p.Value.GetString() ?? "") : p.Value.GetRawText();
+        }
+        else if (obj is IDictionary<string, string> ss)
+        {
+            foreach (var kv in ss) map[kv.Key] = kv.Value ?? "";
+        }
+        else if (obj is IDictionary<string, object?> od)
+        {
+            foreach (var kv in od) map[kv.Key] = kv.Value?.ToString() ?? "";
+        }
+        return map.Count > 0 ? map : null;
     }
 }
