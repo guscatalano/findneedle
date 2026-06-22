@@ -2184,6 +2184,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             Source = l.Source,
             ProcessId = l.ProcessId,
             ThreadId = l.ThreadId,
+            EventId = l.EventId, // cheap + a common field-extraction target, so surface it on list rows too
             Message = full ? l.Message : McpTruncate(l.Message, McpMessageCap),
             Tag = tagged ? rt.Name : null,
             TagText = tagged ? rt.Text : null,
@@ -2194,7 +2195,6 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             dto.Username = l.Username;
             dto.OpCode = l.OpCode;
             dto.SearchableData = l.SearchableData;
-            dto.EventId = l.EventId;
             dto.ProcessName = l.ProcessName;
             dto.ActivityId = l.ActivityId;
             dto.Keywords = l.Keywords;

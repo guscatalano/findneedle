@@ -55,6 +55,18 @@
             "set": { "EventId": "{hr}" },
             "strip": false
           }
+        },
+        {
+          "name": "panther-process",
+          "field": "message",
+          "match": "\\[[A-Za-z0-9._-]+\\.(?:exe|dll|sys)\\]",
+          "enabled": true,
+          "action": {
+            "type": "extract",
+            "pattern": "\\[(?<proc>[A-Za-z0-9._-]+\\.(?:exe|dll|sys))\\]\\s?",
+            "set": { "TaskName": "{proc}" },
+            "strip": true
+          }
         }
       ]
     }
