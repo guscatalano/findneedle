@@ -1986,6 +1986,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             Provider = l.Provider,
             TaskName = l.TaskName,
             Source = l.Source,
+            ProcessId = l.ProcessId,
+            ThreadId = l.ThreadId,
             Message = full ? l.Message : McpTruncate(l.Message, McpMessageCap),
             Tag = tagged ? rt.Name : null,
             TagText = tagged ? rt.Text : null,
