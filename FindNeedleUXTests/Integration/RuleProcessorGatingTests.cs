@@ -69,6 +69,17 @@ public class RuleProcessorGatingTests
     }
 
     [TestMethod]
+    public void ExtractOnlyEnrichment_DoesNotNeedAProcessor()
+    {
+        // "extract" enrichment is applied per-row during the scan, not over the consolidated list, so it
+        // must NOT register a Step3 processor (which would force consolidation and break the lazy path).
+        var p = Write("extract.rules.json",
+            "{ \"sections\": [ { \"name\": \"E\", \"purpose\": \"enrichment\", \"providers\": [\"*\"], " +
+            "\"rules\": [ { \"name\": \"x\", \"action\": { \"type\": \"extract\" } } ] } ] }");
+        Assert.IsFalse(MiddleLayerService.RuleFileHasProcessableSections(p));
+    }
+
+    [TestMethod]
     public void FilterPlusOutput_DoesNotNeedAProcessor()
     {
         var p = Write("mixed.rules.json", """

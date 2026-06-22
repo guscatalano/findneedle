@@ -369,14 +369,41 @@ public class MiddleLayerService
                 string purpose = null;
                 if (s.TryGetProperty("purpose", out var p) || s.TryGetProperty("Purpose", out p))
                     purpose = p.GetString();
-                // Only enrichment (or an unspecified/unknown purpose) needs a Step3 processor + the list.
-                if (!string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(purpose, "filter", StringComparison.OrdinalIgnoreCase))
-                    return true;
+                // Filter / output never need a Step3 processor (applied on demand / via the viewer toggle).
+                if (string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(purpose, "filter", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                // Extract-only enrichment is applied per-row during the scan (NuSearchQuery.EnrichBatch),
+                // not over the consolidated list — so it does NOT need a processor and stays on the lazy
+                // path. Any other enrichment (e.g. a "tag" action) still does. Unknown shape → processable.
+                if (string.Equals(purpose, "enrichment", StringComparison.OrdinalIgnoreCase)
+                    && SectionRulesAreAllExtract(s))
+                    continue;
+                return true;
             }
-            return false; // only filter/output sections → no Step3 processor needed
+            return false; // only filter/output/extract-enrichment sections → no Step3 processor needed
         }
         catch { return true; }
+    }
+
+    /// <summary>True if every rule in the section has an "extract" action (so the whole section is handled
+    /// in-scan, not by a Step3 processor). A section with no rules is vacuously all-extract.</summary>
+    private static bool SectionRulesAreAllExtract(System.Text.Json.JsonElement section)
+    {
+        if (!section.TryGetProperty("rules", out var rules) && !section.TryGetProperty("Rules", out rules))
+            return false;
+        if (rules.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+        foreach (var rule in rules.EnumerateArray())
+        {
+            if (!rule.TryGetProperty("action", out var action) && !rule.TryGetProperty("Action", out action))
+                return false; // a rule without a single action (e.g. an actions array) → be conservative
+            string type = null;
+            if (action.TryGetProperty("type", out var t) || action.TryGetProperty("Type", out t))
+                type = t.GetString();
+            if (!string.Equals(type, "extract", StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return true;
     }
 
     /// <summary>Whether any active rule can produce a UML diagram (a UML output rule is enabled) — used to
