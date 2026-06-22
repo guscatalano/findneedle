@@ -174,9 +174,14 @@ public sealed class GeneratedEtlEndToEndTests
             // emitted above must come back as Error/Warning.
             Assert.IsTrue(levels.Contains(Level.Error), "Error-level TraceLogging events should parse as Error");
             Assert.IsTrue(levels.Contains(Level.Warning), "Warning-level TraceLogging events should parse as Warning");
-            // TaskName must be populated from the event (the event name).
-            Assert.IsTrue(rows.Any(r => !string.IsNullOrWhiteSpace(r.GetTaskName())),
+            // Pick one of OUR events (its payload has a "message" field) — not the ETW session-header
+            // "EventTrace" row. It must carry the payload, have its TaskName captured, and NOT re-echo
+            // the event name ("<TaskName> == …") in the message (that would duplicate the column).
+            var ours = rows.First(r => r.GetMessage().Contains("message:"));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(ours.GetTaskName()),
                 "TaskName should be captured from the TraceLogging event");
+            Assert.IsFalse(ours.GetMessage().StartsWith(ours.GetTaskName() + " ==", StringComparison.Ordinal),
+                $"message should not duplicate the TaskName column (msg='{ours.GetMessage()}')");
         }
         finally
         {
