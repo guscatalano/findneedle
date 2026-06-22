@@ -516,7 +516,12 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 sample = r.s;
 
                 var levelSet = new HashSet<string>(distinct, StringComparer.OrdinalIgnoreCase);
-                foreach (var def in DefaultLevelColors.Keys) levelSet.Add(def);
+                // Only offer real Level enum values (plus whatever's actually in the data). The color
+                // presets in DefaultLevelColors include decorative-only names (e.g. "Critical",
+                // "Debug") that aren't Level members — if those leaked into the filter, selecting one
+                // would silently match nothing AND, because Enum.TryParse fails on them, drop the
+                // level filter entirely, showing every row. DefaultLevelColors stays for coloring only.
+                foreach (var name in Enum.GetNames(typeof(FindNeedlePluginLib.Level))) levelSet.Add(name);
 
                 Levels.Clear();
                 foreach (var level in levelSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))

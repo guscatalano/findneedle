@@ -121,11 +121,13 @@ public sealed class SqlitePagedSource : IPagedLogSource
         if (f == null) return new SqliteStorage.FilterInput();
 
         // Level is stored in SQL as the underlying enum int. Map the user's level-string back.
+        // A non-empty level that isn't a real Level enum value (e.g. "Critical"/"Debug" from a stale
+        // preset, or a typo over MCP) must match NOTHING — not silently drop the filter and show every
+        // row. -1 maps to no enum member, so "Level = -1" yields zero results.
         int? levelInt = null;
-        if (!string.IsNullOrEmpty(f.Level)
-            && Enum.TryParse<Level>(f.Level, ignoreCase: true, out var parsed))
+        if (!string.IsNullOrEmpty(f.Level))
         {
-            levelInt = (int)parsed;
+            levelInt = Enum.TryParse<Level>(f.Level, ignoreCase: true, out var parsed) ? (int)parsed : -1;
         }
 
         return new SqliteStorage.FilterInput
