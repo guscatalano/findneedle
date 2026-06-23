@@ -1061,6 +1061,11 @@ namespace FindPluginCore.Implementations.Storage
             public string TaskName;
             public string Message;
             public string Source;     // matches SQL ResultSource
+            // Multi-select OR-sets (exact match). Non-empty → "column IN (...)"; takes precedence over
+            // the matching substring field above. ProviderSet→Source, SourceSet→ResultSource.
+            public IReadOnlyList<string> ProviderSet;
+            public IReadOnlyList<string> TaskNameSet;
+            public IReadOnlyList<string> SourceSet;
             public int? LevelInt;     // (int)Level enum, mapped by caller
             public string LogTimeFrom; // ISO 8601 round-trip string ("o")
             public string LogTimeTo;
@@ -1164,6 +1169,8 @@ namespace FindPluginCore.Implementations.Storage
         /// <summary>True when the filter has no predicates, so a query over it spans the whole
         /// FilteredResults table. Lets count/level queries short-circuit to the maintained running
         /// total instead of scanning. Mirrors the conditions BuildWhere would emit.</summary>
+        private static bool HasSet(IReadOnlyList<string> s) => s != null && s.Count > 0;
+
         private static bool IsEmptyFilter(FilterInput f)
             => f == null || (
                 string.IsNullOrEmpty(f.Search) &&
@@ -1171,6 +1178,7 @@ namespace FindPluginCore.Implementations.Storage
                 string.IsNullOrEmpty(f.TaskName) &&
                 string.IsNullOrEmpty(f.Message) &&
                 string.IsNullOrEmpty(f.Source) &&
+                !HasSet(f.ProviderSet) && !HasSet(f.TaskNameSet) && !HasSet(f.SourceSet) &&
                 !f.LevelInt.HasValue &&
                 string.IsNullOrEmpty(f.LogTimeFrom) &&
                 string.IsNullOrEmpty(f.LogTimeTo));
@@ -1274,12 +1282,31 @@ namespace FindPluginCore.Implementations.Storage
                 ps.Add(new KeyValuePair<string, object>(name, "%" + EscapeLike(term) + "%"));
             }
 
+            // Exact-match OR-set: "column IN (@p0, @p1, …)". COLLATE NOCASE keeps it case-insensitive
+            // like the substring path. Values come verbatim from the data's facets, so they match.
+            void AddInSet(string column, IReadOnlyList<string> vals)
+            {
+                if (!HasSet(vals)) return;
+                var names = new List<string>(vals.Count);
+                foreach (var v in vals)
+                {
+                    var name = "@p" + (idx++);
+                    names.Add(name);
+                    ps.Add(new KeyValuePair<string, object>(name, v ?? ""));
+                }
+                conditions.Add($"{column} COLLATE NOCASE IN ({string.Join(", ", names)})");
+            }
+
             if (f != null)
             {
-                AddLike("Source",         f.Provider);     // viewer.Provider == SQL.Source
-                AddLike("TaskName",       f.TaskName);
+                // A set takes precedence over the substring field for that column.
+                AddLike("Source",         HasSet(f.ProviderSet) ? null : f.Provider);  // viewer.Provider == SQL.Source
+                AddLike("TaskName",       HasSet(f.TaskNameSet) ? null : f.TaskName);
                 AddLike("Message",        f.Message);
-                AddLike("ResultSource",   f.Source);       // viewer.Source == SQL.ResultSource
+                AddLike("ResultSource",   HasSet(f.SourceSet) ? null : f.Source);      // viewer.Source == SQL.ResultSource
+                AddInSet("Source",        f.ProviderSet);
+                AddInSet("TaskName",      f.TaskNameSet);
+                AddInSet("ResultSource",  f.SourceSet);
 
                 if (f.LevelInt.HasValue)
                 {

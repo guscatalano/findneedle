@@ -131,7 +131,12 @@ namespace FindNeedleUX.UITests
             var btn = FindAllSkippingGrid(window, ControlType.Button)
                          .FirstOrDefault(b => SafeName(b).IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0);
             if (btn == null) return false;
-            btn.Click();
+            // Prefer the Invoke pattern over a physical click: the pager bar can be clipped / partly
+            // off-screen at the default window size, which makes a coordinate-based click miss (the
+            // page then never changes). Invoke fires the button's action directly. Fall back to Click.
+            var invoke = btn.Patterns.Invoke.PatternOrDefault;
+            if (invoke != null) invoke.Invoke();
+            else btn.Click();
             return true;
         }
     }

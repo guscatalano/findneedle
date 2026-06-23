@@ -111,6 +111,10 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         var level = NullIfBlank(f.Level);
         var from = f.FromTime;
         var to = f.ToTime;
+        // Multi-select OR-sets (exact, case-insensitive). Null when unused.
+        var providerSet = ToLookup(f.ProviderSet);
+        var taskNameSet = ToLookup(f.TaskNameSet);
+        var sourceSet = ToLookup(f.SourceSet);
         bool indexCouldMatchSearch = search != null && search.Length > 0 && IsAllAsciiDigit(search);
 
         var matches = new List<LogLine>(Math.Min(_all.Count, 4096));
@@ -121,10 +125,14 @@ public sealed class InMemoryPagedSource : IPagedLogSource
             if (from.HasValue && line.LogTime < from.Value) continue;
             if (to.HasValue && line.LogTime > to.Value) continue;
             if (level != null && !string.Equals(line.Level, level, StringComparison.OrdinalIgnoreCase)) continue;
-            if (provider != null && !ContainsIgnoreCase(line.Provider, provider)) continue;
-            if (taskName != null && !ContainsIgnoreCase(line.TaskName, taskName)) continue;
+            // A set (multi-select) takes precedence over the substring field for that column.
+            if (providerSet != null) { if (!providerSet.Contains(line.Provider ?? "")) continue; }
+            else if (provider != null && !ContainsIgnoreCase(line.Provider, provider)) continue;
+            if (taskNameSet != null) { if (!taskNameSet.Contains(line.TaskName ?? "")) continue; }
+            else if (taskName != null && !ContainsIgnoreCase(line.TaskName, taskName)) continue;
             if (message != null && !ContainsIgnoreCase(line.Message, message)) continue;
-            if (source != null && !ContainsIgnoreCase(line.Source, source)) continue;
+            if (sourceSet != null) { if (!sourceSet.Contains(line.Source ?? "")) continue; }
+            else if (source != null && !ContainsIgnoreCase(line.Source, source)) continue;
 
             if (search != null)
             {
@@ -166,6 +174,12 @@ public sealed class InMemoryPagedSource : IPagedLogSource
     }
 
     private static string NullIfBlank(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    /// <summary>Build a case-insensitive lookup set from a multi-select filter list, or null if unused.</summary>
+    private static HashSet<string> ToLookup(IReadOnlyList<string> values) =>
+        values != null && values.Count > 0
+            ? new HashSet<string>(values, System.StringComparer.OrdinalIgnoreCase)
+            : null;
     private static bool ContainsIgnoreCase(string s, string needle) =>
         s != null && s.Length > 0 && s.Contains(needle, StringComparison.OrdinalIgnoreCase);
     private static bool IsAllAsciiDigit(string s)

@@ -84,12 +84,14 @@ public class PagedRowsEndToEndTests
             // ----- page windows -----
             var page0 = source.GetPage(FilterSpec.Empty, SortSpec.None, offset: 0, limit: 10);
             Assert.AreEqual(10, page0.Count);
-            CollectionAssert.AreEqual(Enumerable.Range(0, 10).ToArray(), page0.Select(r => r.Index).ToArray(),
-                "first page rows are indexed 0..9");
+            // Index is the stable 1-based SQLite Id (load order), not the per-page position — so
+            // "sort by Index" actually reorders. Page 0 carries Ids 1..10, page 1 carries 11..20.
+            CollectionAssert.AreEqual(Enumerable.Range(1, 10).ToArray(), page0.Select(r => r.Index).ToArray(),
+                "first page rows carry the stable 1-based Id (1..10)");
 
             var page1 = source.GetPage(FilterSpec.Empty, SortSpec.None, offset: 10, limit: 10);
             Assert.AreEqual(10, page1.Count);
-            CollectionAssert.AreEqual(Enumerable.Range(10, 10).ToArray(), page1.Select(r => r.Index).ToArray());
+            CollectionAssert.AreEqual(Enumerable.Range(11, 10).ToArray(), page1.Select(r => r.Index).ToArray());
 
             // partial last page (20..24 → 5 rows)
             var lastPage = source.GetPage(FilterSpec.Empty, SortSpec.None, offset: 20, limit: 10);

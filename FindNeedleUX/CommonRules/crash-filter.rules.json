@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "App crash / hang highlighter",
+  "description": "Keeps only application crash, hang, and Windows Error Reporting events (Application Error 1000 / Application Hang 1002 / WER fault buckets / unhandled .NET exceptions) so process failures are easy to flag in a noisy Event Log. Enable it to filter the view down to just the failures.",
+  "sections": [
+    {
+      "name": "CrashFilter",
+      "description": "Keep crash / hang / fault-report events, hide the rest",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "keep-app-crashes",
+          "match": "Faulting application name:|stopped interacting with Windows|Fault bucket|unhandled exception|Application Hang|Application Error",
+          "enabled": true,
+          "action": { "type": "include" }
+        }
+      ]
+    }
+  ]
+}

@@ -77,6 +77,14 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(ScrollBarSizeCombo,
                 ((int)ResultsViewerSettings.ScrollBarSize).ToString());
 
+            // --- Default sort ---
+            SelectComboItemByTag(DefaultSortCombo, ResultsViewerSettings.DefaultSort.ToString());
+
+            // --- Known-value filter dropdown mode (per field) ---
+            SelectComboItemByTag(KnownModeProviderCombo, ResultsViewerSettings.GetKnownFilterMode("Provider").ToString());
+            SelectComboItemByTag(KnownModeTaskNameCombo, ResultsViewerSettings.GetKnownFilterMode("TaskName").ToString());
+            SelectComboItemByTag(KnownModeSourceCombo,   ResultsViewerSettings.GetKnownFilterMode("Source").ToString());
+
             // --- Row text size ---
             SelectComboItemByTag(RowFontSizeCombo,
                 ((int)ResultsViewerSettings.RowFontSize).ToString());
@@ -240,6 +248,27 @@ public sealed partial class ResultsViewerSettingsPage : Page
             && double.TryParse(tag, out var size))
             ResultsViewerSettings.ScrollBarSize = size;
     }
+
+    // ----- Default sort -----
+    private void DefaultSortCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (DefaultSortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && Enum.TryParse<FindNeedleUX.Services.DefaultSortMode>(tag, out var mode))
+            ResultsViewerSettings.DefaultSort = mode;
+    }
+
+    // ----- Known-value filter dropdown mode (per field) -----
+    private void SetKnownMode(ComboBox combo, string field)
+    {
+        if (_suppressEvents) return;
+        if (combo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && Enum.TryParse<FindNeedleUX.Services.KnownFilterMode>(tag, out var mode))
+            ResultsViewerSettings.SetKnownFilterMode(field, mode);
+    }
+    private void KnownModeProviderCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) => SetKnownMode(KnownModeProviderCombo, "Provider");
+    private void KnownModeTaskNameCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) => SetKnownMode(KnownModeTaskNameCombo, "TaskName");
+    private void KnownModeSourceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)   => SetKnownMode(KnownModeSourceCombo, "Source");
 
     // ----- Row text size -----
     private void RowFontSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

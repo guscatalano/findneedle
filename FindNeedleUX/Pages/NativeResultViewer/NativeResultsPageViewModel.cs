@@ -216,6 +216,30 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private string _sourceFilter = "";
     public string SourceFilter { get => _sourceFilter; set => Set(ref _sourceFilter, value, applyFilters: true); }
 
+    // Multi-select OR-sets (null = unused; when set, takes precedence over the substring field above).
+    private IReadOnlyList<string> _providerFilterSet;
+    private IReadOnlyList<string> _taskNameFilterSet;
+    private IReadOnlyList<string> _sourceFilterSet;
+    public IReadOnlyList<string> ProviderFilterSet => _providerFilterSet;
+    public IReadOnlyList<string> TaskNameFilterSet => _taskNameFilterSet;
+    public IReadOnlyList<string> SourceFilterSet => _sourceFilterSet;
+
+    /// <summary>Set the multi-select OR-set for one of Provider / TaskName / Source and re-filter.
+    /// An empty/null list clears it (the column falls back to its substring filter).</summary>
+    public void SetKnownFilterSet(string field, IReadOnlyList<string> values)
+    {
+        var v = (values != null && values.Count > 0) ? values : null;
+        switch (field)
+        {
+            case "Provider": _providerFilterSet = v; break;
+            case "TaskName": _taskNameFilterSet = v; break;
+            case "Source":   _sourceFilterSet = v; break;
+            default: return;
+        }
+        _currentPage = 1;
+        ReloadFromSource();
+    }
+
     private string _levelFilter = "";
     public string LevelFilter { get => _levelFilter; set => Set(ref _levelFilter, value, applyFilters: true); }
 
@@ -303,6 +327,25 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         _sortDescending = descending;
         _currentPage = 1;
         ReloadFromSource();
+    }
+
+    /// <summary>
+    /// Seed the initial sort from the persisted <see cref="ResultsViewerSettings.DefaultSort"/> setting.
+    /// Sets the sort state WITHOUT reloading (a fresh LoadResultsAsync queries with it anyway). Called at
+    /// the start of each fresh load, so opening a new log honors the preference; a manual header click
+    /// after that overrides until the next open.
+    /// </summary>
+    public void ApplyDefaultSortFromSettings()
+    {
+        switch (ResultsViewerSettings.DefaultSort)
+        {
+            case DefaultSortMode.TimeAscending:
+                _sortColumn = "Time"; _sortDescending = false; break;
+            case DefaultSortMode.TimeDescending:
+                _sortColumn = "Time"; _sortDescending = true; break;
+            default: // LoadOrder
+                _sortColumn = null; _sortDescending = false; break;
+        }
     }
 
     // ----- status state -----
@@ -454,6 +497,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         bool streaming = false;
         // A fresh search/load supersedes any rule-filtered view from the previous result set.
         ResetRuleViewFilter();
+        // Seed the initial sort from the user's preference (load order by default) before the first
+        // page is queried, so the log opens already sorted the way they asked.
+        ApplyDefaultSortFromSettings();
         // Capture the UI dispatcher + create the live-refresh timer here, on the UI thread. The
         // streaming RowsAvailable callback runs on the producer (background) thread where
         // DispatcherQueue.GetForCurrentThread() is null — so without this the count would freeze at
@@ -612,7 +658,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         !string.IsNullOrEmpty(_searchText) || !string.IsNullOrEmpty(_providerFilter) ||
         !string.IsNullOrEmpty(_taskNameFilter) || !string.IsNullOrEmpty(_messageFilter) ||
         !string.IsNullOrEmpty(_sourceFilter) || !string.IsNullOrEmpty(_levelFilter) ||
-        _fromDate.HasValue || _toDate.HasValue;
+        _fromDate.HasValue || _toDate.HasValue ||
+        _providerFilterSet != null || _taskNameFilterSet != null || _sourceFilterSet != null;
 
     // Shown while streaming with a filter active: the live re-filter is paused (so the app isn't
     // constantly re-searching the growing table); the user clicks Refresh to fold in new matches.
@@ -804,6 +851,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         _levelFilter = "";
         _fromDate = null;
         _toDate = null;
+        _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = null;
         MiddleLayerService.OutputTimeFrom = MiddleLayerService.OutputTimeTo = null;
         _currentPage = 1;
         HasPendingRows = false;
@@ -948,7 +996,12 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         Source: _sourceFilter ?? "",
         Level: _levelFilter ?? "",
         FromTime: _fromDate,
-        ToTime: _toDate);
+        ToTime: _toDate)
+    {
+        ProviderSet = _providerFilterSet,
+        TaskNameSet = _taskNameFilterSet,
+        SourceSet = _sourceFilterSet,
+    };
 
     public void ClearFilters()
     {
@@ -956,6 +1009,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ProviderFilter = TaskNameFilter = MessageFilter = SourceFilter = LevelFilter = "";
         FromDate = null;
         ToDate = null;
+        // Clear multi-select sets without an extra reload each (the property sets above already reload).
+        _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = null;
     }
 
     // ----- Headless drive hooks (used by the MCP viewer bridge) -----

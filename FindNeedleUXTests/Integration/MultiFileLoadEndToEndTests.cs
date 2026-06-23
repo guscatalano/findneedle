@@ -52,7 +52,11 @@ public class MultiFileLoadEndToEndTests
         return loc;
     }
 
-    /// <summary>Run a fresh quick-load over a path (file or folder) and return (rawCount, filteredCount, firstMessage).</summary>
+    /// <summary>Run a fresh quick-load over a path (file or folder) and return (rawCount, filteredCount,
+    /// firstMessage). NOTE: for a large, filter-less SQLite load the scan streams batches straight to
+    /// FilteredResults and intentionally does NOT populate RawResults (a ~2x insert-cost optimization —
+    /// see NuSearchQuery.streamFilteredDuringScan), so <c>raw</c> is 0 there. <c>filtered</c> is the
+    /// authoritative "rows reached the viewer" count; assert on that.</summary>
     private static (int raw, int filtered, string firstMessage) Load(string path)
     {
         var query = new NuSearchQuery
@@ -82,18 +86,17 @@ public class MultiFileLoadEndToEndTests
         var b = WriteLog("bravo.log", "BRAVO", 45_000);
         var c = WriteLog("charlie.log", "CHARLIE", 60_000);
 
+        // filteredRecordCount is the authoritative "rows reached the viewer" count (raw is 0 on the
+        // large-file streaming path — see Load()).
         var ra = Load(a);
-        Assert.AreEqual(20_000, ra.raw, "file A raw rows");
         Assert.AreEqual(20_000, ra.filtered, "file A filtered (viewer) rows");
         StringAssert.Contains(ra.firstMessage ?? "", "ALPHA", "file A content");
 
         var rb = Load(b);
-        Assert.AreEqual(45_000, rb.raw, "file B raw rows");
         Assert.AreEqual(45_000, rb.filtered, "file B filtered (viewer) rows");
         StringAssert.Contains(rb.firstMessage ?? "", "BRAVO", "file B content");
 
         var rc = Load(c);
-        Assert.AreEqual(60_000, rc.raw, "file C raw rows");
         Assert.AreEqual(60_000, rc.filtered, "file C filtered (viewer) rows");
         StringAssert.Contains(rc.firstMessage ?? "", "CHARLIE", "file C content");
 
@@ -111,7 +114,8 @@ public class MultiFileLoadEndToEndTests
         WriteLog("f3.log", "THREE", 35_000);
 
         var r = Load(_dir); // a folder containing all three
-        Assert.AreEqual(75_000, r.raw, "all files in the folder should load (sum of every file's lines)");
-        Assert.AreEqual(75_000, r.filtered, "all loaded rows should reach the viewer store");
+        // Sum of every file's lines must reach the viewer store (filtered is authoritative; raw is 0
+        // on the streaming path — see Load()).
+        Assert.AreEqual(75_000, r.filtered, "all files in the folder should load (sum of every file's lines)");
     }
 }

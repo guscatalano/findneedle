@@ -237,6 +237,11 @@ namespace FindNeedleUX.UITests
                 catch { combo.Expand(); _mainWindow.FindFirstDescendant(cf => cf.ByName(pageSize.ToString()))?.Click(); }
                 Thread.Sleep(1000);
 
+                // Changing the page size re-renders the grid, which stales the cached element + its
+                // scroll-pattern handle (Scroll() then throws "operation not valid"). Re-acquire it.
+                grid = WaitForPopulatedGrid(30000) ?? grid;
+                Assert.IsNotNull(grid, $"[size {pageSize}] grid disappeared after page-size change.");
+
                 // --- First page ---
                 ClickPagerButton("First");
                 Thread.Sleep(900);
@@ -251,7 +256,10 @@ namespace FindNeedleUX.UITests
                 bool scrollable = scroll.VerticallyScrollable.ValueOrDefault;
                 double before = scroll.VerticalScrollPercent.ValueOrDefault;
                 var scrollSw = Stopwatch.StartNew();
-                for (int i = 0; i < 12; i++) { scroll.Scroll(ScrollAmount.NoAmount, ScrollAmount.LargeIncrement); Thread.Sleep(35); }
+                // Only drive Scroll when the grid reports it's scrollable — calling Scroll on a
+                // non-scrollable / mid-render grid throws "operation not valid due to current state".
+                if (scrollable)
+                    for (int i = 0; i < 12; i++) { scroll.Scroll(ScrollAmount.NoAmount, ScrollAmount.LargeIncrement); Thread.Sleep(35); }
                 scrollSw.Stop();
                 Thread.Sleep(250);
                 double after = scroll.VerticalScrollPercent.ValueOrDefault;

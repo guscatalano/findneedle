@@ -511,6 +511,55 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// How the viewer sorts rows when a log first opens (before any column header is clicked).
+    /// LoadOrder (default) = the order rows were read from the source (SQLite Id ASC), NOT by timestamp.
+    /// TimeAscending / TimeDescending sort by the Time column on open. The user can always re-sort by
+    /// clicking a header; this only sets the initial sort. Applied on each fresh search/open.
+    /// </summary>
+    public const DefaultSortMode DefaultDefaultSort = DefaultSortMode.LoadOrder;
+    public static DefaultSortMode DefaultSort
+    {
+        get => !string.IsNullOrEmpty(Data.DefaultSort)
+               && Enum.TryParse<DefaultSortMode>(Data.DefaultSort, ignoreCase: true, out var p)
+            ? p : DefaultDefaultSort;
+        set { Data.DefaultSort = value.ToString(); Save(); /* applies on next open */ }
+    }
+
+    /// <summary>
+    /// Whether the result viewer's per-column filter row shows "known value" dropdowns (populated from
+    /// the loaded set's distinct Provider / TaskName / Source values) instead of free-text boxes, so the
+    /// user can pick from what's actually present rather than guessing. Per-window UI state.
+    /// </summary>
+    public const bool DefaultShowKnownValues = false;
+    public static bool ShowKnownValues
+    {
+        get => Data.ShowKnownValues ?? DefaultShowKnownValues;
+        set { Data.ShowKnownValues = value; Save(); /* no Changed: applied per-window */ }
+    }
+
+    /// <summary>
+    /// Per-field select mode for the "show known" dropdowns. Only Provider / TaskName / Source support
+    /// known-value dropdowns. Defaults to Single. Multi matches any of the chosen values (OR-set).
+    /// </summary>
+    public const KnownFilterMode DefaultKnownFilterMode = KnownFilterMode.Single;
+    public static KnownFilterMode GetKnownFilterMode(string field)
+    {
+        if (!string.IsNullOrEmpty(field) && Data.KnownFilterModes != null
+            && Data.KnownFilterModes.TryGetValue(field, out var s)
+            && Enum.TryParse<KnownFilterMode>(s, ignoreCase: true, out var m))
+            return m;
+        return DefaultKnownFilterMode;
+    }
+    public static void SetKnownFilterMode(string field, KnownFilterMode mode)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        Data.KnownFilterModes ??= new Dictionary<string, string>();
+        Data.KnownFilterModes[field] = mode.ToString();
+        Save();
+        Changed?.Invoke();
+    }
+
+    /// <summary>
     /// Per-level hex color overrides ("#AARRGGBB" / "#RRGGBB" / "Transparent").
     /// Returns a copy; mutate via <see cref="SetLevelColor"/> or <see cref="ClearLevelColors"/>.
     /// </summary>
@@ -599,6 +648,9 @@ public static class ResultsViewerSettings
         public double? RowHeightRatio { get; set; }
         public string EtwPayloadFormat { get; set; }
         public string EtwPayloadCustomTemplate { get; set; }
+        public string DefaultSort { get; set; }
+        public bool? ShowKnownValues { get; set; }
+        public Dictionary<string, string> KnownFilterModes { get; set; }
         public Dictionary<string, bool> DetailFieldVisibility { get; set; }
     }
 }

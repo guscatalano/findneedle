@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Machine power / boot timeline (report)",
+  "description": "Generates a chronological CSV of the machine's power lifetime: boot, shutdown, unexpected/dirty shutdown (Kernel-Power 41), and daily uptime. Read top-to-bottom, each boot is followed by its shutdown, so you can see uptime sessions and spot crashes (a boot with no preceding clean shutdown). Runs on demand from the Processor Output page.",
+  "sections": [
+    {
+      "name": "PowerTimeline",
+      "description": "Write one row per boot / shutdown / dirty-shutdown / uptime event",
+      "purpose": "output",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "emit-power-timeline",
+          "match": "The Event log service was started|The Event log service was stopped|The previous system shutdown at|The system uptime is|rebooted without cleanly shutting down|The operating system started at|The operating system is shutting down|Kernel-Power|Kernel-Boot",
+          "enabled": true,
+          "action": {
+            "type": "output",
+            "format": "csv",
+            "path": "{output}/machine_power_timeline_{datetime}.csv",
+            "fields": ["time", "source", "message"],
+            "includeHeaders": true
+          }
+        }
+      ]
+    }
+  ]
+}

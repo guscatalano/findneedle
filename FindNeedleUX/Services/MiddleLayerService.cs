@@ -64,6 +64,10 @@ public class MiddleLayerService
     // doesn't re-materialize the previous search's rows from the still-undisposed query storage.
     private static bool _workspaceCleared;
 
+    /// <summary>True after <see cref="ClearWorkspace"/> until a new search establishes a result set.
+    /// Lets pages (e.g. Processor Output) show their empty state instead of stale data.</summary>
+    public static bool IsWorkspaceCleared => _workspaceCleared;
+
     public static void AddFolderLocation(string location)
     {
         // Don't add the same folder/file twice — repeated adds (e.g. an agent calling add_folder per run)
@@ -106,7 +110,11 @@ public class MiddleLayerService
         OutputTimeFrom = OutputTimeTo = null;
         LastRunSummary = null;
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
-        _workspaceCleared = true; // GetSearchStorage / GetStats now report "nothing to show"
+        // Drop the previous run's rule-output state so the Processor Output page clears too.
+        LastRuleOutputFiles.Clear();
+        LastRuleProcessors.Clear();
+        LastAutoAddedRules.Clear();
+        _workspaceCleared = true; // GetSearchStorage / GetStats / Processor Output now report "nothing to show"
         // Tell an open viewer to drop its source BEFORE we dispose any storage (avoids reading a
         // closed SQLite connection). Both callers (menu + MCP) run this on the UI thread, so the
         // handler completes synchronously here.

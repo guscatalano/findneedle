@@ -42,6 +42,11 @@ public interface IMcpViewerController
 
     Task<int> ClearFiltersAsync();
 
+    /// <summary>Turn the rule-view filter on/off (apply the active filter/redact rules to the open
+    /// view). Returns the kept count when on, the unfiltered count when off, or -1 if there are no
+    /// filter rules to apply among the active rule set.</summary>
+    Task<int> SetRuleViewFilterAsync(bool on);
+
     Task SetSortAsync(string column, bool descending);
 
     Task GoToPageAsync(int page);

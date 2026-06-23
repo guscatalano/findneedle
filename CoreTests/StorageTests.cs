@@ -89,6 +89,25 @@ public class StorageTests
         public string GetResultSource() => "RS";
     }
 
+    /// <summary>A dummy whose Source (viewer "Provider" / SQL Source column) is settable, for the
+    /// multi-select OR-set filter tests.</summary>
+    private sealed class ProvResult : ISearchResult
+    {
+        private readonly string _provider;
+        public ProvResult(string provider) { _provider = provider; }
+        public DateTime GetLogTime() => DummySearchResult.FixedTime;
+        public string GetMachineName() => "M";
+        public void WriteToConsole() { }
+        public Level GetLevel() => Level.Info;
+        public string GetUsername() => "U";
+        public string GetTaskName() => "T";
+        public string GetOpCode() => "O";
+        public string GetSource() => _provider;   // → SQL Source / viewer Provider
+        public string GetSearchableData() => "D";
+        public string GetMessage() => "Msg";
+        public string GetResultSource() => "RS";
+    }
+
     private (string searchedFile, string dbPath) CreateUniqueSearchFile()
     {
         var searchedFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -162,6 +181,40 @@ public class StorageTests
         storage.ClearTables();
         Assert.AreEqual(0, storage.GetDistinctLevels().Count);
         Assert.AreEqual(0, storage.GetLevelCounts(new SqliteStorage.FilterInput()).Count);
+    }
+
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_ProviderSet_FiltersAsExactOrSet()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+
+        storage.AddFilteredBatch(new List<ISearchResult>
+        {
+            new ProvResult("Alpha"), new ProvResult("Alpha"),
+            new ProvResult("Beta"),
+            new ProvResult("Gamma"), new ProvResult("Gamma"), new ProvResult("Gamma"),
+        });
+
+        // No set → everything.
+        Assert.AreEqual(6, storage.GetFilteredCount(new SqliteStorage.FilterInput()));
+        // Single-value set.
+        Assert.AreEqual(2, storage.GetFilteredCount(new SqliteStorage.FilterInput { ProviderSet = new[] { "Alpha" } }));
+        // Multi-value OR-set.
+        Assert.AreEqual(5, storage.GetFilteredCount(new SqliteStorage.FilterInput { ProviderSet = new[] { "Alpha", "Gamma" } }));
+        // Case-insensitive (COLLATE NOCASE).
+        Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { ProviderSet = new[] { "beta" } }));
+        // The set takes precedence over the substring Provider field (the substring is ignored).
+        Assert.AreEqual(3, storage.GetFilteredCount(
+            new SqliteStorage.FilterInput { ProviderSet = new[] { "Gamma" }, Provider = "Alpha" }));
+        // A page query returns exactly the set's rows.
+        var page = storage.GetFilteredPage(
+            new SqliteStorage.FilterInput { ProviderSet = new[] { "Beta", "Gamma" } },
+            new SqliteStorage.SortInput(), 0, 100);
+        Assert.AreEqual(4, page.Count);
+        Assert.IsTrue(page.All(r => r.GetSource() == "Beta" || r.GetSource() == "Gamma"));
     }
 
     // Parameterized tests using DataTestMethod to run each scenario for both implementations.

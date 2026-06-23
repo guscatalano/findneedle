@@ -17,7 +17,19 @@ public sealed record FilterSpec(
     DateTime? FromTime,
     DateTime? ToTime)
 {
+    /// <summary>
+    /// Multi-select OR-sets for the "show known" dropdowns. When non-empty, the row's exact value must
+    /// be one of these (case-insensitive) — this takes precedence over the matching substring field
+    /// above. Null/empty = not used. Declared as init-only properties so existing positional
+    /// construction stays valid; records still include them in value-equality (memoization-safe).
+    /// </summary>
+    public IReadOnlyList<string> ProviderSet { get; init; }
+    public IReadOnlyList<string> TaskNameSet { get; init; }
+    public IReadOnlyList<string> SourceSet { get; init; }
+
     public static FilterSpec Empty { get; } = new("", "", "", "", "", "", null, null);
+
+    private static bool HasItems(IReadOnlyList<string> s) => s != null && s.Count > 0;
 
     public bool IsEmpty =>
         string.IsNullOrEmpty(Search) &&
@@ -26,7 +38,8 @@ public sealed record FilterSpec(
         string.IsNullOrEmpty(Message) &&
         string.IsNullOrEmpty(Source) &&
         string.IsNullOrEmpty(Level) &&
-        FromTime is null && ToTime is null;
+        FromTime is null && ToTime is null &&
+        !HasItems(ProviderSet) && !HasItems(TaskNameSet) && !HasItems(SourceSet);
 }
 
 /// <summary>

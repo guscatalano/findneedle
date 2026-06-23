@@ -323,11 +323,19 @@
                     <StackPanel x:Name="TimeRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Time:" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <CalendarDatePicker x:Name="FromDatePicker" Width="160" PlaceholderText="From"
+                        <CalendarDatePicker x:Name="FromDatePicker" Width="148" PlaceholderText="From"
                                             DateChanged="FromDatePicker_DateChanged"/>
+                        <TimePicker x:Name="FromTimePicker" Width="116" ClockIdentifier="24HourClock"
+                                    MinuteIncrement="1"
+                                    SelectedTimeChanged="FromTimePicker_SelectedTimeChanged"
+                                    ToolTipService.ToolTip="Start time (optional). Empty = start of day."/>
                         <TextBlock x:Name="TimeRangeArrow" Text="→" VerticalAlignment="Center"/>
-                        <CalendarDatePicker x:Name="ToDatePicker" Width="160" PlaceholderText="To"
+                        <CalendarDatePicker x:Name="ToDatePicker" Width="148" PlaceholderText="To"
                                             DateChanged="ToDatePicker_DateChanged"/>
+                        <TimePicker x:Name="ToTimePicker" Width="116" ClockIdentifier="24HourClock"
+                                    MinuteIncrement="1"
+                                    SelectedTimeChanged="ToTimePicker_SelectedTimeChanged"
+                                    ToolTipService.ToolTip="End time (optional). Empty = end of day; a set time includes that whole minute."/>
                         <Button Content="Clear" Click="ClearTimeRange_Click" Height="32"/>
                     </StackPanel>
                 </Border>
@@ -338,14 +346,55 @@
                     <StackPanel x:Name="FilterRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Filter:" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <!-- Toggle: free-text boxes vs "known value" dropdowns for Provider/TaskName/Source. -->
+                        <ToggleButton x:Name="ShowKnownToggle" Height="28" FontSize="12" Padding="8,0"
+                                      Content="Known ▾" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
+                                      ToolTipService.ToolTip="Pick from the values actually present (Provider / TaskName / Source) instead of typing."/>
+                        <!-- Provider: text box OR known-value combo (one visible at a time) -->
                         <TextBox x:Name="ProviderFilterBox" Width="120" Height="28" FontSize="12"
                                  PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
+                        <ComboBox x:Name="ProviderFilterCombo" Width="160" Height="28" FontSize="12" Visibility="Collapsed"
+                                  PlaceholderText="Provider (known)…" SelectionChanged="ProviderFilterCombo_SelectionChanged"/>
+                        <DropDownButton x:Name="ProviderFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
+                                        Content="Provider (any)">
+                            <DropDownButton.Flyout>
+                                <Flyout>
+                                    <ListView x:Name="ProviderFilterMultiList" SelectionMode="Multiple"
+                                              MinWidth="240" MaxHeight="340"
+                                              SelectionChanged="ProviderFilterMultiList_SelectionChanged"/>
+                                </Flyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
                         <TextBox x:Name="TaskNameFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="TaskName…" TextChanged="TaskNameFilter_TextChanged"/>
+                        <ComboBox x:Name="TaskNameFilterCombo" Width="160" Height="28" FontSize="12" Visibility="Collapsed"
+                                  PlaceholderText="TaskName (known)…" SelectionChanged="TaskNameFilterCombo_SelectionChanged"/>
+                        <DropDownButton x:Name="TaskNameFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
+                                        Content="TaskName (any)">
+                            <DropDownButton.Flyout>
+                                <Flyout>
+                                    <ListView x:Name="TaskNameFilterMultiList" SelectionMode="Multiple"
+                                              MinWidth="240" MaxHeight="340"
+                                              SelectionChanged="TaskNameFilterMultiList_SelectionChanged"/>
+                                </Flyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
                         <TextBox x:Name="MessageFilterBox" Width="220" Height="28" FontSize="12"
                                  PlaceholderText="Message…" TextChanged="MessageFilter_TextChanged"/>
                         <TextBox x:Name="SourceFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="Source…" TextChanged="SourceFilter_TextChanged"/>
+                        <ComboBox x:Name="SourceFilterCombo" Width="160" Height="28" FontSize="12" Visibility="Collapsed"
+                                  PlaceholderText="Source (known)…" SelectionChanged="SourceFilterCombo_SelectionChanged"/>
+                        <DropDownButton x:Name="SourceFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
+                                        Content="Source (any)">
+                            <DropDownButton.Flyout>
+                                <Flyout>
+                                    <ListView x:Name="SourceFilterMultiList" SelectionMode="Multiple"
+                                              MinWidth="240" MaxHeight="340"
+                                              SelectionChanged="SourceFilterMultiList_SelectionChanged"/>
+                                </Flyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
                         <ComboBox x:Name="LevelFilterCombo" Width="140" Height="28" FontSize="12"
                                   PlaceholderText="Level (all)"
                                   ItemsSource="{x:Bind ViewModel.KnownLevelNames, Mode=OneWay}"

@@ -212,6 +212,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         UpdateEmptyState();
         ApplyAllColumnVisibility();
         RebindGrid();
+        // Reflect the initial sort (from the Default sort preference) on the column headers.
+        SyncSortArrowsFromViewModel();
+        // Now that rows are loaded, fill the known-value dropdowns (if shown).
+        if (ShowKnownToggle?.IsChecked == true) _ = PopulateKnownFilterCombosAsync();
 
         // Tell MainWindow to hide the pre-nav spinner now that we're fully rendered.
         MainWindowActions.HideNavigationSpinner();
@@ -306,6 +310,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         UpdateEmptyState();
         ApplyAllColumnVisibility();
         RebindGrid();
+        // Reflect the initial sort (from the Default sort preference) on the column headers.
+        SyncSortArrowsFromViewModel();
+        // Now that rows are loaded, fill the known-value dropdowns (if shown).
+        if (ShowKnownToggle?.IsChecked == true) _ = PopulateKnownFilterCombosAsync();
         RefreshSearchSubmitMode();
         UpdateDecodeBanner();
         UpdateStreamingIcon();
@@ -327,6 +335,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (LevelFilterCombo != null) LevelFilterCombo.SelectedItem = null;
         if (FromDatePicker != null) FromDatePicker.Date = null;
         if (ToDatePicker != null) ToDatePicker.Date = null;
+        if (FromTimePicker != null) FromTimePicker.SelectedTime = null;
+        if (ToTimePicker != null) ToTimePicker.SelectedTime = null;
     }
 
     private void UpdateStreamingIcon()
@@ -923,6 +933,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         _filterDock = ResultsViewerSettings.FilterDock;
         RefreshFilterLayout();
         _colorTaggedRows = ResultsViewerSettings.ColorTaggedRows;
+        // "Show known" toggle: set visibility now; combos get populated after the data finishes loading.
+        if (ShowKnownToggle != null)
+        {
+            _suppressKnownCombo = true;
+            ShowKnownToggle.IsChecked = ResultsViewerSettings.ShowKnownValues;
+            _suppressKnownCombo = false;
+            ApplyKnownFilterVisibility(ResultsViewerSettings.ShowKnownValues);
+        }
     }
 
     private void ApplyPersistedLevelOverrides()
@@ -1458,6 +1476,25 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     }
 
     /// <summary>
+    /// Set the DataGrid column-header sort arrows to match the ViewModel's current sort state (the
+    /// VM is the source of truth — it's seeded from the Default sort preference on each fresh load).
+    /// A null/empty sort column (load order) clears all arrows.
+    /// </summary>
+    private void SyncSortArrowsFromViewModel()
+    {
+        var name = ViewModel.SortColumn;
+        bool descending = ViewModel.SortDescending;
+        foreach (var c in ResultsGrid.Columns)
+        {
+            if (!string.IsNullOrEmpty(name)
+                && string.Equals(c.Header?.ToString(), name, StringComparison.OrdinalIgnoreCase))
+                c.SortDirection = descending ? DataGridSortDirection.Descending : DataGridSortDirection.Ascending;
+            else
+                c.SortDirection = null;
+        }
+    }
+
+    /// <summary>
     /// Force the DataGrid to re-render rows. Used after a theme change (LoadingRow re-runs) or
     /// a Time-format change (the Binding Converter is consulted again).
     /// </summary>
@@ -1636,15 +1673,164 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void LevelFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => ViewModel.LevelFilter = (LevelFilterCombo.SelectedItem as string) ?? "";
 
+    // ---- "Show known" value dropdowns (Provider / TaskName / Source) ----
+    // Each field has three controls: a free-text box, a single-select combo, and a multi-select
+    // dropdown. Which combo/multi shows depends on the per-field KnownFilterMode setting.
+    // Guards handlers while we populate/select programmatically so they don't re-apply filters.
+    private bool _suppressKnownCombo;
+
+    private async void ShowKnownToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressKnownCombo) return; // programmatic set during ApplyPersistedSettings
+        bool on = ShowKnownToggle.IsChecked == true;
+        ResultsViewerSettings.ShowKnownValues = on;
+        ApplyKnownFilterVisibility(on);
+        if (on) await PopulateKnownFilterCombosAsync();
+    }
+
+    /// <summary>Swap each free-text filter box for its known-value control (single combo or multi
+    /// dropdown, per the field's setting) — or back to the text box.</summary>
+    private void ApplyKnownFilterVisibility(bool knownOn)
+    {
+        SetKnownFieldVisibility(knownOn, "Provider", ProviderFilterBox, ProviderFilterCombo, ProviderFilterMulti);
+        SetKnownFieldVisibility(knownOn, "TaskName", TaskNameFilterBox, TaskNameFilterCombo, TaskNameFilterMulti);
+        SetKnownFieldVisibility(knownOn, "Source",   SourceFilterBox,   SourceFilterCombo,   SourceFilterMulti);
+        // Returning to text mode: make the boxes reflect the active filter (idempotent — same value
+        // re-set is a no-op in the VM) so the visible control matches reality after a combo pick.
+        if (!knownOn)
+        {
+            if (ProviderFilterBox != null) ProviderFilterBox.Text = ViewModel.ProviderFilter ?? "";
+            if (TaskNameFilterBox != null) TaskNameFilterBox.Text = ViewModel.TaskNameFilter ?? "";
+            if (SourceFilterBox != null) SourceFilterBox.Text = ViewModel.SourceFilter ?? "";
+        }
+    }
+
+    private void SetKnownFieldVisibility(bool knownOn, string field, TextBox box, ComboBox combo, DropDownButton multi)
+    {
+        bool isMulti = ResultsViewerSettings.GetKnownFilterMode(field) == KnownFilterMode.Multi;
+        if (box != null) box.Visibility = knownOn ? Visibility.Collapsed : Visibility.Visible;
+        if (combo != null) combo.Visibility = (knownOn && !isMulti) ? Visibility.Visible : Visibility.Collapsed;
+        if (multi != null) multi.Visibility = (knownOn && isMulti) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Fill each known-value control from the loaded set's distinct values (off the UI thread).</summary>
+    private async System.Threading.Tasks.Task PopulateKnownFilterCombosAsync()
+    {
+        await FillKnownFieldAsync("Provider", ProviderFilterCombo, ProviderFilterMultiList, ProviderFilterMulti,
+                                  ViewModel.ProviderFilter, ViewModel.ProviderFilterSet);
+        await FillKnownFieldAsync("TaskName", TaskNameFilterCombo, TaskNameFilterMultiList, TaskNameFilterMulti,
+                                  ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet);
+        await FillKnownFieldAsync("Source",   SourceFilterCombo,   SourceFilterMultiList,   SourceFilterMulti,
+                                  ViewModel.SourceFilter, ViewModel.SourceFilterSet);
+    }
+
+    private async System.Threading.Tasks.Task FillKnownFieldAsync(string field, ComboBox combo, ListView multiList,
+        DropDownButton multiButton, string current, System.Collections.Generic.IReadOnlyList<string> currentSet)
+    {
+        var values = new List<string>();
+        try
+        {
+            var facets = await System.Threading.Tasks.Task.Run(() => ViewModel.GetFacets(field, 1000, 200000));
+            if (facets?.Values != null)
+                values = facets.Values.Select(v => v.Value)
+                    .Where(s => !string.IsNullOrEmpty(s) && s != "(none)").ToList();
+        }
+        catch { /* facet failure → empty control, not a crash */ }
+
+        _suppressKnownCombo = true;
+        if (combo != null)
+        {
+            combo.Items.Clear();
+            foreach (var v in values) combo.Items.Add(v);
+            combo.SelectedItem = values.FirstOrDefault(v => string.Equals(v, current, StringComparison.OrdinalIgnoreCase));
+        }
+        if (multiList != null)
+        {
+            multiList.Items.Clear();
+            foreach (var v in values) multiList.Items.Add(v);
+            multiList.SelectedItems.Clear();
+            if (currentSet != null)
+                foreach (var v in values)
+                    if (currentSet.Contains(v, StringComparer.OrdinalIgnoreCase)) multiList.SelectedItems.Add(v);
+            UpdateMultiButtonLabel(field, multiButton, multiList);
+        }
+        _suppressKnownCombo = false;
+    }
+
+    private static void UpdateMultiButtonLabel(string field, DropDownButton button, ListView list)
+    {
+        if (button == null) return;
+        int n = list?.SelectedItems.Count ?? 0;
+        button.Content = n == 0 ? $"{field} (any)" : $"{field} ({n})";
+    }
+
+    private void ProviderFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressKnownCombo) return;
+        ViewModel.ProviderFilter = (ProviderFilterCombo.SelectedItem as string) ?? "";
+    }
+    private void TaskNameFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressKnownCombo) return;
+        ViewModel.TaskNameFilter = (TaskNameFilterCombo.SelectedItem as string) ?? "";
+    }
+    private void SourceFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressKnownCombo) return;
+        ViewModel.SourceFilter = (SourceFilterCombo.SelectedItem as string) ?? "";
+    }
+
+    private void ProviderFilterMultiList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => ApplyMultiSelection("Provider", ProviderFilterMulti, ProviderFilterMultiList);
+    private void TaskNameFilterMultiList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => ApplyMultiSelection("TaskName", TaskNameFilterMulti, TaskNameFilterMultiList);
+    private void SourceFilterMultiList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => ApplyMultiSelection("Source", SourceFilterMulti, SourceFilterMultiList);
+
+    private void ApplyMultiSelection(string field, DropDownButton button, ListView list)
+    {
+        UpdateMultiButtonLabel(field, button, list);
+        if (_suppressKnownCombo) return;
+        var values = list.SelectedItems.OfType<string>().ToList();
+        ViewModel.SetKnownFilterSet(field, values);
+    }
+
     private void FromDatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
-        => ViewModel.FromDate = sender.Date?.DateTime;
+        => UpdateFromBound();
     private void ToDatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
-        => ViewModel.ToDate = sender.Date?.DateTime;
+        => UpdateToBound();
+    private void FromTimePicker_SelectedTimeChanged(TimePicker sender, TimePickerSelectedValueChangedEventArgs args)
+        => UpdateFromBound();
+    private void ToTimePicker_SelectedTimeChanged(TimePicker sender, TimePickerSelectedValueChangedEventArgs args)
+        => UpdateToBound();
+
+    // Combine the date + optional time pickers into the filter bound. No date → no bound. The "From"
+    // bound floors to the start of the day when no time is given; the "To" bound extends to the end of
+    // the day (or the end of the selected minute) so the range is inclusive of what the user picked.
+    private void UpdateFromBound()
+    {
+        var d = FromDatePicker?.Date?.DateTime;
+        if (d == null) { ViewModel.FromDate = null; return; }
+        var t = FromTimePicker?.SelectedTime;
+        ViewModel.FromDate = t.HasValue ? d.Value.Date + t.Value : d.Value.Date;
+    }
+
+    private void UpdateToBound()
+    {
+        var d = ToDatePicker?.Date?.DateTime;
+        if (d == null) { ViewModel.ToDate = null; return; }
+        var t = ToTimePicker?.SelectedTime;
+        ViewModel.ToDate = t.HasValue
+            ? d.Value.Date + t.Value + TimeSpan.FromSeconds(59.999) // include the whole selected minute
+            : d.Value.Date.AddDays(1).AddMilliseconds(-1);          // end of the selected day
+    }
 
     private void ClearTimeRange_Click(object sender, RoutedEventArgs e)
     {
         FromDatePicker.Date = null;
         ToDatePicker.Date = null;
+        FromTimePicker.SelectedTime = null;
+        ToTimePicker.SelectedTime = null;
     }
 
     private void ResetColumnFilters_Click(object sender, RoutedEventArgs e)
@@ -1661,6 +1847,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         LevelFilterCombo.SelectedItem = null;
         FromDatePicker.Date = null;
         ToDatePicker.Date = null;
+        FromTimePicker.SelectedTime = null;
+        ToTimePicker.SelectedTime = null;
         ViewModel.ClearFilters();
     }
 
@@ -2341,6 +2529,40 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return tcs.Task;
     }
 
+    /// <summary>Marshal an async function returning a value to the UI thread and await it.</summary>
+    private Task<T> McpOnUiAsync<T>(Func<System.Threading.Tasks.Task<T>> f)
+    {
+        var dq = DispatcherQueue;
+        if (dq == null || dq.HasThreadAccess) return f();
+        var tcs = new TaskCompletionSource<T>();
+        if (!dq.TryEnqueue(async () => { try { tcs.TrySetResult(await f()); } catch (Exception ex) { tcs.TrySetException(ex); } }))
+            return f();
+        return tcs.Task;
+    }
+
+    /// <summary>MCP: turn the rule-view filter on/off — applies the active filter/redact rules to the
+    /// open view (the same thing the toolbar's rule-filter toggle does), so an agent can see a
+    /// filter rule's effect without the UI. Returns the kept row count when on, the unfiltered count
+    /// when off, or -1 if turning on with no filter rules among the active set.</summary>
+    public Task<int> SetRuleViewFilterAsync(bool on) => McpOnUiAsync(async () =>
+    {
+        var ruleFiles = MiddleLayerService.LastRuleProcessors?
+            .Select(p => p.RulesFilePath)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new System.Collections.Generic.List<string>();
+        if (on && ruleFiles.Count == 0)
+        {
+            if (RuleFilterToggle != null) RuleFilterToggle.IsChecked = false;
+            return -1;
+        }
+        int kept = await ViewModel.SetRuleViewFilterAsync(on, ruleFiles);
+        if (RuleFilterToggle != null) RuleFilterToggle.IsChecked = on && kept >= 0;
+        RebindGrid();
+        UpdateEmptyState();
+        return on ? kept : ViewModel.TotalFilteredCount;
+    });
+
     private FindNeedleUX.Services.Mcp.RecordDto McpToRecord(LogLine l, bool full)
     {
         if (l == null) return null;
@@ -2502,8 +2724,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (message != null) MessageFilterBox.Text = message;
         if (source != null) SourceFilterBox.Text = source;
         if (level != null) LevelFilterCombo.SelectedItem = string.IsNullOrEmpty(level) ? null : level;
-        if (clearFrom) FromDatePicker.Date = null; else if (from.HasValue) FromDatePicker.Date = from.Value;
-        if (clearTo) ToDatePicker.Date = null; else if (to.HasValue) ToDatePicker.Date = to.Value;
+        if (clearFrom) { FromDatePicker.Date = null; FromTimePicker.SelectedTime = null; }
+        else if (from.HasValue) { FromDatePicker.Date = from.Value; FromTimePicker.SelectedTime = from.Value.TimeOfDay; }
+        if (clearTo) { ToDatePicker.Date = null; ToTimePicker.SelectedTime = null; }
+        else if (to.HasValue) { ToDatePicker.Date = to.Value; ToTimePicker.SelectedTime = to.Value.TimeOfDay; }
 
         // Authoritative single apply + count (the controls' own events would each reload separately).
         return ViewModel.SetFiltersBulk(search, provider, taskName, message, source, level,
@@ -2517,6 +2741,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         LevelFilterCombo.SelectedItem = null;
         FromDatePicker.Date = null;
         ToDatePicker.Date = null;
+        FromTimePicker.SelectedTime = null;
+        ToTimePicker.SelectedTime = null;
         ViewModel.ClearFilters();
         return ViewModel.TotalFilteredCount;
     });

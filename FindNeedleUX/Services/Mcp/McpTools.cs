@@ -163,6 +163,52 @@ internal static class McpTools
         },
         new ToolDef
         {
+            Name = "save_rule",
+            Description = "Author a RuleDSL rule: validate the JSON and (if valid) write it to the AI rules sandbox (%LocalAppData%\\FindNeedle\\AIRules), never touching shipped CommonRules. On invalid JSON nothing is written and the errors are returned so you can fix and retry. After saving, call set_rules([name]) then run_search(ignoreCache:true) — searches re-read rule files fresh, so your edits take effect immediately. A rule file has either a 'sections' array (filter/enrichment/output rules) or 'participants'+'rules' (a UML interaction diagram).",
+            InputSchema = Obj(new
+            {
+                name = S("Rule file name, e.g. \"my-crashes\" (\".rules.json\" is added if missing). Path components are stripped."),
+                json = S("The full rule file contents as a JSON string."),
+            }, "name", "json"),
+            Invoke = async a => await B.SaveRuleAsync(Str(a, "name"), Str(a, "json")),
+        },
+        new ToolDef
+        {
+            Name = "validate_rule",
+            Description = "Validate rule JSON WITHOUT writing it. Returns { valid, errors, warnings, summary } — parse errors, missing 'purpose'/'rules', unusual section purpose, plus a summary of sections/rules/purposes. Use to check a draft before save_rule.",
+            InputSchema = Obj(new { json = S("The rule file contents as a JSON string.") }, "json"),
+            Invoke = async a => await B.ValidateRuleAsync(Str(a, "json")),
+        },
+        new ToolDef
+        {
+            Name = "list_rule_files",
+            Description = "List rule files you can use: AI-authored ones from the sandbox (source=\"ai\", editable) and shipped CommonRules (source=\"common\", read-only reference). Each has name, source, editable, bytes, path.",
+            InputSchema = Obj(new { }),
+            Invoke = async _ => await B.ListRuleFilesAsync(),
+        },
+        new ToolDef
+        {
+            Name = "read_rule",
+            Description = "Read a rule file's JSON by name (AI sandbox first, then CommonRules). Use to inspect a shipped rule as a template, or to read back something you saved. Returns name, source, editable, content, path.",
+            InputSchema = Obj(new { name = S("Rule file name, e.g. \"dism-fields.rules.json\" or \"my-crashes\".") }, "name"),
+            Invoke = async a => await B.ReadRuleAsync(Str(a, "name")),
+        },
+        new ToolDef
+        {
+            Name = "delete_rule",
+            Description = "Delete an AI-authored rule file from the sandbox. Refuses to delete shipped CommonRules.",
+            InputSchema = Obj(new { name = S("AI-authored rule file name to delete.") }, "name"),
+            Invoke = async a => await B.DeleteRuleAsync(Str(a, "name")),
+        },
+        new ToolDef
+        {
+            Name = "set_rule_filter",
+            Description = "Turn the rule-view filter on/off: apply the active filter/redact rules (from set_rules) to the OPEN view — the same as the viewer's rule-filter toggle. Filter-purpose rules don't change run_search results (they're applied at view time, not scan time), so use this to actually see a filter rule's effect. Returns keptRows when on (rows the rules keep), the unfiltered count when off, or -1 if the active rule set has no filter rules. Requires an open viewer after run_search.",
+            InputSchema = Obj(new { on = Bn("True to apply the rule filter, false to remove it.") }, "on"),
+            Invoke = async a => new { keptRows = await B.SetRuleViewFilterAsync(Bool(a, "on", true)) },
+        },
+        new ToolDef
+        {
             Name = "add_folder",
             Description = "Add a folder or file as a data source location.",
             InputSchema = Obj(new { path = S("Absolute path to a folder or log file.") }, "path"),

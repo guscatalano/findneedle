@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using FindNeedlePluginLib.Interfaces;
 
@@ -128,6 +129,7 @@ public sealed class McpViewerBridge
         string source, string level, string fromTime, string toTime)
         => Viewer.SetFilterAsync(search, provider, taskName, message, source, level, fromTime, toTime);
     public Task<int> ClearFiltersAsync() => Viewer.ClearFiltersAsync();
+    public Task<int> SetRuleViewFilterAsync(bool on) => Viewer.SetRuleViewFilterAsync(on);
     public Task SetSortAsync(string column, bool descending) => Viewer.SetSortAsync(column, descending);
     public Task GoToPageAsync(int page) => Viewer.GoToPageAsync(page);
     public Task SetPageSizeAsync(int pageSize) => Viewer.SetPageSizeAsync(pageSize);
@@ -188,14 +190,17 @@ public sealed class McpViewerBridge
         return new { set = resolved, missing };
     });
 
-    /// <summary>Resolve a rule path: as-is, else under the app's CommonRules folder, else under the app
-    /// base. Returns null if it can't be found (so the caller can report it as missing).</summary>
+    /// <summary>Resolve a rule path: as-is, else under the AI-authored rules folder, else under the
+    /// app's CommonRules folder, else under the app base. Returns null if it can't be found.</summary>
     private static string ResolveRulePath(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
         try
         {
             if (File.Exists(raw)) return Path.GetFullPath(raw);
+            // AI-authored rules (saved via save_rule) resolve by bare name too.
+            var underAi = Path.Combine(AiRulesDir, Path.GetFileName(raw));
+            if (File.Exists(underAi)) return underAi;
             var baseDir = AppContext.BaseDirectory;
             var underCommon = Path.Combine(baseDir, "CommonRules", raw);
             if (File.Exists(underCommon)) return underCommon;
@@ -204,6 +209,170 @@ public sealed class McpViewerBridge
         }
         catch { /* fall through to not-found */ }
         return null;
+    }
+
+    // ===================== AI rule authoring (save / validate / list / read / delete) =====================
+    // A sandboxed folder so an agent can write rules over MCP without touching the shipped CommonRules.
+
+    /// <summary>Folder for AI-authored rule files (sandbox). Created on first write.</summary>
+    private static string AiRulesDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "FindNeedle", "AIRules");
+
+    private static string CommonRulesDir => Path.Combine(AppContext.BaseDirectory, "CommonRules");
+
+    /// <summary>Normalize a requested rule name into a safe "<name>.rules.json" filename inside the
+    /// sandbox (strips any directory components, rejects traversal, enforces the extension).</summary>
+    private static string SafeRuleFileName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("rule name is required");
+        var leaf = Path.GetFileName(name.Trim());           // drop any path components → no traversal
+        if (string.IsNullOrEmpty(leaf)) throw new ArgumentException("invalid rule name");
+        // Collapse to a known-good filename + the canonical .rules.json suffix.
+        if (leaf.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase)) { /* keep */ }
+        else if (leaf.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            leaf = leaf.Substring(0, leaf.Length - 5) + ".rules.json";
+        else
+            leaf = leaf + ".rules.json";
+        if (leaf.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            throw new ArgumentException($"rule name has invalid filename characters: '{name}'");
+        return leaf;
+    }
+
+    /// <summary>Structurally validate a rule JSON document. Returns (valid, errors, warnings, summary).
+    /// Checks it parses and matches one of the two shapes the engine understands: a sections file
+    /// (filter/enrichment/output rules) or a UML participants/interaction file.</summary>
+    private static (bool valid, List<string> errors, List<string> warnings, object summary) ValidateRuleStructured(string json)
+    {
+        var errors = new List<string>();
+        var warnings = new List<string>();
+        if (string.IsNullOrWhiteSpace(json)) { errors.Add("rule JSON is empty"); return (false, errors, warnings, null); }
+
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(json); }
+        catch (JsonException ex) { errors.Add($"JSON parse error: {ex.Message}"); return (false, errors, warnings, null); }
+
+        using (doc)
+        {
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) { errors.Add("top level must be a JSON object"); return (false, errors, warnings, null); }
+
+            bool hasSections = root.TryGetProperty("sections", out var sections) || root.TryGetProperty("Sections", out sections);
+            bool hasParticipants = root.TryGetProperty("participants", out var parts) || root.TryGetProperty("Participants", out parts);
+
+            int sectionCount = 0, ruleCount = 0; var purposes = new List<string>();
+            if (hasSections)
+            {
+                if (sections.ValueKind != JsonValueKind.Array) errors.Add("'sections' must be an array");
+                else foreach (var s in sections.EnumerateArray())
+                {
+                    sectionCount++;
+                    var purpose = (s.TryGetProperty("purpose", out var p) || s.TryGetProperty("Purpose", out p)) ? p.GetString() : null;
+                    if (string.IsNullOrEmpty(purpose)) errors.Add($"section #{sectionCount} is missing 'purpose'");
+                    else
+                    {
+                        purposes.Add(purpose);
+                        var known = new[] { "filter", "enrichment", "output", "uml" };
+                        if (!known.Contains(purpose.ToLowerInvariant())) warnings.Add($"section #{sectionCount} has unusual purpose '{purpose}' (expected one of: {string.Join(", ", known)})");
+                    }
+                    if (!(s.TryGetProperty("rules", out var rs) || s.TryGetProperty("Rules", out rs)) || rs.ValueKind != JsonValueKind.Array)
+                        errors.Add($"section #{sectionCount} ('{purpose}') is missing a 'rules' array");
+                    else ruleCount += rs.GetArrayLength();
+                }
+            }
+            else if (hasParticipants)
+            {
+                if (parts.ValueKind != JsonValueKind.Array) errors.Add("'participants' must be an array");
+                if (!(root.TryGetProperty("rules", out var rs) || root.TryGetProperty("Rules", out rs)) || rs.ValueKind != JsonValueKind.Array)
+                    errors.Add("a UML participants file needs a top-level 'rules' array");
+                else ruleCount = rs.GetArrayLength();
+            }
+            else
+            {
+                errors.Add("rule file must have either a 'sections' array (filter/enrichment/output rules) or 'participants' + 'rules' (a UML interaction file)");
+            }
+
+            var summary = hasParticipants && !hasSections
+                ? (object)new { kind = "uml-participants", rules = ruleCount }
+                : new { kind = "sections", sections = sectionCount, rules = ruleCount, purposes = purposes.Distinct().ToArray() };
+            return (errors.Count == 0, errors, warnings, summary);
+        }
+    }
+
+    /// <summary>Validate rule JSON without writing it. Returns structured pass/fail + errors + a summary.</summary>
+    public Task<object> ValidateRuleAsync(string json) => Task.FromResult<object>(BuildValidationResult(json));
+
+    private static object BuildValidationResult(string json)
+    {
+        var (valid, errors, warnings, summary) = ValidateRuleStructured(json);
+        return new { valid, errors, warnings, summary };
+    }
+
+    /// <summary>Validate then write a rule file into the AI sandbox. On invalid JSON nothing is written
+    /// and the errors are returned so the agent can self-correct.</summary>
+    public Task<object> SaveRuleAsync(string name, string json) => Task.FromResult<object>(DoSaveRule(name, json));
+
+    private static object DoSaveRule(string name, string json)
+    {
+        var fileName = SafeRuleFileName(name);
+        var (valid, errors, warnings, summary) = ValidateRuleStructured(json);
+        if (!valid)
+            return new { saved = false, name = fileName, errors, warnings, summary };
+
+        Directory.CreateDirectory(AiRulesDir);
+        var path = Path.Combine(AiRulesDir, fileName);
+        File.WriteAllText(path, json);
+        // Tip the caller toward the next step (point the search at it, then re-run).
+        return new { saved = true, name = fileName, path, warnings, summary,
+                     next = "Call set_rules with this name, then run_search(ignoreCache:true) to apply it." };
+    }
+
+    /// <summary>List rule files the agent can use: AI-authored (read/write/delete) and shipped CommonRules
+    /// (read-only reference).</summary>
+    public Task<object> ListRuleFilesAsync() => Task.FromResult<object>(DoListRuleFiles());
+
+    private static object DoListRuleFiles()
+    {
+        var list = new List<object>();
+        void Add(string dir, string source, bool editable)
+        {
+            if (!Directory.Exists(dir)) return;
+            foreach (var f in Directory.EnumerateFiles(dir, "*.rules.json").OrderBy(x => x))
+            {
+                long bytes = 0; try { bytes = new FileInfo(f).Length; } catch { }
+                list.Add(new { name = Path.GetFileName(f), source, editable, bytes, path = f });
+            }
+        }
+        Add(AiRulesDir, "ai", true);
+        Add(CommonRulesDir, "common", false);
+        return new { files = list };
+    }
+
+    /// <summary>Read a rule file's JSON (AI sandbox first, then CommonRules). Throws if not found.</summary>
+    public Task<object> ReadRuleAsync(string name) => Task.FromResult<object>(DoReadRule(name));
+
+    private static object DoReadRule(string name)
+    {
+        var leaf = Path.GetFileName((name ?? "").Trim());
+        if (string.IsNullOrEmpty(leaf)) throw new ArgumentException("rule name is required");
+        var ai = Path.Combine(AiRulesDir, leaf);
+        var common = Path.Combine(CommonRulesDir, leaf);
+        var path = File.Exists(ai) ? ai : File.Exists(common) ? common : null;
+        if (path == null) throw new FileNotFoundException($"no rule file named '{leaf}' in the AI sandbox or CommonRules");
+        return new { name = leaf, source = path == ai ? "ai" : "common", editable = path == ai, content = File.ReadAllText(path), path };
+    }
+
+    /// <summary>Delete an AI-authored rule file. Refuses to touch shipped CommonRules.</summary>
+    public Task<object> DeleteRuleAsync(string name) => Task.FromResult<object>(DoDeleteRule(name));
+
+    private static object DoDeleteRule(string name)
+    {
+        var leaf = Path.GetFileName((name ?? "").Trim());
+        if (string.IsNullOrEmpty(leaf)) throw new ArgumentException("rule name is required");
+        var path = Path.Combine(AiRulesDir, leaf);
+        if (!File.Exists(path)) throw new FileNotFoundException($"no AI-authored rule named '{leaf}' (CommonRules files can't be deleted)");
+        File.Delete(path);
+        return new { deleted = true, name = leaf };
     }
 
     public Task AddKustoAsync(string cluster, string database, string kql, string authMode, long rowLimit)

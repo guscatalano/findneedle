@@ -92,7 +92,7 @@ namespace FindNeedleUX.UITests
                 _mainWindow = _app.GetMainWindow(_automation);
                 Assert.IsNotNull(_mainWindow, "Failed to get main window");
                 
-                // Navigate to SearchRulesPage via menu: SearchQuery -> Rules
+                // Navigate to SearchRulesPage via menu: Configure -> Rules
                 NavigateToSearchRulesPage();
             }
             catch (Exception ex)
@@ -103,23 +103,25 @@ namespace FindNeedleUX.UITests
 
         private static void NavigateToSearchRulesPage()
         {
-            // Find and click the SearchQuery menu
-            var searchQueryMenu = _mainWindow.FindFirstDescendant(cf => cf.ByName("SearchQuery"));
-            Assert.IsNotNull(searchQueryMenu, "SearchQuery menu should exist");
-            searchQueryMenu.Click();
+            // Open the "Configure" top-level menu (the Rules page lives under it).
+            var configureMenu = _mainWindow.FindFirstDescendant(cf => cf.ByName("Configure"));
+            Assert.IsNotNull(configureMenu, "Configure menu should exist");
+            configureMenu.Click();
             Thread.Sleep(500);
-            
-            // Find and click the Rules menu item
-            var rulesMenuItem = _mainWindow.FindFirstDescendant(cf => cf.ByAutomationId("search_rules"));
-            if (rulesMenuItem == null)
-            {
-                // Try by name as fallback
-                rulesMenuItem = _mainWindow.FindFirstDescendant(cf => cf.ByName("Rules"));
-            }
+
+            // Click the "Rules" flyout item (x:Name="rules" → AutomationId "rules"; fall back to its text).
+            var rulesMenuItem = _mainWindow.FindFirstDescendant(cf => cf.ByAutomationId("rules"))
+                ?? _mainWindow.FindFirstDescendant(cf => cf.ByName("Rules"));
             Assert.IsNotNull(rulesMenuItem, "Rules menu item should exist");
             rulesMenuItem.Click();
-            
-            // Wait for navigation to complete
+            Thread.Sleep(1000);
+
+            // The Rules hub opens on its "Active" tab; SearchRulesPage lives under the "Rule files" tab.
+            var filesTab = _mainWindow.FindFirstDescendant(cf => cf.ByName("Rule files"));
+            Assert.IsNotNull(filesTab, "Rule files tab should exist");
+            filesTab.Click();
+
+            // Wait for the tab's frame to navigate to SearchRulesPage
             Thread.Sleep(1000);
         }
 

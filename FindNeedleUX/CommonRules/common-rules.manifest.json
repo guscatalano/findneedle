@@ -58,5 +58,25 @@
     "File": "panther-fields.rules.json",
     "Name": "Windows Setup (Panther) field extraction (component / Result code)",
     "Condition": { "PathGlobs": ["*panther*", "*Panther*", "*setupact*", "*setuperr*"] }
+  },
+  {
+    "File": "crash-filter.rules.json",
+    "Name": "App crash / hang highlighter (show only failures)",
+    "Condition": { "Providers": ["Application Error", "Application Hang", "Windows Error Reporting", ".NET Runtime"] }
+  },
+  {
+    "File": "crash-report.rules.json",
+    "Name": "App crash report (text report of every crash / hang)",
+    "Condition": { "Providers": ["Application Error", "Application Hang", "Windows Error Reporting", ".NET Runtime"] }
+  },
+  {
+    "File": "machine-power-filter.rules.json",
+    "Name": "Machine power / boot timeline (show only power events)",
+    "Condition": { "Providers": ["EventLog", "Microsoft-Windows-Kernel-General", "Microsoft-Windows-Kernel-Power", "Microsoft-Windows-Kernel-Boot"] }
+  },
+  {
+    "File": "machine-power-timeline.rules.json",
+    "Name": "Machine power / boot timeline (CSV report)",
+    "Condition": { "Providers": ["EventLog", "Microsoft-Windows-Kernel-General", "Microsoft-Windows-Kernel-Power", "Microsoft-Windows-Kernel-Boot"] }
   }
 ]

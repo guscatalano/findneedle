@@ -34,7 +34,14 @@ public sealed partial class ProcessorOutputPage : Page
     public ProcessorOutputPage()
     {
         this.InitializeComponent();
-        Loaded += (_, _) => BuildPage();
+        Loaded += (_, _) =>
+        {
+            BuildPage();
+            // Rebuild (→ empty) when the workspace is cleared while this page is open.
+            MiddleLayerService.WorkspaceCleared -= OnWorkspaceCleared;
+            MiddleLayerService.WorkspaceCleared += OnWorkspaceCleared;
+        };
+        Unloaded += (_, _) => MiddleLayerService.WorkspaceCleared -= OnWorkspaceCleared;
         KeyDown += (_, e) =>
         {
             if (e.Key == global::Windows.System.VirtualKey.Escape && FullscreenOverlay.Visibility == Visibility.Visible)
@@ -111,10 +118,29 @@ public sealed partial class ProcessorOutputPage : Page
         GeneratingOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>Workspace was cleared — rebuild to the empty state. Clear runs on the UI thread, but
+    /// marshal defensively in case an MCP-driven clear ever fires off-thread.</summary>
+    private void OnWorkspaceCleared()
+    {
+        if (DispatcherQueue.HasThreadAccess) BuildPage();
+        else DispatcherQueue.TryEnqueue(BuildPage);
+    }
+
     private void BuildPage()
     {
         OutputList.Items.Clear();
         DetailHost.Children.Clear();
+
+        // A cleared workspace has nothing to show — empty state, no Generate button, no stale outputs.
+        if (MiddleLayerService.IsWorkspaceCleared)
+        {
+            GenerateButton.Visibility = Visibility.Collapsed;
+            TimeRangeNote.Visibility = Visibility.Collapsed;
+            NoTimeRangeNote.Visibility = Visibility.Collapsed;
+            SummaryText.Text = "";
+            ShowEmptyDetail();
+            return;
+        }
 
         // Show Generate only when there are output rules to run.
         GenerateButton.Visibility = MiddleLayerService.HasOutputRules ? Visibility.Visible : Visibility.Collapsed;
@@ -416,13 +442,11 @@ public sealed partial class ProcessorOutputPage : Page
             panel.Children.Add(new TextBlock { Text = entry.Subtitle, Foreground = new SolidColorBrush(Colors.Gray), TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(new TextBlock
         {
-            Text = "Not generated yet. Output rules run on demand so searches stay fast — click Generate to produce them.",
+            // Single Generate action lives in the top-right header (it carries the time-range note and
+            // the generating overlay), so point at it instead of duplicating the button here.
+            Text = "Not generated yet. Output rules run on demand so searches stay fast — click the Generate button (top right) to produce them.",
             Foreground = new SolidColorBrush(Colors.Gray), TextWrapping = TextWrapping.Wrap,
         });
-        var btn = new Button { Content = "Generate now", Margin = new Thickness(0, 4, 0, 0) };
-        try { btn.Style = (Style)Application.Current.Resources["AccentButtonStyle"]; } catch { }
-        btn.Click += (_, __) => Generate_Click(btn, null!);
-        panel.Children.Add(btn);
         return panel;
     }
 

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "App crash report",
+  "description": "Generates a chronological text report of every application crash / hang / Windows Error Reporting event (faulting application, module, and exception code live in the message) from an Event Log. Runs on demand from the Processor Output page.",
+  "sections": [
+    {
+      "name": "CrashReport",
+      "description": "Write one entry per crash / hang to a text report",
+      "purpose": "output",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "emit-crash-report",
+          "match": "Faulting application name:|stopped interacting with Windows|Fault bucket|unhandled exception|Application Hang|Application Error",
+          "enabled": true,
+          "action": {
+            "type": "output",
+            "format": "txt",
+            "path": "{output}/crash_report_{datetime}.txt",
+            "fields": ["time", "source", "machine", "message"],
+            "includeHeaders": true
+          }
+        }
+      ]
+    }
+  ]
+}

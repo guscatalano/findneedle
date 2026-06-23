@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Machine power / boot timeline (filter)",
+  "description": "Keeps only the events that mark the machine's power lifetime: boot (EventLog 6005 / Kernel-General 12), shutdown (6006 / Kernel-General 13), dirty/unexpected shutdown (6008 / Kernel-Power 41), and daily uptime (6013). Enable it to see the machine's on/off history without the noise.",
+  "sections": [
+    {
+      "name": "PowerFilter",
+      "description": "Keep boot / shutdown / dirty-shutdown / uptime events",
+      "purpose": "filter",
+      "providers": ["*"],
+      "rules": [
+        {
+          "name": "keep-power-events",
+          "match": "The Event log service was started|The Event log service was stopped|The previous system shutdown at|The system uptime is|rebooted without cleanly shutting down|The operating system started at|The operating system is shutting down|Kernel-Power|Kernel-Boot",
+          "enabled": true,
+          "action": { "type": "include" }
+        }
+      ]
+    }
+  ]
+}

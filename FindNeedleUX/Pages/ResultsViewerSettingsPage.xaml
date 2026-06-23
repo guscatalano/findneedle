@@ -179,6 +179,64 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Default sort -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Default sort" FontWeight="SemiBold"/>
+                            <TextBlock Text="How rows are sorted when a log first opens. &quot;Load order&quot; keeps the exact order rows were read from the source (not necessarily by time). You can always click a column header to re-sort."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="DefaultSortCombo" Width="320"
+                                      SelectionChanged="DefaultSortCombo_SelectionChanged"
+                                      AutomationProperties.Name="Default sort">
+                                <ComboBoxItem Content="Load order — as read (default)" Tag="LoadOrder"/>
+                                <ComboBoxItem Content="Time — oldest first"           Tag="TimeAscending"/>
+                                <ComboBoxItem Content="Time — newest first"           Tag="TimeDescending"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- "Show known" filter dropdown mode (per field) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Known-value filter dropdowns" FontWeight="SemiBold"/>
+                            <TextBlock Text="When the result viewer's &quot;Known ▾&quot; filter is on, choose whether each column's dropdown lets you pick one value or several (matched as any-of)."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <Grid ColumnSpacing="12" RowSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Provider" VerticalAlignment="Center" FontSize="13"/>
+                                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="KnownModeProviderCombo" Width="180"
+                                          SelectionChanged="KnownModeProviderCombo_SelectionChanged" AutomationProperties.Name="Provider known-filter mode">
+                                    <ComboBoxItem Content="Single select" Tag="Single"/>
+                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
+                                </ComboBox>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="TaskName" VerticalAlignment="Center" FontSize="13"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="KnownModeTaskNameCombo" Width="180"
+                                          SelectionChanged="KnownModeTaskNameCombo_SelectionChanged" AutomationProperties.Name="TaskName known-filter mode">
+                                    <ComboBoxItem Content="Single select" Tag="Single"/>
+                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
+                                </ComboBox>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Source" VerticalAlignment="Center" FontSize="13"/>
+                                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="KnownModeSourceCombo" Width="180"
+                                          SelectionChanged="KnownModeSourceCombo_SelectionChanged" AutomationProperties.Name="Source known-filter mode">
+                                    <ComboBoxItem Content="Single select" Tag="Single"/>
+                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
+                                </ComboBox>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Row text size -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

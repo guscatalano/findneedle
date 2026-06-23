@@ -51,7 +51,7 @@
                 </Border>
                 <TextBlock x:Name="NoTimeRangeNote" Visibility="Collapsed" HorizontalAlignment="Right"
                            FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                           Text="Generates over all results (set a time range in the results view to limit it)."
+                           Text="Generates over all results."
                            TextWrapping="Wrap" TextAlignment="Right"/>
             </StackPanel>
         </Grid>
