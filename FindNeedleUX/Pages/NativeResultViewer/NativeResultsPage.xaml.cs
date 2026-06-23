@@ -2058,25 +2058,25 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private static string TruncMid(string s, int n) =>
         string.IsNullOrEmpty(s) ? "" : (s.Length <= n ? s : s.Substring(0, n) + "…");
 
-    /// <summary>Build a one-rule enrichment file: extract a capture into <paramref name="field"/>, or
-    /// strip the matched text from the message.</summary>
-    private static string BuildQuickRuleJson(string field, string pattern, bool extract)
+    /// <summary>Build a session viewer rule from the dialog inputs. Extract mode also strips the match
+    /// (so the value isn't duplicated in the message), matching the bundled *-fields rules. Returns
+    /// null if the regex is invalid.</summary>
+    private static FindNeedleUX.Services.ViewerQuickRule BuildQuickRule(string column, string field, string pattern, bool extract)
     {
-        var m = System.Text.RegularExpressions.Regex.Match(pattern ?? "", @"\(\?<(\w+)>");
-        string effPattern = m.Success ? pattern : "(?<v>" + pattern + ")";
-        string grp = m.Success ? m.Groups[1].Value : "v";
-        object action = extract
-            ? new { type = "extract", pattern = effPattern, set = new Dictionary<string, string> { { field, "{" + grp + "}" } }, strip = false }
-            : new { type = "extract", pattern = pattern, strip = true };
-        var doc = new
+        var gm = System.Text.RegularExpressions.Regex.Match(pattern ?? "", @"\(\?<(\w+)>");
+        string effPattern = gm.Success ? pattern : "(?<v>" + (pattern ?? "") + ")";
+        string grp = gm.Success ? gm.Groups[1].Value : "v";
+        try
         {
-            schemaVersion = "2.0",
-            sections = new[] { new {
-                name = "quickrule", purpose = "enrichment", providers = new[] { "*" },
-                rules = new[] { new { name = "quick", field = "message", match = extract ? effPattern : pattern, enabled = true, action } }
-            } }
-        };
-        return System.Text.Json.JsonSerializer.Serialize(doc, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var rx = new System.Text.RegularExpressions.Regex(
+                extract ? effPattern : pattern,
+                System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromMilliseconds(250));
+            return new FindNeedleUX.Services.ViewerQuickRule
+            {
+                Pattern = rx, CaptureGroup = grp, TargetField = extract ? field : null, Strip = true, ColumnLabel = column,
+            };
+        }
+        catch { return null; }
     }
 
     private async System.Threading.Tasks.Task ShowColumnQuickRuleDialogAsync(string column)
@@ -2105,28 +2105,24 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             if (string.IsNullOrWhiteSpace(pattern.Text)) { preview.Text = "Type a regex to preview…"; return; }
             bool extract = extractRadio.IsChecked == true && settable != null;
-            try
+            var rule = BuildQuickRule(column, settable ?? column, pattern.Text, extract);
+            if (rule == null) { preview.Text = "⚠ Invalid regex"; return; }
+            var sb = new System.Text.StringBuilder();
+            int shown = 0, changed = 0;
+            foreach (var msg in samples)
             {
-                var rows = FindPluginCore.Searching.RuleDSL.FieldExtractionPreview.Run(
-                    BuildQuickRuleJson(settable ?? column, pattern.Text, extract), samples);
-                var sb = new System.Text.StringBuilder();
-                int shown = 0, changed = 0;
-                foreach (var r in rows)
+                var (matched, captured, after) = rule.Evaluate(msg);
+                if (matched) changed++;
+                if (shown < 8 && (matched || shown < 3))
                 {
-                    bool hit = extract ? r.Fields.Count > 0 : r.After != r.Before;
-                    if (hit) changed++;
-                    if (shown < 8 && (hit || shown < 3))
-                    {
-                        var val = extract && settable != null && r.Fields.TryGetValue(settable, out var v) ? $"   → {column}={v}" : "";
-                        sb.Append("• ").Append(TruncMid(r.Before, 92)).Append('\n');
-                        sb.Append("   ⇒ ").Append(TruncMid(r.After, 92)).Append(val).Append("\n\n");
-                        shown++;
-                    }
+                    var val = extract && !string.IsNullOrEmpty(captured) ? $"   → {column}={captured}" : "";
+                    sb.Append("• ").Append(TruncMid(msg, 92)).Append('\n');
+                    sb.Append("   ⇒ ").Append(TruncMid(after, 92)).Append(val).Append("\n\n");
+                    shown++;
                 }
-                sb.Append($"Matched {changed} of {rows.Count} sampled rows.");
-                preview.Text = sb.ToString();
             }
-            catch (Exception ex) { preview.Text = "⚠ " + ex.Message; }
+            sb.Append($"Matched {changed} of {samples.Count} sampled rows.");
+            preview.Text = sb.ToString();
         }
         pattern.TextChanged += (_, _) => Refresh();
         extractRadio.Checked += (_, _) => Refresh();
@@ -2135,7 +2131,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         var panel = new StackPanel { Spacing = 8, MinWidth = 480 };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Pull a value out of the Message into the {column} column, or strip matching text. Runs as field-extraction enrichment on a fresh search.",
+            Text = $"Pull a value out of the Message into the {column} column, or strip matching text. Applies to the open results instantly — no re-scan; cleared on restart.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         });
@@ -2149,46 +2145,32 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             CornerRadius = new CornerRadius(4), Padding = new Thickness(8), Child = preview,
         });
 
+        // A "Clear quick rules" secondary button when any session rule is already active.
+        bool anyActive = FindNeedleUX.Services.ViewerQuickRulesStore.Any;
         var dlg = new ContentDialog
         {
             Title = $"Quick rule — {column}",
             Content = new ScrollViewer { Content = panel, MaxHeight = 440 },
-            PrimaryButtonText = "Apply (re-run search)",
+            PrimaryButtonText = "Apply",
+            SecondaryButtonText = anyActive ? "Clear all quick rules" : null,
             CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
+            DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot,
         };
         Refresh();
         var result = await dlg.ShowAsync();
+        if (result == ContentDialogResult.Secondary)
+        {
+            FindNeedleUX.Services.ViewerQuickRulesStore.Clear();
+            ViewModel.RefreshNow();
+            return;
+        }
         if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(pattern.Text)) return;
         bool ex2 = extractRadio.IsChecked == true && settable != null;
-        ApplyQuickRule(column, BuildQuickRuleJson(settable ?? column, pattern.Text, ex2));
-    }
-
-    private void ApplyQuickRule(string column, string ruleJson)
-    {
-        try
-        {
-            var dir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle", "quick-rules");
-            System.IO.Directory.CreateDirectory(dir);
-            var path = System.IO.Path.Combine(dir, $"quick-{column}-{Guid.NewGuid():N}.rules.json");
-            System.IO.File.WriteAllText(path, ruleJson);
-            FindPluginCore.Searching.AutoRules.AutoRulesStore.Upsert(new FindPluginCore.Searching.AutoRules.AutoRuleEntry
-            {
-                Name = $"Quick rule: {column}",
-                RulePath = path,
-                BuiltIn = false,
-                Enabled = true,
-                Condition = new FindPluginCore.Searching.AutoRules.AutoRuleCondition { Always = true },
-            });
-            ResultsViewerSettings.EnrichmentEnabled = true; // extract rules only run when enrichment is on
-            MainWindowActions.RerunSearch();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"ApplyQuickRule failed: {ex.Message}");
-        }
+        var rule = BuildQuickRule(column, settable ?? column, pattern.Text, ex2);
+        if (rule == null) return;
+        FindNeedleUX.Services.ViewerQuickRulesStore.Add(rule);
+        ViewModel.RefreshNow(); // re-fetch the current page → rows rebuild with the rule applied (no re-scan)
     }
 
     private static string TryGetCellColumnHeader(CommunityToolkit.WinUI.UI.Controls.DataGridCell cell)

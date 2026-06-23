@@ -102,6 +102,7 @@ public class MiddleLayerService
         Locations.Clear();
         Filters.Clear();
         SearchResults.Clear();
+        ViewerQuickRulesStore.Clear(); // session right-click rules don't outlive the workspace
         LastRunSummary = null;
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
         _workspaceCleared = true; // GetSearchStorage / GetStats now report "nothing to show"

@@ -60,6 +60,9 @@ public class LogLine
             FindNeedleUX.Services.ResultsViewerSettings.EtwPayloadFormat,
             FindNeedleUX.Services.ResultsViewerSettings.EtwPayloadCustomTemplate);
         Message = CleanMessage(rawMessage, LogTime, Level);
+        // Apply any session "quick rules" (right-click-a-header rules) at display time — extract a value
+        // into a column and/or strip the match from the Message. No re-scan; cleared on restart.
+        FindNeedleUX.Services.ViewerQuickRulesStore.Apply(this);
     }
 
     /// <summary>
