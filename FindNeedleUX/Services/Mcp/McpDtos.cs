@@ -65,6 +65,11 @@ public sealed class ViewStateDto
     public int TotalFiltered { get; set; }
     public int Total { get; set; }
     public string DetailsMode { get; set; }
+    /// <summary>True while a streaming search is still producing rows into the viewer — Total/counts
+    /// are still climbing and shouldn't be treated as final until this is false.</summary>
+    public bool Streaming { get; set; }
+    /// <summary>True while the viewer is (re)loading its result set (the initial load/refresh).</summary>
+    public bool Loading { get; set; }
 }
 
 public sealed class SummaryDto
@@ -109,4 +114,6 @@ public sealed class StatusDto
     public int Locations { get; set; }    // data sources loaded in the workspace
     public int? Total { get; set; }        // total rows in the viewer (null if no viewer)
     public int? TotalFiltered { get; set; } // rows matching the current filter (null if no viewer)
+    public bool? Streaming { get; set; }    // true while a streaming search is still adding rows (counts not final)
+    public bool? Loading { get; set; }      // true while the viewer is (re)loading its result set
 }

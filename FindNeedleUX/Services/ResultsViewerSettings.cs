@@ -526,6 +526,22 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Width (px) of the left-docked filter pane. User-resizable via the splitter between the pane and
+    /// the results. Clamped so a corrupt value can't make it vanish or eat the grid. Only applies when
+    /// the filter dock is Left.
+    /// </summary>
+    public const double DefaultFilterPaneWidth = 300;
+    public const double MinFilterPaneWidth = 220;
+    public const double MaxFilterPaneWidth = 760;
+    public static double ClampFilterPaneWidth(double v) =>
+        v < MinFilterPaneWidth ? MinFilterPaneWidth : v > MaxFilterPaneWidth ? MaxFilterPaneWidth : v;
+    public static double FilterPaneWidth
+    {
+        get => ClampFilterPaneWidth(Data.FilterPaneWidth ?? DefaultFilterPaneWidth);
+        set { Data.FilterPaneWidth = ClampFilterPaneWidth(value); Save(); /* applied per-window */ }
+    }
+
+    /// <summary>
     /// Whether the result viewer's per-column filter row shows "known value" dropdowns (populated from
     /// the loaded set's distinct Provider / TaskName / Source values) instead of free-text boxes, so the
     /// user can pick from what's actually present rather than guessing. Per-window UI state.
@@ -643,6 +659,7 @@ public static class ResultsViewerSettings
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }
+        public double? FilterPaneWidth { get; set; }
         public double? ScrollBarSize { get; set; }
         public double? RowFontSize { get; set; }
         public double? RowHeightRatio { get; set; }

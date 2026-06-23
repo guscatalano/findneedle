@@ -47,6 +47,10 @@ public interface IMcpViewerController
     /// filter rules to apply among the active rule set.</summary>
     Task<int> SetRuleViewFilterAsync(bool on);
 
+    /// <summary>Wait until any in-flight streaming/loading search completes (counts are final), or the
+    /// timeout elapses. Returns true if it settled, false on timeout.</summary>
+    Task<bool> WaitForLoadAsync(int timeoutMs);
+
     Task SetSortAsync(string column, bool descending);
 
     Task GoToPageAsync(int page);

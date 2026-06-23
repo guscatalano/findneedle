@@ -9,6 +9,7 @@ using FindNeedleUX.Services;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives; // ToggleButton
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 
@@ -333,10 +334,15 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (MessageFilterBox != null) MessageFilterBox.Text = "";
         if (SourceFilterBox != null) SourceFilterBox.Text = "";
         if (LevelFilterCombo != null) LevelFilterCombo.SelectedItem = null;
-        if (FromDatePicker != null) FromDatePicker.Date = null;
-        if (ToDatePicker != null) ToDatePicker.Date = null;
-        if (FromTimePicker != null) FromTimePicker.SelectedTime = null;
-        if (ToTimePicker != null) ToTimePicker.SelectedTime = null;
+        ResetTimeFilterUiToAll();
+    }
+
+    /// <summary>Reset the time filter UI to its default: pickers cleared, "All" preset selected,
+    /// custom panel collapsed. (Does not itself clear the VM range — callers do that.)</summary>
+    private void ResetTimeFilterUiToAll()
+    {
+        ClearCustomTimePickersSilently();
+        if (TimePresetAll != null) SelectOnlyPreset(TimePresetAll);
     }
 
     private void UpdateStreamingIcon()
@@ -515,30 +521,37 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
 
         // Rows stack vertically when docked left (narrow column), horizontally when on top.
+        // TimeRowPanel stays vertical in both docks — it's its own mini-layout (preset chips + a
+        // collapsible custom range) that wraps internally via WrapPanelLite, so flipping it would
+        // put the chip row and the custom row side-by-side.
         var orientation = left ? Orientation.Vertical : Orientation.Horizontal;
-        if (TimeRowPanel   != null) TimeRowPanel.Orientation   = orientation;
         if (FilterRowPanel != null) FilterRowPanel.Orientation = orientation;
         if (LevelsRowPanel != null) LevelsRowPanel.Orientation = orientation;
 
         // Left dock: let the inputs fill the column (fixed widths leave a ragged right edge in a
         // narrow vertical stack). Top dock: restore the compact fixed widths for the horizontal row.
+        // (The time pickers keep their own compact widths inside the wrapping custom panel.)
         void Field(Control c, double topWidth)
         {
             if (c == null) return;
             c.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
             c.Width = left ? double.NaN : topWidth;
         }
-        Field(FromDatePicker, 160); Field(ToDatePicker, 160);
         Field(ProviderFilterBox, 120); Field(TaskNameFilterBox, 140);
         Field(MessageFilterBox, 220);  Field(SourceFilterBox, 140);
         Field(LevelFilterCombo, 140);
-        if (TimeRangeArrow != null) // the "→" reads sideways between stacked pickers
-            TimeRangeArrow.Visibility = left ? Visibility.Collapsed : Visibility.Visible;
 
         // Host visibility follows the expand state; the inactive host stays collapsed.
         FiltersPanel.Visibility  = _filtersExpanded ? Visibility.Visible : Visibility.Collapsed;
-        LeftFilterHost.Visibility = (left  && _filtersExpanded) ? Visibility.Visible : Visibility.Collapsed;
+        bool leftShown = left && _filtersExpanded;
+        LeftFilterHost.Visibility = leftShown ? Visibility.Visible : Visibility.Collapsed;
         TopFilterHost.Visibility  = (!left && _filtersExpanded) ? Visibility.Visible : Visibility.Collapsed;
+        // Drive the resizable left column: its persisted width when docked-left-and-shown, else 0 so the
+        // results reclaim the space (top dock / collapsed). The splitter shows only when the pane does.
+        if (LeftFilterColumn != null)
+            LeftFilterColumn.Width = leftShown ? new GridLength(ResultsViewerSettings.FilterPaneWidth) : new GridLength(0);
+        if (FilterPaneSplitter != null)
+            FilterPaneSplitter.Visibility = leftShown ? Visibility.Visible : Visibility.Collapsed;
 
         // Toolbar reflection.
         if (DockTopItem  != null) DockTopItem.IsChecked  = !left;
@@ -705,6 +718,62 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             try { ProtectedCursor = null; } catch { }
             ResultsViewerSettings.DetailsPanelHeight = DetailsPanel.Height;
         }
+    }
+
+    // ----- Left filter pane resize (same drag pattern, X axis; rewrites LeftFilterColumn.Width) -----
+    private bool _filterPaneResizing;
+    private double _filterPaneResizeStartX;
+    private double _filterPaneResizeStartWidth;
+
+    private void FilterPaneSplitter_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        try { ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.SizeWestEast); }
+        catch { /* not all hosts allow cursor changes */ }
+    }
+
+    private void FilterPaneSplitter_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (_filterPaneResizing) return; // keep the resize cursor while dragging
+        try { ProtectedCursor = null; } catch { }
+    }
+
+    private void FilterPaneSplitter_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is not UIElement el) return;
+        var pt = e.GetCurrentPoint(this);
+        if (!pt.Properties.IsLeftButtonPressed) return;
+        _filterPaneResizing = true;
+        _filterPaneResizeStartX = pt.Position.X;
+        _filterPaneResizeStartWidth = LeftFilterColumn.ActualWidth;
+        el.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void FilterPaneSplitter_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_filterPaneResizing) return;
+        var deltaRight = e.GetCurrentPoint(this).Position.X - _filterPaneResizeStartX; // drag right = wider
+        var w = ResultsViewerSettings.ClampFilterPaneWidth(_filterPaneResizeStartWidth + deltaRight);
+        LeftFilterColumn.Width = new GridLength(w);
+        e.Handled = true;
+    }
+
+    private void FilterPaneSplitter_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_filterPaneResizing) return;
+        _filterPaneResizing = false;
+        if (sender is UIElement el) el.ReleasePointerCapture(e.Pointer);
+        try { ProtectedCursor = null; } catch { }
+        ResultsViewerSettings.FilterPaneWidth = LeftFilterColumn.ActualWidth; // persist
+        e.Handled = true;
+    }
+
+    private void FilterPaneSplitter_PointerCaptureLost(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_filterPaneResizing) return;
+        _filterPaneResizing = false;
+        try { ProtectedCursor = null; } catch { }
+        ResultsViewerSettings.FilterPaneWidth = LeftFilterColumn.ActualWidth;
     }
 
     private void ApplyPersistedPageSize()
@@ -1800,37 +1869,137 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void ToDatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
         => UpdateToBound();
     private void FromTimePicker_SelectedTimeChanged(TimePicker sender, TimePickerSelectedValueChangedEventArgs args)
-        => UpdateFromBound();
+    { UpdateTimeButtonLabel(FromTimeButton, FromTimePicker); UpdateFromBound(); }
     private void ToTimePicker_SelectedTimeChanged(TimePicker sender, TimePickerSelectedValueChangedEventArgs args)
-        => UpdateToBound();
+    { UpdateTimeButtonLabel(ToTimeButton, ToTimePicker); UpdateToBound(); }
+
+    private void ClearFromTime_Click(object sender, RoutedEventArgs e) { if (FromTimePicker != null) FromTimePicker.SelectedTime = null; }
+    private void ClearToTime_Click(object sender, RoutedEventArgs e)   { if (ToTimePicker != null) ToTimePicker.SelectedTime = null; }
+
+    /// <summary>Reflect the picked time on its drop-down button so it's visible without opening the flyout.</summary>
+    private static void UpdateTimeButtonLabel(DropDownButton button, TimePicker picker)
+    {
+        if (button == null) return;
+        button.Content = picker?.SelectedTime is TimeSpan t
+            ? $"Time: {t.Hours:D2}:{t.Minutes:D2}"
+            : "Time: any";
+    }
 
     // Combine the date + optional time pickers into the filter bound. No date → no bound. The "From"
     // bound floors to the start of the day when no time is given; the "To" bound extends to the end of
     // the day (or the end of the selected minute) so the range is inclusive of what the user picked.
+    // ----- Time filter: quick presets + custom range -----
+    // _suppressTimeBounds: ignore the date/time picker -> VM handlers while we clear them programmatically
+    // (so applying a preset doesn't get clobbered). _suppressTimePreset: ignore the ToggleButton click
+    // handlers while we set IsChecked in code.
+    private bool _suppressTimeBounds;
+    private bool _suppressTimePreset;
+
     private void UpdateFromBound()
     {
-        var d = FromDatePicker?.Date?.DateTime;
-        if (d == null) { ViewModel.FromDate = null; return; }
-        var t = FromTimePicker?.SelectedTime;
-        ViewModel.FromDate = t.HasValue ? d.Value.Date + t.Value : d.Value.Date;
+        if (_suppressTimeBounds) return;
+        ViewModel.FromDate = ComposeBound(FromDatePicker, FromTimePicker, isEnd: false);
+        OnCustomTimeEdited();
     }
 
     private void UpdateToBound()
     {
-        var d = ToDatePicker?.Date?.DateTime;
-        if (d == null) { ViewModel.ToDate = null; return; }
-        var t = ToTimePicker?.SelectedTime;
-        ViewModel.ToDate = t.HasValue
-            ? d.Value.Date + t.Value + TimeSpan.FromSeconds(59.999) // include the whole selected minute
-            : d.Value.Date.AddDays(1).AddMilliseconds(-1);          // end of the selected day
+        if (_suppressTimeBounds) return;
+        ViewModel.ToDate = ComposeBound(ToDatePicker, ToTimePicker, isEnd: true);
+        OnCustomTimeEdited();
+    }
+
+    /// <summary>
+    /// Combine a date picker + a time picker into a filter bound. Key behavior: a time with NO date is
+    /// no longer ignored — it anchors to the log's day so you can filter by the minute just by typing a
+    /// time. Date-only spans the whole day; the "To" bound includes the whole selected minute/day.
+    /// </summary>
+    private DateTime? ComposeBound(CalendarDatePicker datePicker, TimePicker timePicker, bool isEnd)
+    {
+        var date = datePicker?.Date?.DateTime;
+        var time = timePicker?.SelectedTime;
+        if (date == null && time == null) return null; // nothing set → no bound
+
+        // No date but a time → anchor to the log's day (its latest event's date). For a single-day log
+        // that's unambiguous; for a multi-day log it scopes to the most recent day.
+        DateTime day = date?.Date ?? (ViewModel.GetDataMaxTime()?.Date ?? DateTime.Today);
+
+        if (time.HasValue)
+            return isEnd ? day + time.Value + TimeSpan.FromSeconds(59.999) // whole selected minute
+                         : day + time.Value;
+        return isEnd ? day.AddDays(1).AddMilliseconds(-1) // end of the selected day
+                     : day;
+    }
+
+    /// <summary>A preset chip was clicked: apply its relative window (anchored to the log's latest
+    /// event) or clear for "All", and make it the only checked chip.</summary>
+    private async void TimePreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressTimePreset || sender is not ToggleButton btn) return;
+        SelectOnlyPreset(btn);
+        ClearCustomTimePickersSilently();
+        int minutes = int.TryParse(btn.Tag as string, out var m) ? m : 0;
+        if (minutes <= 0) { ViewModel.FromDate = null; ViewModel.ToDate = null; return; }
+        // Anchor "last N" to the newest event in the whole log (works for historical logs), not wall
+        // clock. Open-ended To so rows at/after the anchor (incl. anything still streaming) stay in.
+        var anchor = await System.Threading.Tasks.Task.Run(() => ViewModel.GetDataMaxTime()) ?? DateTime.Now;
+        ViewModel.ToDate = null;
+        ViewModel.FromDate = anchor.AddMinutes(-minutes);
+    }
+
+    /// <summary>"Custom ▾" just discloses/hides the absolute From/To pickers; it doesn't change the range.</summary>
+    private void CustomTimeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (CustomTimePanel != null)
+            CustomTimePanel.Visibility = CustomTimeToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>The preset chips (Tag-bearing toggles) — excludes the "Custom" toggle that shares the panel.</summary>
+    private IEnumerable<ToggleButton> PresetChips()
+        => TimePresetPanel?.Children.OfType<ToggleButton>().Where(b => b.Tag is string)
+           ?? System.Linq.Enumerable.Empty<ToggleButton>();
+
+    /// <summary>Check exactly one preset chip (radio behavior) and collapse the custom panel.</summary>
+    private void SelectOnlyPreset(ToggleButton keep)
+    {
+        _suppressTimePreset = true;
+        foreach (var c in PresetChips())
+            c.IsChecked = ReferenceEquals(c, keep);
+        if (CustomTimeToggle != null) CustomTimeToggle.IsChecked = false;
+        if (CustomTimePanel != null) CustomTimePanel.Visibility = Visibility.Collapsed;
+        _suppressTimePreset = false;
+    }
+
+    private void ClearCustomTimePickersSilently()
+    {
+        _suppressTimeBounds = true;
+        if (FromDatePicker != null) FromDatePicker.Date = null;
+        if (ToDatePicker != null) ToDatePicker.Date = null;
+        if (FromTimePicker != null) FromTimePicker.SelectedTime = null;
+        if (ToTimePicker != null) ToTimePicker.SelectedTime = null;
+        UpdateTimeButtonLabel(FromTimeButton, FromTimePicker);
+        UpdateTimeButtonLabel(ToTimeButton, ToTimePicker);
+        _suppressTimeBounds = false;
+    }
+
+    /// <summary>The user edited an absolute picker: a custom range is now active, so uncheck every
+    /// preset chip — unless the range is now empty, in which case "All" is the right selection.</summary>
+    private void OnCustomTimeEdited()
+    {
+        if (TimePresetPanel == null) return;
+        bool noRange = ViewModel.FromDate == null && ViewModel.ToDate == null;
+        _suppressTimePreset = true;
+        foreach (var c in PresetChips())
+            c.IsChecked = noRange && ReferenceEquals(c, TimePresetAll);
+        _suppressTimePreset = false;
     }
 
     private void ClearTimeRange_Click(object sender, RoutedEventArgs e)
     {
-        FromDatePicker.Date = null;
-        ToDatePicker.Date = null;
-        FromTimePicker.SelectedTime = null;
-        ToTimePicker.SelectedTime = null;
+        ClearCustomTimePickersSilently();
+        ViewModel.FromDate = null;
+        ViewModel.ToDate = null;
+        SelectOnlyPreset(TimePresetAll); // back to "All"
     }
 
     private void ResetColumnFilters_Click(object sender, RoutedEventArgs e)
@@ -1845,10 +2014,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         SearchBox.Text = "";
         ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
         LevelFilterCombo.SelectedItem = null;
-        FromDatePicker.Date = null;
-        ToDatePicker.Date = null;
-        FromTimePicker.SelectedTime = null;
-        ToTimePicker.SelectedTime = null;
+        ResetTimeFilterUiToAll();
         ViewModel.ClearFilters();
     }
 
@@ -2619,7 +2785,22 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             TotalFiltered = ViewModel.TotalFilteredCount,
             Total = ViewModel.TotalCount,
             DetailsMode = _detailsMode.ToString(),
+            Streaming = ViewModel.IsStreaming,
+            Loading = ViewModel.IsLoading,
         });
+
+    /// <summary>MCP: wait until any in-flight streaming/loading search finishes (so counts are final),
+    /// or the timeout elapses. Returns true if loading completed, false if it timed out.</summary>
+    public Task<bool> WaitForLoadAsync(int timeoutMs) => McpOnUiAsync(async () =>
+    {
+        var deadline = Environment.TickCount64 + Math.Clamp(timeoutMs, 0, 600_000);
+        while (ViewModel.IsStreaming || ViewModel.IsLoading)
+        {
+            if (Environment.TickCount64 >= deadline) return false;
+            await System.Threading.Tasks.Task.Delay(150);
+        }
+        return true;
+    });
 
     public Task<FindNeedleUX.Services.Mcp.PageDto> GetPageAsync(int? offset, int limit) => McpOnUiAsync(() =>
     {
@@ -2739,10 +2920,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         SearchBox.Text = "";
         ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
         LevelFilterCombo.SelectedItem = null;
-        FromDatePicker.Date = null;
-        ToDatePicker.Date = null;
-        FromTimePicker.SelectedTime = null;
-        ToTimePicker.SelectedTime = null;
+        ResetTimeFilterUiToAll();
         ViewModel.ClearFilters();
         return ViewModel.TotalFilteredCount;
     });

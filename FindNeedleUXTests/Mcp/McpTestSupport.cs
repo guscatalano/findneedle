@@ -83,6 +83,7 @@ internal sealed class FakeViewerController : IMcpViewerController
 
     public bool LastRuleFilterOn;
     public Task<int> SetRuleViewFilterAsync(bool on) { LastRuleFilterOn = on; return Task.FromResult(on ? 5 : 17); }
+    public Task<bool> WaitForLoadAsync(int timeoutMs) => Task.FromResult(true);
 
     public Task SetSortAsync(string column, bool descending) { LastSortColumn = column; return Task.CompletedTask; }
     public Task GoToPageAsync(int page) => Task.CompletedTask;

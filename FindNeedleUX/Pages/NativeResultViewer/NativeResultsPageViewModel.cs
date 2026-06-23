@@ -1082,6 +1082,16 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         return (min, max);
     }
 
+    /// <summary>The latest event time across the WHOLE loaded set (ignores the current filter). Used
+    /// to anchor relative time presets ("last 1h" = the last hour of the log, so they work for
+    /// historical logs, not just live ones). Null if there's no data.</summary>
+    public DateTime? GetDataMaxTime()
+    {
+        if (_source == null) return null;
+        var last = _source.GetPage(FilterSpec.Empty, new SortSpec("Time", true), 0, 1);
+        return last.Count > 0 ? last[0].LogTime : (DateTime?)null;
+    }
+
     /// <summary>Top distinct values of a field over the current filtered set (MCP <c>facets</c>).</summary>
     public FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult GetFacets(string field, int limit, int sampleCap)
         => FindNeedleUX.Services.Mcp.LogAnalysis.Facets(_source, BuildFilterSpec(), field, limit, sampleCap);

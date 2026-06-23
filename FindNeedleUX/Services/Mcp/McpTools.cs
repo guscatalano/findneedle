@@ -298,7 +298,7 @@ internal static class McpTools
         new ToolDef
         {
             Name = "status",
-            Description = "Health/orientation: whether the MCP server is running, its port, whether a result viewer is open (viewer tools usable), how many locations are loaded, and current row counts. Always succeeds.",
+            Description = "Health/orientation: whether the MCP server is running, its port, whether a result viewer is open (viewer tools usable), how many locations are loaded, current row counts, and whether a search is still streaming/loading (streaming=true means Total is still climbing — counts aren't final yet; use wait_for_load). Always succeeds.",
             InputSchema = Obj(new { }),
             Invoke = async _ => await B.GetStatusAsync(),
         },
@@ -308,6 +308,13 @@ internal static class McpTools
             Description = "Wait until a result viewer is open (e.g. just after app launch or a search), so viewer tools don't hit the 'no viewer' race. Returns whether one is ready.",
             InputSchema = Obj(new { timeoutMs = I("Max time to wait in ms (default 10000, max 120000).") }),
             Invoke = async a => new { ready = await B.WaitForViewerAsync(Int(a, "timeoutMs", 10_000)) },
+        },
+        new ToolDef
+        {
+            Name = "wait_for_load",
+            Description = "Wait until any in-flight streaming/loading search finishes so row counts are FINAL before you read them. A streaming search opens the viewer early and keeps adding rows in the background; status/summary/get_view counts climb until this returns. Use run_search -> wait_for_load -> get_page/summary to trust the numbers. Returns { settled } (false = timed out, rows may still be arriving). Requires an open viewer.",
+            InputSchema = Obj(new { timeoutMs = I("Max time to wait in ms (default 60000, max 600000).") }),
+            Invoke = async a => new { settled = await B.WaitForLoadAsync(Int(a, "timeoutMs", 60_000)) },
         },
         new ToolDef
         {

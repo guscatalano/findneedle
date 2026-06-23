@@ -292,16 +292,25 @@
              (RefreshFilterLayout) per the dock setting; its inner rows switch horizontal/vertical. -->
         <Grid Grid.Row="2" x:Name="BodyGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>  <!-- left filter pane (collapsed unless docked left) -->
-                <ColumnDefinition Width="*"/>     <!-- main content -->
+                <ColumnDefinition x:Name="LeftFilterColumn" Width="Auto"/>  <!-- left filter pane (0 unless docked left; user-resizable) -->
+                <ColumnDefinition Width="Auto"/>                            <!-- resize splitter (shown only in left dock) -->
+                <ColumnDefinition Width="*"/>                              <!-- main content -->
             </Grid.ColumnDefinitions>
 
-            <!-- Left-dock host: scrolls when the filters are taller than the viewport. -->
-            <ScrollViewer x:Name="LeftFilterHost" Grid.Column="0" Width="300" Visibility="Collapsed"
+            <!-- Left-dock host: fills the resizable column; scrolls when the filters are taller than the viewport. -->
+            <ScrollViewer x:Name="LeftFilterHost" Grid.Column="0" Visibility="Collapsed"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,1,0"/>
 
-            <Grid Grid.Column="1">
+            <!-- Drag-to-resize handle between the filter pane and the results (left dock only). -->
+            <Border x:Name="FilterPaneSplitter" Grid.Column="1" Width="6" Visibility="Collapsed"
+                    Background="Transparent"
+                    PointerEntered="FilterPaneSplitter_PointerEntered" PointerExited="FilterPaneSplitter_PointerExited"
+                    PointerPressed="FilterPaneSplitter_PointerPressed" PointerMoved="FilterPaneSplitter_PointerMoved"
+                    PointerReleased="FilterPaneSplitter_PointerReleased" PointerCaptureLost="FilterPaneSplitter_PointerCaptureLost"
+                    ToolTipService.ToolTip="Drag to resize the filter pane"/>
+
+            <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>  <!-- Top-dock filter host -->
                     <RowDefinition Height="*"/>     <!-- Grid + overlays -->
@@ -320,23 +329,65 @@
                 <!-- Time range -->
                 <Border Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                    <StackPanel x:Name="TimeRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="Time:" VerticalAlignment="Center" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <CalendarDatePicker x:Name="FromDatePicker" Width="148" PlaceholderText="From"
-                                            DateChanged="FromDatePicker_DateChanged"/>
-                        <TimePicker x:Name="FromTimePicker" Width="116" ClockIdentifier="24HourClock"
-                                    MinuteIncrement="1"
-                                    SelectedTimeChanged="FromTimePicker_SelectedTimeChanged"
-                                    ToolTipService.ToolTip="Start time (optional). Empty = start of day."/>
-                        <TextBlock x:Name="TimeRangeArrow" Text="→" VerticalAlignment="Center"/>
-                        <CalendarDatePicker x:Name="ToDatePicker" Width="148" PlaceholderText="To"
-                                            DateChanged="ToDatePicker_DateChanged"/>
-                        <TimePicker x:Name="ToTimePicker" Width="116" ClockIdentifier="24HourClock"
-                                    MinuteIncrement="1"
-                                    SelectedTimeChanged="ToTimePicker_SelectedTimeChanged"
-                                    ToolTipService.ToolTip="End time (optional). Empty = end of day; a set time includes that whole minute."/>
-                        <Button Content="Clear" Click="ClearTimeRange_Click" Height="32"/>
+                    <StackPanel x:Name="TimeRowPanel" Orientation="Vertical" Spacing="6">
+                        <!-- Quick relative presets (anchored to the log's latest event) + Custom toggle.
+                             WrapPanelLite so the chips flow onto more lines in a narrow (left-dock) pane
+                             instead of falling off the edge. -->
+                        <local:WrapPanelLite x:Name="TimePresetPanel" HorizontalSpacing="6" VerticalSpacing="6">
+                            <TextBlock Text="Time:" VerticalAlignment="Center" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <ToggleButton Content="15m" Tag="15"    Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="Last 15 minutes of the log"/>
+                            <ToggleButton Content="1h"  Tag="60"    Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="Last hour of the log"/>
+                            <ToggleButton Content="6h"  Tag="360"   Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="Last 6 hours of the log"/>
+                            <ToggleButton Content="24h" Tag="1440"  Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="Last 24 hours of the log"/>
+                            <ToggleButton Content="7d"  Tag="10080" Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="Last 7 days of the log"/>
+                            <ToggleButton x:Name="TimePresetAll" Content="All" Tag="0" IsChecked="True" Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="No time filter (whole log)"/>
+                            <ToggleButton x:Name="CustomTimeToggle" Content="Custom ▾" Height="28" FontSize="12" Padding="8,0" Click="CustomTimeToggle_Click" ToolTipService.ToolTip="Pick an exact From/To date and time"/>
+                        </local:WrapPanelLite>
+                        <!-- Custom absolute range. Each bound stacks its date over its time so the 24h
+                             TimePicker keeps enough width to show BOTH hour and minute (it clips to just
+                             the hour when squeezed). The groups wrap to fit a narrow / resized pane. -->
+                        <local:WrapPanelLite x:Name="CustomTimePanel" HorizontalSpacing="12" VerticalSpacing="8" Visibility="Collapsed">
+                            <StackPanel Orientation="Vertical" Spacing="4">
+                                <TextBlock Text="From" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                <CalendarDatePicker x:Name="FromDatePicker" Width="170" PlaceholderText="From date"
+                                                    DateChanged="FromDatePicker_DateChanged"/>
+                                <DropDownButton x:Name="FromTimeButton" Width="170" HorizontalContentAlignment="Stretch"
+                                                Content="Time: any"
+                                                ToolTipService.ToolTip="Start time (optional). Empty = start of day; a time alone filters that minute on the log's day.">
+                                    <DropDownButton.Flyout>
+                                        <Flyout>
+                                            <StackPanel Spacing="10" MinWidth="240">
+                                                <TextBlock Text="From time" FontWeight="SemiBold"/>
+                                                <TimePicker x:Name="FromTimePicker" ClockIdentifier="24HourClock" MinuteIncrement="1"
+                                                            SelectedTimeChanged="FromTimePicker_SelectedTimeChanged"/>
+                                                <Button Content="Clear time" Click="ClearFromTime_Click" HorizontalAlignment="Right"/>
+                                            </StackPanel>
+                                        </Flyout>
+                                    </DropDownButton.Flyout>
+                                </DropDownButton>
+                            </StackPanel>
+                            <StackPanel Orientation="Vertical" Spacing="4">
+                                <TextBlock Text="To" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                <CalendarDatePicker x:Name="ToDatePicker" Width="170" PlaceholderText="To date"
+                                                    DateChanged="ToDatePicker_DateChanged"/>
+                                <DropDownButton x:Name="ToTimeButton" Width="170" HorizontalContentAlignment="Stretch"
+                                                Content="Time: any"
+                                                ToolTipService.ToolTip="End time (optional). Empty = end of day; a set time includes that whole minute.">
+                                    <DropDownButton.Flyout>
+                                        <Flyout>
+                                            <StackPanel Spacing="10" MinWidth="240">
+                                                <TextBlock Text="To time" FontWeight="SemiBold"/>
+                                                <TimePicker x:Name="ToTimePicker" ClockIdentifier="24HourClock" MinuteIncrement="1"
+                                                            SelectedTimeChanged="ToTimePicker_SelectedTimeChanged"/>
+                                                <Button Content="Clear time" Click="ClearToTime_Click" HorizontalAlignment="Right"/>
+                                            </StackPanel>
+                                        </Flyout>
+                                    </DropDownButton.Flyout>
+                                </DropDownButton>
+                            </StackPanel>
+                            <Button Content="Clear" Click="ClearTimeRange_Click" Height="32" VerticalAlignment="Bottom"/>
+                        </local:WrapPanelLite>
                     </StackPanel>
                 </Border>
 

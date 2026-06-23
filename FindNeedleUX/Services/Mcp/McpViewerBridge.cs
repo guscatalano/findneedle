@@ -98,7 +98,7 @@ public sealed class McpViewerBridge
         };
         if (dto.HasViewer)
         {
-            try { var v = await GetViewAsync().ConfigureAwait(false); dto.Total = v.Total; dto.TotalFiltered = v.TotalFiltered; }
+            try { var v = await GetViewAsync().ConfigureAwait(false); dto.Total = v.Total; dto.TotalFiltered = v.TotalFiltered; dto.Streaming = v.Streaming; dto.Loading = v.Loading; }
             catch (McpNoViewerException) { dto.HasViewer = false; } // viewer closed between the check and the call
         }
         return dto;
@@ -130,6 +130,7 @@ public sealed class McpViewerBridge
         => Viewer.SetFilterAsync(search, provider, taskName, message, source, level, fromTime, toTime);
     public Task<int> ClearFiltersAsync() => Viewer.ClearFiltersAsync();
     public Task<int> SetRuleViewFilterAsync(bool on) => Viewer.SetRuleViewFilterAsync(on);
+    public Task<bool> WaitForLoadAsync(int timeoutMs) => Viewer.WaitForLoadAsync(timeoutMs);
     public Task SetSortAsync(string column, bool descending) => Viewer.SetSortAsync(column, descending);
     public Task GoToPageAsync(int page) => Viewer.GoToPageAsync(page);
     public Task SetPageSizeAsync(int pageSize) => Viewer.SetPageSizeAsync(pageSize);
