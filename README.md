@@ -12,13 +12,30 @@
 
 **findneedle** is a lightweight utility designed to help you efficiently search through log files on Windows systems. With a focus on speed and simplicity, it offers a clean user interface and powerful search capabilities.
 
+## Screenshots
+
+A populated result view — color-coded levels with live counts, time-range presets, and per-column filters:
+
+![Result viewer](docs/screenshots/01-results-overview.png)
+
+A structured query in the search box (`level == Error OR level == Warning`) — field operators with `AND`/`OR`/`NOT`:
+
+![Query language](docs/screenshots/02-query-language.png)
+
+Filtered to a single level:
+
+![Level filter](docs/screenshots/03-level-filter.png)
+
 ## Features
 
-- 🔍 Fast text search across large log files
-- 🖥️ Simple, user-friendly interface
-- 📂 Support for multiple log file formats
-- ⏩ Real-time filtering and highlighting
-- ⚡ Built with JavaScript, C#, HTML, and CSS
+- 🔍 Fast text search across large logs (SQLite-backed with an FTS index for big files)
+- 🧠 Structured query language — `msg != "x" AND level == Error`, with `AND` / `OR` / `NOT`
+- 🎨 Per-level color coding with live counts; customizable theme and toolbar
+- ⏩ Real-time filtering, time-range presets, and per-column filters
+- 📂 Multiple sources & formats — folders, Windows Event Log, ETW, ZIP, CSV, JSON, plain text
+- 📊 Declarative RuleDSL for field extraction, filtering, and UML / diagram output
+- 🤖 Built-in MCP server so an AI agent can drive the viewer and author rules
+- 🖥️ WinUI 3 desktop app + command-line tool (C# / .NET 8)
 
 ## Getting Started
 
