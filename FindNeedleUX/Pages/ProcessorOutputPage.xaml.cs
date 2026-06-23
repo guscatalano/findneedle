@@ -146,12 +146,17 @@ public sealed partial class ProcessorOutputPage : Page
         if (files.Count > 0) parts.Add($"{files.Count} file{(files.Count == 1 ? "" : "s")} generated");
         if (diagramCount > 0) parts.Add($"{diagramCount} diagram{(diagramCount == 1 ? "" : "s")}");
         if (pending.Count > 0) parts.Add($"{pending.Count} output{(pending.Count == 1 ? "" : "s")} ready — click Generate");
-        // Diagrams/outputs reuse the results view's time range (so it isn't set twice).
+        SummaryText.Text = string.Join("  -  ", parts);
+
+        // Make it explicit that Generate respects the results view's time range (so it isn't set twice).
         var tf = MiddleLayerService.OutputTimeFrom;
         var tt = MiddleLayerService.OutputTimeTo;
-        if (tf.HasValue || tt.HasValue)
-            parts.Add($"time range {(tf?.ToString("yyyy-MM-dd HH:mm") ?? "start")} → {(tt?.ToString("yyyy-MM-dd HH:mm") ?? "end")} (from view)");
-        SummaryText.Text = string.Join("  -  ", parts);
+        bool hasRange = tf.HasValue || tt.HasValue;
+        TimeRangeNote.Visibility = hasRange ? Visibility.Visible : Visibility.Collapsed;
+        NoTimeRangeNote.Visibility = (!hasRange && (pending.Count > 0 || GenerateButton.Visibility == Visibility.Visible))
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (hasRange)
+            TimeRangeText.Text = $"Limited to the view's time range: {(tf?.ToString("yyyy-MM-dd HH:mm") ?? "start")} → {(tt?.ToString("yyyy-MM-dd HH:mm") ?? "end")}";
 
         ListViewItem? firstSelectable = null;
 

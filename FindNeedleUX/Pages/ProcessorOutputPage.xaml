@@ -28,14 +28,32 @@
                 <TextBlock Text="Processor Output" FontSize="26" FontWeight="SemiBold" />
                 <TextBlock x:Name="SummaryText" FontSize="13" Foreground="Gray" TextWrapping="Wrap" />
             </StackPanel>
-            <Button Grid.Column="2" x:Name="GenerateButton" Click="Generate_Click"
-                    VerticalAlignment="Top" Style="{StaticResource AccentButtonStyle}"
-                    ToolTipService.ToolTip="Run the enabled output rules (e.g. UML diagrams) over the current results">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon x:Name="GenerateIcon" Glyph="&#xE768;" FontSize="14" />
-                    <TextBlock x:Name="GenerateLabel" Text="Generate" />
-                </StackPanel>
-            </Button>
+            <StackPanel Grid.Column="2" VerticalAlignment="Top" HorizontalAlignment="Right" Spacing="4" MaxWidth="280">
+                <Button x:Name="GenerateButton" Click="Generate_Click" HorizontalAlignment="Right"
+                        Style="{StaticResource AccentButtonStyle}"
+                        ToolTipService.ToolTip="Run the enabled output rules (e.g. UML diagrams) over the current results, limited to the results view's time range">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon x:Name="GenerateIcon" Glyph="&#xE768;" FontSize="14" />
+                        <TextBlock x:Name="GenerateLabel" Text="Generate" />
+                    </StackPanel>
+                </Button>
+                <!-- Makes it obvious the generation respects the view's time filter. -->
+                <Border x:Name="TimeRangeNote" Visibility="Collapsed" HorizontalAlignment="Right"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                        CornerRadius="4" Padding="8,4">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE823;" FontSize="12" VerticalAlignment="Center"
+                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock x:Name="TimeRangeText" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+                <TextBlock x:Name="NoTimeRangeNote" Visibility="Collapsed" HorizontalAlignment="Right"
+                           FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           Text="Generates over all results (set a time range in the results view to limit it)."
+                           TextWrapping="Wrap" TextAlignment="Right"/>
+            </StackPanel>
         </Grid>
 
         <!-- Master / detail -->
