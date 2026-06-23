@@ -1841,6 +1841,15 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         if (e.OriginalSource is not DependencyObject src) return;
 
+        // Right-click on a column header → quick rewrite/extract rule for that column.
+        var headerColumn = TryGetRightClickedHeader(src);
+        if (headerColumn != null)
+        {
+            e.Handled = true;
+            _ = ShowColumnQuickRuleDialogAsync(headerColumn);
+            return;
+        }
+
         LogLine row = null;
         string cellColumnHeader = null;
         CommunityToolkit.WinUI.UI.Controls.DataGridRow rowEl = null;
@@ -2014,6 +2023,171 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             var name = string.IsNullOrEmpty(existing.Name) ? TagOptions[3].Name : existing.Name; // default "Note"
             _rowTags[rowId] = new RowTag(name, tb.Text);
             refreshRow();
+        }
+    }
+
+    /// <summary>If the right-click landed on a DataGrid column header, return that column's name.</summary>
+    private static string TryGetRightClickedHeader(DependencyObject src)
+    {
+        var node = src;
+        while (node != null)
+        {
+            if (node is ContentControl cc && node.GetType().Name == "DataGridColumnHeader")
+                return cc.Content as string;
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return null;
+    }
+
+    /// <summary>Viewer column → the enrichment field that fills it ("Provider" is fed by Source).
+    /// Null = the column isn't directly settable by an extract rule.</summary>
+    private static string SettableFieldFor(string column) => column switch
+    {
+        "TaskName" => "TaskName",
+        "Provider" => "Source",
+        "ProcessId" => "ProcessId",
+        "ProcessName" => "ProcessName",
+        "ThreadId" => "ThreadId",
+        "EventId" => "EventId",
+        "ActivityId" => "ActivityId",
+        "Channel" => "Channel",
+        "OpCode" => "OpCode",
+        _ => null,
+    };
+
+    private static string TruncMid(string s, int n) =>
+        string.IsNullOrEmpty(s) ? "" : (s.Length <= n ? s : s.Substring(0, n) + "…");
+
+    /// <summary>Build a one-rule enrichment file: extract a capture into <paramref name="field"/>, or
+    /// strip the matched text from the message.</summary>
+    private static string BuildQuickRuleJson(string field, string pattern, bool extract)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(pattern ?? "", @"\(\?<(\w+)>");
+        string effPattern = m.Success ? pattern : "(?<v>" + pattern + ")";
+        string grp = m.Success ? m.Groups[1].Value : "v";
+        object action = extract
+            ? new { type = "extract", pattern = effPattern, set = new Dictionary<string, string> { { field, "{" + grp + "}" } }, strip = false }
+            : new { type = "extract", pattern = pattern, strip = true };
+        var doc = new
+        {
+            schemaVersion = "2.0",
+            sections = new[] { new {
+                name = "quickrule", purpose = "enrichment", providers = new[] { "*" },
+                rules = new[] { new { name = "quick", field = "message", match = extract ? effPattern : pattern, enabled = true, action } }
+            } }
+        };
+        return System.Text.Json.JsonSerializer.Serialize(doc, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private async System.Threading.Tasks.Task ShowColumnQuickRuleDialogAsync(string column)
+    {
+        var settable = SettableFieldFor(column);
+        var samples = ViewModel.Results.Select(r => r.Message).Where(s => !string.IsNullOrEmpty(s)).Take(12).ToList();
+
+        var pattern = new TextBox
+        {
+            PlaceholderText = @"regex — e.g. PID=(?<v>\d+)   (the (?<v>…) group is the captured value)",
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+        };
+        var extractRadio = new RadioButton
+        {
+            Content = settable != null ? $"Extract a value into the {column} column" : $"Extract (the {column} column can't be set)",
+            IsChecked = settable != null, IsEnabled = settable != null, GroupName = "qr",
+        };
+        var stripRadio = new RadioButton { Content = "Strip the matched text from the Message", IsChecked = settable == null, GroupName = "qr" };
+        var preview = new TextBlock
+        {
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 12,
+            TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true,
+        };
+
+        void Refresh()
+        {
+            if (string.IsNullOrWhiteSpace(pattern.Text)) { preview.Text = "Type a regex to preview…"; return; }
+            bool extract = extractRadio.IsChecked == true && settable != null;
+            try
+            {
+                var rows = FindPluginCore.Searching.RuleDSL.FieldExtractionPreview.Run(
+                    BuildQuickRuleJson(settable ?? column, pattern.Text, extract), samples);
+                var sb = new System.Text.StringBuilder();
+                int shown = 0, changed = 0;
+                foreach (var r in rows)
+                {
+                    bool hit = extract ? r.Fields.Count > 0 : r.After != r.Before;
+                    if (hit) changed++;
+                    if (shown < 8 && (hit || shown < 3))
+                    {
+                        var val = extract && settable != null && r.Fields.TryGetValue(settable, out var v) ? $"   → {column}={v}" : "";
+                        sb.Append("• ").Append(TruncMid(r.Before, 92)).Append('\n');
+                        sb.Append("   ⇒ ").Append(TruncMid(r.After, 92)).Append(val).Append("\n\n");
+                        shown++;
+                    }
+                }
+                sb.Append($"Matched {changed} of {rows.Count} sampled rows.");
+                preview.Text = sb.ToString();
+            }
+            catch (Exception ex) { preview.Text = "⚠ " + ex.Message; }
+        }
+        pattern.TextChanged += (_, _) => Refresh();
+        extractRadio.Checked += (_, _) => Refresh();
+        stripRadio.Checked += (_, _) => Refresh();
+
+        var panel = new StackPanel { Spacing = 8, MinWidth = 480 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Pull a value out of the Message into the {column} column, or strip matching text. Runs as field-extraction enrichment on a fresh search.",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+        panel.Children.Add(pattern);
+        panel.Children.Add(extractRadio);
+        panel.Children.Add(stripRadio);
+        panel.Children.Add(new TextBlock { Text = "Preview (current page)", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 0) });
+        panel.Children.Add(new Border
+        {
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
+            CornerRadius = new CornerRadius(4), Padding = new Thickness(8), Child = preview,
+        });
+
+        var dlg = new ContentDialog
+        {
+            Title = $"Quick rule — {column}",
+            Content = new ScrollViewer { Content = panel, MaxHeight = 440 },
+            PrimaryButtonText = "Apply (re-run search)",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = this.XamlRoot,
+        };
+        Refresh();
+        var result = await dlg.ShowAsync();
+        if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(pattern.Text)) return;
+        bool ex2 = extractRadio.IsChecked == true && settable != null;
+        ApplyQuickRule(column, BuildQuickRuleJson(settable ?? column, pattern.Text, ex2));
+    }
+
+    private void ApplyQuickRule(string column, string ruleJson)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle", "quick-rules");
+            System.IO.Directory.CreateDirectory(dir);
+            var path = System.IO.Path.Combine(dir, $"quick-{column}-{Guid.NewGuid():N}.rules.json");
+            System.IO.File.WriteAllText(path, ruleJson);
+            FindPluginCore.Searching.AutoRules.AutoRulesStore.Upsert(new FindPluginCore.Searching.AutoRules.AutoRuleEntry
+            {
+                Name = $"Quick rule: {column}",
+                RulePath = path,
+                BuiltIn = false,
+                Enabled = true,
+                Condition = new FindPluginCore.Searching.AutoRules.AutoRuleCondition { Always = true },
+            });
+            ResultsViewerSettings.EnrichmentEnabled = true; // extract rules only run when enrichment is on
+            MainWindowActions.RerunSearch();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ApplyQuickRule failed: {ex.Message}");
         }
     }
 

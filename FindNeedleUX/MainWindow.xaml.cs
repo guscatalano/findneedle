@@ -1069,6 +1069,27 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>Re-run the search with a fresh scan (so a just-added rule actually applies) and reopen
+    /// the viewer. Used by the column-header "quick rule" Apply.</summary>
+    public async void RerunSearch()
+    {
+        var prevCacheMode = MiddleLayerService.CacheModeOverride;
+        MiddleLayerService.CacheModeOverride = FindPluginCore.Searching.CacheReuseMode.Never;
+        try
+        {
+            ShowSpinner(true, "Applying rule…", showCancel: true);
+            await RunSearchWithProgress();
+            ShowSpinner(false);
+            await OpenViewerAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowSpinner(false);
+            Logger.Instance.Log($"Apply rule / rerun failed: {ex}");
+        }
+        finally { MiddleLayerService.CacheModeOverride = prevCacheMode; }
+    }
+
     public async void QuickFileOpen()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);

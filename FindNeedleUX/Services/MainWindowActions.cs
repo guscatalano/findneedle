@@ -68,4 +68,12 @@ public class MainWindowActions
         if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
             mw.RerunWithFullDecode();
     }
+
+    /// <summary>Re-run the current search (fresh scan) and reopen the viewer — used after applying a
+    /// quick/session rule so its effect shows.</summary>
+    public static void RerunSearch()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.RerunSearch();
+    }
 }
