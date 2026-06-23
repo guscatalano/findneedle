@@ -60,7 +60,13 @@ public sealed class SqlitePagedSource : IPagedLogSource
         var rows = _storage.GetFilteredPage(ToInput(filters), ToSortInput(sort), offset, limit);
         var list = new List<FindNeedleUX.LogLine>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
-            list.Add(new FindNeedleUX.LogLine(rows[i], offset + i));
+        {
+            // Index shows the stable load-order line number (the SQLite Id), not the per-page position
+            // — otherwise it re-labels 0,1,2… for every sort direction and "sort by Index" looks like a
+            // no-op even though the rows do reorder. Falls back to page position if there's no id.
+            long id = rows[i].GetRowId();
+            list.Add(new FindNeedleUX.LogLine(rows[i], id >= 0 ? (int)id : offset + i));
+        }
         return list;
     }
 
