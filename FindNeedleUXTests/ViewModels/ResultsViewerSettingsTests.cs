@@ -67,4 +67,36 @@ public class ResultsViewerSettingsTests
         }
     }
 
+    // ── Regression: per-window UI toggles must NOT broadcast Changed ───────────
+    // Firing Changed runs the viewer's OnSettingsChanged → ApplyTheme, which momentarily resets the
+    // per-level colors. Toolbar-button and column visibility are per-window UI state applied directly,
+    // so they must persist WITHOUT the global broadcast (that was the "level colors change" bug).
+    [TestMethod]
+    public void PerWindowToggles_DoNotBroadcastChanged()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"viewer-settings-{Guid.NewGuid():N}.json");
+        int fired = 0;
+        void Handler() => fired++;
+        try
+        {
+            ResultsViewerSettings.SetStorageLocationForTests(tmp);
+            ResultsViewerSettings.Changed += Handler;
+
+            ResultsViewerSettings.SetToolbarButtonVisibility("Export", false);
+            ResultsViewerSettings.SetColumnVisibility("Message", false);
+            ResultsViewerSettings.ClearColumnVisibility();
+
+            Assert.AreEqual(0, fired, "toolbar/column visibility must not fire the global Changed event");
+
+            // Sanity: it still persisted (just without the broadcast).
+            ResultsViewerSettings.ReloadFromDiskForTests();
+            Assert.IsFalse(ResultsViewerSettings.ToolbarButtonVisibility["Export"]);
+        }
+        finally
+        {
+            ResultsViewerSettings.Changed -= Handler;
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            ResultsViewerSettings.ResetStorageForTests();
+        }
+    }
 }

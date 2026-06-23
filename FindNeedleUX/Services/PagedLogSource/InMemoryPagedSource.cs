@@ -150,10 +150,34 @@ public sealed class InMemoryPagedSource : IPagedLogSource
                 }
             }
 
+            // Structured search-box query (evaluated against the row's fields).
+            if (f.Query != null && !f.Query.Evaluate(name => LineField(line, name))) continue;
+
             matches.Add(line);
         }
         return matches;
     }
+
+    /// <summary>Resolve a canonical query field name to this row's value. "*" = all searchable text.
+    /// Field names mirror FindPluginCore.Searching.Query.LogQuery's canonical set.</summary>
+    private static string LineField(LogLine l, string name) => name switch
+    {
+        "*" => l.SearchableData ?? l.Message ?? "",
+        "message" => l.Message,
+        "taskname" => l.TaskName,
+        "provider" => l.Provider,
+        "source" => l.Source,
+        "level" => l.Level,
+        "processid" => l.ProcessId,
+        "threadid" => l.ThreadId,
+        "eventid" => l.EventId,
+        "channel" => l.Channel,
+        "machinename" => l.MachineName,
+        "username" => l.Username,
+        "opcode" => l.OpCode,
+        "time" => l.LogTime.ToString("o"),
+        _ => "",
+    };
 
     private static void ApplySort(SortSpec s, List<LogLine> list)
     {

@@ -202,7 +202,44 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     // ----- filter state -----
     private string _searchText = "";
-    public string SearchText { get => _searchText; set => Set(ref _searchText, value, applyFilters: true); }
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (_searchText == value) return;
+            _searchText = value ?? "";
+            ReparseSearch();
+            OnPropertyChanged(nameof(SearchText));
+            ApplyFilters();
+        }
+    }
+
+    // The search box auto-detects a structured query (has a field operator / AND / OR) vs a plain
+    // substring. A valid query → _parsedQuery (applied across both backends) with _effectiveSearch ""
+    // so the substring path doesn't double-apply. A query that looks structured but won't parse →
+    // SearchQueryError set, no filtering. Plain text → substring search as before.
+    private FindPluginCore.Searching.Query.QueryNode _parsedQuery;
+    private string _effectiveSearch = "";
+    private string _searchQueryError = "";
+    /// <summary>Parse error for a malformed structured query (empty when fine). Bound to a UI hint.</summary>
+    public string SearchQueryError { get => _searchQueryError; private set => Set(ref _searchQueryError, value); }
+    /// <summary>True while the search box holds a valid structured query (vs a plain substring).</summary>
+    public bool SearchIsQuery => _parsedQuery != null;
+
+    private void ReparseSearch()
+    {
+        var text = _searchText ?? "";
+        if (FindPluginCore.Searching.Query.LogQuery.LooksStructured(text))
+        {
+            if (FindPluginCore.Searching.Query.LogQuery.TryParse(text, out var node, out var err))
+            { _parsedQuery = node; _effectiveSearch = ""; SearchQueryError = ""; }
+            else
+            { _parsedQuery = null; _effectiveSearch = ""; SearchQueryError = err; }
+        }
+        else
+        { _parsedQuery = null; _effectiveSearch = text; SearchQueryError = ""; }
+    }
 
     private string _providerFilter = "";
     public string ProviderFilter { get => _providerFilter; set => Set(ref _providerFilter, value, applyFilters: true); }
@@ -844,6 +881,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public void ClearFiltersNoReload()
     {
         _searchText = "";
+        ReparseSearch(); // drop any parsed query + error
         _providerFilter = "";
         _taskNameFilter = "";
         _messageFilter = "";
@@ -924,6 +962,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         value ??= "";
         if (string.Equals(_searchText, value, StringComparison.Ordinal)) return false;
         _searchText = value;
+        ReparseSearch(); // keep the parsed-query / substring state in sync (MCP-driven set)
         OnPropertyChanged(nameof(SearchText));
         return true;
     }
@@ -989,7 +1028,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     }
 
     private FilterSpec BuildFilterSpec() => new(
-        Search: _searchText ?? "",
+        Search: _effectiveSearch ?? "",   // "" when the box holds a structured query (see _parsedQuery)
         Provider: _providerFilter ?? "",
         TaskName: _taskNameFilter ?? "",
         Message: _messageFilter ?? "",
@@ -1001,6 +1040,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ProviderSet = _providerFilterSet,
         TaskNameSet = _taskNameFilterSet,
         SourceSet = _sourceFilterSet,
+        Query = _parsedQuery,
     };
 
     public void ClearFilters()
@@ -1024,7 +1064,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         string source, string level, DateTime? fromTime, DateTime? toTime,
         bool clearFromTime = false, bool clearToTime = false)
     {
-        if (search != null)   { _searchText = search;     OnPropertyChanged(nameof(SearchText)); }
+        if (search != null)   { _searchText = search; ReparseSearch(); OnPropertyChanged(nameof(SearchText)); }
         if (provider != null) { _providerFilter = provider; OnPropertyChanged(nameof(ProviderFilter)); }
         if (taskName != null) { _taskNameFilter = taskName; OnPropertyChanged(nameof(TaskNameFilter)); }
         if (message != null)  { _messageFilter = message;   OnPropertyChanged(nameof(MessageFilter)); }

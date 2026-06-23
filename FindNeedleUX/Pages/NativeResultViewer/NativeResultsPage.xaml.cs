@@ -1010,6 +1010,150 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             _suppressKnownCombo = false;
             ApplyKnownFilterVisibility(ResultsViewerSettings.ShowKnownValues);
         }
+        ApplyToolbarVisibility();
+    }
+
+    // ----- Toolbar customization (show/hide buttons) -----
+    private FrameworkElement ToolbarButtonFor(string id) => id switch
+    {
+        "SearchHelp" => SearchHelpButton,
+        "Columns" => ColumnsButton,
+        "Export" => ExportButton,
+        "Sources" => SourcesButton,
+        "Filters" => FiltersToggle,
+        "View" => ViewButton,
+        "FilterPerf" => FilterPerfButton,
+        "Status" => StatusText,
+        _ => null,
+    };
+
+    private static string ToolbarButtonLabel(string id) => id switch
+    {
+        "SearchHelp" => "Search syntax help (?)",
+        "Columns" => "Columns",
+        "Export" => "Export",
+        "Sources" => "Sources",
+        "Filters" => "Filters toggle",
+        "View" => "View menu",
+        "FilterPerf" => "Filter timing (⏱)",
+        "Status" => "Status text (x / y results)",
+        _ => id,
+    };
+
+    /// <summary>Apply the persisted show/hide choices to the toolbar buttons.</summary>
+    private void ApplyToolbarVisibility()
+    {
+        var vis = ResultsViewerSettings.ToolbarButtonVisibility;
+        foreach (var id in ResultsViewerSettings.ToolbarButtonIds)
+        {
+            var el = ToolbarButtonFor(id);
+            if (el != null)
+                el.Visibility = (vis.TryGetValue(id, out var v) ? v : true) ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>More (⋯) → "Customize toolbar…": a dialog of checkboxes to show/hide each button.</summary>
+    private async void CustomizeToolbar_Click(object sender, RoutedEventArgs e)
+    {
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Show these toolbar buttons:",
+            Foreground = new SolidColorBrush(Colors.Gray),
+            Margin = new Thickness(0, 0, 0, 6),
+        });
+        var vis = ResultsViewerSettings.ToolbarButtonVisibility;
+        foreach (var id in ResultsViewerSettings.ToolbarButtonIds)
+        {
+            var cb = new CheckBox
+            {
+                Content = ToolbarButtonLabel(id),
+                IsChecked = vis.TryGetValue(id, out var v) ? v : true,
+                Tag = id,
+            };
+            cb.Checked += ToolbarCheckChanged;
+            cb.Unchecked += ToolbarCheckChanged;
+            panel.Children.Add(cb);
+        }
+        var dlg = new ContentDialog
+        {
+            Title = "Customize toolbar",
+            Content = panel,
+            CloseButtonText = "Done",
+            XamlRoot = this.XamlRoot,
+        };
+        try { await dlg.ShowAsync(); } catch { /* another dialog may be open */ }
+    }
+
+    private void ToolbarCheckChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.Tag is string id)
+        {
+            ResultsViewerSettings.SetToolbarButtonVisibility(id, cb.IsChecked == true);
+            ApplyToolbarVisibility(); // live update behind the dialog
+        }
+    }
+
+    // The More (⋯) menu surfaces any HIDDEN toolbar buttons so their actions stay usable without
+    // un-hiding them. Rebuilt each time the menu opens; dynamic entries are tracked so they can be
+    // cleared on the next open.
+    private readonly List<MenuFlyoutItemBase> _overflowDynamic = new();
+
+    private void OverflowMenu_Opening(object sender, object e)
+    {
+        foreach (var it in _overflowDynamic) OverflowMenu.Items.Remove(it);
+        _overflowDynamic.Clear();
+
+        var vis = ResultsViewerSettings.ToolbarButtonVisibility;
+        int idx = 0;
+        foreach (var id in ResultsViewerSettings.ToolbarButtonIds)
+        {
+            if (id == "Status") continue;                          // not an action
+            if (vis.TryGetValue(id, out var v) && v) continue;     // already on the toolbar
+            var mi = new MenuFlyoutItem { Text = ToolbarButtonLabel(id), Tag = id };
+            mi.Click += HiddenToolbarItem_Click;
+            OverflowMenu.Items.Insert(idx++, mi);
+            _overflowDynamic.Add(mi);
+        }
+        if (idx > 0)
+        {
+            var sep = new MenuFlyoutSeparator();
+            OverflowMenu.Items.Insert(idx, sep);
+            _overflowDynamic.Add(sep);
+        }
+    }
+
+    private void HiddenToolbarItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem mi && mi.Tag is string id) OpenHiddenButton(id);
+    }
+
+    /// <summary>Run a hidden button's action without un-hiding it: flyout buttons are briefly revealed,
+    /// their flyout opened, then re-collapsed when it closes; command/toggle buttons just fire.</summary>
+    private void OpenHiddenButton(string id)
+    {
+        var el = ToolbarButtonFor(id);
+        if (el == null) return;
+
+        var fb = (el as Button)?.Flyout; // DropDownButton derives from Button, shares Flyout
+        if (fb != null)
+        {
+            el.Visibility = Visibility.Visible;
+            el.UpdateLayout(); // arrange now so the flyout can anchor to it
+            EventHandler<object> onClosed = null;
+            onClosed = (_, __) => { fb.Closed -= onClosed; ApplyToolbarVisibility(); }; // re-collapse per settings
+            fb.Closed += onClosed;
+            fb.ShowAt(el);
+            return;
+        }
+
+        switch (id)
+        {
+            case "Sources": ShowLoadedSources_Click(el, new RoutedEventArgs()); break;
+            case "Filters":
+                if (el is ToggleButton tb) { tb.IsChecked = !(tb.IsChecked ?? false); FiltersToggle_Click(tb, new RoutedEventArgs()); }
+                break;
+        }
     }
 
     private void ApplyPersistedLevelOverrides()
@@ -1734,6 +1878,17 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // enable the Rule filter toggle (it was disabled while the load was still streaming).
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming) && !ViewModel.IsStreaming)
             DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); UpdateEmptyState(); });
+        else if (e.PropertyName == nameof(NativeResultsPageViewModel.SearchQueryError))
+            DispatcherQueue.TryEnqueue(UpdateSearchQueryError);
+    }
+
+    /// <summary>Show/hide the inline parse error for a malformed structured query in the search box.</summary>
+    private void UpdateSearchQueryError()
+    {
+        if (SearchQueryErrorText == null) return;
+        var err = ViewModel.SearchQueryError;
+        if (string.IsNullOrEmpty(err)) { SearchQueryErrorText.Visibility = Visibility.Collapsed; }
+        else { SearchQueryErrorText.Text = "⚠ " + err; SearchQueryErrorText.Visibility = Visibility.Visible; }
     }
     private void ProviderFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.ProviderFilter = ProviderFilterBox.Text;
     private void TaskNameFilter_TextChanged(object sender, TextChangedEventArgs e) => ViewModel.TaskNameFilter = TaskNameFilterBox.Text;

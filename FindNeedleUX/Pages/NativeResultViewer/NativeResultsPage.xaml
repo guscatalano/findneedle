@@ -131,16 +131,67 @@
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
           <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>     <!-- search box: fills the empty space -->
+                <ColumnDefinition Width="Auto"/>  <!-- ? help + search indicators -->
+                <ColumnDefinition Width="Auto"/>  <!-- action buttons, pinned right -->
             </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <TextBox x:Name="SearchBox" Width="280" Height="32"
-                         PlaceholderText="Search all columns... (Ctrl+F)"
+            <TextBox x:Name="SearchBox" Grid.Column="0" Height="32" HorizontalAlignment="Stretch" Margin="0,0,8,0"
+                         PlaceholderText="Search… or query: msg ~ error AND level == Warning"
                          TextChanged="SearchBox_TextChanged"
                          KeyDown="SearchBox_KeyDown"
                          GotFocus="SearchBox_GotFocus"
-                         AutomationProperties.Name="Search results"/>
+                         AutomationProperties.Name="Search results">
+                    <ToolTipService.ToolTip>
+                        <TextBlock>
+                            <Run Text="Plain text searches all columns. Or use a query:"/><LineBreak/>
+                            <Run FontFamily="Consolas" Text="  msg != &quot;this&quot; AND taskname == &quot;that&quot;"/><LineBreak/>
+                            <Run FontFamily="Consolas" Text="  level == Error OR provider ~ Kernel"/><LineBreak/>
+                            <Run FontFamily="Consolas" Text="  (pid == 1234 OR pid == 5678) AND NOT msg ~ debug"/><LineBreak/>
+                            <Run Text="Operators: == != ~ (contains) !~ &gt; &lt; &gt;= &lt;=  ·  fields: msg, taskname, provider, source, level, pid, tid, eventid, channel, time, …"/>
+                        </TextBlock>
+                    </ToolTipService.ToolTip>
+                </TextBox>
+                <!-- Col1: ? help + search-state indicators, riding just right of the (filled) box. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <!-- "?" help: full search/query syntax in a flyout. -->
+                <Button x:Name="SearchHelpButton" Width="32" Height="32" Padding="0" Content="?" FontSize="14"
+                        VerticalAlignment="Center" ToolTipService.ToolTip="Search &amp; query syntax">
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel Spacing="8" MaxWidth="440">
+                                <TextBlock Text="Search &amp; query syntax" FontWeight="SemiBold" FontSize="14"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="Plain text searches every column. Add a field + operator (or AND / OR) and the box switches to a structured query."/>
+                                <TextBlock Text="Examples" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                <TextBlock FontFamily="Consolas" TextWrapping="Wrap" IsTextSelectionEnabled="True">
+                                    <Run Text="error"/><LineBreak/>
+                                    <Run Text="msg != &quot;this&quot; AND taskname == &quot;that&quot;"/><LineBreak/>
+                                    <Run Text="level == Error OR provider ~ Kernel"/><LineBreak/>
+                                    <Run Text="(pid == 1234 OR pid == 5678) AND NOT msg ~ debug"/><LineBreak/>
+                                    <Run Text="time &gt;= &quot;2024-01-15 09:00&quot;"/>
+                                </TextBlock>
+                                <TextBlock Text="Operators" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="12">
+                                    <Run FontFamily="Consolas" Text="=="/><Run Text=" equals   "/>
+                                    <Run FontFamily="Consolas" Text="!="/><Run Text=" not-equals   "/>
+                                    <Run FontFamily="Consolas" Text="~"/><Run Text=" contains   "/>
+                                    <Run FontFamily="Consolas" Text="!~"/><Run Text=" not-contains   "/>
+                                    <Run FontFamily="Consolas" Text="&gt; &lt; &gt;= &lt;="/><Run Text=" compare (time / number)"/>
+                                </TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="Combine with AND, OR, NOT and parentheses. == / != / ~ are case-insensitive. Quote values that contain spaces."/>
+                                <TextBlock Text="Fields" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" FontFamily="Consolas" IsTextSelectionEnabled="True"
+                                           Text="msg, taskname, provider, source, level, pid, tid, eventid, channel, machine, user, opcode, time"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <!-- Inline parse error when the box holds a malformed structured query. -->
+                <TextBlock x:Name="SearchQueryErrorText" VerticalAlignment="Center" FontSize="11"
+                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                           Visibility="Collapsed" MaxWidth="260" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.Name="Query error"/>
                 <!-- Spins while a search runs off the UI thread (so the window never freezes). -->
                 <ProgressRing x:Name="SearchBusyRing" Width="16" Height="16"
                               IsActive="False" Visibility="Collapsed"
@@ -152,8 +203,13 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Visibility="Collapsed"
                            AutomationProperties.Name="Search submit hint"/>
+                </StackPanel>
 
-                <Button Content="Columns ▾" Height="32"
+                <!-- Col2: action buttons + status/indicators, pinned to the right.
+                     Left margin keeps a gap from the "?" so they don't collide. -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                            Margin="16,0,0,0">
+                <Button x:Name="ColumnsButton" Content="Columns ▾" Height="32"
                         AutomationProperties.Name="Toggle column visibility">
                     <Button.Flyout>
                         <Flyout>
@@ -203,7 +259,7 @@
                 </ToggleButton>
 
                 <!-- View: rule-filter toggle, row-detail mode, and filter-pane dock, grouped. -->
-                <Button Content="View ▾" Height="32" AutomationProperties.Name="View options"
+                <Button x:Name="ViewButton" Content="View ▾" Height="32" AutomationProperties.Name="View options"
                         ToolTipService.ToolTip="Row details, filter pane position, and rule filtering">
                     <Button.Flyout>
                         <MenuFlyout Placement="Bottom">
@@ -224,7 +280,7 @@
                     </Button.Flyout>
                 </Button>
 
-                <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                <TextBlock x:Name="StatusText" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
                            VerticalAlignment="Center" Margin="16,0,0,0"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
@@ -271,19 +327,21 @@
                     <Button Content="Cancel" Height="28" Click="CancelIndexingButton_Click"
                             AutomationProperties.Name="Cancel building search index"/>
                 </StackPanel>
+                <!-- Overflow: rarely-used Help + Settings -->
+                <Button x:Name="OverflowButton" Height="32" VerticalAlignment="Center"
+                        AutomationProperties.Name="More" ToolTipService.ToolTip="More">
+                    <FontIcon Glyph="&#xE712;" FontSize="14"/>
+                    <Button.Flyout>
+                        <MenuFlyout x:Name="OverflowMenu" Placement="BottomEdgeAlignedRight" Opening="OverflowMenu_Opening">
+                            <!-- Hidden-button entries are inserted here at the top when the menu opens. -->
+                            <MenuFlyoutItem Text="Customize toolbar…" Click="CustomizeToolbar_Click"/>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Help" Click="HelpButton_Click"/>
+                            <MenuFlyoutItem Text="Settings…" Click="SettingsButton_Click"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
             </StackPanel>
-
-            <!-- Overflow: rarely-used Help + Settings, pinned right. -->
-            <Button Grid.Column="1" x:Name="OverflowButton" Height="32" VerticalAlignment="Center"
-                    AutomationProperties.Name="More" ToolTipService.ToolTip="More">
-                <FontIcon Glyph="&#xE712;" FontSize="14"/>
-                <Button.Flyout>
-                    <MenuFlyout Placement="BottomEdgeAlignedRight">
-                        <MenuFlyoutItem Text="Help" Click="HelpButton_Click"/>
-                        <MenuFlyoutItem Text="Settings…" Click="SettingsButton_Click"/>
-                    </MenuFlyout>
-                </Button.Flyout>
-            </Button>
           </Grid>
         </Border>
 

@@ -185,6 +185,32 @@ public class StorageTests
 
     [TestMethod]
     [TestCategory("Storage")]
+    public void Sqlite_StructuredQuery_FiltersViaSql()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+        storage.AddFilteredBatch(new List<ISearchResult>
+        {
+            new DummySearchResult("connection failed - timeout"),
+            new DummySearchResult("file not found"),
+            new DummySearchResult("authentication failed"),
+            new DummySearchResult("all good"),
+        });
+
+        FindPluginCore.Searching.Query.QueryNode Q(string s)
+        {
+            Assert.IsTrue(FindPluginCore.Searching.Query.LogQuery.TryParse(s, out var n, out var e), $"parse: {e}");
+            return n;
+        }
+        Assert.AreEqual(2, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message ~ failed") }));
+        Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message ~ failed AND NOT message ~ timeout") }));
+        Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message == \"all good\"") }));
+        Assert.AreEqual(3, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message ~ failed OR message ~ found") }));
+    }
+
+    [TestMethod]
+    [TestCategory("Storage")]
     public void Sqlite_ProviderSet_FiltersAsExactOrSet()
     {
         var (searchedFile, _) = CreateUniqueSearchFile();

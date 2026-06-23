@@ -146,6 +146,7 @@ public sealed class SqlitePagedSource : IPagedLogSource
             ProviderSet = f.ProviderSet,
             TaskNameSet = f.TaskNameSet,
             SourceSet = f.SourceSet,
+            Query = f.Query,
             LevelInt = levelInt,
             // The viewer's time-range filter compares against LogTime stored as ISO 8601 round-trip
             // ("o") strings. ISO strings sort lexically same as chronologically, so >= / <= work.

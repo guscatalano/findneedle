@@ -414,10 +414,10 @@ internal static class McpTools
         new ToolDef
         {
             Name = "search",
-            Description = "Set the global search term (and optional column/time filters), then return the first page. Convenience over set_filter + get_page.",
+            Description = "Set the global search term (and optional column/time filters), then return the first page. Convenience over set_filter + get_page. The term may be a structured query (see the 'query' arg).",
             InputSchema = Obj(new
             {
-                query = S("Global substring search across all columns."),
+                query = S("Plain text = substring across all columns. OR a structured query: field OP value joined by AND/OR/NOT with parentheses, e.g. 'msg != \"x\" AND level == Error', 'provider ~ Kernel OR pid == 1234', 'time >= \"2024-01-15 09:00\"'. Operators: == != ~ (contains) !~ > < >= <=. Fields: msg, taskname, provider, source, level, pid, tid, eventid, channel, machine, user, opcode, time. Auto-detected (an operator or AND/OR/NOT switches to query mode)."),
                 provider = S("Provider column filter."),
                 taskName = S("TaskName column filter."),
                 message = S("Message column filter."),
@@ -437,10 +437,10 @@ internal static class McpTools
         new ToolDef
         {
             Name = "set_filter",
-            Description = "Set any subset of the viewer's filters (null/omitted = unchanged, \"\" = clear). Returns the new filtered count.",
+            Description = "Set any subset of the viewer's filters (null/omitted = unchanged, \"\" = clear). Returns the new filtered count. The 'search' arg accepts the structured query language too.",
             InputSchema = Obj(new
             {
-                search = S("Global search term."),
+                search = S("Plain text = substring across all columns. OR a structured query, e.g. 'msg != \"x\" AND taskname == \"y\"', 'level == Error OR provider ~ Kernel'. Operators == != ~ !~ > < >= <= ; fields msg/taskname/provider/source/level/pid/tid/eventid/channel/machine/user/opcode/time ; combine with AND/OR/NOT and parens. Auto-detected."),
                 provider = S("Provider filter."),
                 taskName = S("TaskName filter."),
                 message = S("Message filter."),

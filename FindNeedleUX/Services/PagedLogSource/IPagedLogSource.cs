@@ -27,6 +27,10 @@ public sealed record FilterSpec(
     public IReadOnlyList<string> TaskNameSet { get; init; }
     public IReadOnlyList<string> SourceSet { get; init; }
 
+    /// <summary>Parsed structured query (from the search box's query language), applied as an extra AND
+    /// across both backends. Null when the search is a plain substring (the <see cref="Search"/> path).</summary>
+    public FindPluginCore.Searching.Query.QueryNode Query { get; init; }
+
     public static FilterSpec Empty { get; } = new("", "", "", "", "", "", null, null);
 
     private static bool HasItems(IReadOnlyList<string> s) => s != null && s.Count > 0;
@@ -39,7 +43,8 @@ public sealed record FilterSpec(
         string.IsNullOrEmpty(Source) &&
         string.IsNullOrEmpty(Level) &&
         FromTime is null && ToTime is null &&
-        !HasItems(ProviderSet) && !HasItems(TaskNameSet) && !HasItems(SourceSet);
+        !HasItems(ProviderSet) && !HasItems(TaskNameSet) && !HasItems(SourceSet) &&
+        Query is null;
 }
 
 /// <summary>

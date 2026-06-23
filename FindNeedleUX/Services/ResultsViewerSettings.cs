@@ -390,14 +390,16 @@ public static class ResultsViewerSettings
         Data.ColumnVisibility ??= new Dictionary<string, bool>();
         Data.ColumnVisibility[column] = visible;
         Save();
-        Changed?.Invoke();
+        // No Changed broadcast: column visibility is applied directly (viewer's ApplyColumnVisibility,
+        // or re-applied when the viewer re-opens). Firing Changed would run OnSettingsChanged →
+        // ApplyTheme, which momentarily resets level colors — and no subscriber acts on column state.
     }
 
     public static void ClearColumnVisibility()
     {
         Data.ColumnVisibility = null;
         Save();
-        Changed?.Invoke();
+        // See SetColumnVisibility: no Changed broadcast (avoids the spurious theme/level-color reset).
     }
 
     /// <summary>Canonical ordered set of fields the row-details panel can show.</summary>
@@ -530,6 +532,35 @@ public static class ResultsViewerSettings
     /// the results. Clamped so a corrupt value can't make it vanish or eat the grid. Only applies when
     /// the filter dock is Left.
     /// </summary>
+    /// <summary>Toolbar buttons the user can show/hide (stable ids). The search box and the More (⋯)
+    /// menu are always shown and not in this list.</summary>
+    public static readonly IReadOnlyList<string> ToolbarButtonIds =
+        new[] { "SearchHelp", "Columns", "Export", "Sources", "Filters", "View", "FilterPerf", "Status" };
+
+    /// <summary>Per-button toolbar visibility (all shown by default), merged with the defaults.</summary>
+    public static IReadOnlyDictionary<string, bool> ToolbarButtonVisibility
+    {
+        get
+        {
+            var merged = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in ToolbarButtonIds) merged[id] = true;
+            if (Data.ToolbarButtons != null)
+                foreach (var kv in Data.ToolbarButtons) merged[kv.Key] = kv.Value;
+            return merged;
+        }
+    }
+
+    public static void SetToolbarButtonVisibility(string id, bool visible)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        Data.ToolbarButtons ??= new Dictionary<string, bool>();
+        Data.ToolbarButtons[id] = visible;
+        Save();
+        // No Changed broadcast: this is per-window UI state. The viewer applies it directly via
+        // ApplyToolbarVisibility(). Firing Changed would run the full OnSettingsChanged → ApplyTheme,
+        // which momentarily resets level colors to the theme defaults (looked like a color "bug").
+    }
+
     public const double DefaultFilterPaneWidth = 300;
     public const double MinFilterPaneWidth = 220;
     public const double MaxFilterPaneWidth = 760;
@@ -660,6 +691,7 @@ public static class ResultsViewerSettings
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }
         public double? FilterPaneWidth { get; set; }
+        public Dictionary<string, bool> ToolbarButtons { get; set; }
         public double? ScrollBarSize { get; set; }
         public double? RowFontSize { get; set; }
         public double? RowHeightRatio { get; set; }

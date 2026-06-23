@@ -114,6 +114,15 @@ public class MiddleLayerService
         LastRuleOutputFiles.Clear();
         LastRuleProcessors.Clear();
         LastAutoAddedRules.Clear();
+        // Reset the active rule set. Rules (incl. auto-added ones like the DISM diagram rules) live on
+        // the query's RulesConfigPaths and otherwise survive the clear AND get carried onto the next
+        // file you load — so the Processor Output page would keep offering/generating a DISM diagram
+        // for an unrelated file. Clearing here means the next file gets its OWN auto-rules fresh.
+        if (SearchQueryUX?.CurrentQuery is NuSearchQuery nuq)
+        {
+            nuq.RulesConfigPaths = new List<string>();
+            nuq.LoadedRules = null;
+        }
         _workspaceCleared = true; // GetSearchStorage / GetStats / Processor Output now report "nothing to show"
         // Tell an open viewer to drop its source BEFORE we dispose any storage (avoids reading a
         // closed SQLite connection). Both callers (menu + MCP) run this on the UI thread, so the

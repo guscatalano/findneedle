@@ -1066,6 +1066,7 @@ namespace FindPluginCore.Implementations.Storage
             public IReadOnlyList<string> ProviderSet;
             public IReadOnlyList<string> TaskNameSet;
             public IReadOnlyList<string> SourceSet;
+            public FindPluginCore.Searching.Query.QueryNode Query; // structured search-box query (optional)
             public int? LevelInt;     // (int)Level enum, mapped by caller
             public string LogTimeFrom; // ISO 8601 round-trip string ("o")
             public string LogTimeTo;
@@ -1179,6 +1180,7 @@ namespace FindPluginCore.Implementations.Storage
                 string.IsNullOrEmpty(f.Message) &&
                 string.IsNullOrEmpty(f.Source) &&
                 !HasSet(f.ProviderSet) && !HasSet(f.TaskNameSet) && !HasSet(f.SourceSet) &&
+                f.Query == null &&
                 !f.LevelInt.HasValue &&
                 string.IsNullOrEmpty(f.LogTimeFrom) &&
                 string.IsNullOrEmpty(f.LogTimeTo));
@@ -1352,6 +1354,14 @@ namespace FindPluginCore.Implementations.Storage
                             "LogTime LIKE " + name + " ESCAPE '\\')");
                         ps.Add(new KeyValuePair<string, object>(name, pattern));
                     }
+                }
+
+                // Structured search-box query (its own @q… params, no collision with @p… above).
+                if (f.Query != null)
+                {
+                    var qctx = new FindPluginCore.Searching.Query.QuerySqlContext();
+                    conditions.Add(f.Query.AppendSql(qctx));
+                    foreach (var kv in qctx.Parameters) ps.Add(kv);
                 }
             }
 
