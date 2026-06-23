@@ -12,6 +12,13 @@
         <local:TimeFormatConverter x:Key="TimeFmt"/>
         <pages:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
+        <!-- Grid cell text: align to the TOP of the (fixed-height) row so a multi-line value (e.g. a
+             crash report with embedded newlines) reads top→bottom instead of centering its middle
+             lines in the row and spilling over the neighbours. -->
+        <Style x:Key="GridCellText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Top"/>
+        </Style>
+
         <!-- Row details panel -->
         <DataTemplate x:Key="RowDetailsTemplate">
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -593,24 +600,24 @@
                               ClipboardCopyMode="IncludeHeader"
                               AutomationProperties.Name="Search results">
                 <ctWinUI:DataGrid.Columns>
-                    <ctWinUI:DataGridTextColumn Header="Index"    Binding="{Binding Index}"    Width="70"/>
-                    <ctWinUI:DataGridTextColumn Header="Time"     Binding="{Binding LogTime, Converter={StaticResource TimeFmt}}" Width="160"/>
-                    <ctWinUI:DataGridTextColumn Header="Provider" Binding="{Binding Provider}" Width="120"/>
-                    <ctWinUI:DataGridTextColumn Header="TaskName" Binding="{Binding TaskName}" Width="140"/>
-                    <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800"/>
-                    <ctWinUI:DataGridTextColumn Header="Source"   Binding="{Binding Source}"   Width="140"/>
-                    <ctWinUI:DataGridTextColumn Header="Level"    Binding="{Binding Level}"    Width="90"/>
-                    <ctWinUI:DataGridTextColumn Header="ProcessId"  Binding="{Binding ProcessId}"  Width="80"/>
-                    <ctWinUI:DataGridTextColumn Header="ProcessName" Binding="{Binding ProcessName}" Width="140"/>
-                    <ctWinUI:DataGridTextColumn Header="ThreadId"   Binding="{Binding ThreadId}"   Width="80"/>
-                    <ctWinUI:DataGridTextColumn Header="ActivityId" Binding="{Binding ActivityId}" Width="240"/>
-                    <ctWinUI:DataGridTextColumn Header="EventId"    Binding="{Binding EventId}"    Width="80"/>
-                    <ctWinUI:DataGridTextColumn Header="OpCode"     Binding="{Binding OpCode}"     Width="100"/>
-                    <ctWinUI:DataGridTextColumn Header="Keywords"   Binding="{Binding Keywords}"   Width="140"/>
-                    <ctWinUI:DataGridTextColumn Header="RelatedActivityId" Binding="{Binding RelatedActivityId}" Width="240"/>
-                    <ctWinUI:DataGridTextColumn Header="Channel"    Binding="{Binding Channel}"    Width="120"/>
-                    <ctWinUI:DataGridTextColumn Header="ProviderGuid" Binding="{Binding ProviderGuid}" Width="240"/>
-                    <ctWinUI:DataGridTextColumn Header="RecordId"   Binding="{Binding RecordId}"   Width="90"/>
+                    <ctWinUI:DataGridTextColumn Header="Index"    Binding="{Binding Index}"    Width="70"  ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Time"     Binding="{Binding LogTime, Converter={StaticResource TimeFmt}}" Width="160" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Provider" Binding="{Binding Provider}" Width="120" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="TaskName" Binding="{Binding TaskName}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Source"   Binding="{Binding Source}"   Width="140" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Level"    Binding="{Binding Level}"    Width="90"  ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="ProcessId"  Binding="{Binding ProcessId}"  Width="80"  ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="ProcessName" Binding="{Binding ProcessName}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="ThreadId"   Binding="{Binding ThreadId}"   Width="80"  ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="ActivityId" Binding="{Binding ActivityId}" Width="240" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="EventId"    Binding="{Binding EventId}"    Width="80"  ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="OpCode"     Binding="{Binding OpCode}"     Width="100" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Keywords"   Binding="{Binding Keywords}"   Width="140" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="RelatedActivityId" Binding="{Binding RelatedActivityId}" Width="240" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Channel"    Binding="{Binding Channel}"    Width="120" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="ProviderGuid" Binding="{Binding ProviderGuid}" Width="240" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="RecordId"   Binding="{Binding RecordId}"   Width="90"  ElementStyle="{StaticResource GridCellText}"/>
                 </ctWinUI:DataGrid.Columns>
             </ctWinUI:DataGrid>
 
