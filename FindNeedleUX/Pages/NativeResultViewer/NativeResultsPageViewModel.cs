@@ -220,10 +220,18 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public string LevelFilter { get => _levelFilter; set => Set(ref _levelFilter, value, applyFilters: true); }
 
     private DateTime? _fromDate;
-    public DateTime? FromDate { get => _fromDate; set => Set(ref _fromDate, value, applyFilters: true); }
+    public DateTime? FromDate
+    {
+        get => _fromDate;
+        set { Set(ref _fromDate, value, applyFilters: true); MiddleLayerService.OutputTimeFrom = _fromDate; }
+    }
 
     private DateTime? _toDate;
-    public DateTime? ToDate { get => _toDate; set => Set(ref _toDate, value, applyFilters: true); }
+    public DateTime? ToDate
+    {
+        get => _toDate;
+        set { Set(ref _toDate, value, applyFilters: true); MiddleLayerService.OutputTimeTo = _toDate; }
+    }
 
     // ----- pagination -----
     private int _pageSize = 100;
@@ -796,6 +804,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         _levelFilter = "";
         _fromDate = null;
         _toDate = null;
+        MiddleLayerService.OutputTimeFrom = MiddleLayerService.OutputTimeTo = null;
         _currentPage = 1;
         HasPendingRows = false;
         OnPropertyChanged(nameof(SearchText));

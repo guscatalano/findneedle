@@ -1123,7 +1123,8 @@ public class NuSearchQuery : ISearchQuery
     /// Step4. Returns the output files produced. Lets the UI generate a UML diagram explicitly instead
     /// of on every search.
     /// </summary>
-    public List<string> GenerateOutputsNow(CancellationToken cancellationToken = default)
+    public List<string> GenerateOutputsNow(CancellationToken cancellationToken = default,
+        DateTime? fromTime = null, DateTime? toTime = null)
     {
         if ((_currentResultList == null || _currentResultList.Count == 0) && _resultStorage != null)
         {
@@ -1136,14 +1137,39 @@ public class NuSearchQuery : ISearchQuery
             _filteredResults = list;
         }
 
+        // Optional time window — lets the UI generate a diagram over the same range the results view is
+        // showing, without re-running the search. Filter a copy; the cached full list is untouched.
+        var listForOutput = _currentResultList;
+        if ((fromTime.HasValue || toTime.HasValue) && listForOutput != null)
+        {
+            int before = listForOutput.Count;
+            listForOutput = listForOutput.Where(r =>
+            {
+                var t = r.GetLogTime();
+                if (fromTime.HasValue && t < fromTime.Value) return false;
+                if (toTime.HasValue && t > toTime.Value) return false;
+                return true;
+            }).ToList();
+            PerfLog.Log("search.generate_outputs.timefilter", ("kept", listForOutput.Count), ("of", before));
+        }
+
         bool prev = DeferOutputs;
         DeferOutputs = false;
+        var savedCurrent = _currentResultList;
+        var savedFiltered = _filteredResults;
         try
         {
-            using (PerfLog.Scope("search.generate_outputs", ("rows", _currentResultList?.Count ?? 0)))
+            _currentResultList = listForOutput;
+            _filteredResults = listForOutput;
+            using (PerfLog.Scope("search.generate_outputs", ("rows", listForOutput?.Count ?? 0)))
                 Step4_ProcessAllResultsToOutput(cancellationToken);
         }
-        finally { DeferOutputs = prev; }
+        finally
+        {
+            _currentResultList = savedCurrent;
+            _filteredResults = savedFiltered;
+            DeferOutputs = prev;
+        }
 
         return GeneratedRuleOutputFiles.Where(System.IO.File.Exists).ToList();
     }

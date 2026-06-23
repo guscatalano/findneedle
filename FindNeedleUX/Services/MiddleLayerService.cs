@@ -103,6 +103,7 @@ public class MiddleLayerService
         Filters.Clear();
         SearchResults.Clear();
         ViewerQuickRulesStore.Clear(); // session right-click rules don't outlive the workspace
+        OutputTimeFrom = OutputTimeTo = null;
         LastRunSummary = null;
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
         _workspaceCleared = true; // GetSearchStorage / GetStats now report "nothing to show"
@@ -403,11 +404,17 @@ public class MiddleLayerService
     /// Scans the current results once; safe to call off the UI thread. Updates
     /// <see cref="LastRuleOutputFiles"/> and notifies. Returns the files produced.
     /// </summary>
+    /// <summary>The results view's current time range (From/To), pushed here by the viewer so deferred
+    /// output generation (UML diagrams) can reuse it instead of asking for the range again. Null = no
+    /// bound. Reset on Clear workspace / Clear filters.</summary>
+    public static DateTime? OutputTimeFrom { get; set; }
+    public static DateTime? OutputTimeTo { get; set; }
+
     public static List<string> GenerateRuleOutputs(System.Threading.CancellationToken ct = default)
     {
         if (SearchQueryUX.CurrentQuery is NuSearchQuery nu)
         {
-            var files = nu.GenerateOutputsNow(ct);
+            var files = nu.GenerateOutputsNow(ct, OutputTimeFrom, OutputTimeTo);
             LastRuleOutputFiles = files;
             NotifyStateChanged();
             return files;
