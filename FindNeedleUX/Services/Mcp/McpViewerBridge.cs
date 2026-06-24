@@ -667,6 +667,17 @@ public sealed class McpViewerBridge
                 chars = u.DiagramCharCount,
                 rulesFired = u.Rules.Count(r => r.Count > 0),
                 rulesTotal = u.Rules.Count,
+                // Per-rule hit counts + a few sample matched lines — the key signal for debugging a rule
+                // that isn't working: count==0 means its `match` regex matched nothing (see sampleLines
+                // for what the rows actually look like). Capped so the payload stays agent-friendly.
+                rules = u.Rules.Select(r => new
+                {
+                    name = r.Name,
+                    match = r.Match,
+                    count = r.Count,
+                    sampleLines = (r.Lines ?? new List<FindNeedleRuleDSL.UmlRuleHitLine>())
+                        .Take(3).Select(l => l.Content).ToList(),
+                }).ToList(),
             })
             .ToList();
 
