@@ -1895,7 +1895,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void MessageFilter_TextChanged(object sender, TextChangedEventArgs e)  => ViewModel.MessageFilter  = MessageFilterBox.Text;
     private void SourceFilter_TextChanged(object sender, TextChangedEventArgs e)   => ViewModel.SourceFilter   = SourceFilterBox.Text;
     private void LevelFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        => ViewModel.LevelFilter = (LevelFilterCombo.SelectedItem as string) ?? "";
+        => ViewModel.LevelFilter = (LevelFilterCombo.SelectedItem as LevelEntry)?.Level ?? "";
 
     // ---- "Show known" value dropdowns (Provider / TaskName / Source) ----
     // Each field has three controls: a free-text box, a single-select combo, and a multi-select
@@ -1951,57 +1951,79 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private async System.Threading.Tasks.Task FillKnownFieldAsync(string field, ComboBox combo, ListView multiList,
         DropDownButton multiButton, string current, System.Collections.Generic.IReadOnlyList<string> currentSet)
     {
-        var values = new List<string>();
+        var facets = new List<(string Value, int Count)>();
+        int total = 0;
         try
         {
-            var facets = await System.Threading.Tasks.Task.Run(() => ViewModel.GetFacets(field, 1000, 200000));
-            if (facets?.Values != null)
-                values = facets.Values.Select(v => v.Value)
-                    .Where(s => !string.IsNullOrEmpty(s) && s != "(none)").ToList();
+            // Cross-filter narrowing: values still reachable given every OTHER active filter — but NOT
+            // this field's own selection, so the list doesn't collapse to just what's already picked.
+            var f = await System.Threading.Tasks.Task.Run(() => ViewModel.GetFacetsExcludingField(field, 1000, 200000));
+            total = f?.Total ?? 0;
+            if (f?.Values != null)
+                facets = f.Values
+                    .Where(v => !string.IsNullOrEmpty(v.Value) && v.Value != "(none)")
+                    .Select(v => (v.Value, v.Count)).ToList();
         }
         catch { /* facet failure → empty control, not a crash */ }
+
+        // Keep a currently-selected value visible even if it dropped out of the cross-filtered set
+        // (a count-0 "stale" row, like SimpleEventViewer) so the user can still see and clear it.
+        var present = new HashSet<string>(facets.Select(x => x.Value), StringComparer.OrdinalIgnoreCase);
+        void EnsurePresent(string v)
+        {
+            if (!string.IsNullOrEmpty(v) && !present.Contains(v)) { facets.Add((v, 0)); present.Add(v); }
+        }
+        if (currentSet != null) foreach (var v in currentSet) EnsurePresent(v);
+        EnsurePresent(current);
 
         _suppressKnownCombo = true;
         if (combo != null)
         {
-            combo.Items.Clear();
-            foreach (var v in values) combo.Items.Add(v);
-            combo.SelectedItem = values.FirstOrDefault(v => string.Equals(v, current, StringComparison.OrdinalIgnoreCase));
+            var items = new List<KnownFacetItem> { new() { IsAll = true, Count = total } };
+            items.AddRange(facets.Select(x => new KnownFacetItem { Value = x.Value, Count = x.Count }));
+            combo.ItemsSource = items;
+            combo.SelectedItem = items.FirstOrDefault(i => !i.IsAll
+                && string.Equals(i.Value, current, StringComparison.OrdinalIgnoreCase)) ?? items[0]; // (All)
         }
         if (multiList != null)
         {
-            multiList.Items.Clear();
-            foreach (var v in values) multiList.Items.Add(v);
+            var items = facets.Select(x => new KnownFacetItem { Value = x.Value, Count = x.Count }).ToList();
+            multiList.ItemsSource = items;
             multiList.SelectedItems.Clear();
             if (currentSet != null)
-                foreach (var v in values)
-                    if (currentSet.Contains(v, StringComparer.OrdinalIgnoreCase)) multiList.SelectedItems.Add(v);
+                foreach (var it in items)
+                    if (currentSet.Contains(it.Value, StringComparer.OrdinalIgnoreCase)) multiList.SelectedItems.Add(it);
             UpdateMultiButtonLabel(field, multiButton, multiList);
         }
         _suppressKnownCombo = false;
     }
 
+    /// <summary>SEV-style summary on the multi-select button: "Field: All" / "Field: value" / "Field: value +N".</summary>
     private static void UpdateMultiButtonLabel(string field, DropDownButton button, ListView list)
     {
         if (button == null) return;
-        int n = list?.SelectedItems.Count ?? 0;
-        button.Content = n == 0 ? $"{field} (any)" : $"{field} ({n})";
+        var sel = list?.SelectedItems.OfType<KnownFacetItem>().Where(i => !i.IsAll).Select(i => i.Value).ToList()
+                  ?? new List<string>();
+        button.Content = KnownFilterLabel.Summarize(field, sel);
     }
 
     private void ProviderFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressKnownCombo) return;
-        ViewModel.ProviderFilter = (ProviderFilterCombo.SelectedItem as string) ?? "";
+        ViewModel.ProviderFilter = (ProviderFilterCombo.SelectedItem as KnownFacetItem)?.Value ?? "";
+        _ = RefreshOtherKnownFieldsAsync("Provider");
     }
     private void TaskNameFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressKnownCombo) return;
-        ViewModel.TaskNameFilter = (TaskNameFilterCombo.SelectedItem as string) ?? "";
+        ViewModel.TaskNameFilter = (TaskNameFilterCombo.SelectedItem as KnownFacetItem)?.Value ?? "";
+        _ = RefreshOtherKnownFieldsAsync("TaskName");
     }
     private void SourceFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressKnownCombo) return;
-        ViewModel.SourceFilter = (SourceFilterCombo.SelectedItem as string) ?? "";
+        ViewModel.SourceFilter = (SourceFilterCombo.SelectedItem as KnownFacetItem)?.Value ?? "";
+        _ = RefreshOtherKnownFieldsAsync("Source");
     }
 
     private void ProviderFilterMultiList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2015,8 +2037,42 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         UpdateMultiButtonLabel(field, button, list);
         if (_suppressKnownCombo) return;
-        var values = list.SelectedItems.OfType<string>().ToList();
+        var values = list.SelectedItems.OfType<KnownFacetItem>().Where(i => !i.IsAll).Select(i => i.Value).ToList();
         ViewModel.SetKnownFilterSet(field, values);
+        _ = RefreshOtherKnownFieldsAsync(field);
+    }
+
+    // "(All)" row at the top of each multi-select flyout: clearing the selection drops the field's
+    // filter (SelectionChanged → ApplyMultiSelection handles the rest).
+    private void ProviderFilterAll_Click(object sender, RoutedEventArgs e) => ProviderFilterMultiList.SelectedItems.Clear();
+    private void TaskNameFilterAll_Click(object sender, RoutedEventArgs e) => TaskNameFilterMultiList.SelectedItems.Clear();
+    private void SourceFilterAll_Click(object sender, RoutedEventArgs e)   => SourceFilterMultiList.SelectedItems.Clear();
+
+    // When a flyout opens, refresh that field's own values against the other active filters (cross-filter).
+    private async void ProviderFlyout_Opening(object sender, object e)
+        => await FillKnownFieldAsync("Provider", ProviderFilterCombo, ProviderFilterMultiList, ProviderFilterMulti,
+                                     ViewModel.ProviderFilter, ViewModel.ProviderFilterSet);
+    private async void TaskNameFlyout_Opening(object sender, object e)
+        => await FillKnownFieldAsync("TaskName", TaskNameFilterCombo, TaskNameFilterMultiList, TaskNameFilterMulti,
+                                     ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet);
+    private async void SourceFlyout_Opening(object sender, object e)
+        => await FillKnownFieldAsync("Source", SourceFilterCombo, SourceFilterMultiList, SourceFilterMulti,
+                                     ViewModel.SourceFilter, ViewModel.SourceFilterSet);
+
+    /// <summary>After one known field changes, refresh the OTHER two so their values reflect the new
+    /// filter (cross-filter narrowing). No-op when the "Known" dropdowns aren't showing.</summary>
+    private async System.Threading.Tasks.Task RefreshOtherKnownFieldsAsync(string changedField)
+    {
+        if (ShowKnownToggle?.IsChecked != true) return;
+        if (changedField != "Provider")
+            await FillKnownFieldAsync("Provider", ProviderFilterCombo, ProviderFilterMultiList, ProviderFilterMulti,
+                                      ViewModel.ProviderFilter, ViewModel.ProviderFilterSet);
+        if (changedField != "TaskName")
+            await FillKnownFieldAsync("TaskName", TaskNameFilterCombo, TaskNameFilterMultiList, TaskNameFilterMulti,
+                                      ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet);
+        if (changedField != "Source")
+            await FillKnownFieldAsync("Source", SourceFilterCombo, SourceFilterMultiList, SourceFilterMulti,
+                                      ViewModel.SourceFilter, ViewModel.SourceFilterSet);
     }
 
     private void FromDatePicker_DateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
@@ -2236,42 +2292,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (col != null) col.Visibility = entry.IsVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // ----- Level color editor -----
-    private async void LevelChip_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button btn || btn.Tag is not string level) return;
-        var entry = ViewModel.Levels.FirstOrDefault(x => string.Equals(x.Level, level, StringComparison.OrdinalIgnoreCase));
-        if (entry == null) return;
-
-        var picker = new ColorPicker { IsAlphaEnabled = false, Color = ParseHex(entry.HexColor) };
-        var dialog = new ContentDialog
-        {
-            Title = $"Color for {level}",
-            Content = picker,
-            PrimaryButtonText = "OK",
-            SecondaryButtonText = "Reset to default",
-            CloseButtonText = "Cancel",
-            XamlRoot = this.XamlRoot
-        };
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
-        {
-            var c = picker.Color;
-            var hex = $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
-            entry.HexColor = hex;
-            // Persist as a per-level override.
-            ResultsViewerSettings.SetLevelColor(level, hex);
-        }
-        else if (result == ContentDialogResult.Secondary)
-        {
-            // Reset = drop user override, fall back to active theme.
-            var theme = NativeResultsPageViewModel.ThemePresets.TryGetValue(ResultsViewerSettings.ThemeName, out var t)
-                ? t : NativeResultsPageViewModel.ThemePresets[NativeResultsPageViewModel.DefaultThemeName];
-            entry.HexColor = theme.TryGetValue(level, out var def) ? def : "Transparent";
-            ResultsViewerSettings.SetLevelColor(level, entry.HexColor);
-        }
-        RebindGrid();
-    }
+    // Level colors are edited only on the settings page (Settings → Appearance → Level colors), so the
+    // viewer has no color editor — the level legend is display-only. Edits made on the settings page
+    // flow back here live via ResultsViewerSettings.Changed → OnSettingsChanged → ApplyTheme.
 
     // ----- Row coloring -----
     // Hot path during scroll. Perf rules:
@@ -3059,7 +3082,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (taskName != null) TaskNameFilterBox.Text = taskName;
         if (message != null) MessageFilterBox.Text = message;
         if (source != null) SourceFilterBox.Text = source;
-        if (level != null) LevelFilterCombo.SelectedItem = string.IsNullOrEmpty(level) ? null : level;
+        if (level != null) LevelFilterCombo.SelectedItem = string.IsNullOrEmpty(level)
+            ? null
+            : ViewModel.Levels.FirstOrDefault(l => string.Equals(l.Level, level, StringComparison.OrdinalIgnoreCase));
         if (clearFrom) { FromDatePicker.Date = null; FromTimePicker.SelectedTime = null; }
         else if (from.HasValue) { FromDatePicker.Date = from.Value; FromTimePicker.SelectedTime = from.Value.TimeOfDay; }
         if (clearTo) { ToDatePicker.Date = null; ToTimePicker.SelectedTime = null; }
@@ -3180,19 +3205,6 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         };
     }
 
-    private static global::Windows.UI.Color ParseHex(string hex)
-    {
-        if (string.IsNullOrWhiteSpace(hex) || hex.Equals("Transparent", StringComparison.OrdinalIgnoreCase))
-            return global::Windows.UI.Color.FromArgb(0, 0, 0, 0);
-        var s = hex.TrimStart('#');
-        if (s.Length == 6) s = "FF" + s;
-        if (s.Length != 8) return global::Windows.UI.Color.FromArgb(255, 255, 255, 255);
-        return global::Windows.UI.Color.FromArgb(
-            (byte)Convert.ToInt32(s.Substring(0, 2), 16),
-            (byte)Convert.ToInt32(s.Substring(2, 2), 16),
-            (byte)Convert.ToInt32(s.Substring(4, 2), 16),
-            (byte)Convert.ToInt32(s.Substring(6, 2), 16));
-    }
 }
 } // FindNeedleUX.Pages
 

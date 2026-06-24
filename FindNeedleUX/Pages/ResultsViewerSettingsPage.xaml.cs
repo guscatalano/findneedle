@@ -39,6 +39,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
         bool all = tag == "all";
         PanelAppearance.Visibility   = all || tag == "appearance"   ? Visibility.Visible : Visibility.Collapsed;
+        PanelGeneral.Visibility      = all || tag == "general"      ? Visibility.Visible : Visibility.Collapsed;
         PanelSearch.Visibility       = all || tag == "search"       ? Visibility.Visible : Visibility.Collapsed;
         PanelColumns.Visibility      = all || tag == "columns"      ? Visibility.Visible : Visibility.Collapsed;
         PanelDecoding.Visibility     = all || tag == "decoding"     ? Visibility.Visible : Visibility.Collapsed;
@@ -47,12 +48,156 @@ public sealed partial class ResultsViewerSettingsPage : Page
         CategoryTitle.Text = tag switch
         {
             "all"          => "All settings",
+            "general"      => "General",
             "search"       => "Search",
             "columns"      => "Columns",
             "decoding"     => "Decoding (WPP symbols)",
             "integrations" => "Integrations",
             _              => "Appearance",
         };
+    }
+
+    // ----- Settings search (pane AutoSuggestBox: "type to find a setting") -----
+    private sealed class SettingEntry
+    {
+        public string Title = "";
+        public string Description = "";
+        public string Category = "";   // display name, e.g. "Appearance"
+        public Border Card;            // the card Border to scroll to
+        public string Suggestion => $"{Title}  —  {Category}";
+    }
+
+    private readonly System.Collections.Generic.List<SettingEntry> _settingsCatalog = new();
+
+    /// <summary>Walk each category panel once and record (title, description, category, card) for every
+    /// card Border, so the search box can match + jump without any per-card manual tagging. New cards are
+    /// picked up automatically.</summary>
+    private void BuildSettingsCatalog()
+    {
+        _settingsCatalog.Clear();
+        var panels = new (Panel panel, string category)[]
+        {
+            (PanelAppearance,   "Appearance"),
+            (PanelGeneral,      "General"),
+            (PanelSearch,       "Search"),
+            (PanelColumns,      "Columns"),
+            (PanelDecoding,     "Decoding"),
+            (PanelIntegrations, "Integrations"),
+        };
+        foreach (var (panel, category) in panels)
+        {
+            if (panel == null) continue;
+            foreach (var card in panel.Children.OfType<Border>())
+            {
+                var texts = Descendants<TextBlock>(card).ToList();
+                string title = texts.FirstOrDefault(t => t.FontWeight.Weight >= 600)?.Text
+                               ?? texts.FirstOrDefault()?.Text;
+                if (string.IsNullOrWhiteSpace(title)) continue;
+                var descParts = texts.Select(t => t.Text)
+                    .Concat(Descendants<CheckBox>(card).Select(c => c.Content?.ToString()));
+                string description = string.Join(" ",
+                    descParts.Where(s => !string.IsNullOrWhiteSpace(s) && s != title));
+                _settingsCatalog.Add(new SettingEntry
+                {
+                    Title = title, Description = description, Category = category, Card = card
+                });
+            }
+        }
+    }
+
+    private static System.Collections.Generic.IEnumerable<T> Descendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        int n = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < n; i++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var d in Descendants<T>(child)) yield return d;
+        }
+    }
+
+    private void SettingsSearch_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        var q = sender.Text?.Trim() ?? "";
+        if (q.Length == 0) { sender.ItemsSource = null; return; }
+        sender.ItemsSource = _settingsCatalog
+            .Where(e => e.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+                     || e.Description.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Suggestion)
+            .ToList();
+    }
+
+    private void SettingsSearch_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+    {
+        if (args.SelectedItem is string s)
+        {
+            var entry = _settingsCatalog.FirstOrDefault(e => e.Suggestion == s);
+            if (entry != null) JumpToSetting(entry);
+        }
+    }
+
+    private void SettingsSearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        SettingEntry entry = args.ChosenSuggestion is string s
+            ? _settingsCatalog.FirstOrDefault(e => e.Suggestion == s)
+            : null;
+        if (entry == null)
+        {
+            var q = args.QueryText?.Trim() ?? "";
+            if (q.Length > 0)
+                entry = _settingsCatalog.FirstOrDefault(
+                    e => e.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+                      || e.Description.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+        if (entry != null) JumpToSetting(entry);
+    }
+
+    /// <summary>Switch to "All settings" (so every panel is visible), scroll the matched card into view,
+    /// and briefly outline it so it's obvious which setting matched.</summary>
+    private void JumpToSetting(SettingEntry e)
+    {
+        if (e?.Card == null) return;
+
+        // "All settings" mode → every panel visible, so BringIntoView works for any category.
+        var allItem = SettingsNav.MenuItems.OfType<NavigationViewItem>()
+            .FirstOrDefault(i => (i.Tag as string) == "all");
+        if (allItem != null) SettingsNav.SelectedItem = allItem;
+        PanelAppearance.Visibility = PanelGeneral.Visibility = PanelSearch.Visibility =
+            PanelColumns.Visibility = PanelDecoding.Visibility = PanelIntegrations.Visibility = Visibility.Visible;
+        CategoryTitle.Text = e.Category;
+
+        var card = e.Card;
+        // Let the now-visible panels lay out before scrolling/highlighting.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            card.StartBringIntoView();
+            HighlightCard(card);
+        });
+    }
+
+    private void HighlightCard(Border card)
+    {
+        if (card == null) return;
+        var origBrush = card.BorderBrush;
+        var origThickness = card.BorderThickness;
+        if (Application.Current.Resources.TryGetValue("AccentFillColorDefaultBrush", out var accent)
+            && accent is Microsoft.UI.Xaml.Media.Brush brush)
+        {
+            card.BorderBrush = brush;
+            card.BorderThickness = new Thickness(2);
+        }
+        var timer = DispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(1600);
+        timer.IsRepeating = false;
+        timer.Tick += (s, _) =>
+        {
+            card.BorderBrush = origBrush;
+            card.BorderThickness = origThickness;
+            timer.Stop();
+        };
+        timer.Start();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -67,6 +212,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             ShowPreviewFrame(0);
 
             // --- Time format ---
+            PopulateTimeFormatCombo();
             SelectComboItemByTag(TimeFormatCombo, ResultsViewerSettings.TimeFormat);
             UpdateTimeFormatPreview();
 
@@ -146,6 +292,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
                 "FindNeedle", "viewer-settings.json");
 
             LevelEditor.ItemsSource = Levels;
+
+            // Index every card so the pane search box can find + jump to a setting.
+            BuildSettingsCatalog();
         }
         finally { _suppressEvents = false; }
     }
@@ -190,7 +339,11 @@ public sealed partial class ResultsViewerSettingsPage : Page
             ? t : NativeResultsPageViewModel.ThemePresets[NativeResultsPageViewModel.DefaultThemeName];
         var overrides = ResultsViewerSettings.LevelColors;
 
-        foreach (var levelName in NativeResultsPageViewModel.ThemePresets[NativeResultsPageViewModel.DefaultThemeName].Keys)
+        // Iterate the REAL Level enum (Catastrophic/Error/Warning/Info/Verbose/Unknown), in severity
+        // order, so this editor lists exactly the levels the result viewer colors. (The theme presets
+        // carry extra decorative keys like "Critical"/"Debug" that no row is ever tagged with — listing
+        // those here made the editor look out of sync with the grid.)
+        foreach (var levelName in Enum.GetNames(typeof(FindNeedlePluginLib.Level)))
         {
             string hex = overrides.TryGetValue(levelName, out var ov) ? ov
                        : theme.TryGetValue(levelName, out var th) ? th
@@ -208,6 +361,35 @@ public sealed partial class ResultsViewerSettingsPage : Page
                 combo.SelectedItem = item;
                 return;
             }
+        }
+    }
+
+    // Each option's label is fixed; its example is rendered from the option's own format string against
+    // one sample timestamp, so every row is built the same way — consistent, and never a duplicate.
+    private static readonly (string tag, string label)[] TimeFormatOptions =
+    {
+        ("yyyy-MM-dd HH:mm:ss",     "Standard"),
+        ("yyyy-MM-dd HH:mm:ss.fff", "With milliseconds"),
+        ("yyyy-MM-dd HH:mm:ss zzz", "With time zone"),
+        ("MMM d HH:mm:ss",          "Friendly"),
+        ("HH:mm:ss",                "Time only"),
+        ("HH:mm:ss.fff",            "Time only + milliseconds"),
+        ("g",                       "Locale short"),
+        ("G",                       "Locale long"),
+        ("o",                       "ISO 8601 round-trip"),
+    };
+
+    private void PopulateTimeFormatCombo()
+    {
+        // Fixed sample (with ms + a non-UTC-ambiguous local kind so zzz renders an offset).
+        var sample = new DateTime(2026, 3, 1, 9, 20, 1, 123, DateTimeKind.Local);
+        TimeFormatCombo.Items.Clear();
+        foreach (var (tag, label) in TimeFormatOptions)
+        {
+            string example;
+            try { example = sample.ToString(tag, System.Globalization.CultureInfo.CurrentCulture); }
+            catch { example = tag; }
+            TimeFormatCombo.Items.Add(new ComboBoxItem { Tag = tag, Content = $"{label} — {example}" });
         }
     }
 

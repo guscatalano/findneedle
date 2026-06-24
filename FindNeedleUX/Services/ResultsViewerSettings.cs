@@ -586,9 +586,11 @@ public static class ResultsViewerSettings
 
     /// <summary>
     /// Per-field select mode for the "show known" dropdowns. Only Provider / TaskName / Source support
-    /// known-value dropdowns. Defaults to Single. Multi matches any of the chosen values (OR-set).
+    /// known-value dropdowns. Defaults to Multi (match any of several values, OR-set) — like
+    /// SimpleEventViewer, where picking a few providers/sources at once is the common case. Users can
+    /// still switch a field to Single on the settings page.
     /// </summary>
-    public const KnownFilterMode DefaultKnownFilterMode = KnownFilterMode.Single;
+    public const KnownFilterMode DefaultKnownFilterMode = KnownFilterMode.Multi;
     public static KnownFilterMode GetKnownFilterMode(string field)
     {
         if (!string.IsNullOrEmpty(field) && Data.KnownFilterModes != null

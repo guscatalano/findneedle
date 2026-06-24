@@ -469,29 +469,39 @@
                         <!-- Provider: text box OR known-value combo (one visible at a time) -->
                         <TextBox x:Name="ProviderFilterBox" Width="120" Height="28" FontSize="12"
                                  PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
-                        <ComboBox x:Name="ProviderFilterCombo" Width="160" Height="28" FontSize="12" Visibility="Collapsed"
+                        <ComboBox x:Name="ProviderFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
+                                  DisplayMemberPath="Display"
                                   PlaceholderText="Provider (known)…" SelectionChanged="ProviderFilterCombo_SelectionChanged"/>
                         <DropDownButton x:Name="ProviderFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
-                                        Content="Provider (any)">
+                                        Content="Provider: All">
                             <DropDownButton.Flyout>
-                                <Flyout>
-                                    <ListView x:Name="ProviderFilterMultiList" SelectionMode="Multiple"
-                                              MinWidth="240" MaxHeight="340"
-                                              SelectionChanged="ProviderFilterMultiList_SelectionChanged"/>
+                                <Flyout Opening="ProviderFlyout_Opening">
+                                    <StackPanel MinWidth="260" Spacing="4">
+                                        <Button Content="(All) — clear" Click="ProviderFilterAll_Click"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" FontSize="12"/>
+                                        <ListView x:Name="ProviderFilterMultiList" SelectionMode="Multiple"
+                                                  DisplayMemberPath="Display" MaxHeight="320"
+                                                  SelectionChanged="ProviderFilterMultiList_SelectionChanged"/>
+                                    </StackPanel>
                                 </Flyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
                         <TextBox x:Name="TaskNameFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="TaskName…" TextChanged="TaskNameFilter_TextChanged"/>
-                        <ComboBox x:Name="TaskNameFilterCombo" Width="160" Height="28" FontSize="12" Visibility="Collapsed"
+                        <ComboBox x:Name="TaskNameFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
+                                  DisplayMemberPath="Display"
                                   PlaceholderText="TaskName (known)…" SelectionChanged="TaskNameFilterCombo_SelectionChanged"/>
                         <DropDownButton x:Name="TaskNameFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
-                                        Content="TaskName (any)">
+                                        Content="TaskName: All">
                             <DropDownButton.Flyout>
-                                <Flyout>
-                                    <ListView x:Name="TaskNameFilterMultiList" SelectionMode="Multiple"
-                                              MinWidth="240" MaxHeight="340"
-                                              SelectionChanged="TaskNameFilterMultiList_SelectionChanged"/>
+                                <Flyout Opening="TaskNameFlyout_Opening">
+                                    <StackPanel MinWidth="260" Spacing="4">
+                                        <Button Content="(All) — clear" Click="TaskNameFilterAll_Click"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" FontSize="12"/>
+                                        <ListView x:Name="TaskNameFilterMultiList" SelectionMode="Multiple"
+                                                  DisplayMemberPath="Display" MaxHeight="320"
+                                                  SelectionChanged="TaskNameFilterMultiList_SelectionChanged"/>
+                                    </StackPanel>
                                 </Flyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
@@ -499,27 +509,46 @@
                                  PlaceholderText="Message…" TextChanged="MessageFilter_TextChanged"/>
                         <TextBox x:Name="SourceFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="Source…" TextChanged="SourceFilter_TextChanged"/>
-                        <ComboBox x:Name="SourceFilterCombo" Width="160" Height="28" FontSize="12" Visibility="Collapsed"
+                        <ComboBox x:Name="SourceFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
+                                  DisplayMemberPath="Display"
                                   PlaceholderText="Source (known)…" SelectionChanged="SourceFilterCombo_SelectionChanged"/>
                         <DropDownButton x:Name="SourceFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
-                                        Content="Source (any)">
+                                        Content="Source: All">
                             <DropDownButton.Flyout>
-                                <Flyout>
-                                    <ListView x:Name="SourceFilterMultiList" SelectionMode="Multiple"
-                                              MinWidth="240" MaxHeight="340"
-                                              SelectionChanged="SourceFilterMultiList_SelectionChanged"/>
+                                <Flyout Opening="SourceFlyout_Opening">
+                                    <StackPanel MinWidth="260" Spacing="4">
+                                        <Button Content="(All) — clear" Click="SourceFilterAll_Click"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" FontSize="12"/>
+                                        <ListView x:Name="SourceFilterMultiList" SelectionMode="Multiple"
+                                                  DisplayMemberPath="Display" MaxHeight="320"
+                                                  SelectionChanged="SourceFilterMultiList_SelectionChanged"/>
+                                    </StackPanel>
                                 </Flyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
-                        <ComboBox x:Name="LevelFilterCombo" Width="140" Height="28" FontSize="12"
+                        <ComboBox x:Name="LevelFilterCombo" Width="170" Height="28" FontSize="12"
                                   PlaceholderText="Level (all)"
-                                  ItemsSource="{x:Bind ViewModel.KnownLevelNames, Mode=OneWay}"
-                                  SelectionChanged="LevelFilterCombo_SelectionChanged"/>
+                                  ItemsSource="{x:Bind ViewModel.Levels, Mode=OneWay}"
+                                  SelectionChanged="LevelFilterCombo_SelectionChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="local:LevelEntry">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <Border Width="10" Height="10" CornerRadius="2" BorderThickness="1"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                Background="{x:Bind HexColor, Mode=OneWay, Converter={StaticResource HexToBrush}}"/>
+                                        <TextBlock Text="{x:Bind Level}" FontSize="12"/>
+                                        <TextBlock Text="{x:Bind Count, Mode=OneWay}" FontSize="11"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                         <Button Content="Reset row" Click="ResetColumnFilters_Click" Height="28" FontSize="12"/>
                     </StackPanel>
                 </Border>
 
-                <!-- Level color chips: per-level swatch + count + click-to-edit-color -->
+                <!-- Level legend: per-level swatch + count. Display-only — level colors are edited only
+                     on the settings page (Settings → Appearance → Level colors), the single source of truth. -->
                 <Border Padding="12,6">
                     <StackPanel x:Name="LevelsRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Levels:" VerticalAlignment="Center" FontSize="12"
@@ -533,9 +562,10 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="local:LevelEntry">
-                                    <Button Click="LevelChip_Click" Tag="{x:Bind Level}"
-                                            Padding="8,3" MinHeight="0" FontSize="12"
-                                            AutomationProperties.Name="Edit color for level">
+                                    <Border Padding="8,3" CornerRadius="4"
+                                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                            ToolTipService.ToolTip="Edit level colors in Settings → Appearance → Level colors">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                             <Border Width="12" Height="12" CornerRadius="2" BorderThickness="1"
                                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -544,7 +574,7 @@
                                             <TextBlock Text="{x:Bind Count, Mode=OneWay}" FontSize="11"
                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         </StackPanel>
-                                    </Button>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

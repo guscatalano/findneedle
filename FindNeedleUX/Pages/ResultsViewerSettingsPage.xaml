@@ -13,6 +13,13 @@
                     IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
                     PaneTitle="Viewer settings"
                     SelectionChanged="SettingsNav_SelectionChanged">
+        <NavigationView.AutoSuggestBox>
+            <AutoSuggestBox x:Name="SettingsSearchBox" QueryIcon="Find"
+                            PlaceholderText="Search settings…"
+                            TextChanged="SettingsSearch_TextChanged"
+                            SuggestionChosen="SettingsSearch_SuggestionChosen"
+                            QuerySubmitted="SettingsSearch_QuerySubmitted"/>
+        </NavigationView.AutoSuggestBox>
         <NavigationView.MenuItems>
             <NavigationViewItem Content="All settings" Tag="all">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE8A9;"/></NavigationViewItem.Icon>
@@ -20,6 +27,9 @@
             <NavigationViewItemSeparator/>
             <NavigationViewItem Content="Appearance" Tag="appearance" IsSelected="True">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE790;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="General" Tag="general">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
             <NavigationViewItem Content="Search" Tag="search">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE721;"/></NavigationViewItem.Icon>
@@ -117,19 +127,11 @@
                             CornerRadius="6" Padding="16">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Time format" FontWeight="SemiBold"/>
-                            <ComboBox x:Name="TimeFormatCombo" Width="320"
+                            <!-- Items are populated in code (PopulateTimeFormatCombo) so each row shows a
+                                 live example rendered from its own format string — always consistent, no dupes. -->
+                            <ComboBox x:Name="TimeFormatCombo" Width="360"
                                       SelectionChanged="TimeFormatCombo_SelectionChanged"
-                                      AutomationProperties.Name="Time format">
-                                <ComboBoxItem Tag="yyyy-MM-dd HH:mm:ss"     Content="2026-03-01 09:20:01      (yyyy-MM-dd HH:mm:ss)"/>
-                                <ComboBoxItem Tag="yyyy-MM-dd HH:mm:ss.fff" Content="With ms                  (HH:mm:ss.fff)"/>
-                                <ComboBoxItem Tag="yyyy-MM-dd HH:mm:ss zzz" Content="With timezone           (HH:mm:ss zzz)"/>
-                                <ComboBoxItem Tag="MMM d HH:mm:ss"          Content="Friendly                (MMM d HH:mm:ss)"/>
-                                <ComboBoxItem Tag="HH:mm:ss"                Content="Time only               (HH:mm:ss)"/>
-                                <ComboBoxItem Tag="HH:mm:ss.fff"            Content="Time + ms               (HH:mm:ss.fff)"/>
-                                <ComboBoxItem Tag="g"                       Content="Locale short            (g)"/>
-                                <ComboBoxItem Tag="G"                       Content="Locale long             (G)"/>
-                                <ComboBoxItem Tag="o"                       Content="ISO 8601 round-trip     (o)"/>
-                            </ComboBox>
+                                      AutomationProperties.Name="Time format"/>
                             <TextBlock x:Name="TimeFormatPreview"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        FontFamily="Consolas" FontSize="12"/>
@@ -160,6 +162,49 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Per-level colors (kept next to Color theme — a theme is just a preset for these) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <Grid>
+                                <TextBlock Text="Level colors" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <Button Content="Reset all to theme defaults" Click="ResetAllColors_Click"
+                                        HorizontalAlignment="Right" FontSize="12"/>
+                            </Grid>
+                            <TextBlock Text="The colors used to tint result rows by level. This is the only place to change them — click a swatch to pick a custom color; Reset reverts that level to the current theme."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ItemsControl x:Name="LevelEditor">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="nrv:LevelEntry">
+                                        <Grid Padding="0,6,0,6" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{x:Bind Level}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            <Button Grid.Column="1" Click="PickColor_Click" Tag="{x:Bind Level}"
+                                                    Padding="2" MinHeight="0" MinWidth="0"
+                                                    ToolTipService.ToolTip="Pick custom color">
+                                                <Border Width="32" Height="20" CornerRadius="3" BorderThickness="1"
+                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                        Background="{x:Bind HexColor, Mode=OneWay, Converter={StaticResource HexToBrush}}"/>
+                                            </Button>
+                                            <TextBlock Grid.Column="2" Text="{x:Bind HexColor, Mode=OneWay}"
+                                                       VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Button Grid.Column="4" Content="Reset" Click="ResetColor_Click" Tag="{x:Bind Level}"
+                                                    FontSize="12"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Scrollbar -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
@@ -178,6 +223,64 @@
                             </ComboBox>
                         </StackPanel>
                     </Border>
+
+                    <!-- Row text size -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row text size" FontWeight="SemiBold"/>
+                            <TextBlock Text="Font size of the result grid's rows. Smaller fits more rows on screen; larger is easier to read."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="RowFontSizeCombo" Width="220"
+                                      SelectionChanged="RowFontSizeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Row text size">
+                                <ComboBoxItem Content="Compact (9)"  Tag="9"/>
+                                <ComboBoxItem Content="Small (11)"   Tag="11"/>
+                                <ComboBoxItem Content="Default (12)" Tag="12"/>
+                                <ComboBoxItem Content="Medium (14)"  Tag="14"/>
+                                <ComboBoxItem Content="Large (16)"   Tag="16"/>
+                                <ComboBoxItem Content="Extra large (20)" Tag="20"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Row height (density) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row height" FontWeight="SemiBold"/>
+                            <TextBlock Text="How tall each row is relative to its text. Tighter fits more rows on screen; roomier is easier to scan."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="RowHeightRatioCombo" Width="220"
+                                      SelectionChanged="RowHeightRatioCombo_SelectionChanged"
+                                      AutomationProperties.Name="Row height">
+                                <ComboBoxItem Content="Tight"            Tag="1.4"/>
+                                <ComboBoxItem Content="Comfortable (default)" Tag="1.9"/>
+                                <ComboBoxItem Content="Roomy"            Tag="2.4"/>
+                                <ComboBoxItem Content="Spacious"         Tag="3"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Row tags -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row tags" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ColorTaggedRowsCheck" Content="Also color the whole row with the tag color"
+                                      Checked="ColorTaggedRowsCheck_Changed" Unchecked="ColorTaggedRowsCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="Tagged rows always show a colored tag glyph on the left. Turn this on to tint the whole row too."/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+
+                <!-- ============================ GENERAL ============================ -->
+                <StackPanel x:Name="PanelGeneral" Spacing="16" Visibility="Collapsed">
 
                     <!-- Default sort -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
@@ -237,129 +340,7 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Row text size -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Row text size" FontWeight="SemiBold"/>
-                            <TextBlock Text="Font size of the result grid's rows. Smaller fits more rows on screen; larger is easier to read."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="RowFontSizeCombo" Width="220"
-                                      SelectionChanged="RowFontSizeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Row text size">
-                                <ComboBoxItem Content="Compact (9)"  Tag="9"/>
-                                <ComboBoxItem Content="Small (11)"   Tag="11"/>
-                                <ComboBoxItem Content="Default (12)" Tag="12"/>
-                                <ComboBoxItem Content="Medium (14)"  Tag="14"/>
-                                <ComboBoxItem Content="Large (16)"   Tag="16"/>
-                                <ComboBoxItem Content="Extra large (20)" Tag="20"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Row height (density) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Row height" FontWeight="SemiBold"/>
-                            <TextBlock Text="How tall each row is relative to its text. Tighter fits more rows on screen; roomier is easier to scan."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="RowHeightRatioCombo" Width="220"
-                                      SelectionChanged="RowHeightRatioCombo_SelectionChanged"
-                                      AutomationProperties.Name="Row height">
-                                <ComboBoxItem Content="Tight"            Tag="1.4"/>
-                                <ComboBoxItem Content="Comfortable (default)" Tag="1.9"/>
-                                <ComboBoxItem Content="Roomy"            Tag="2.4"/>
-                                <ComboBoxItem Content="Spacious"         Tag="3"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Event payload format (ETW TraceLogging etc.) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Event payload format" FontWeight="SemiBold"/>
-                            <TextBlock Text="How a structured event's fields (e.g. ETW TraceLogging) are shown in the Message column. Applies instantly — no re-scan."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="PayloadFormatCombo" Width="260"
-                                      SelectionChanged="PayloadFormatCombo_SelectionChanged"
-                                      AutomationProperties.Name="Event payload format">
-                                <ComboBoxItem Content="key=&quot;value&quot; (PerfView)" Tag="KeyValueQuoted"/>
-                                <ComboBoxItem Content="key=value (logfmt)"         Tag="KeyValue"/>
-                                <ComboBoxItem Content="JSON"                        Tag="Json"/>
-                                <ComboBoxItem Content="key: value | (legacy)"      Tag="Pipe"/>
-                                <ComboBoxItem Content="Custom template…"            Tag="Custom"/>
-                            </ComboBox>
-                            <StackPanel x:Name="PayloadCustomPanel" Spacing="4" Visibility="Collapsed">
-                                <TextBlock Text="Custom template — tokens {name} and {value}, applied per field (include your own separator):"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                                <TextBox x:Name="PayloadCustomTemplateBox" Width="360" FontFamily="Consolas"
-                                         LostFocus="PayloadCustomTemplate_LostFocus"
-                                         AutomationProperties.Name="Custom payload template"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Per-level colors -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <Grid>
-                                <TextBlock Text="Level colors" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <Button Content="Reset all to theme defaults" Click="ResetAllColors_Click"
-                                        HorizontalAlignment="Right" FontSize="12"/>
-                            </Grid>
-                            <TextBlock Text="Click a swatch to pick a custom color. Reset reverts that level to the current theme."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ItemsControl x:Name="LevelEditor">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="nrv:LevelEntry">
-                                        <Grid Padding="0,6,0,6" ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="120"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="120"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{x:Bind Level}" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                                            <Button Grid.Column="1" Click="PickColor_Click" Tag="{x:Bind Level}"
-                                                    Padding="2" MinHeight="0" MinWidth="0"
-                                                    ToolTipService.ToolTip="Pick custom color">
-                                                <Border Width="32" Height="20" CornerRadius="3" BorderThickness="1"
-                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                        Background="{x:Bind HexColor, Mode=OneWay, Converter={StaticResource HexToBrush}}"/>
-                                            </Button>
-                                            <TextBlock Grid.Column="2" Text="{x:Bind HexColor, Mode=OneWay}"
-                                                       VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"
-                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                            <Button Grid.Column="4" Content="Reset" Click="ResetColor_Click" Tag="{x:Bind Level}"
-                                                    FontSize="12"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Row tags -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Row tags" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ColorTaggedRowsCheck" Content="Also color the whole row with the tag color"
-                                      Checked="ColorTaggedRowsCheck_Changed" Unchecked="ColorTaggedRowsCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="Tagged rows always show a colored tag glyph on the left. Turn this on to tint the whole row too."/>
-                        </StackPanel>
-                    </Border>
-
+                    <!-- Welcome page -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                             CornerRadius="6" Padding="16">
@@ -372,6 +353,7 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Status bar -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                             CornerRadius="6" Padding="16">
@@ -520,6 +502,33 @@
 
                 <!-- ============================ DECODING ============================ -->
                 <StackPanel x:Name="PanelDecoding" Spacing="16" Visibility="Collapsed">
+
+                    <!-- Event payload format (ETW TraceLogging etc.) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Event payload format" FontWeight="SemiBold"/>
+                            <TextBlock Text="How a structured event's fields (e.g. ETW TraceLogging) are shown in the Message column. Applies instantly — no re-scan."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="PayloadFormatCombo" Width="260"
+                                      SelectionChanged="PayloadFormatCombo_SelectionChanged"
+                                      AutomationProperties.Name="Event payload format">
+                                <ComboBoxItem Content="key=&quot;value&quot; (PerfView)" Tag="KeyValueQuoted"/>
+                                <ComboBoxItem Content="key=value (logfmt)"         Tag="KeyValue"/>
+                                <ComboBoxItem Content="JSON"                        Tag="Json"/>
+                                <ComboBoxItem Content="key: value | (legacy)"      Tag="Pipe"/>
+                                <ComboBoxItem Content="Custom template…"            Tag="Custom"/>
+                            </ComboBox>
+                            <StackPanel x:Name="PayloadCustomPanel" Spacing="4" Visibility="Collapsed">
+                                <TextBlock Text="Custom template — tokens {name} and {value}, applied per field (include your own separator):"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                                <TextBox x:Name="PayloadCustomTemplateBox" Width="360" FontFamily="Consolas"
+                                         LostFocus="PayloadCustomTemplate_LostFocus"
+                                         AutomationProperties.Name="Custom payload template"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
 
                     <!-- WPP / tracefmt symbols -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"

@@ -1136,6 +1136,24 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult GetFacets(string field, int limit, int sampleCap)
         => FindNeedleUX.Services.Mcp.LogAnalysis.Facets(_source, BuildFilterSpec(), field, limit, sampleCap);
 
+    /// <summary>
+    /// Facets for one known-value field computed over every OTHER active filter but ignoring this
+    /// field's own selection — so the field's dropdown shows the values still reachable given the rest
+    /// of the filters (cross-filter narrowing), without collapsing to only what's already picked.
+    /// </summary>
+    public FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult GetFacetsExcludingField(string field, int limit, int sampleCap)
+    {
+        var spec = BuildFilterSpec();
+        spec = field switch
+        {
+            "Provider" => spec with { Provider = "", ProviderSet = null },
+            "TaskName" => spec with { TaskName = "", TaskNameSet = null },
+            "Source"   => spec with { Source = "",   SourceSet = null },
+            _ => spec,
+        };
+        return FindNeedleUX.Services.Mcp.LogAnalysis.Facets(_source, spec, field, limit, sampleCap);
+    }
+
     /// <summary>Most common message templates over the current filtered set (MCP <c>top_patterns</c>).</summary>
     public FindNeedleUX.Services.Mcp.LogAnalysis.PatternResult GetTopPatterns(int limit, int sampleCap)
         => FindNeedleUX.Services.Mcp.LogAnalysis.TopPatterns(_source, BuildFilterSpec(), limit, sampleCap);
@@ -1284,6 +1302,34 @@ public class LevelEntry : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler PropertyChanged;
+}
+
+/// <summary>
+/// One row in a "known value" filter dropdown (Provider / TaskName / Source): a distinct value plus
+/// how many rows currently have it. <see cref="Display"/> shows the count alongside the value, like
+/// SimpleEventViewer. The <see cref="IsAll"/> sentinel is the leading "(All)" entry that clears the
+/// field's filter.
+/// </summary>
+public sealed class KnownFacetItem
+{
+    public string Value { get; init; } = "";
+    public int Count { get; init; }
+    public bool IsAll { get; init; }
+    public string Display => IsAll ? "(All)" : $"{Value}  ({Count:N0})";
+}
+
+/// <summary>Pure label helpers for the known-value filter dropdowns (extracted so they're unit-testable
+/// without a WinUI control). Mirrors SimpleEventViewer's summary style.</summary>
+public static class KnownFilterLabel
+{
+    /// <summary>"Field: All" with nothing chosen, "Field: value" for one, "Field: value +N" for many.</summary>
+    public static string Summarize(string field, System.Collections.Generic.IReadOnlyList<string> selected)
+    {
+        int n = selected?.Count ?? 0;
+        return n == 0 ? $"{field}: All"
+             : n == 1 ? $"{field}: {selected[0]}"
+             : $"{field}: {selected[0]} +{n - 1}";
+    }
 }
 
 public class ColumnEntry : INotifyPropertyChanged
