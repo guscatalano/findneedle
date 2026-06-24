@@ -279,6 +279,17 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- File associations (supported types are declared in the packaged manifest) ---
             FileAssocList.Text = string.Join("   ", FindNeedleUX.Services.FileAssociations.Extensions);
+            OpenWithCheck.IsChecked = ResultsViewerSettings.FileOpenWithEnabled;
+            ContextMenuCheck.IsChecked = ResultsViewerSettings.FileContextMenuEnabled;
+            if (FindNeedleUX.Services.FileIntegration.IsPackaged)
+            {
+                // Packaged (Store) build: "Open with" comes from the manifest and these per-user registry
+                // toggles are virtualized, so disable them and explain.
+                OpenWithCheck.IsEnabled = false;
+                ContextMenuCheck.IsEnabled = false;
+                FileIntegrationNote.Text = "This Store-installed copy registers \"Open with\" via its package. "
+                    + "Use \"Manage defaults in Windows…\" to choose Find Needle per file type.";
+            }
 
             // --- WPP / tracefmt TMF path ---
             TmfPathBox.Text = ResultsViewerSettings.TraceFormatSearchPath;
@@ -862,6 +873,22 @@ public sealed partial class ResultsViewerSettingsPage : Page
     }
 
     // ----- File associations -----
+    private void OpenWithCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        bool on = OpenWithCheck.IsChecked == true;
+        ResultsViewerSettings.FileOpenWithEnabled = on;
+        FindNeedleUX.Services.FileIntegration.SetOpenWith(on);
+    }
+
+    private void ContextMenuCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        bool on = ContextMenuCheck.IsChecked == true;
+        ResultsViewerSettings.FileContextMenuEnabled = on;
+        FindNeedleUX.Services.FileIntegration.SetContextMenu(on);
+    }
+
     private async void ManageDefaultApps_Click(object sender, RoutedEventArgs e)
     {
         // Windows won't let an app silently set itself as the default handler (anti-hijack), so we

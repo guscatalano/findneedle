@@ -238,6 +238,25 @@ public static class ResultsViewerSettings
         set { Data.EnrichmentEnabled = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>Whether the "Open with → Find Needle" Explorer entry is registered (per-user). Off by
+    /// default. Toggling registers/unregisters HKCU classes via <see cref="FileIntegration"/>. No Changed
+    /// broadcast — it acts on the OS, not the viewer.</summary>
+    public const bool DefaultFileOpenWithEnabled = false;
+    public static bool FileOpenWithEnabled
+    {
+        get => Data.FileOpenWithEnabled ?? DefaultFileOpenWithEnabled;
+        set { Data.FileOpenWithEnabled = value; Save(); }
+    }
+
+    /// <summary>Whether the right-click "Open in Find Needle" context-menu verb is registered (per-user).
+    /// Off by default.</summary>
+    public const bool DefaultFileContextMenuEnabled = false;
+    public static bool FileContextMenuEnabled
+    {
+        get => Data.FileContextMenuEnabled ?? DefaultFileContextMenuEnabled;
+        set { Data.FileContextMenuEnabled = value; Save(); }
+    }
+
     /// <summary>TCP port for the in-app MCP server (bound to 127.0.0.1 only).</summary>
     public const int DefaultMcpServerPort = 8765;
     public static int McpServerPort
@@ -685,6 +704,8 @@ public static class ResultsViewerSettings
         public bool? ShowStatusBar { get; set; }
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }
+        public bool? FileOpenWithEnabled { get; set; }
+        public bool? FileContextMenuEnabled { get; set; }
         public bool? EnrichmentEnabled { get; set; }
         public string TraceFormatSearchPath { get; set; }
         public string SymbolPath { get; set; }
