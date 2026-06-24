@@ -55,8 +55,27 @@ public sealed partial class ProcessorOutputPage : Page
     /// <summary>Generate (run) the deferred output rules on demand — e.g. build the UML diagram. Outputs
     /// don't run on every search (that forces the full result list to materialize + rescan); this is the
     /// explicit "produce the diagram now" action.</summary>
+    private enum DiagramToolChoice { OpenTools, GenerateAnyway, Cancel }
+
     private async void Generate_Click(object sender, RoutedEventArgs e)
     {
+        // If an output renders a diagram image in a format whose tool isn't installed, warn first and
+        // offer to jump to the Diagram Tools page (rather than silently producing text with no image).
+        var missingTools = MiddleLayerService.GetUnavailableDiagramImageFormats();
+        if (missingTools.Count > 0)
+        {
+            switch (await PromptDiagramToolMissingAsync(missingTools))
+            {
+                case DiagramToolChoice.Cancel:
+                    return;
+                case DiagramToolChoice.OpenTools:
+                    this.Frame?.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
+                    return;
+                case DiagramToolChoice.GenerateAnyway:
+                    break; // proceed — writes the diagram text (.mmd/.puml), skips the image
+            }
+        }
+
         GenerateButton.IsEnabled = false;
         var prevLabel = GenerateLabel.Text;
         GenerateLabel.Text = "Generating…";
@@ -76,6 +95,33 @@ public sealed partial class ProcessorOutputPage : Page
             GenerateLabel.Text = prevLabel;
             GenerateButton.IsEnabled = true;
         }
+    }
+
+    private async System.Threading.Tasks.Task<DiagramToolChoice> PromptDiagramToolMissingAsync(System.Collections.Generic.List<string> formats)
+    {
+        var list = string.Join(" / ", formats);
+        try
+        {
+            var dlg = new ContentDialog
+            {
+                Title = "Diagram tool not available",
+                Content = $"This output renders a {list} diagram image, but the {list} rendering tool isn't set up on "
+                        + "this machine. Install or configure it on the Diagram Tools page.\n\n"
+                        + "“Generate anyway” still writes the diagram text (.mmd / .puml) — just without the rendered image.",
+                PrimaryButtonText = "Open Diagram Tools",
+                SecondaryButtonText = "Generate anyway",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = this.XamlRoot,
+            };
+            return await dlg.ShowAsync() switch
+            {
+                ContentDialogResult.Primary => DiagramToolChoice.OpenTools,
+                ContentDialogResult.Secondary => DiagramToolChoice.GenerateAnyway,
+                _ => DiagramToolChoice.Cancel,
+            };
+        }
+        catch { return DiagramToolChoice.GenerateAnyway; } // dialog failed → don't block generation
     }
 
     /// <summary>Show/hide the "generating" overlay, using the user's themed loader gif (the same little

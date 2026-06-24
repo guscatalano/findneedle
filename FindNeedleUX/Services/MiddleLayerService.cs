@@ -578,6 +578,82 @@ public class MiddleLayerService
         catch { return false; }
     }
 
+    /// <summary>
+    /// For the active output rules, the diagram syntaxes whose IMAGE generation is requested but whose
+    /// rendering tool isn't available on this machine (Mermaid CLI / PlantUML+Java not installed). Empty
+    /// means everything needed is present. Lets the UI warn + point at the Diagram Tools page before
+    /// generating, instead of silently producing diagram text with no rendered image.
+    /// </summary>
+    public static List<string> GetUnavailableDiagramImageFormats()
+    {
+        var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var paths = SearchQueryUX.CurrentQuery?.RulesConfigPaths;
+        if (paths == null) return new List<string>();
+        foreach (var path in paths)
+            foreach (var (syntax, image) in GetUmlOutputs(path))
+                if (image && !DiagramImageToolAvailable(syntax))
+                    missing.Add(PrettyDiagramSyntax(syntax));
+        return missing.ToList();
+    }
+
+    private static bool DiagramImageToolAvailable(string syntax)
+    {
+        try
+        {
+            var mgr = SystemInfoMiddleware.UmlDependencyManager;
+            FindNeedlePluginLib.IUMLGenerator gen = (syntax ?? "").Trim().ToLowerInvariant() switch
+            {
+                "plantuml" or "puml" or "plant" => new FindNeedleUmlDsl.PlantUMLGenerator(mgr.PlantUml),
+                _ => new FindNeedleUmlDsl.MermaidUMLGenerator(mgr.Mermaid),
+            };
+            return gen.IsSupported(FindNeedlePluginLib.UmlOutputType.ImageFile);
+        }
+        catch { return false; }
+    }
+
+    private static string PrettyDiagramSyntax(string syntax) => (syntax ?? "").Trim().ToLowerInvariant() switch
+    {
+        "plantuml" or "puml" or "plant" => "PlantUML",
+        _ => "Mermaid",
+    };
+
+    /// <summary>Yield (syntax, generateImage) for every enabled UML output action in a rule file.</summary>
+    private static IEnumerable<(string syntax, bool image)> GetUmlOutputs(string path)
+    {
+        var result = new List<(string, bool)>();
+        try
+        {
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return result;
+            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            if (!doc.RootElement.TryGetProperty("sections", out var secs) && !doc.RootElement.TryGetProperty("Sections", out secs)) return result;
+            if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) return result;
+            foreach (var s in secs.EnumerateArray())
+            {
+                string purpose = s.TryGetProperty("purpose", out var p) ? p.GetString()
+                               : s.TryGetProperty("Purpose", out var p2) ? p2.GetString() : null;
+                if (!string.Equals(purpose, "output", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!s.TryGetProperty("rules", out var rules) && !s.TryGetProperty("Rules", out rules)) continue;
+                if (rules.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+                foreach (var r in rules.EnumerateArray())
+                {
+                    if ((r.TryGetProperty("enabled", out var en) || r.TryGetProperty("Enabled", out en))
+                        && en.ValueKind == System.Text.Json.JsonValueKind.False) continue;
+                    if (!r.TryGetProperty("action", out var act) && !r.TryGetProperty("Action", out act)) continue;
+                    string type = act.TryGetProperty("type", out var ty) ? ty.GetString()
+                                : act.TryGetProperty("Type", out var ty2) ? ty2.GetString() : null;
+                    if (!string.Equals(type, "uml", StringComparison.OrdinalIgnoreCase)) continue;
+                    string syntax = act.TryGetProperty("syntax", out var sy) ? sy.GetString()
+                                  : act.TryGetProperty("Syntax", out var sy2) ? sy2.GetString() : "mermaid";
+                    bool image = (act.TryGetProperty("generateImage", out var gi) || act.TryGetProperty("GenerateImage", out gi))
+                                 && gi.ValueKind == System.Text.Json.JsonValueKind.True;
+                    result.Add((syntax ?? "mermaid", image));
+                }
+            }
+        }
+        catch { /* unreadable rule → nothing to warn about */ }
+        return result;
+    }
+
     /// <summary>Generated diagram files (.mmd/.puml/.png) from the last search or on-demand generation.</summary>
     public static List<string> GeneratedDiagramFiles
     {

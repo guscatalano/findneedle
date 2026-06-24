@@ -247,19 +247,15 @@ public sealed partial class DiagramToolsPage : Page
             });
         });
 
+        bool ok = false;
         try
         {
             InstallProgressText.Text = $"Installing {name}...";
             var result = await installFunc(progress, _installCancellationTokenSource.Token);
-
-            if (result.Success)
-            {
-                InstallProgressText.Text = $"{name} installed successfully!";
-            }
-            else
-            {
-                InstallProgressText.Text = $"Failed to install {name}: {result.Message}";
-            }
+            ok = result.Success;
+            InstallProgressText.Text = ok
+                ? $"{name} installed successfully!"
+                : $"Failed to install {name}: {result.Message}";
         }
         catch (OperationCanceledException)
         {
@@ -275,12 +271,16 @@ public sealed partial class DiagramToolsPage : Page
             InstallPlantUmlButton.IsEnabled = true;
             InstallMermaidButton.IsEnabled = true;
             InstallProgressBar.IsIndeterminate = false;
-
-            // Delay hiding progress panel so user can see result
-            await Task.Delay(3000);
-            InstallProgressPanel.Visibility = Visibility.Collapsed;
-
+            InstallProgressBar.Value = 0;
             RefreshStatus();
+
+            // Auto-hide ONLY on success. On failure/cancel, leave the message on screen so it's
+            // readable (it used to vanish after 3s); it resets on the next install attempt.
+            if (ok)
+            {
+                await Task.Delay(3000);
+                InstallProgressPanel.Visibility = Visibility.Collapsed;
+            }
         }
     }
 
