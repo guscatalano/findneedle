@@ -591,6 +591,24 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True"/>
                         </StackPanel>
                     </Border>
+
+                    <!-- File associations -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="File associations" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="When installed from the Microsoft Store, Find Needle can open these file types straight from Explorer's right-click &quot;Open with&quot; menu. Windows lets you choose which app is the default for each type."/>
+                            <TextBlock Text="Supported file types" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock x:Name="FileAssocList" FontFamily="Consolas" FontSize="13"
+                                       IsTextSelectionEnabled="True"/>
+                            <Button Content="Manage defaults in Windows…" Click="ManageDefaultApps_Click"
+                                    FontSize="12" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <TextBlock Text="Settings file:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Margin="0,8,0,0"/>

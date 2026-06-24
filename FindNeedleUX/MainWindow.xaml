@@ -98,8 +98,10 @@
             </Grid>
         </Border>
 
-        <!-- Main content area with overlay spinner -->
-        <Grid Grid.Row="2">
+        <!-- Main content area with overlay spinner. AllowDrop here lets you drag log files/folders
+             onto the viewer to open them (events bubble up from the hosted page in contentFrame). -->
+        <Grid Grid.Row="2" AllowDrop="True"
+              DragOver="Content_DragOver" DragLeave="Content_DragLeave" Drop="Content_Drop">
             <Frame x:Name="contentFrame" />
             <!-- Full-window overlay spinner for ETL inspection and quick actions -->
             <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
@@ -153,6 +155,20 @@
                             AutomationProperties.Name="Cancel current operation"/>
                 </StackPanel>
             </Grid>
+
+            <!-- Drag-and-drop overlay: shown while files are dragged over the viewer (hit-test off so
+                 the drag events still reach the grid below). -->
+            <Border x:Name="DropOverlay" Visibility="Collapsed" IsHitTestVisible="False" Margin="8"
+                    Background="#CC101418" CornerRadius="6"
+                    BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" BorderThickness="3">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                    <FontIcon Glyph="&#xE896;" FontSize="44" Foreground="White"/>
+                    <TextBlock Text="Drop log files to open" FontSize="20" FontWeight="SemiBold"
+                               Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Folders, .etl, .evtx, .log, .txt, .zip and more"
+                               FontSize="13" Foreground="#CCFFFFFF" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </Window>

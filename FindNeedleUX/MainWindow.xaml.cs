@@ -1119,6 +1119,79 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Open a single file (or folder) path directly — used by file activation ("Open with → Find
+    /// Needle") and the command line. Mirrors <see cref="QuickFileOpen"/> but takes the path instead
+    /// of prompting. No-op for a missing path.
+    /// </summary>
+    public async System.Threading.Tasks.Task OpenPathAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !(System.IO.File.Exists(path) || System.IO.Directory.Exists(path)))
+            return;
+        MiddleLayerService.NewWorkspace();
+        MiddleLayerService.AddFolderLocation(path); // handles a single file or a folder
+        await OpenWithOptionalStreamingAsync("Opening file...");
+    }
+
+    /// <summary>Open one or more dropped paths: new workspace, add each existing file/folder, open the
+    /// viewer once. Shared by drag-and-drop.</summary>
+    public async System.Threading.Tasks.Task OpenPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+    {
+        var valid = new System.Collections.Generic.List<string>();
+        if (paths != null)
+            foreach (var p in paths)
+                if (!string.IsNullOrWhiteSpace(p) && (System.IO.File.Exists(p) || System.IO.Directory.Exists(p)))
+                    valid.Add(p);
+        if (valid.Count == 0) return;
+        MiddleLayerService.NewWorkspace();
+        foreach (var p in valid) MiddleLayerService.AddFolderLocation(p);
+        await OpenWithOptionalStreamingAsync(valid.Count == 1 ? "Opening file..." : $"Opening {valid.Count} files...");
+    }
+
+    // ----- Drag & drop: drop log files/folders onto the viewer to open them -----
+    private void Content_DragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+    {
+        if (e.DataView.Contains(global::Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = global::Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+            try
+            {
+                e.DragUIOverride.Caption = "Open in Find Needle";
+                e.DragUIOverride.IsCaptionVisible = true;
+                e.DragUIOverride.IsGlyphVisible = true;
+            }
+            catch { /* DragUIOverride can be unavailable for some sources */ }
+            if (DropOverlay != null) DropOverlay.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            e.AcceptedOperation = global::Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
+        }
+    }
+
+    private void Content_DragLeave(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+    {
+        if (DropOverlay != null) DropOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private async void Content_Drop(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+    {
+        if (DropOverlay != null) DropOverlay.Visibility = Visibility.Collapsed;
+        if (!e.DataView.Contains(global::Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            return;
+        var deferral = e.GetDeferral();
+        try
+        {
+            var items = await e.DataView.GetStorageItemsAsync();
+            var paths = new System.Collections.Generic.List<string>();
+            foreach (var it in items)
+                if (!string.IsNullOrWhiteSpace(it.Path)) paths.Add(it.Path);
+            if (paths.Count > 0) await OpenPathsAsync(paths);
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Drop failed: {ex.Message}"); }
+        finally { deferral.Complete(); }
+    }
+
+    /// <summary>
     /// Run the search and show the viewer. When "open progressively" is enabled, start a streaming
     /// search and open the viewer as soon as the first page is ready (it keeps filling in the
     /// background with a banner); otherwise run the full search behind the spinner, then open.

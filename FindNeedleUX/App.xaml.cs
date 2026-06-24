@@ -2,8 +2,10 @@
 // and more about our project templates, see: http://aka.ms/winui-project-info.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.UI.Xaml;
+using Microsoft.Windows.AppLifecycle;
 using FindPluginCore;
 using FindNeedleUX.Services;
 using FindNeedlePluginLib;
@@ -74,6 +76,83 @@ public partial class App : Application
         catch (Exception ex)
         {
             Logger.Instance.Log($"CLI argument handling failed: {ex.Message}");
+        }
+
+        // File activation ("Open with → Find Needle"): unlike a command-line launch, the file path does
+        // NOT arrive via argv — it's carried on the activation args. Read it and open it.
+        try
+        {
+            var activated = AppInstance.GetCurrent().GetActivatedEventArgs();
+            if (activated?.Kind == ExtendedActivationKind.File)
+                OpenActivatedFiles(activated);
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"File activation handling failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handle an activation redirected from a second instance (e.g. a second "Open with → Find Needle"):
+    /// bring the existing window forward and open the file in it. Called by <c>Program.OnActivated</c> on
+    /// a background thread, so marshal to the UI thread first.
+    /// </summary>
+    public void HandleActivation(AppActivationArguments args)
+    {
+        var window = m_window;
+        if (window == null) return;
+        window.DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                window.Activate(); // bring the existing window to the foreground
+                OpenActivatedFiles(args);
+            }
+            catch (Exception ex) { Logger.Instance.Log($"Redirected activation failed: {ex.Message}"); }
+        });
+    }
+
+    /// <summary>Open the first supported file carried by a File/Launch activation in the main window.</summary>
+    private void OpenActivatedFiles(AppActivationArguments args)
+    {
+        if (m_window is not MainWindow mw) return;
+        foreach (var path in ExtractPaths(args))
+        {
+            _ = mw.OpenPathAsync(path);
+            break; // one workspace per window — open the first file
+        }
+    }
+
+    /// <summary>Pull openable file paths out of a File activation (Explorer "Open with") or a Launch
+    /// activation (command line). Only existing files are yielded.</summary>
+    private static IEnumerable<string> ExtractPaths(AppActivationArguments args)
+    {
+        if (args == null) yield break;
+
+        if (args.Kind == ExtendedActivationKind.File
+            && args.Data is global::Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs)
+        {
+            foreach (var item in fileArgs.Files)
+            {
+                var p = item?.Path;
+                if (!string.IsNullOrWhiteSpace(p) && System.IO.File.Exists(p)) yield return p;
+            }
+        }
+        else if (args.Kind == ExtendedActivationKind.Launch
+            && args.Data is global::Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs launchArgs)
+        {
+            var arguments = launchArgs.Arguments;
+            if (string.IsNullOrWhiteSpace(arguments)) yield break;
+
+            // Common case: the whole tail is one (possibly quoted) path.
+            var whole = arguments.Trim().Trim('"');
+            if (System.IO.File.Exists(whole)) { yield return whole; yield break; }
+
+            foreach (var token in arguments.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var t = token.Trim().Trim('"');
+                if (System.IO.File.Exists(t)) yield return t;
+            }
         }
     }
 

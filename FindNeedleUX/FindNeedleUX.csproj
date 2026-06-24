@@ -8,6 +8,12 @@
     <Platforms>x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
+    <!-- We supply our own entry point (Program.cs) to do single-instance activation redirection
+         (so "Open with" of a 2nd file reuses the running window instead of spawning a new one).
+         The generated Main in App.g.i.cs is gated by the DISABLE_XAML_GENERATED_MAIN compile constant;
+         this SDK doesn't auto-define it from <DisableXamlGeneratedMain>, so define it explicitly. -->
+    <DisableXamlGeneratedMain>true</DisableXamlGeneratedMain>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <EnableMsixTooling>true</EnableMsixTooling>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseRidGraph>true</UseRidGraph>

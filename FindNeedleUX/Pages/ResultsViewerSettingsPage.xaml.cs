@@ -277,6 +277,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             McpPortBox.Text = ResultsViewerSettings.McpServerPort.ToString();
             UpdateMcpStatus();
 
+            // --- File associations (supported types are declared in the packaged manifest) ---
+            FileAssocList.Text = string.Join("   ", FindNeedleUX.Services.FileAssociations.Extensions);
+
             // --- WPP / tracefmt TMF path ---
             TmfPathBox.Text = ResultsViewerSettings.TraceFormatSearchPath;
             SymbolSourceBox.Text = ResultsViewerSettings.SymbolSourcePath;
@@ -856,6 +859,15 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (McpStatusText == null) return;
         McpStatusText.Text = "Status: " + FindNeedleUX.Services.Mcp.McpServerHost.Status;
+    }
+
+    // ----- File associations -----
+    private async void ManageDefaultApps_Click(object sender, RoutedEventArgs e)
+    {
+        // Windows won't let an app silently set itself as the default handler (anti-hijack), so we
+        // deep-link to the Default apps page where the user can choose Find Needle per file type.
+        try { await global::Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:defaultapps")); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LaunchUriAsync failed: {ex.Message}"); }
     }
 
     // ----- Storage backend -----
