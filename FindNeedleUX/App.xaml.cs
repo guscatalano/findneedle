@@ -144,16 +144,38 @@ public partial class App : Application
             var arguments = launchArgs.Arguments;
             if (string.IsNullOrWhiteSpace(arguments)) yield break;
 
-            // Common case: the whole tail is one (possibly quoted) path.
-            var whole = arguments.Trim().Trim('"');
-            if (System.IO.File.Exists(whole)) { yield return whole; yield break; }
-
-            foreach (var token in arguments.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            // For a command-line / right-click ("Open in Find Needle") launch, Arguments usually begins
+            // with this exe's OWN path (argv[0]). Taking the first existing path blindly would open the
+            // app's .exe as a "log" (0 rows). Tokenize quote-aware, skip our own exe + flags, yield files.
+            var self = Environment.ProcessPath ?? "";
+            foreach (var token in TokenizeArgs(arguments))
             {
                 var t = token.Trim().Trim('"');
-                if (System.IO.File.Exists(t)) yield return t;
+                if (string.IsNullOrWhiteSpace(t) || t.StartsWith("--")) continue;
+                if (!string.IsNullOrEmpty(self) && string.Equals(t, self, StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(System.IO.Path.GetFileName(t), "FindNeedleUX.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                if (System.IO.File.Exists(t) || System.IO.Directory.Exists(t)) yield return t;
             }
         }
+    }
+
+    /// <summary>Split a command-line string into tokens, honoring double-quoted segments so paths with
+    /// spaces stay intact (a naive space-split would break "C:\Program Files\…").</summary>
+    private static IEnumerable<string> TokenizeArgs(string s)
+    {
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        foreach (var ch in s)
+        {
+            if (ch == '"') { inQuotes = !inQuotes; continue; }
+            if (ch == ' ' && !inQuotes)
+            {
+                if (sb.Length > 0) { yield return sb.ToString(); sb.Clear(); }
+                continue;
+            }
+            sb.Append(ch);
+        }
+        if (sb.Length > 0) yield return sb.ToString();
     }
 
     private Window m_window;
