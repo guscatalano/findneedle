@@ -1725,9 +1725,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void RerenderRowsPreservingView()
     {
         var sel = ResultsGrid.SelectedItem;
+        // Resetting ItemsSource forces the rows to re-realize (so a changed tag glyph shows), but it also
+        // snaps the grid's scroll back to the top. Capture the vertical offset and restore it after the
+        // new content lays out, so tagging a row while scrolled down doesn't jump to the top.
+        var sv = FindDescendants<ScrollViewer>(ResultsGrid).FirstOrDefault();
+        double offset = sv?.VerticalOffset ?? 0;
+
         ResultsGrid.ItemsSource = null;
         ResultsGrid.ItemsSource = ViewModel.Results;
         if (sel != null) ResultsGrid.SelectedItem = sel;
+
+        if (sv != null && offset > 0)
+        {
+            // Restore on a low-priority tick so the regenerated rows are measured first (otherwise the
+            // scroll extent is still 0 and ChangeView is clamped to the top).
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                () => { try { sv.ChangeView(null, offset, null, disableAnimation: true); } catch { /* best-effort */ } });
+        }
     }
 
     // ----- Keyboard shortcuts -----

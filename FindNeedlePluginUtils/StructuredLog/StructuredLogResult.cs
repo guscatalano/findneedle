@@ -37,17 +37,16 @@ public sealed class StructuredLogResult : ISearchResult
     /// <summary>Message plus every field value, so search/filter matches unmapped columns too.</summary>
     public string SearchableData { get; set; } = string.Empty;
 
-    private string? _sourceBasename;
-
     public DateTime GetLogTime() => LogTime;
     public Level GetLevel() => Level;
     public string GetMessage() => Message;
     public string GetSearchableData() => string.IsNullOrEmpty(SearchableData) ? Message : SearchableData;
 
     // Provider name → "Provider" column (GetSource); file path → "Source" column (GetResultSource).
-    public string GetSource() => string.IsNullOrEmpty(Provider)
-        ? (_sourceBasename ??= Path.GetFileName(SourceFile))
-        : Provider;
+    // When the data has no recognized provider/logger column, leave Provider blank rather than falling
+    // back to the file name — the file is already shown in the Source column, so putting the file name
+    // in Provider was misleading (it looked like the provider was literally the CSV file).
+    public string GetSource() => Provider ?? string.Empty;
     public string GetResultSource() => SourceFile;
 
     public string GetMachineName() => MachineName;
