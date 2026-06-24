@@ -400,6 +400,10 @@ jobs:
           }
           if (-not $pushed) { Write-Host "Failed to push version bump after 5 attempts."; exit 1 }
           echo "releasetag=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # Explicit success: the "nothing to commit" path leaves $LASTEXITCODE=1 from `git commit`,
+          # and GitHub's pwsh shell does `exit $LASTEXITCODE` at the end — which would fail the step
+          # (and skip the MSIX) even though the version is already correct on origin. Force exit 0.
+          exit 0
 
   make_msix_signed:
     needs: [build-release, set-msix-version]
