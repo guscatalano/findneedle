@@ -580,12 +580,19 @@ jobs:
     - name: Publish FindNeedleUX (self-contained, win-x64)
       shell: pwsh
       run: |
+        # Clear any stale Roslyn build server, then publish single-threaded with shared compilation
+        # off. This avoids the intermittent CS2012 "FindNeedleToolInstallers.dll is being used by
+        # another process (locked by VBCSCompiler)" race that parallel project builds hit. The MSI job
+        # isn't on the Store-critical path, so trading a little speed for reliability is the right call.
+        dotnet build-server shutdown
         dotnet publish ${{ env.FindNeedleUX_Project }} `
           --configuration Release `
           --runtime win-x64 `
           --self-contained true `
           --output "${{ github.workspace }}/publish" `
+          -m:1 `
           /p:Platform=x64 `
+          /p:UseSharedCompilation=false `
           /p:GenerateAppxPackageOnBuild=false
     - name: Build MSI
       shell: pwsh
