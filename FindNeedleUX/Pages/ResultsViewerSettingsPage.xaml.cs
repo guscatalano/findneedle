@@ -936,6 +936,31 @@ public sealed partial class ResultsViewerSettingsPage : Page
         FindNeedleUX.Services.FileIntegration.SetContextMenu(on);
     }
 
+    // ----- Diagnostics: send app logs to dev -----
+    private async void SendLogs_Click(object sender, RoutedEventArgs e)
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
+        var path = Win32FileDialog.SaveFile(hWnd,
+            FindNeedleUX.Services.DiagnosticsBundle.SuggestedFileName(),
+            new (string, string)[] { ("Zip archive", "*.zip") }, ".zip");
+        if (path == null) return;
+
+        SendLogsButton.IsEnabled = false;
+        SendLogsStatus.Text = "Gathering logs…";
+        try
+        {
+            int count = await System.Threading.Tasks.Task.Run(
+                () => FindNeedleUX.Services.DiagnosticsBundle.Create(path));
+            SendLogsStatus.Text = $"Saved {count} item(s) to the .zip.";
+            try { System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\""); } catch { /* reveal is best-effort */ }
+        }
+        catch (Exception ex)
+        {
+            SendLogsStatus.Text = "Failed: " + ex.Message;
+        }
+        finally { SendLogsButton.IsEnabled = true; }
+    }
+
     private async void ManageDefaultApps_Click(object sender, RoutedEventArgs e)
     {
         // Windows won't let an app silently set itself as the default handler (anti-hijack), so we

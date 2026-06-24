@@ -394,6 +394,23 @@
                                        Text="The bar at the top with Locations / Rules / Last run / Run → View Results. Closing it with the × turns this off."/>
                         </StackPanel>
                     </Border>
+
+                    <!-- Diagnostics: bundle logs for the developer -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Diagnostics" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Bundle the app logs, settings, plugin config, and system info into a single .zip you can attach to a bug report. No log file contents are uploaded anywhere — you choose where to save it."/>
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Button x:Name="SendLogsButton" Content="Send app logs to dev…" Click="SendLogs_Click"/>
+                                <TextBlock x:Name="SendLogsStatus" VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- ============================ SEARCH ============================ -->
