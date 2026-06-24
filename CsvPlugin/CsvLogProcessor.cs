@@ -122,18 +122,24 @@ public class CsvLogProcessor : IFileExtensionProcessor, IPluginDescription
         var header = csv.HeaderRecord;
         if (header == null || header.Length == 0) return;
 
+        // Canonical column names (blank header → colN), used BOTH as field keys and as the mapping
+        // store key — so the remap dialog, the saved mapping, and the per-row field names all agree.
+        var names = new string[header.Length];
+        for (int i = 0; i < header.Length; i++)
+            names[i] = string.IsNullOrEmpty(header[i]) ? $"col{i}" : header[i];
+
+        // A user-saved column mapping for this exact column set (null = use the auto alias table).
+        var overrides = CsvColumnMappingStore.Get(names);
+
         int line = 1;
         while (csv.Read())
         {
             if (cancellationToken.IsCancellationRequested) break;
             line++;
-            var fields = new List<KeyValuePair<string, string>>(header.Length);
-            for (int i = 0; i < header.Length; i++)
-            {
-                var name = string.IsNullOrEmpty(header[i]) ? $"col{i}" : header[i];
-                fields.Add(new KeyValuePair<string, string>(name, csv.GetField(i) ?? string.Empty));
-            }
-            emit(StructuredLogFieldMapper.Map(fields, _filePath, line), line);
+            var fields = new List<KeyValuePair<string, string>>(names.Length);
+            for (int i = 0; i < names.Length; i++)
+                fields.Add(new KeyValuePair<string, string>(names[i], csv.GetField(i) ?? string.Empty));
+            emit(StructuredLogFieldMapper.Map(fields, _filePath, line, overrides), line);
         }
     }
 

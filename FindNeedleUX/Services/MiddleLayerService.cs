@@ -676,6 +676,80 @@ public class MiddleLayerService
     public static bool HasOutputRules =>
         (SearchQueryUX.CurrentQuery as NuSearchQuery)?.HasOutputRules ?? false;
 
+    // ----- CSV column remapping support -----
+    private static readonly string[] CsvExtensions = { ".csv", ".tsv" };
+
+    /// <summary>If the workspace is a single CSV/TSV file, return its path + column names (read cheaply
+    /// from the header line, blank headers normalized to colN to match the parser). Else null.</summary>
+    public static (string path, string[] headers)? GetLoadedCsv()
+    {
+        try
+        {
+            if (Locations.Count != 1) return null;
+            if (Locations[0] is not FolderLocation fl) return null;
+            var path = fl.path;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            if (!CsvExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)) return null;
+            var headers = ReadCsvHeaders(path);
+            return headers == null || headers.Length == 0 ? null : (path, headers);
+        }
+        catch { return null; }
+    }
+
+    /// <summary>True when a single CSV/TSV is loaded and we don't yet have a saved mapping for its columns
+    /// (drives the one-time "Map columns" auto-prompt).</summary>
+    public static bool HasUnmappedCsv()
+    {
+        var csv = GetLoadedCsv();
+        return csv != null
+            && !FindNeedlePluginUtils.StructuredLog.CsvColumnMappingStore.Has(csv.Value.headers);
+    }
+
+    private static string[]? ReadCsvHeaders(string path)
+    {
+        try
+        {
+            using var sr = new StreamReader(path, detectEncodingFromByteOrderMarks: true);
+            var first = sr.ReadLine();
+            if (string.IsNullOrEmpty(first)) return null;
+            char delim = path.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase) ? '\t' : SniffDelim(first);
+            return SplitCsvHeader(first, delim);
+        }
+        catch { return null; }
+    }
+
+    private static char SniffDelim(string line)
+    {
+        int commas = line.Count(c => c == ','), tabs = line.Count(c => c == '\t'), semis = line.Count(c => c == ';');
+        if (tabs > commas && tabs >= semis) return '\t';
+        if (semis > commas && semis > tabs) return ';';
+        return ',';
+    }
+
+    // Minimal quote-aware split for the header line only (CsvHelper does the real row parsing). Trims
+    // fields and normalizes blank headers to colN, matching CsvLogProcessor's field names + store key.
+    private static string[] SplitCsvHeader(string line, char delim)
+    {
+        var fields = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                else inQuotes = !inQuotes;
+            }
+            else if (c == delim && !inQuotes) { fields.Add(sb.ToString().Trim()); sb.Clear(); }
+            else sb.Append(c);
+        }
+        fields.Add(sb.ToString().Trim());
+        for (int i = 0; i < fields.Count; i++)
+            if (string.IsNullOrEmpty(fields[i])) fields[i] = $"col{i}";
+        return fields.ToArray();
+    }
+
     public static List<LogLine> GetLogLines()
     {
         // Fast path: the search consolidated rows into SearchResults (legacy + small-search

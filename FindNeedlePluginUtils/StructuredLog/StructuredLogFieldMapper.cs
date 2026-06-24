@@ -35,8 +35,33 @@ public static class StructuredLogFieldMapper
         ["activityid"] = "activityid", ["correlationid"] = "activityid", ["traceid"] = "activityid",
     };
 
+    /// <summary>Canonical fields a column can be mapped to (used by the "Map CSV columns" UI).</summary>
+    public static readonly IReadOnlyList<string> MappableFields = new[]
+    {
+        "time", "level", "message", "provider", "task", "pid", "tid", "eventid", "machine", "user", "activityid",
+    };
+
+    /// <summary>The canonical field the alias table would auto-pick for a header, or null if none.
+    /// Used to pre-fill the column-mapping dialog.</summary>
+    public static string? AutoDetect(string header)
+        => Alias.TryGetValue(header ?? string.Empty, out var canon) ? canon : null;
+
+    // Sentinel an override uses to say "don't map this column to a field" (keep it as data only).
+    private const string DataOnly = "-";
+
     public static StructuredLogResult Map(
         IReadOnlyList<KeyValuePair<string, string>> fields, string sourceFile, int lineNumber)
+        => Map(fields, sourceFile, lineNumber, null);
+
+    /// <summary>
+    /// Map a row's fields, optionally honoring a user-supplied <paramref name="overrides"/> map
+    /// (header → canonical field; "" or "-" means "data only"). An override wins over the alias table;
+    /// a header absent from <paramref name="overrides"/> falls back to the alias table. When
+    /// <paramref name="overrides"/> is null the behavior is identical to the alias-only mapping.
+    /// </summary>
+    public static StructuredLogResult Map(
+        IReadOnlyList<KeyValuePair<string, string>> fields, string sourceFile, int lineNumber,
+        IReadOnlyDictionary<string, string>? overrides)
     {
         var r = new StructuredLogResult { SourceFile = sourceFile, LineNumber = lineNumber };
         var searchable = new StringBuilder();
@@ -47,7 +72,17 @@ public static class StructuredLogFieldMapper
             if (searchable.Length > 0) searchable.Append(' ');
             searchable.Append(value);
 
-            if (!Alias.TryGetValue(kv.Key ?? string.Empty, out var canon)) continue;
+            var header = kv.Key ?? string.Empty;
+            string? canon;
+            if (overrides != null && overrides.TryGetValue(header, out var ov))
+            {
+                if (string.IsNullOrEmpty(ov) || ov == DataOnly) continue; // explicitly "data only"
+                canon = ov;
+            }
+            else if (!Alias.TryGetValue(header, out canon))
+            {
+                continue;
+            }
             switch (canon)
             {
                 case "time":    if (r.LogTime == DateTime.MinValue) r.LogTime = ParseTime(value); break;

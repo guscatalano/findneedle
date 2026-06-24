@@ -39,6 +39,7 @@
                 <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Statistics &amp; timing (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
+                <MenuFlyoutItem x:Name="RemapCsvMenuItem" Text="Remap CSV columns…" Click="RemapCsvMenuItem_Click" Visibility="Collapsed"/>
             </MenuBarItem>
 
             <MenuBarItem Title="Inspect">

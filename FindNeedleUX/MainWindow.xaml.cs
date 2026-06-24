@@ -513,6 +513,11 @@ public sealed partial class MainWindow : Window
 
     private void RefreshStatusStrip()
     {
+        // "Remap CSV columns…" is only relevant when the workspace is a single CSV/TSV file.
+        if (RemapCsvMenuItem != null)
+            RemapCsvMenuItem.Visibility = MiddleLayerService.GetLoadedCsv() != null
+                ? Visibility.Visible : Visibility.Collapsed;
+
         if (StatusSegments == null) return; // not yet realized
         StatusSegments.Children.Clear();
         foreach (var id in StatusBarCatalog.GetSelectedIds())
@@ -1236,6 +1241,94 @@ public sealed partial class MainWindow : Window
         catch { return DragDropMode.ClearAndAdd; } // dialog failed → safe default
     }
 
+    // ----- CSV column remapping -----
+    private bool _applyingCsvMapping;
+
+    // Display label ↔ canonical field. "-" = "data only" (kept searchable, not mapped to a column).
+    private static readonly (string display, string canon)[] CsvFieldChoices =
+    {
+        ("(data only)", "-"),
+        ("Time", "time"), ("Level", "level"), ("Message", "message"), ("Provider", "provider"),
+        ("TaskName", "task"), ("ProcessId", "pid"), ("ThreadId", "tid"), ("EventId", "eventid"),
+        ("Machine", "machine"), ("User", "user"), ("ActivityId", "activityid"),
+    };
+
+    /// <summary>Auto-prompt the mapping dialog the first time a CSV's columns are seen (no saved mapping).</summary>
+    private async System.Threading.Tasks.Task MaybePromptCsvMappingAsync()
+    {
+        if (_applyingCsvMapping) return;
+        try { if (MiddleLayerService.HasUnmappedCsv()) await ShowCsvMappingDialogAsync(); }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"CSV mapping prompt failed: {ex.Message}"); }
+    }
+
+    private void RemapCsvMenuItem_Click(object sender, RoutedEventArgs e) => _ = ShowCsvMappingDialogAsync();
+
+    private async System.Threading.Tasks.Task ShowCsvMappingDialogAsync()
+    {
+        var csv = MiddleLayerService.GetLoadedCsv();
+        if (csv == null) return;
+        var headers = csv.Value.headers;
+        var saved = FindNeedlePluginUtils.StructuredLog.CsvColumnMappingStore.Get(headers);
+
+        var panel = new StackPanel { Spacing = 6 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Choose which field each CSV column maps to. Unmapped columns stay searchable as data.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+
+        var combos = new System.Collections.Generic.List<(string header, ComboBox box)>();
+        foreach (var h in headers)
+        {
+            var row = new Grid { ColumnSpacing = 10, Margin = new Thickness(0, 0, 0, 2) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+            var lbl = new TextBlock { Text = h, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            Grid.SetColumn(lbl, 0); row.Children.Add(lbl);
+
+            var combo = new ComboBox { Width = 180 };
+            foreach (var (display, _) in CsvFieldChoices) combo.Items.Add(display);
+            string canon = saved != null && saved.TryGetValue(h, out var ov) ? ov
+                : (FindNeedlePluginUtils.StructuredLog.StructuredLogFieldMapper.AutoDetect(h) ?? "-");
+            int idx = Array.FindIndex(CsvFieldChoices, c => c.canon == canon);
+            combo.SelectedIndex = idx >= 0 ? idx : 0;
+            Grid.SetColumn(combo, 1); row.Children.Add(combo);
+
+            panel.Children.Add(row);
+            combos.Add((h, combo));
+        }
+
+        var dlg = new ContentDialog
+        {
+            Title = "Map CSV columns",
+            Content = new ScrollViewer { Content = panel, MaxHeight = 440 },
+            PrimaryButtonText = "Apply",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.Content.XamlRoot,
+        };
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var map = new System.Collections.Generic.Dictionary<string, string>();
+        foreach (var (header, box) in combos)
+            map[header] = CsvFieldChoices[Math.Max(0, box.SelectedIndex)].canon; // "-" = data only
+        FindNeedlePluginUtils.StructuredLog.CsvColumnMappingStore.Set(headers, map);
+
+        // Re-parse with the new mapping — must bypass the cache (it holds the previously-parsed rows).
+        _applyingCsvMapping = true;
+        var prevCache = MiddleLayerService.CacheModeOverride;
+        MiddleLayerService.CacheModeOverride = FindPluginCore.Searching.CacheReuseMode.Never;
+        try { await OpenWithOptionalStreamingAsync("Applying column mapping…"); }
+        finally
+        {
+            MiddleLayerService.CacheModeOverride = prevCache;
+            _applyingCsvMapping = false;
+            RefreshStatusStrip();
+        }
+    }
+
     // ----- Drag & drop: drop log files/folders onto the viewer to open them -----
     private void Content_DragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
     {
@@ -1302,6 +1395,8 @@ public sealed partial class MainWindow : Window
             ShowSpinner(false);
             await OpenViewerAsync();
         }
+        // First time we open a CSV whose columns we haven't mapped, offer the column-mapping dialog.
+        await MaybePromptCsvMappingAsync();
     }
 
     /// <summary>Wait until a streaming search has produced its first rows (or finished / timed out),
