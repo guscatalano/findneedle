@@ -219,6 +219,10 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Theme ---
             SelectComboItemByTag(ThemeCombo, ResultsViewerSettings.ThemeName);
 
+            // --- Title bar color ---
+            SelectComboItemByTag(TitleBarModeCombo, ResultsViewerSettings.TitleBarColorMode);
+            UpdateTitleBarCustomPanel();
+
             // --- Scrollbar size ---
             SelectComboItemByTag(ScrollBarSizeCombo,
                 ((int)ResultsViewerSettings.ScrollBarSize).ToString());
@@ -433,6 +437,49 @@ public sealed partial class ResultsViewerSettingsPage : Page
             ResultsViewerSettings.ClearLevelColors();
             ResultsViewerSettings.ThemeName = themeName;
             RebuildLevelEditor();
+        }
+    }
+
+    // ----- Title bar color -----
+    private void UpdateTitleBarCustomPanel()
+    {
+        bool custom = ResultsViewerSettings.TitleBarColorMode == "Custom";
+        TitleBarCustomPanel.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        var hex = ResultsViewerSettings.TitleBarCustomColor;
+        TitleBarHexText.Text = hex;
+        TitleBarSwatch.Background = HexToBrushConverter.Parse(hex);
+    }
+
+    private void TitleBarModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (TitleBarModeCombo.SelectedItem is ComboBoxItem item && item.Tag is string mode)
+        {
+            ResultsViewerSettings.TitleBarColorMode = mode;
+            UpdateTitleBarCustomPanel();
+        }
+    }
+
+    private async void TitleBarColor_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new ColorPicker
+        {
+            IsAlphaEnabled = false,
+            Color = HexToBrushConverter.ParseColor(ResultsViewerSettings.TitleBarCustomColor)
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "Title bar color",
+            Content = picker,
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
+            XamlRoot = this.XamlRoot
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        {
+            var c = picker.Color;
+            ResultsViewerSettings.TitleBarCustomColor = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            UpdateTitleBarCustomPanel();
         }
     }
 

@@ -205,6 +205,35 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Title bar color -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Title bar" FontWeight="SemiBold"/>
+                            <TextBlock Text="Color of the window's title bar. Takes effect on Windows 11."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="TitleBarModeCombo" Width="220"
+                                      SelectionChanged="TitleBarModeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Title bar color mode">
+                                <ComboBoxItem Content="System default" Tag="System"/>
+                                <ComboBoxItem Content="Accent color"   Tag="Accent"/>
+                                <ComboBoxItem Content="Custom…"         Tag="Custom"/>
+                            </ComboBox>
+                            <StackPanel x:Name="TitleBarCustomPanel" Orientation="Horizontal" Spacing="8"
+                                        VerticalAlignment="Center" Visibility="Collapsed">
+                                <Button Click="TitleBarColor_Click" Padding="2" MinHeight="0" MinWidth="0"
+                                        ToolTipService.ToolTip="Pick a custom title bar color">
+                                    <Border x:Name="TitleBarSwatch" Width="40" Height="22" CornerRadius="3"
+                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                                </Button>
+                                <TextBlock x:Name="TitleBarHexText" VerticalAlignment="Center"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Scrollbar -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

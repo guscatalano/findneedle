@@ -42,8 +42,13 @@ public sealed partial class MainWindow : Window
         // Keep the top "Quick" menu in sync when quick actions are edited on the welcome page.
         FindNeedleUX.Services.QuickActionCatalog.Changed += () => DispatcherQueue.TryEnqueue(BuildQuickMenu);
         ApplyPersistedStatusStripVisibility();
-        // Re-apply status-bar visibility when toggled in Preferences.
-        ResultsViewerSettings.Changed += () => DispatcherQueue.TryEnqueue(ApplyPersistedStatusStripVisibility);
+        ApplyTitleBarColor();
+        // Re-apply status-bar visibility + title-bar color when changed in Preferences.
+        ResultsViewerSettings.Changed += () => DispatcherQueue.TryEnqueue(() =>
+        {
+            ApplyPersistedStatusStripVisibility();
+            ApplyTitleBarColor();
+        });
         InitMcpIndicator();
 
         // Pre-warm the heavy viewer pages on a low-priority dispatcher tick. Constructing the
@@ -1281,6 +1286,57 @@ public sealed partial class MainWindow : Window
             await ShowWorkspaceError("Couldn't save workspace", path, ex);
         }
         finally { ShowSpinner(false); }
+    }
+
+    // ----- Title bar color (Settings → Appearance → Title bar) -----
+    private void ApplyTitleBarColor()
+    {
+        try
+        {
+            if (!Microsoft.UI.Windowing.AppWindowTitleBar.IsCustomizationSupported()) return; // Win11+
+            var tb = AppWindow?.TitleBar;
+            if (tb == null) return;
+
+            global::Windows.UI.Color? bg = ResolveTitleBarColor();
+            tb.BackgroundColor = bg;
+            tb.ButtonBackgroundColor = bg;
+            tb.InactiveBackgroundColor = bg;
+            tb.ButtonInactiveBackgroundColor = bg;
+
+            if (bg is global::Windows.UI.Color c)
+            {
+                // Pick black/white text for contrast against the chosen color.
+                var lum = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+                var fg = lum > 0.6 ? global::Windows.UI.Color.FromArgb(255, 0, 0, 0)
+                                   : global::Windows.UI.Color.FromArgb(255, 255, 255, 255);
+                tb.ForegroundColor = fg;
+                tb.ButtonForegroundColor = fg;
+                tb.ButtonHoverForegroundColor = fg;
+            }
+            else
+            {
+                tb.ForegroundColor = null;
+                tb.ButtonForegroundColor = null;
+                tb.ButtonHoverForegroundColor = null;
+            }
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ApplyTitleBarColor failed: {ex.Message}"); }
+    }
+
+    private static global::Windows.UI.Color? ResolveTitleBarColor()
+    {
+        switch (ResultsViewerSettings.TitleBarColorMode)
+        {
+            case "Accent":
+                try { return new global::Windows.UI.ViewManagement.UISettings()
+                        .GetColorValue(global::Windows.UI.ViewManagement.UIColorType.Accent); }
+                catch { return null; }
+            case "Custom":
+                return FindNeedleUX.Pages.NativeResultViewer.HexToBrushConverter.ParseColor(
+                    ResultsViewerSettings.TitleBarCustomColor);
+            default:
+                return null; // System default
+        }
     }
 
     private async System.Threading.Tasks.Task ShowWorkspaceError(string title, string path, Exception ex)

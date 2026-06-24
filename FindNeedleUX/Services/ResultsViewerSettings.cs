@@ -458,6 +458,24 @@ public static class ResultsViewerSettings
         set { Data.ThemeName = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>How the window title bar is colored: "System" (default), "Accent" (Windows accent), or
+    /// "Custom" (<see cref="TitleBarCustomColor"/>). Broadcasts Changed so the window re-applies live.</summary>
+    public const string DefaultTitleBarColorMode = "System";
+    public static string TitleBarColorMode
+    {
+        get => string.IsNullOrEmpty(Data.TitleBarColorMode) ? DefaultTitleBarColorMode : Data.TitleBarColorMode;
+        set { Data.TitleBarColorMode = value; Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>Custom title-bar color ("#RRGGBB" / "#AARRGGBB"), used when <see cref="TitleBarColorMode"/>
+    /// is "Custom".</summary>
+    public const string DefaultTitleBarCustomColor = "#2D7D9A";
+    public static string TitleBarCustomColor
+    {
+        get => string.IsNullOrEmpty(Data.TitleBarCustomColor) ? DefaultTitleBarCustomColor : Data.TitleBarCustomColor;
+        set { Data.TitleBarCustomColor = value; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>
     /// Thickness (in px) of the result grid's scrollbars. WinUI's default is a thin auto-hiding bar
     /// (~12px); bumping this makes the scrollbar easier to see and grab. Clamped to a sane range so a
@@ -685,6 +703,8 @@ public static class ResultsViewerSettings
     {
         public string TimeFormat { get; set; }
         public string ThemeName { get; set; }
+        public string TitleBarColorMode { get; set; }
+        public string TitleBarCustomColor { get; set; }
         public Dictionary<string, string> LevelColors { get; set; }
         public bool? FiltersExpanded { get; set; }
         public Dictionary<string, bool> ColumnVisibility { get; set; }
