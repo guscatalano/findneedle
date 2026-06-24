@@ -309,7 +309,115 @@ public sealed class McpViewerBridge
     private static object BuildValidationResult(string json)
     {
         var (valid, errors, warnings, summary) = ValidateRuleStructured(json);
-        return new { valid, errors, warnings, summary };
+        return new
+        {
+            valid,
+            errors,
+            warnings,
+            summary,
+            hint = valid ? null : "Call rule_schema for the schema reference (structure, purposes, action types, examples).",
+        };
+    }
+
+    // ----- rule schema + examples (help an agent author rules) -----
+
+    /// <summary>The RuleDSL schema reference (grammar, valid value sets, minimal valid examples).</summary>
+    public Task<object> RuleSchemaAsync() => Task.FromResult<object>(RuleSchemaHelp.Schema());
+
+    /// <summary>No name: list shipped example rules with what each demonstrates. With a name: the example's
+    /// full JSON (so an agent can adapt it as a template).</summary>
+    public Task<object> RuleExamplesAsync(string name)
+        => Task.FromResult<object>(string.IsNullOrWhiteSpace(name) ? DoListRuleExamples() : DoReadRule(name));
+
+    private static object DoListRuleExamples()
+    {
+        var list = new List<object>();
+        if (Directory.Exists(CommonRulesDir))
+        {
+            foreach (var f in Directory.EnumerateFiles(CommonRulesDir, "*.rules.json").OrderBy(x => x))
+            {
+                string purpose = "", demonstrates = "", title = null;
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(f));
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("title", out var tt) && tt.ValueKind == JsonValueKind.String) title = tt.GetString();
+                    if ((root.TryGetProperty("sections", out var secs) || root.TryGetProperty("Sections", out secs))
+                        && secs.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var s in secs.EnumerateArray())
+                        {
+                            var pu = s.TryGetProperty("purpose", out var pv) ? pv.GetString()
+                                   : s.TryGetProperty("Purpose", out var pv2) ? pv2.GetString() : null;
+                            if (string.IsNullOrEmpty(pu)) continue;
+                            purpose = pu;
+                            string at = null, syntax = null;
+                            if ((s.TryGetProperty("rules", out var rs) || s.TryGetProperty("Rules", out rs))
+                                && rs.ValueKind == JsonValueKind.Array)
+                                foreach (var r in rs.EnumerateArray())
+                                    if (r.TryGetProperty("action", out var ac) || r.TryGetProperty("Action", out ac))
+                                    {
+                                        if (ac.TryGetProperty("type", out var tv)) at = tv.GetString();
+                                        if (ac.TryGetProperty("syntax", out var sv)) syntax = sv.GetString();
+                                        break;
+                                    }
+                            demonstrates = at == null ? pu
+                                : syntax != null ? $"{pu} ({at}/{syntax})" : $"{pu} ({at})";
+                            break;
+                        }
+                    }
+                    else if (root.TryGetProperty("participants", out _) || root.TryGetProperty("Participants", out _))
+                    {
+                        purpose = "output"; demonstrates = "uml participants/interaction";
+                    }
+                }
+                catch { /* skip unreadable example */ }
+                list.Add(new { name = Path.GetFileName(f), title, purpose, demonstrates });
+            }
+        }
+        return new { examples = list, hint = "Pass {name} to fetch an example's full JSON; see rule_schema for the grammar." };
+    }
+
+    // ----- UML diagram tools (status + install) -----
+
+    /// <summary>Whether Mermaid + PlantUML are installed and can render images.</summary>
+    public Task<object> UmlToolsAsync() => Task.Run<object>(() =>
+    {
+        bool ImageSupported(bool plant)
+        {
+            try
+            {
+                var mgr = SystemInfoMiddleware.UmlDependencyManager;
+                FindNeedlePluginLib.IUMLGenerator g = plant
+                    ? new FindNeedleUmlDsl.PlantUMLGenerator(mgr.PlantUml)
+                    : new FindNeedleUmlDsl.MermaidUMLGenerator(mgr.Mermaid);
+                return g.IsSupported(FindNeedlePluginLib.UmlOutputType.ImageFile);
+            }
+            catch { return false; }
+        }
+
+        var m = SystemInfoMiddleware.GetMermaidStatus();
+        var p = SystemInfoMiddleware.GetPlantUmlStatus();
+        return new
+        {
+            mermaid = new { installed = m.IsInstalled, path = m.InstalledPath, version = m.InstalledVersion, imageSupported = ImageSupported(false) },
+            plantuml = new { installed = p.IsInstalled, path = p.InstalledPath, version = p.InstalledVersion, imageSupported = ImageSupported(true) },
+            note = "A UML output rule always writes the .mmd/.puml text; the rendered image needs imageSupported=true. install_uml_tool installs a missing one.",
+        };
+    });
+
+    /// <summary>Install the Mermaid CLI or PlantUML tool; returns the installer's real success/error message.</summary>
+    public async Task<object> InstallUmlToolAsync(string tool)
+    {
+        var which = (tool ?? "").Trim().ToLowerInvariant();
+        FindNeedleToolInstallers.InstallResult result;
+        if (which is "mermaid" or "mermaidcli" or "mmdc")
+            result = await SystemInfoMiddleware.InstallMermaidAsync(null, System.Threading.CancellationToken.None).ConfigureAwait(false);
+        else if (which is "plantuml" or "plant" or "puml")
+            result = await SystemInfoMiddleware.InstallPlantUmlAsync(null, System.Threading.CancellationToken.None).ConfigureAwait(false);
+        else
+            throw new ArgumentException($"unknown tool '{tool}'. Use \"mermaid\" or \"plantuml\".");
+        return new { ok = result.Success, tool = which, message = result.Message };
     }
 
     /// <summary>Validate then write a rule file into the AI sandbox. On invalid JSON nothing is written
@@ -562,7 +670,25 @@ public sealed class McpViewerBridge
             })
             .ToList();
 
-        return new { ok = true, totalMs = sw.ElapsedMilliseconds, fileCount = files.Count, files, diagrams };
+        // Image formats whose render tool is missing — so a skipped image render is KNOWN, not silent.
+        // (The .mmd/.puml text is still written; only the rendered image is skipped.)
+        List<string> unavailableImageFormats;
+        try { unavailableImageFormats = MiddleLayerService.GetUnavailableDiagramImageFormats(); }
+        catch { unavailableImageFormats = new List<string>(); }
+
+        return new
+        {
+            ok = true,
+            totalMs = sw.ElapsedMilliseconds,
+            fileCount = files.Count,
+            files,
+            diagrams,
+            unavailableImageFormats,
+            note = unavailableImageFormats.Count > 0
+                ? "Diagram text (.mmd/.puml) was written, but the image was NOT rendered because these tools aren't installed: "
+                  + string.Join(", ", unavailableImageFormats) + ". Use uml_tools / install_uml_tool."
+                : null,
+        };
     });
 
     // ----- UI-thread marshaling -----

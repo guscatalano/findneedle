@@ -202,6 +202,20 @@ internal static class McpTools
         },
         new ToolDef
         {
+            Name = "rule_schema",
+            Description = "Get the RuleDSL schema reference: the file structure, valid section purposes (filter/enrichment/output), action types per purpose, matchable fields, and minimal VALID examples. Read this before authoring a rule; then validate_rule a draft and save_rule it.",
+            InputSchema = Obj(new { }),
+            Invoke = async _ => await B.RuleSchemaAsync(),
+        },
+        new ToolDef
+        {
+            Name = "rule_examples",
+            Description = "Shipped example rules to adapt as templates. No args lists them with what each demonstrates (filter/enrichment/output + action); pass {name} to fetch one example's full JSON.",
+            InputSchema = Obj(new { name = S("Optional example file name to fetch its full JSON, e.g. \"dism-interaction.rules.json\".") }),
+            Invoke = async a => await B.RuleExamplesAsync(Str(a, "name")),
+        },
+        new ToolDef
+        {
             Name = "set_rule_filter",
             Description = "Turn the rule-view filter on/off: apply the active filter/redact rules (from set_rules) to the OPEN view — the same as the viewer's rule-filter toggle. Filter-purpose rules don't change run_search results (they're applied at view time, not scan time), so use this to actually see a filter rule's effect. Returns keptRows when on (rows the rules keep), the unfiltered count when off, or -1 if the active rule set has no filter rules. Requires an open viewer after run_search.",
             InputSchema = Obj(new { on = Bn("True to apply the rule filter, false to remove it.") }, "on"),
@@ -333,9 +347,23 @@ internal static class McpTools
         new ToolDef
         {
             Name = "generate_outputs",
-            Description = "Run the deferred RuleDSL output rules now — e.g. generate the UML diagram from the current results — and return the produced files plus per-diagram generation stats: generationMs (time to build the markup), sourceRows, matchedRows, participants, interactions, lines/chars, and rulesFired/rulesTotal. Also returns totalMs (full wall time). Requires an output/UML rule to be enabled. Use this to test and time diagram generation.",
+            Description = "Run the deferred RuleDSL output rules now — e.g. generate the UML diagram from the current results — and return the produced files plus per-diagram generation stats: generationMs (time to build the markup), sourceRows, matchedRows, participants, interactions, lines/chars, and rulesFired/rulesTotal. Also returns totalMs (full wall time), and unavailableImageFormats (diagram syntaxes whose render tool is missing — the .mmd/.puml text is still written, only the image is skipped; see uml_tools/install_uml_tool). Requires an output/UML rule to be enabled.",
             InputSchema = Obj(new { }),
             Invoke = async _ => await B.GenerateOutputsAsync(),
+        },
+        new ToolDef
+        {
+            Name = "uml_tools",
+            Description = "Report whether the Mermaid and PlantUML diagram tools are installed and can render images: { mermaid, plantuml } each with installed, path, version, imageSupported. imageSupported=false means a UML rule's .mmd/.puml text is written but the rendered image is skipped — install_uml_tool to fix.",
+            InputSchema = Obj(new { }),
+            Invoke = async _ => await B.UmlToolsAsync(),
+        },
+        new ToolDef
+        {
+            Name = "install_uml_tool",
+            Description = "Install a diagram render tool so UML images can be generated: tool=\"mermaid\" (Mermaid CLI) or \"plantuml\". Returns { ok, tool, message } with the installer's real output (errors included). May take a while.",
+            InputSchema = Obj(new { tool = S("Which tool to install: \"mermaid\" or \"plantuml\".") }, "tool"),
+            Invoke = async a => await B.InstallUmlToolAsync(Str(a, "tool")),
         },
         new ToolDef
         {
