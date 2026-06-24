@@ -1112,17 +1112,42 @@ public sealed partial class MainWindow : Window
     public async void QuickFileOpen()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var file = Win32FileDialog.OpenFile(hWnd, new (string, string)[]
-        {
-            ("Log files", "*.txt;*.etl;*.log;*.zip;*.evtx"),
-            ("All files", "*.*"),
-        });
+        var file = Win32FileDialog.OpenFile(hWnd, LogFileFilters());
         if (file != null)
         {
             MiddleLayerService.NewWorkspace();
             MiddleLayerService.AddFolderLocation(file);
             await OpenWithOptionalStreamingAsync("Opening file...");
         }
+    }
+
+    /// <summary>"Open file" dialog filters, built from every registered IFileExtensionProcessor's
+    /// extensions (so CSV/TSV/JSON/etc. are included) unioned with a baseline of the always-supported
+    /// formats — so the list can't silently go stale or drop the ETW formats if a plugin isn't loaded.</summary>
+    private static (string name, string spec)[] LogFileFilters()
+    {
+        var exts = new System.Collections.Generic.SortedSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".txt", ".log", ".etl", ".evtx", ".zip", // baseline — never lost
+        };
+        try
+        {
+            foreach (var p in findneedle.PluginSubsystem.PluginManager.GetSingleton()
+                         .GetAllPluginsInstancesOfAType<FindNeedlePluginLib.IFileExtensionProcessor>())
+            {
+                try
+                {
+                    foreach (var e in p.RegisterForExtensions() ?? new System.Collections.Generic.List<string>())
+                        if (!string.IsNullOrWhiteSpace(e))
+                            exts.Add(e.StartsWith(".", StringComparison.Ordinal) ? e : "." + e);
+                }
+                catch { /* a misbehaving plugin shouldn't break the picker */ }
+            }
+        }
+        catch { /* fall back to the baseline */ }
+
+        var spec = string.Join(";", exts.Select(e => "*" + e));
+        return new (string, string)[] { ("Log files", spec), ("All files", "*.*") };
     }
 
     public async void QuickFolderOpen()
