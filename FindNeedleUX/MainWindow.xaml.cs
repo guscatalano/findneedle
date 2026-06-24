@@ -824,11 +824,25 @@ public sealed partial class MainWindow : Window
 
     private void SetWindowIcon(string iconPath)
     {
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var hIcon = PInvoke.LoadImage(IntPtr.Zero, iconPath, GDI_IMAGE_TYPE.IMAGE_ICON, 0, 0, IMAGE_FLAGS.LR_LOADFROMFILE);
-        if (hIcon != IntPtr.Zero)
+        var full = System.IO.Path.IsPathRooted(iconPath)
+            ? iconPath
+            : System.IO.Path.Combine(AppContext.BaseDirectory, iconPath);
+        try
         {
-            PInvoke.SendMessage(new HWND(hwnd), PInvoke.WM_SETICON, (IntPtr)1, hIcon);
+            // AppWindow.SetIcon sets BOTH the taskbar and the title-bar (top-left) icon from the same
+            // .ico, so they match. The old WM_SETICON path set only ICON_BIG (taskbar), leaving the
+            // title bar on a default icon that didn't match.
+            AppWindow?.SetIcon(full);
+        }
+        catch
+        {
+            // Fallback: set the small (title bar) AND big (taskbar) icons explicitly.
+            var hwnd = new HWND(WinRT.Interop.WindowNative.GetWindowHandle(this));
+            var big = PInvoke.LoadImage(IntPtr.Zero, full, GDI_IMAGE_TYPE.IMAGE_ICON, 0, 0, IMAGE_FLAGS.LR_LOADFROMFILE);
+            var small = PInvoke.LoadImage(IntPtr.Zero, full, GDI_IMAGE_TYPE.IMAGE_ICON, 16, 16, IMAGE_FLAGS.LR_LOADFROMFILE);
+            if (small == IntPtr.Zero) small = big;
+            if (big != IntPtr.Zero) PInvoke.SendMessage(hwnd, PInvoke.WM_SETICON, (IntPtr)1 /*ICON_BIG*/, big);
+            if (small != IntPtr.Zero) PInvoke.SendMessage(hwnd, PInvoke.WM_SETICON, (IntPtr)0 /*ICON_SMALL*/, small);
         }
     }
 
