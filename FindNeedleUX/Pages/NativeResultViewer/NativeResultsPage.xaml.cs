@@ -3166,6 +3166,49 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return removed;
     });
 
+    public Task<List<FindNeedleUX.Services.Mcp.TagCountDto>> GetTagCountsAsync() => McpOnUiAsync(() =>
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in _rowTags.Values)
+        {
+            var name = string.IsNullOrWhiteSpace(t.Name) ? "(none)" : t.Name;
+            counts.TryGetValue(name, out var c);
+            counts[name] = c + 1;
+        }
+        return counts.OrderByDescending(kv => kv.Value)
+            .Select(kv => new FindNeedleUX.Services.Mcp.TagCountDto { Tag = kv.Key, Count = kv.Value })
+            .ToList();
+    });
+
+    public Task<List<FindNeedleUX.Services.Mcp.RecordDto>> GetTaggedRowsAsync(string tag) => McpOnUiAsync(() =>
+    {
+        var list = new List<FindNeedleUX.Services.Mcp.RecordDto>();
+        foreach (var kv in _rowTags)
+        {
+            if (!string.IsNullOrWhiteSpace(tag)
+                && !string.Equals(kv.Value.Name, tag, StringComparison.OrdinalIgnoreCase)) continue;
+            var line = ViewModel.GetRecordByRowId(kv.Key);
+            if (line != null) list.Add(McpToRecord(line, full: false));
+        }
+        return list;
+    });
+
+    public Task<FindNeedleUX.Services.Mcp.ContextDto> GetContextAsync(long rowId, int before, int after) => McpOnUiAsync(() =>
+    {
+        var dto = new FindNeedleUX.Services.Mcp.ContextDto { RowId = rowId, TotalFiltered = ViewModel.TotalFilteredCount };
+        var (index, rows) = ViewModel.GetContext(rowId, before, after);
+        if (index < 0) { dto.Found = false; return dto; }
+        dto.Found = true;
+        dto.TargetIndex = index;
+        foreach (var r in rows)
+        {
+            var rec = McpToRecord(r, full: false);
+            dto.Rows.Add(rec);
+            if (rec.RowId == rowId) dto.Target = rec;
+        }
+        return dto;
+    });
+
     public Task SetDetailsModeAsync(string mode) => McpOnUiAsync(() =>
     {
         var m = (mode ?? "").Trim().ToLowerInvariant() switch

@@ -1083,6 +1083,35 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     /// <summary>A read-only snapshot of the rows currently shown on the active page.</summary>
     public IReadOnlyList<LogLine> CurrentPageRows() => Results;
 
+    /// <summary>
+    /// MCP get_context: locate a row's 0-based ordinal in the current filter+sort, then return the
+    /// window [ordinal-before, ordinal+after]. Scans up to <paramref name="scanCap"/> rows (in chunks)
+    /// to find the id; returns (-1, empty) if it isn't within that cap. The returned rows carry their
+    /// filtered Index (set by the paged source).
+    /// </summary>
+    public (int index, List<LogLine> rows) GetContext(long rowId, int before, int after, int scanCap = 200_000)
+    {
+        if (_source == null) return (-1, new List<LogLine>());
+        before = Math.Clamp(before, 0, 100);
+        after = Math.Clamp(after, 0, 100);
+        var filters = BuildFilterSpec();
+        var sort = new SortSpec(_sortColumn, _sortDescending);
+        int cap = Math.Min(_source.GetFilteredCount(filters), scanCap);
+        int targetIndex = -1;
+        const int chunk = 4000;
+        for (int off = 0; off < cap && targetIndex < 0; off += chunk)
+        {
+            var page = _source.GetPage(filters, sort, off, Math.Min(chunk, cap - off));
+            if (page.Count == 0) break;
+            for (int i = 0; i < page.Count; i++)
+                if (page[i].RowId == rowId) { targetIndex = off + i; break; }
+        }
+        if (targetIndex < 0) return (-1, new List<LogLine>());
+        int start = Math.Max(0, targetIndex - before);
+        var rows = _source.GetPage(filters, sort, start, before + after + 1);
+        return (targetIndex, rows);
+    }
+
     /// <summary>An arbitrary [offset, offset+limit) slice of the current filtered/sorted result.</summary>
     public List<LogLine> GetRows(int offset, int limit)
         => _source == null ? new List<LogLine>()

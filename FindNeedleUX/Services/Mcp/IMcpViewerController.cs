@@ -68,6 +68,18 @@ public interface IMcpViewerController
 
     Task<bool> ClearTagAsync(long rowId);
 
+    /// <summary>The distinct row tags currently applied, each with its count (MCP list_tags).</summary>
+    Task<List<TagCountDto>> GetTagCountsAsync();
+
+    /// <summary>The rows currently tagged with <paramref name="tag"/> (or all tagged rows when null/blank).
+    /// Tags are a viewer-side overlay, so this lists the tagged rows rather than reconfiguring the grid.</summary>
+    Task<List<RecordDto>> GetTaggedRowsAsync(string tag);
+
+    /// <summary>Rows around <paramref name="rowId"/> in the current filter+sort: the target plus
+    /// <paramref name="before"/>/<paramref name="after"/> neighbors. Found=false if the id isn't in
+    /// the (capped) scan of the current filtered set.</summary>
+    Task<ContextDto> GetContextAsync(long rowId, int before, int after);
+
     Task SetDetailsModeAsync(string mode);
 
     /// <summary>

@@ -102,6 +102,24 @@ public sealed class ExportResultDto
     public int RowCount { get; set; }
 }
 
+/// <summary>One row-tag category and how many rows currently carry it (MCP <c>list_tags</c>).</summary>
+public sealed class TagCountDto
+{
+    public string Tag { get; set; }
+    public int Count { get; set; }
+}
+
+/// <summary>The rows around a target row in the current filter+sort order (MCP <c>get_context</c>).</summary>
+public sealed class ContextDto
+{
+    public bool Found { get; set; }
+    public long RowId { get; set; }
+    public int TargetIndex { get; set; }   // 0-based ordinal of the target in the current filter+sort
+    public int TotalFiltered { get; set; }
+    public RecordDto Target { get; set; }
+    public List<RecordDto> Rows { get; set; } = new();
+}
+
 /// <summary>
 /// Health / orientation snapshot. Always succeeds (works with or without an open viewer) so an agent
 /// can check what's available before calling viewer tools.

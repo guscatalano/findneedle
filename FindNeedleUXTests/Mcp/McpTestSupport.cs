@@ -91,6 +91,29 @@ internal sealed class FakeViewerController : IMcpViewerController
     public Task<bool> SelectRowAsync(long rowId) => Task.FromResult(true);
     public Task<bool> TagRowAsync(long rowId, string tag, string text) { LastTagId = rowId; LastTag = tag; LastTagText = text; return Task.FromResult(true); }
     public Task<bool> ClearTagAsync(long rowId) => Task.FromResult(true);
+
+    public List<TagCountDto> TagCountsResult = new() { new TagCountDto { Tag = "Important", Count = 2 } };
+    public Task<List<TagCountDto>> GetTagCountsAsync() => Task.FromResult(TagCountsResult);
+
+    public string LastTaggedFilter = "<unset>";
+    public Task<List<RecordDto>> GetTaggedRowsAsync(string tag)
+    {
+        LastTaggedFilter = tag;
+        return Task.FromResult(new List<RecordDto> { new() { RowId = 100, Message = "tagged" } });
+    }
+
+    public long LastContextRowId = long.MinValue;
+    public int LastContextBefore, LastContextAfter;
+    public Task<ContextDto> GetContextAsync(long rowId, int before, int after)
+    {
+        LastContextRowId = rowId; LastContextBefore = before; LastContextAfter = after;
+        return Task.FromResult(new ContextDto
+        {
+            Found = true, RowId = rowId, TargetIndex = 10,
+            Target = new RecordDto { RowId = rowId },
+            Rows = { new RecordDto { RowId = rowId } },
+        });
+    }
     public Task ReloadAsync() => Task.CompletedTask;
     public Task SetDetailsModeAsync(string mode) => Task.CompletedTask;
     public Task<ExportResultDto> ExportAsync(string format, string destPath)

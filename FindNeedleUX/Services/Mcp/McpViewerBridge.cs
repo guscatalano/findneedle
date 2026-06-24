@@ -137,6 +137,9 @@ public sealed class McpViewerBridge
     public Task<bool> SelectRowAsync(long rowId) => Viewer.SelectRowAsync(rowId);
     public Task<bool> TagRowAsync(long rowId, string tag, string text) => Viewer.TagRowAsync(rowId, tag, text);
     public Task<bool> ClearTagAsync(long rowId) => Viewer.ClearTagAsync(rowId);
+    public Task<List<TagCountDto>> GetTagCountsAsync() => Viewer.GetTagCountsAsync();
+    public Task<List<RecordDto>> GetTaggedRowsAsync(string tag) => Viewer.GetTaggedRowsAsync(tag);
+    public Task<ContextDto> GetContextAsync(long rowId, int before, int after) => Viewer.GetContextAsync(rowId, before, after);
     public Task SetDetailsModeAsync(string mode) => Viewer.SetDetailsModeAsync(mode);
     public Task<ExportResultDto> ExportAsync(string format, string destPath) => Viewer.ExportAsync(format, destPath);
 
@@ -388,6 +391,69 @@ public sealed class McpViewerBridge
     });
 
     public Task ClearWorkspaceAsync() => RunOnUiAsync(() => MiddleLayerService.ClearWorkspace());
+
+    public Task<object> SaveWorkspaceAsync(string path) => RunOnUiAsync<object>(() =>
+    {
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path is required");
+        MiddleLayerService.SaveWorkspace(path);
+        return new { ok = true, path };
+    });
+
+    public Task<object> OpenWorkspaceAsync(string path) => RunOnUiAsync<object>(() =>
+    {
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path is required");
+        MiddleLayerService.OpenWorkspace(path);
+        return new { ok = true, path, locations = MiddleLayerService.Locations.Count };
+    });
+
+    // ----- viewer settings (whitelisted; no blind reflection) -----
+    private static readonly string[] SettingKeys =
+    {
+        "ThemeName", "PageSize", "TimeFormat", "EnrichmentEnabled", "StreamWhileLoading",
+        "TitleBarColorMode", "TitleBarCustomColor", "DefaultSort", "FilterDock",
+    };
+
+    public Task<object> GetSettingAsync(string key) => RunOnUiAsync<object>(() =>
+    {
+        string val = key switch
+        {
+            "ThemeName" => ResultsViewerSettings.ThemeName,
+            "PageSize" => ResultsViewerSettings.PageSize.ToString(),
+            "TimeFormat" => ResultsViewerSettings.TimeFormat,
+            "EnrichmentEnabled" => ResultsViewerSettings.EnrichmentEnabled.ToString(),
+            "StreamWhileLoading" => ResultsViewerSettings.StreamWhileLoading.ToString(),
+            "TitleBarColorMode" => ResultsViewerSettings.TitleBarColorMode,
+            "TitleBarCustomColor" => ResultsViewerSettings.TitleBarCustomColor,
+            "DefaultSort" => ResultsViewerSettings.DefaultSort.ToString(),
+            "FilterDock" => ResultsViewerSettings.FilterDock.ToString(),
+            _ => throw new ArgumentException($"unknown setting '{key}'. Known: {string.Join(", ", SettingKeys)}"),
+        };
+        return new { key, value = val };
+    });
+
+    public Task<object> SetSettingAsync(string key, string value) => RunOnUiAsync<object>(() =>
+    {
+        bool ParseBool() => bool.TryParse(value, out var b) ? b
+            : throw new ArgumentException($"{key} expects true/false, got '{value}'");
+        int ParseInt() => int.TryParse(value, out var n) ? n
+            : throw new ArgumentException($"{key} expects an integer, got '{value}'");
+        switch (key)
+        {
+            case "ThemeName": ResultsViewerSettings.ThemeName = value; break;
+            case "PageSize": ResultsViewerSettings.PageSize = ParseInt(); break;
+            case "TimeFormat": ResultsViewerSettings.TimeFormat = value; break;
+            case "EnrichmentEnabled": ResultsViewerSettings.EnrichmentEnabled = ParseBool(); break;
+            case "StreamWhileLoading": ResultsViewerSettings.StreamWhileLoading = ParseBool(); break;
+            case "TitleBarColorMode": ResultsViewerSettings.TitleBarColorMode = value; break;
+            case "TitleBarCustomColor": ResultsViewerSettings.TitleBarCustomColor = value; break;
+            case "DefaultSort":
+                ResultsViewerSettings.DefaultSort = Enum.Parse<DefaultSortMode>(value, ignoreCase: true); break;
+            case "FilterDock":
+                ResultsViewerSettings.FilterDock = Enum.Parse<FilterDock>(value, ignoreCase: true); break;
+            default: throw new ArgumentException($"unknown setting '{key}'. Known: {string.Join(", ", SettingKeys)}");
+        }
+        return new { key, value };
+    });
 
     public Task<bool> RemoveLocationAsync(string name) => RunOnUiAsync(() =>
     {

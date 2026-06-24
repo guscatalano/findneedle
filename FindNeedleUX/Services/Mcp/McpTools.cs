@@ -249,6 +249,20 @@ internal static class McpTools
         },
         new ToolDef
         {
+            Name = "save_workspace",
+            Description = "Save the current workspace (locations + filters + active rule paths) to a .json file you can reopen later with open_workspace.",
+            InputSchema = Obj(new { path = S("Destination .json path.") }, "path"),
+            Invoke = async a => await B.SaveWorkspaceAsync(Str(a, "path")),
+        },
+        new ToolDef
+        {
+            Name = "open_workspace",
+            Description = "Load a workspace (locations + rules) from a .json saved by save_workspace. Replaces the current locations/filters; call run_search afterward. Returns the loaded location count.",
+            InputSchema = Obj(new { path = S("Workspace .json path to load.") }, "path"),
+            Invoke = async a => await B.OpenWorkspaceAsync(Str(a, "path")),
+        },
+        new ToolDef
+        {
             Name = "list_log_catalog",
             Description = "List the Log Finder catalog — the user's saved + built-in known log locations (e.g. Windows Event Logs, CBS, DISM, Panther, Windows Update, Defender, Temp). Each entry has an id, name, resolved path, category, kind (folder/file), and whether it exists on this machine. Load one with add_log_location(id), then run_search.",
             InputSchema = Obj(new { includeMissing = Bn("Include entries whose path doesn't exist on this machine (default false).") }),
@@ -527,6 +541,46 @@ internal static class McpTools
                 path = S("Destination path; omit for a timestamped temp file."),
             }),
             Invoke = async a => await B.ExportAsync(Str(a, "format", "csv"), Str(a, "path")),
+        },
+        new ToolDef
+        {
+            Name = "list_tags",
+            Description = "List the row tags currently applied in the viewer (Important/Question/Resolved/Note/UML), each with its count.",
+            InputSchema = Obj(new { }),
+            Invoke = async _ => new { tags = await B.GetTagCountsAsync() },
+        },
+        new ToolDef
+        {
+            Name = "filter_by_tag",
+            Description = "Return the rows currently tagged with a category (Important/Question/Resolved/Note/UML), or all tagged rows if omitted. Tags are a viewer-side overlay, so this lists the tagged rows rather than reconfiguring the paged grid.",
+            InputSchema = Obj(new { tag = S("Tag category to list; omit/empty for all tagged rows.") }),
+            Invoke = async a => new { rows = await B.GetTaggedRowsAsync(Str(a, "tag")) },
+        },
+        new ToolDef
+        {
+            Name = "get_context",
+            Description = "Get the rows immediately around a row (by stable id) in the CURRENT filter+sort order — the target plus N rows before/after — to see an event's surroundings. found=false if the id isn't within the scanned window of the current filtered set.",
+            InputSchema = Obj(new
+            {
+                rowId = I("Stable row id (the rowId field from get_page)."),
+                before = I("Rows before the target (default 5, max 100)."),
+                after = I("Rows after the target (default 5, max 100)."),
+            }, "rowId"),
+            Invoke = async a => await B.GetContextAsync(RowId(a), Int(a, "before", 5), Int(a, "after", 5)),
+        },
+        new ToolDef
+        {
+            Name = "get_setting",
+            Description = "Read a viewer setting by key. Keys: ThemeName, PageSize, TimeFormat, EnrichmentEnabled, StreamWhileLoading, TitleBarColorMode, TitleBarCustomColor, DefaultSort, FilterDock.",
+            InputSchema = Obj(new { key = S("Setting key (see description for the allowed set).") }, "key"),
+            Invoke = async a => await B.GetSettingAsync(Str(a, "key")),
+        },
+        new ToolDef
+        {
+            Name = "set_setting",
+            Description = "Set a viewer setting by key (see get_setting for the allowed keys). 'value' is a string parsed to the setting's type (int/bool/enum).",
+            InputSchema = Obj(new { key = S("Setting key."), value = S("New value as a string.") }, "key", "value"),
+            Invoke = async a => await B.SetSettingAsync(Str(a, "key"), Str(a, "value")),
         },
     };
 }
