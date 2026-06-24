@@ -395,6 +395,25 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Drag and drop behavior -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Drag and drop" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="When you drag a file or folder onto the viewer and a workspace is already loaded."/>
+                            <ComboBox x:Name="DragDropModeCombo" Width="320"
+                                      SelectionChanged="DragDropModeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Drag and drop behavior">
+                                <ComboBoxItem Content="Ask every time (default)"   Tag="Prompt"/>
+                                <ComboBoxItem Content="Clear workspace and open"   Tag="ClearAndAdd"/>
+                                <ComboBoxItem Content="Add to existing workspace"  Tag="AddToExisting"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Diagnostics: bundle logs for the developer -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

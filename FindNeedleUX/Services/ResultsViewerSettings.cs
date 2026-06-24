@@ -257,6 +257,17 @@ public static class ResultsViewerSettings
         set { Data.FileContextMenuEnabled = value; Save(); }
     }
 
+    /// <summary>What happens when a file/folder is dropped onto the viewer while a workspace is already
+    /// loaded: Prompt (ask each time, default), ClearAndAdd, or AddToExisting. Applied per-drop (no Changed).</summary>
+    public const DragDropMode DefaultDragDropMode = DragDropMode.Prompt;
+    public static DragDropMode DragDropMode
+    {
+        get => !string.IsNullOrEmpty(Data.DragDropMode)
+               && Enum.TryParse<DragDropMode>(Data.DragDropMode, ignoreCase: true, out var p)
+            ? p : DefaultDragDropMode;
+        set { Data.DragDropMode = value.ToString(); Save(); }
+    }
+
     /// <summary>TCP port for the in-app MCP server (bound to 127.0.0.1 only).</summary>
     public const int DefaultMcpServerPort = 8765;
     public static int McpServerPort
@@ -726,6 +737,7 @@ public static class ResultsViewerSettings
         public int? McpServerPort { get; set; }
         public bool? FileOpenWithEnabled { get; set; }
         public bool? FileContextMenuEnabled { get; set; }
+        public string DragDropMode { get; set; }
         public bool? EnrichmentEnabled { get; set; }
         public string TraceFormatSearchPath { get; set; }
         public string SymbolPath { get; set; }

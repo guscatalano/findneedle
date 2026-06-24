@@ -223,6 +223,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(TitleBarModeCombo, ResultsViewerSettings.TitleBarColorMode);
             UpdateTitleBarCustomPanel();
 
+            // --- Drag and drop ---
+            SelectComboItemByTag(DragDropModeCombo, ResultsViewerSettings.DragDropMode.ToString());
+
             // --- Scrollbar size ---
             SelectComboItemByTag(ScrollBarSizeCombo,
                 ((int)ResultsViewerSettings.ScrollBarSize).ToString());
@@ -438,6 +441,15 @@ public sealed partial class ResultsViewerSettingsPage : Page
             ResultsViewerSettings.ThemeName = themeName;
             RebuildLevelEditor();
         }
+    }
+
+    // ----- Drag and drop -----
+    private void DragDropModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (DragDropModeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && Enum.TryParse<FindNeedleUX.Services.DragDropMode>(tag, out var mode))
+            ResultsViewerSettings.DragDropMode = mode;
     }
 
     // ----- Title bar color -----

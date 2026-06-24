@@ -2499,6 +2499,29 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             };
             copyCell.Click += (_, __) => CopyToClipboard(cellValue ?? "");
             flyout.Items.Add(copyCell);
+
+            // Filter in / out this cell's value — writes a predicate into the search box (editable).
+            var field = QueryFieldForColumn(cellColumnHeader);
+            if (field != null && !string.IsNullOrEmpty(cellValue))
+            {
+                bool contains = field == "message"; // a full message rarely matches exactly → use contains
+                var preview = cellValue.Length > 40 ? cellValue.Substring(0, 40) + "…" : cellValue;
+                var filterIn = new MenuFlyoutItem
+                {
+                    Text = $"Filter in:  {field} {(contains ? "~" : "==")} \"{preview}\"",
+                    Icon = new SymbolIcon(Symbol.Filter),
+                };
+                filterIn.Click += (_, __) => AddSearchPredicate(field, cellValue, negate: false, contains: contains);
+                flyout.Items.Add(filterIn);
+
+                var filterOut = new MenuFlyoutItem
+                {
+                    Text = $"Filter out:  {field} {(contains ? "!~" : "!=")} \"{preview}\"",
+                };
+                filterOut.Click += (_, __) => AddSearchPredicate(field, cellValue, negate: true, contains: contains);
+                flyout.Items.Add(filterOut);
+            }
+
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
@@ -2518,6 +2541,45 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // cursor regardless of which visual-tree descendant raised the event.
         flyout.ShowAt(ResultsGrid, e.GetPosition(ResultsGrid));
         e.Handled = true;
+    }
+
+    /// <summary>Map a grid column header to the search-query field name (null = not filterable via query).</summary>
+    private static string QueryFieldForColumn(string header) => header switch
+    {
+        "Provider" => "provider",
+        "TaskName" => "taskname",
+        "Message" => "message",
+        "Source" => "source",
+        "Level" => "level",
+        "ProcessId" => "processid",
+        "ThreadId" => "threadid",
+        "EventId" => "eventid",
+        "Channel" => "channel",
+        "MachineName" => "machinename",
+        "Username" => "username",
+        "OpCode" => "opcode",
+        _ => null,
+    };
+
+    /// <summary>Append a <c>field op "value"</c> predicate to the search box and apply it. Combines with
+    /// any existing query/term via AND (a bare term parses as a global-contains node, so it stays valid),
+    /// then leaves the box focused with the cursor at the end so the user can edit it.</summary>
+    private void AddSearchPredicate(string field, string value, bool negate, bool contains)
+    {
+        // Sanitize for the query language: single line, no embedded double-quotes, bounded length.
+        var v = (value ?? "").Replace('"', '\'').Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (v.Length > 200) v = v.Substring(0, 200);
+        string op = contains ? (negate ? "!~" : "~") : (negate ? "!=" : "==");
+        string predicate = $"{field} {op} \"{v}\"";
+
+        var existing = (SearchBox.Text ?? "").Trim();
+        var newText = existing.Length == 0 ? predicate : $"{existing} AND {predicate}";
+
+        SearchBox.Text = newText;
+        SearchBox.Focus(FocusState.Programmatic);
+        try { SearchBox.SelectionStart = newText.Length; } catch { /* cursor position is best-effort */ }
+        _searchDebounceTimer.Stop();
+        _ = RunSearchAsync(); // commit + apply now, regardless of submit mode
     }
 
     /// <summary>

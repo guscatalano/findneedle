@@ -1153,7 +1153,11 @@ public sealed partial class MainWindow : Window
 
     /// <summary>Open one or more dropped paths: new workspace, add each existing file/folder, open the
     /// viewer once. Shared by drag-and-drop.</summary>
-    public async System.Threading.Tasks.Task OpenPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+    public System.Threading.Tasks.Task OpenPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+        => LoadPathsAsync(paths, clearFirst: true);
+
+    private async System.Threading.Tasks.Task LoadPathsAsync(
+        System.Collections.Generic.IReadOnlyList<string> paths, bool clearFirst)
     {
         var valid = new System.Collections.Generic.List<string>();
         if (paths != null)
@@ -1161,9 +1165,50 @@ public sealed partial class MainWindow : Window
                 if (!string.IsNullOrWhiteSpace(p) && (System.IO.File.Exists(p) || System.IO.Directory.Exists(p)))
                     valid.Add(p);
         if (valid.Count == 0) return;
-        MiddleLayerService.NewWorkspace();
+        if (clearFirst) MiddleLayerService.NewWorkspace();
         foreach (var p in valid) MiddleLayerService.AddFolderLocation(p);
         await OpenWithOptionalStreamingAsync(valid.Count == 1 ? "Opening file..." : $"Opening {valid.Count} files...");
+    }
+
+    /// <summary>Decide what a drop does when a workspace is already loaded: clear-and-open, add-to-existing,
+    /// or ask — per the user's "drag and drop" setting (default: prompt). Empty workspace always just opens.</summary>
+    private async System.Threading.Tasks.Task HandleDroppedPathsAsync(
+        System.Collections.Generic.IReadOnlyList<string> paths)
+    {
+        if (MiddleLayerService.Locations.Count == 0) { await LoadPathsAsync(paths, clearFirst: true); return; }
+
+        var mode = ResultsViewerSettings.DragDropMode;
+        if (mode == DragDropMode.Prompt)
+        {
+            var choice = await PromptDropChoiceAsync(paths.Count);
+            if (choice == null) return; // cancelled
+            mode = choice.Value;
+        }
+        await LoadPathsAsync(paths, clearFirst: mode == DragDropMode.ClearAndAdd);
+    }
+
+    private async System.Threading.Tasks.Task<DragDropMode?> PromptDropChoiceAsync(int count)
+    {
+        try
+        {
+            var dlg = new ContentDialog
+            {
+                Title = count == 1 ? "Open dropped file" : $"Open {count} dropped files",
+                Content = "A workspace is already loaded. Add the file(s) to it, or clear it and open fresh?",
+                PrimaryButtonText = "Add to workspace",
+                SecondaryButtonText = "Clear & open",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = this.Content.XamlRoot,
+            };
+            return await dlg.ShowAsync() switch
+            {
+                ContentDialogResult.Primary => DragDropMode.AddToExisting,
+                ContentDialogResult.Secondary => DragDropMode.ClearAndAdd,
+                _ => (DragDropMode?)null,
+            };
+        }
+        catch { return DragDropMode.ClearAndAdd; } // dialog failed → safe default
     }
 
     // ----- Drag & drop: drop log files/folders onto the viewer to open them -----
@@ -1204,7 +1249,7 @@ public sealed partial class MainWindow : Window
             var paths = new System.Collections.Generic.List<string>();
             foreach (var it in items)
                 if (!string.IsNullOrWhiteSpace(it.Path)) paths.Add(it.Path);
-            if (paths.Count > 0) await OpenPathsAsync(paths);
+            if (paths.Count > 0) await HandleDroppedPathsAsync(paths);
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Drop failed: {ex.Message}"); }
         finally { deferral.Complete(); }
