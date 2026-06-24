@@ -375,30 +375,30 @@ jobs:
           $version = $versionParts -join '.'
           $version = "$version.0"  # Always append .0 for four-segment version
           echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          [xml]$xml = Get-Content $manifest
-          $xml.Package.Identity.Version = $version
-          $xml.Save($manifest)
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git add $manifest
-          git commit -m "Update AppxManifest version to $version [skip ci]" || true
-          $maxAttempts = 3
-          $attempt = 1
-          while ($attempt -le $maxAttempts) {
-            try {
-              git pull --rebase origin master
-              git push
-              break
-            } catch {
-              if ($attempt -eq $maxAttempts) {
-                Write-Host "Failed to push after $maxAttempts attempts."
-                exit 1
-              }
-              Write-Host "Push failed (attempt $attempt/$maxAttempts), retrying after rebase..."
-              $attempt++
-              Start-Sleep -Seconds 2
+          # Push the version bump race-free: each attempt starts from the freshest origin/master,
+          # re-applies the version, and pushes. This avoids the rebase conflict on the <Identity Version>
+          # line that stranded the job on a detached HEAD when runs overlapped.
+          $pushed = $false
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            git fetch origin master
+            git reset --hard origin/master
+            [xml]$xml = Get-Content $manifest
+            $xml.Package.Identity.Version = $version
+            $xml.Save($manifest)
+            git add $manifest
+            git commit -m "Update AppxManifest version to $version [skip ci]"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Manifest already at $version on origin - nothing to commit."
+              $pushed = $true; break
             }
+            git push origin HEAD:master
+            if ($LASTEXITCODE -eq 0) { $pushed = $true; break }
+            Write-Host "Push rejected (attempt $attempt/5) - refreshing origin and retrying..."
+            Start-Sleep -Seconds 3
           }
+          if (-not $pushed) { Write-Host "Failed to push version bump after 5 attempts."; exit 1 }
           echo "releasetag=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
   make_msix_signed:
