@@ -123,9 +123,25 @@ public class SystemInfoMiddleware
         bool tracefmtOk = !string.IsNullOrWhiteSpace(tracefmt) && File.Exists(tracefmt);
         list.Add(new("tracefmt (ETL / WPP decode)", tracefmtOk ? tracefmt! : "not found — WPP/.etl traces can't be decoded", tracefmtOk));
 
-        var plantuml = GetPlantUMLPath();
-        bool plantOk = !string.IsNullOrWhiteSpace(plantuml) && File.Exists(plantuml);
-        list.Add(new("PlantUML (UML diagrams)", plantOk ? plantuml : "not set — configure under Diagram Tools", plantOk));
+        // UML diagram generation — one row covering both renderers. OK if EITHER Mermaid or PlantUML is
+        // available (a managed install via Diagram Tools, or for PlantUML a custom JAR path). The old
+        // check only looked at PlantUML's custom config path, so a working managed install read "not set".
+        var plantCustom = GetPlantUMLPath();
+        bool plantCustomOk = !string.IsNullOrWhiteSpace(plantCustom) && File.Exists(plantCustom);
+        FindNeedleToolInstallers.DependencyStatus plantStatus;
+        try { plantStatus = GetPlantUmlStatus(); } catch { plantStatus = null; }
+        FindNeedleToolInstallers.DependencyStatus mermaidStatus;
+        try { mermaidStatus = GetMermaidStatus(); } catch { mermaidStatus = null; }
+        bool plantOk = (plantStatus?.IsInstalled ?? false) || plantCustomOk;
+        bool mermaidOk = mermaidStatus?.IsInstalled ?? false;
+        var umlAvailable = new System.Collections.Generic.List<string>();
+        if (mermaidOk) umlAvailable.Add("Mermaid");
+        if (plantOk) umlAvailable.Add("PlantUML");
+        bool umlOk = umlAvailable.Count > 0;
+        list.Add(new("UML diagram generation",
+            umlOk ? "available: " + string.Join(", ", umlAvailable)
+                  : "no renderer installed — install Mermaid or PlantUML under Diagram Tools",
+            umlOk));
 
         return list;
     }
