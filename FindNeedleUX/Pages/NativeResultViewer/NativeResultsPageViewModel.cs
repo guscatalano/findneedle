@@ -439,7 +439,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
         "ProcessId", "ProcessName", "ThreadId", "ActivityId",
-        "EventId", "OpCode", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId"
+        "EventId", "OpCode", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId",
+        "Raw Row"
     };
 
     public static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ThemePresets =

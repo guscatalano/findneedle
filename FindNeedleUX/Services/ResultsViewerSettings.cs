@@ -396,7 +396,8 @@ public static class ResultsViewerSettings
             { "RelatedActivityId", false },
             { "Channel",           false },
             { "ProviderGuid",      false },
-            { "RecordId",          false }
+            { "RecordId",          false },
+            { "Raw Row",           false }  // the unformatted original row (CSV values / raw log line)
         };
 
     /// <summary>

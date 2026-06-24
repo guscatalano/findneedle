@@ -2789,6 +2789,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         "Message"  => line.Message,
         "Source"   => line.Source,
         "Level"    => line.Level,
+        "Raw Row"  => line.SearchableData,
         _          => null
     };
 

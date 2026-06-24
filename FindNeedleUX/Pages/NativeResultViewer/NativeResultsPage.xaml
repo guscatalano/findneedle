@@ -648,6 +648,7 @@
                     <ctWinUI:DataGridTextColumn Header="Channel"    Binding="{Binding Channel}"    Width="120" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="ProviderGuid" Binding="{Binding ProviderGuid}" Width="240" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="RecordId"   Binding="{Binding RecordId}"   Width="90"  ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Raw Row"    Binding="{Binding SearchableData}" Width="500" ElementStyle="{StaticResource GridCellText}"/>
                 </ctWinUI:DataGrid.Columns>
             </ctWinUI:DataGrid>
 
