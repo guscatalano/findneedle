@@ -1248,29 +1248,54 @@ public sealed partial class MainWindow : Window
             contentFrame.Navigate(ResolveDefaultViewerType());
     }
 
-    private void LoadCommand()
+    private async void LoadCommand()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var path = Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("Workspace JSON", "*.json") });
-        if (path != null)
+        if (path == null) return;
+        try
         {
             ShowSpinner(true, "Loading workspace...");
             MiddleLayerService.OpenWorkspace(path);
-            ShowSpinner(false);
         }
+        catch (Exception ex)
+        {
+            await ShowWorkspaceError("Couldn't open workspace", path, ex);
+        }
+        finally { ShowSpinner(false); }
     }
 
-    private void SaveCommand()
+    private async void SaveCommand()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var path = Win32FileDialog.SaveFile(hWnd, "SearchQuery",
             new (string, string)[] { ("Workspace JSON", "*.json") }, ".json");
-        if (path != null)
+        if (path == null) return;
+        try
         {
             ShowSpinner(true, "Saving workspace...");
             MiddleLayerService.SaveWorkspace(path);
-            ShowSpinner(false);
         }
+        catch (Exception ex)
+        {
+            await ShowWorkspaceError("Couldn't save workspace", path, ex);
+        }
+        finally { ShowSpinner(false); }
+    }
+
+    private async System.Threading.Tasks.Task ShowWorkspaceError(string title, string path, Exception ex)
+    {
+        try
+        {
+            await new ContentDialog
+            {
+                Title = title,
+                Content = $"{path}\n\n{ex.Message}",
+                CloseButtonText = "OK",
+                XamlRoot = this.Content.XamlRoot,
+            }.ShowAsync();
+        }
+        catch { /* dialog itself failed — nothing more we can do */ }
     }
 
     // Step-aware robot loader: sweep → scan → papers → shelve → sort → type (see RobotLoader).

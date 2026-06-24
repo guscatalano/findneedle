@@ -1,4 +1,5 @@
-﻿using findneedle;
+﻿using System.Collections.Generic;
+using findneedle;
 using findneedle.Implementations;
 using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
@@ -100,6 +101,43 @@ public class SearchQuerySerializerTest
         Assert.IsTrue(outputfilter1.somevalue.Equals(keyword1.somevalue));
         Assert.IsTrue(outputfilter2.somevalue.Equals(keyword2.somevalue));
 
+    }
+
+    // The UX saves the workspace from the raw pieces (not a SearchQuery cast, since it runs NuSearchQuery).
+    [TestMethod]
+    public void ComponentOverload_SerializesNameAndFilter()
+    {
+        var keyword = new FakeCmdLineParser
+        {
+            somevalue = "x",
+            reg = new CommandLineRegistration { key = "keyword", handlerType = CommandLineHandlerType.Filter }
+        };
+        var r = SearchQueryJsonReader.GetSerializableSearchQuery(
+            new List<ISearchLocation>(), new List<ISearchFilter> { keyword }, null, "ws");
+
+        Assert.AreEqual("ws", r.Name);
+        Assert.IsNotNull(r.FilterJson);
+        Assert.AreEqual(1, r.FilterJson.Count);
+
+        var output = SearchQueryJsonReader.GetSearchQueryObject(
+            SearchQueryJsonReader.LoadSearchQuery(r.GetQueryJson()));
+        Assert.AreEqual(1, output.Filters.Count);
+        Assert.IsTrue(output.Filters[0] is FakeCmdLineParser);
+    }
+
+    // A saved workspace keeps its RuleDSL rule paths.
+    [TestMethod]
+    public void RulesConfigPaths_RoundTrip()
+    {
+        var rules = new List<string> { @"C:\rules\a.rules.json", @"C:\rules\b.rules.json" };
+        var r = SearchQueryJsonReader.GetSerializableSearchQuery(
+            new List<ISearchLocation>(), new List<ISearchFilter>(), rules, "ws");
+
+        var q2 = SearchQueryJsonReader.LoadSearchQuery(r.GetQueryJson());
+        CollectionAssert.AreEqual(rules, q2.RulesConfigPaths);
+
+        var output = SearchQueryJsonReader.GetSearchQueryObject(q2);
+        CollectionAssert.AreEqual(rules, output.RulesConfigPaths);
     }
 
 }

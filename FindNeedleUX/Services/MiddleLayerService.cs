@@ -114,6 +114,7 @@ public class MiddleLayerService
         LastRuleOutputFiles.Clear();
         LastRuleProcessors.Clear();
         LastAutoAddedRules.Clear();
+        WorkspaceRulePaths.Clear(); // a loaded workspace's rules don't outlive a clear/new
         // Reset the active rule set. Rules (incl. auto-added ones like the DISM diagram rules) live on
         // the query's RulesConfigPaths and otherwise survive the clear AND get carried onto the next
         // file you load — so the Processor Output page would keep offering/generating a DISM diagram
@@ -320,6 +321,11 @@ public class MiddleLayerService
             // RulesConfigPaths so they flow through the normal rules→processors path below and show up
             // in the Rules page; LastAutoAddedRules records which ones were added (for the UI).
             query.RulesConfigPaths ??= new List<string>();
+            // Rules restored from a loaded workspace: re-apply them on every rebuild so they persist.
+            if (WorkspaceRulePaths != null)
+                foreach (var p in WorkspaceRulePaths)
+                    if (!query.RulesConfigPaths.Any(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase)))
+                        query.RulesConfigPaths.Add(p);
             var ctx = BuildAutoRuleContext(Locations);
             var autoPaths = FindPluginCore.Searching.AutoRules.AutoRulesStore
                 .ResolveForSearch(ctx, SkipAutoRulesForNextSearch);
@@ -963,6 +969,11 @@ public class MiddleLayerService
         return $"Needs TMF ({guids.Length}): {shown} — and {guids.Length - show} more (click Copy for the full list).";
     }
 
+    /// <summary>Rule-config paths restored from a loaded workspace. Re-applied in <see cref="UpdateSearchQuery"/>
+    /// every time the query is rebuilt (each search recreates the query), so a loaded workspace's rules
+    /// survive re-runs. Cleared by New/Clear.</summary>
+    public static List<string> WorkspaceRulePaths = new();
+
     public static void OpenWorkspace(string filename)
     {
         var o = SearchQueryJsonReader.LoadSearchQuery(File.ReadAllText(filename));
@@ -978,30 +989,29 @@ public class MiddleLayerService
                 ((FolderLocation)loc).SetExtensionProcessorList(PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IFileExtensionProcessor>());
             }
         }
+        // Restore the saved rule set durably (UpdateSearchQuery folds these into the rebuilt query).
+        WorkspaceRulePaths = o.RulesConfigPaths != null ? new List<string>(o.RulesConfigPaths) : new List<string>();
         UpdateSearchQuery();
         NotifyStateChanged();
     }
 
     public static void NewWorkspace()
     {
-        Filters = new List<ISearchFilter>();
-        Locations = new List<ISearchLocation>();
-
+        // Full reset (results, rules, stats, streaming, viewer) — same as Clear — then establish a fresh
+        // empty query. Previously "New" only reset locations + filters, leaving stale results/diagrams.
+        ClearWorkspace();
         UpdateSearchQuery();
         NotifyStateChanged();
     }
 
     public static void SaveWorkspace(string filename)
     {
+        // Serialize the workspace from the locations/filters/rules directly (NOT via a SearchQuery cast —
+        // the UX runs NuSearchQuery, which isn't a SearchQuery, so the old cast silently saved nothing).
         UpdateSearchQuery();
-        var query = SearchQueryUX.CurrentQuery;
-        var searchQueryConcrete = query as SearchQuery;
-        if (searchQueryConcrete != null)
-        {
-            SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(searchQueryConcrete);
-            var json = r.GetQueryJson();
-            File.WriteAllText(filename, json);
-        }
+        var rules = SearchQueryUX.CurrentQuery?.RulesConfigPaths ?? new List<string>();
+        SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(Locations, Filters, rules, "Workspace");
+        File.WriteAllText(filename, r.GetQueryJson());
     }
 
     public static void RemoveLocationByName(string name)

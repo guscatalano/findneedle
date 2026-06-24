@@ -97,26 +97,30 @@ public class SearchQueryJsonReader
         {
             throw new ArgumentNullException(nameof(source));
         }
+        return GetSerializableSearchQuery(source.Locations, source.Filters, source.RulesConfigPaths, source.Name);
+    }
 
+    /// <summary>
+    /// Build a serializable workspace from the raw pieces (locations + filters + rule paths), independent
+    /// of the concrete query type. The UX runs <c>NuSearchQuery</c>, which is NOT a <see cref="SearchQuery"/>,
+    /// so saving must not depend on that cast — it serializes the locations/filters/rules directly.
+    /// </summary>
+    public static SerializableSearchQuery GetSerializableSearchQuery(
+        List<ISearchLocation> locations, List<ISearchFilter> filters, List<string>? rulesConfigPaths, string? name = "")
+    {
         SerializableSearchQuery destination = new();
-
-        destination.Name = source.Name ?? string.Empty; // Ensure non-null assignment
+        destination.Name = name ?? string.Empty;
         destination.FilterJson = new List<string>();
         destination.LocationJson = new List<string>();
+        destination.RulesConfigPaths = rulesConfigPaths != null ? new List<string>(rulesConfigPaths) : new List<string>();
 
-        // Serialize all the filters
-        foreach (ISearchFilter filter in source.Filters)
-        {
-            var outher = SerializeImplementedType(filter);
-            destination.FilterJson.Add(outher);
-        }
+        if (filters != null)
+            foreach (ISearchFilter filter in filters)
+                destination.FilterJson.Add(SerializeImplementedType(filter));
 
-        // Serialize all the locations
-        foreach (var loc in source.Locations)
-        {
-            var outher = SerializeImplementedType(loc);
-            destination.LocationJson.Add(outher);
-        }
+        if (locations != null)
+            foreach (var loc in locations)
+                destination.LocationJson.Add(SerializeImplementedType(loc));
 
         return destination;
     }
@@ -129,6 +133,8 @@ public class SearchQueryJsonReader
         destination.Name = source.Name;
         destination.Filters = new();
         destination.Locations = new();
+        destination.RulesConfigPaths = source.RulesConfigPaths != null
+            ? new List<string>(source.RulesConfigPaths) : new List<string>();
 
         if (source.FilterJson != null)
         {
@@ -185,6 +191,13 @@ public class SerializableSearchQuery
     }
 
     public List<string>? LocationJson
+    {
+        get; set;
+    }
+
+    /// <summary>Rule-config file paths active on the query (RuleDSL). Restored onto the loaded query so a
+    /// saved workspace keeps its rules. May be null in older saved files.</summary>
+    public List<string>? RulesConfigPaths
     {
         get; set;
     }
