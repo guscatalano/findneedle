@@ -33,6 +33,7 @@
               <uap:FileType>.log</uap:FileType>
               <uap:FileType>.txt</uap:FileType>
               <uap:FileType>.zip</uap:FileType>
+              <uap:FileType>.cab</uap:FileType>
             </uap:SupportedFileTypes>
           </uap:FileTypeAssociation>
         </uap:Extension>

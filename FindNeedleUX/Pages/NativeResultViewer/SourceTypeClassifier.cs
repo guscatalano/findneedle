@@ -26,6 +26,7 @@ public static class SourceTypeClassifier
             ".csv" or ".tsv" => "CSV",
             ".json" or ".jsonl" or ".ndjson" => "JSON",
             ".zip" => "Zip archives",
+            ".cab" => "Cab archives",
             ".txt" or ".log" or ".trace" or ".out" or "" => "Log files",
             _ => $"Other ({ext})",
         };

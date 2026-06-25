@@ -14,7 +14,7 @@ namespace FindNeedleUX.Services;
 public static class FileAssociations
 {
     /// <summary>Extensions (with leading dot) Find Needle advertises as openable.</summary>
-    public static readonly string[] Extensions = { ".etl", ".evtx", ".log", ".txt", ".zip" };
+    public static readonly string[] Extensions = { ".etl", ".evtx", ".log", ".txt", ".zip", ".cab" };
 
     /// <summary>True when <paramref name="path"/> has one of the <see cref="Extensions"/> (case-insensitive).</summary>
     public static bool IsSupported(string path)

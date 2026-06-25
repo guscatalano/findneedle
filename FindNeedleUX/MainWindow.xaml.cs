@@ -1133,7 +1133,7 @@ public sealed partial class MainWindow : Window
     {
         var exts = new System.Collections.Generic.SortedSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".txt", ".log", ".etl", ".evtx", ".zip", // baseline — never lost
+            ".txt", ".log", ".etl", ".evtx", ".zip", ".cab", // baseline — never lost
         };
         try
         {

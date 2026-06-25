@@ -202,12 +202,32 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         }
     }
 
+    // How deep we'll follow archives-within-archives before giving up (zip-bomb / runaway guard).
+    private const int MaxArchiveDepth = 8;
+
     private void ProcessFile(string file, System.Threading.CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested) return;
         Logger.Instance.Log($"Processing file: {file}");
-        var ext = Path.GetExtension(file).ToLower();
+        var ext = ResolveExtension(file);
 
+        // Archive containers (.zip / .cab) aren't parsed in place: extract them to a temp folder and run
+        // each extracted file back through the pipeline (nested archives recurse). This is the wired-up
+        // path for "open a .cab/.zip and see the logs inside" — for a single dropped file or one sitting
+        // in a scanned folder alike — without touching the user's original files.
+        if (ArchiveExtractor.IsArchive(ext))
+        {
+            ExtractAndProcessArchive(file, cancellationToken, depth: 0);
+            return;
+        }
+
+        ProcessPlainFile(file, ext, cancellationToken);
+    }
+
+    /// <summary>The extension, with the same ".etl.001"-style fixup the scan has always done.</summary>
+    private static string ResolveExtension(string file)
+    {
+        var ext = Path.GetExtension(file).ToLower();
         if (file.Length > 10)
         {
             //Let's check that they are within the extension
@@ -217,11 +237,42 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 if (string.IsNullOrEmpty(ext))
                 {
                     //extension is wrong, let's pick the other one.
-                    ext = last10.Substring(last10.IndexOf("."), 10-last10.LastIndexOf('.'));
+                    ext = last10.Substring(last10.IndexOf("."), 10 - last10.LastIndexOf('.'));
                 }
             }
         }
+        return ext;
+    }
 
+    /// <summary>Extract an archive to a throwaway temp dir (named after the archive so the Source column
+    /// still shows where rows came from) and process every extracted file; nested archives recurse up to
+    /// <see cref="MaxArchiveDepth"/>. The temp dir lives under TempStorage's main path, cleaned at exit.</summary>
+    private void ExtractAndProcessArchive(string archive, System.Threading.CancellationToken cancellationToken, int depth)
+    {
+        if (cancellationToken.IsCancellationRequested || depth > MaxArchiveDepth) return;
+        string temp;
+        try { temp = TempStorage.GetNewTempPath(Path.GetFileNameWithoutExtension(archive)); }
+        catch (Exception ex) { Logger.Instance.Log($"Could not create temp dir for {archive}: {ex.Message}"); return; }
+
+        if (!ArchiveExtractor.TryExtract(archive, temp, cancellationToken))
+        {
+            Logger.Instance.Log($"Archive extraction produced nothing for {archive}");
+            return;
+        }
+
+        foreach (var inner in FileIO.GetAllFiles(temp, GetAllFilesErrorHandler))
+        {
+            if (cancellationToken.IsCancellationRequested) return;
+            var innerExt = ResolveExtension(inner);
+            if (ArchiveExtractor.IsArchive(innerExt))
+                ExtractAndProcessArchive(inner, cancellationToken, depth + 1);
+            else
+                ProcessPlainFile(inner, innerExt, cancellationToken);
+        }
+    }
+
+    private void ProcessPlainFile(string file, string ext, System.Threading.CancellationToken cancellationToken)
+    {
         if (extToProcessor.ContainsKey(ext))
         {
             foreach(var template in extToProcessor[ext])

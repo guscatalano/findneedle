@@ -21,6 +21,7 @@ public class SourceTypeClassifierTests
     [DataRow(@"C:\data\rows.tsv", "CSV")]
     [DataRow(@"C:\data\events.json", "JSON")]
     [DataRow(@"C:\bundle\logs.zip", "Zip archives")]
+    [DataRow(@"C:\bundle\logs.cab", "Cab archives")]
     [DataRow(@"C:\logs\setupact.log", "Log files")]
     [DataRow(@"C:\logs\notes.txt", "Log files")]
     public void Classify_MapsKnownExtensions(string path, string expected)
