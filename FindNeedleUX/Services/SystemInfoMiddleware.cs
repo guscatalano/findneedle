@@ -14,7 +14,11 @@ using FindNeedleCoreUtils;
 namespace FindNeedleUX.Services;
 public class SystemInfoMiddleware
 {
-    private static readonly Lazy<UmlDependencyManager> _umlDependencyManager = new(() => new UmlDependencyManager());
+    // Pass the explicit dependencies dir (packaged-aware) so the Mermaid/PlantUML installers and the
+    // npm/node child processes they spawn all read/write the SAME real folder — under MSIX the default
+    // %LOCALAPPDATA% is virtualized for the app but not for the child process (see PackagedAppPaths).
+    private static readonly Lazy<UmlDependencyManager> _umlDependencyManager =
+        new(() => new UmlDependencyManager(PackagedAppPaths.DependenciesBaseDir));
     
     /// <summary>
     /// Gets the singleton UML dependency manager instance.

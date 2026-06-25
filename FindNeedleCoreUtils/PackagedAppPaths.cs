@@ -19,10 +19,27 @@ public static class PackagedAppPaths
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     /// <summary>
-    /// Gets the base directory for FindNeedle dependencies.
+    /// Gets the base directory for FindNeedle dependencies (Node/Mermaid, PlantUML/Java).
     /// </summary>
-    public static string DependenciesBaseDir => 
-        Path.Combine(LocalAppData, "FindNeedle", "Dependencies");
+    /// <remarks>
+    /// For a PACKAGED (MSIX) app the app's writes to <c>%LOCALAPPDATA%</c> are virtualized to the
+    /// package's <c>LocalCache\Local</c>, but child processes the app spawns (npm/node for the Mermaid
+    /// install) run OUTSIDE the package silo and write to the REAL <c>%LOCALAPPDATA%</c> — so the app
+    /// would "install" a tool and then fail to find it ("installed but mmdc not found"). Resolve the
+    /// EXPLICIT <c>…\Packages\{family}\LocalCache\Local\…</c> path (the same physical place the
+    /// virtualization targets) so the app and the child processes agree on one real location.
+    /// </remarks>
+    public static string DependenciesBaseDir
+    {
+        get
+        {
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (IsPackagedApp && !string.IsNullOrEmpty(PackageFamilyName))
+                return Path.Combine(local, "Packages", PackageFamilyName!, "LocalCache", "Local",
+                                    "FindNeedle", "Dependencies");
+            return Path.Combine(local, "FindNeedle", "Dependencies");
+        }
+    }
 
     /// <summary>
     /// Gets the directory for PlantUML dependencies (Java JRE and PlantUML JAR).
