@@ -70,10 +70,13 @@ public class PackagedAppCommandRunnerTests
     [ExpectedException(typeof(TimeoutException))]
     public void RunCommand_Unpackaged_TimesOutOnLongRunningCommand()
     {
-        // Test timeout behavior with a command that takes longer than the timeout
+        // Test timeout behavior with a command that takes longer than the timeout.
+        // NOTE: don't use `timeout /t` here — it aborts immediately ("Input redirection is not
+        // supported") when the runner redirects stdin, so it never actually sleeps and the timeout
+        // never fires. `ping -n 11 127.0.0.1` waits ~10s (≈1s between sends) and ignores stdin.
         PackagedAppCommandRunner.RunCommand(
             "cmd.exe",
-            "/c timeout /t 10",  // Sleep for 10 seconds
+            "/c ping -n 11 127.0.0.1",  // runs ~10 seconds, independent of stdin
             Path.GetTempPath(),
             1000  // 1 second timeout
         );
