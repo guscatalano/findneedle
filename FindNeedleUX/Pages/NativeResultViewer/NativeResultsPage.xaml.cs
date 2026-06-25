@@ -1240,6 +1240,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         copyRow.Children.Add(copyJson);
         panel.Children.Add(copyRow);
 
+        var typeToggles = BuildSourceTypeToggles();
+        if (typeToggles != null) panel.Children.Add(typeToggles);
+
         panel.Children.Add(SourcesHeader($"Locations ({locInfo.Count})"));
         if (locInfo.Count == 0)
             panel.Children.Add(SourcesNote("No locations loaded."));
@@ -1269,6 +1272,81 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             XamlRoot = this.XamlRoot,
         };
         await dialog.ShowAsync();
+    }
+
+    /// <summary>
+    /// Build the "Show by source type" toggle section for the Sources dialog: one checkbox per kind
+    /// of source currently loaded (PCAP / ETW / Event Log / plain logs / …), with its row count.
+    /// Unchecking a type hides all of its rows by driving the existing per-value Source filter — so
+    /// it composes with cross-filter narrowing and needs no new storage-side filter dimension.
+    /// Returns null when there's nothing worth grouping (0 or 1 distinct type).
+    /// </summary>
+    private FrameworkElement? BuildSourceTypeToggles()
+    {
+        FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult? facets = null;
+        // Cross-filtered Source values (excludes the Source field's own selection so the list stays stable).
+        try { facets = ViewModel.GetFacetsExcludingField("Source", 100000, 1000000); } catch { }
+        if (facets?.Values == null || facets.Values.Count == 0) return null;
+
+        var byType = new System.Collections.Generic.Dictionary<string, (int count, System.Collections.Generic.List<string> values)>(StringComparer.Ordinal);
+        foreach (var fv in facets.Values)
+        {
+            if (string.IsNullOrEmpty(fv.Value) || fv.Value == "(none)") continue;
+            var type = SourceTypeClassifier.Classify(fv.Value);
+            if (!byType.TryGetValue(type, out var agg)) agg = (0, new System.Collections.Generic.List<string>());
+            agg.count += fv.Count;
+            agg.values.Add(fv.Value);
+            byType[type] = agg;
+        }
+        if (byType.Count <= 1) return null; // only one kind of source — nothing to toggle between
+
+        var currentSet = ViewModel.SourceFilterSet; // null = everything visible
+        bool IsTypeOn(System.Collections.Generic.List<string> vals) =>
+            currentSet == null || vals.All(v => currentSet.Contains(v, StringComparer.OrdinalIgnoreCase));
+
+        var section = new StackPanel { Spacing = 2 };
+        section.Children.Add(SourcesHeader($"Show by source type ({byType.Count})"));
+        section.Children.Add(SourcesNote("Turn a whole kind of source on or off in the viewer."));
+
+        var checks = new System.Collections.Generic.List<(CheckBox box, System.Collections.Generic.List<string> values)>();
+        foreach (var kv in byType.OrderByDescending(k => k.Value.count))
+        {
+            var cb = new CheckBox
+            {
+                Content = $"{kv.Key}  ({kv.Value.count:N0})",
+                IsChecked = IsTypeOn(kv.Value.values),
+                Margin = new Thickness(8, 0, 0, 0),
+                MinWidth = 0,
+            };
+            cb.Checked += (_, __) => ApplySourceTypeSelection(checks);
+            cb.Unchecked += (_, __) => ApplySourceTypeSelection(checks);
+            checks.Add((cb, kv.Value.values));
+            section.Children.Add(cb);
+        }
+        return section;
+    }
+
+    /// <summary>Apply the source-type checkboxes: all on → clear the Source filter (show everything);
+    /// otherwise restrict the Source filter to the union of the checked types' values.</summary>
+    private void ApplySourceTypeSelection(System.Collections.Generic.List<(CheckBox box, System.Collections.Generic.List<string> values)> checks)
+    {
+        bool allOn = checks.All(c => c.box.IsChecked == true);
+        if (allOn)
+        {
+            ViewModel.SetKnownFilterSet("Source", null);
+        }
+        else
+        {
+            var union = new System.Collections.Generic.List<string>();
+            var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in checks)
+                if (c.box.IsChecked == true)
+                    foreach (var v in c.values)
+                        if (seen.Add(v)) union.Add(v);
+            ViewModel.SetKnownFilterSet("Source", union);
+        }
+        UpdateSourcesButtonState();
+        _ = PopulateKnownFilterCombosAsync(); // keep the filter-pane Source list in sync
     }
 
     private static string SourcesAsText(

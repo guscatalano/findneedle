@@ -5,7 +5,8 @@
     { "name": "JsonPlugin", "path": "JsonPlugin.dll", "enabled": true },
     { "name": "EventLogPlugin", "path": "EventLogPlugin.dll", "enabled": true },
     { "name": "ETWPlugin", "path": "ETWPlugin.dll", "enabled": true },
-    { "name": "ZipFilePlugin", "path": "ZipFilePlugin.dll", "enabled": true }
+    { "name": "ZipFilePlugin", "path": "ZipFilePlugin.dll", "enabled": true },
+    { "name": "PcapPlugin", "path": "PcapPlugin.dll", "enabled": true }
   ],
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
   "SearchQueryClass": "NuSearchQuery",

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pure-managed packet dissection. NOTE: deliberately NOT SharpPcap, which needs native
+         libpcap/npcap and would break on a fresh machine (the same class of problem we hit with
+         the Mermaid CLI). PacketDotNet only decodes bytes we feed it; we read the .pcap/.pcapng
+         container ourselves in PcapFileReader. -->
+    <PackageReference Include="PacketDotNet" Version="1.4.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+    <ProjectReference Include="..\FindNeedlePluginUtils\FindNeedlePluginUtils.csproj" />
+  </ItemGroup>
+
+</Project>
