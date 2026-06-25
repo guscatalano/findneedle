@@ -43,6 +43,9 @@
             <NavigationViewItem Content="Integrations" Tag="integrations">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE968;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem Content="Logs" Tag="logs">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE7C3;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
         </NavigationView.MenuItems>
 
         <ScrollViewer Padding="24">
@@ -414,22 +417,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Diagnostics: bundle logs for the developer -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Diagnostics" FontWeight="SemiBold"/>
-                            <TextBlock TextWrapping="Wrap" FontSize="12"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Bundle the app logs, settings, plugin config, and system info into a single .zip you can attach to a bug report. No log file contents are uploaded anywhere — you choose where to save it."/>
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Button x:Name="SendLogsButton" Content="Send app logs to dev…" Click="SendLogs_Click"/>
-                                <TextBlock x:Name="SendLogsStatus" VerticalAlignment="Center" FontSize="12"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
                 </StackPanel>
 
                 <!-- ============================ SEARCH ============================ -->
@@ -687,9 +674,40 @@
                     </Border>
                 </StackPanel>
 
-                <TextBlock Text="Settings file:" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" Margin="0,8,0,0"/>
-                <TextBlock x:Name="SettingsPathText" FontFamily="Consolas" FontSize="11"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True"/>
+                <!-- ============================ LOGS ============================ -->
+                <StackPanel x:Name="PanelLogs" Spacing="16" Visibility="Collapsed">
+
+                    <!-- Diagnostics: bundle logs for the developer -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Diagnostics" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Bundle the app logs, settings, plugin config, and system info into a single .zip you can attach to a bug report. No log file contents are uploaded anywhere — you choose where to save it."/>
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Button x:Name="SendLogsButton" Content="Send app logs to dev…" Click="SendLogs_Click"/>
+                                <TextBlock x:Name="SendLogsStatus" VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Settings file path -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Settings file" FontWeight="SemiBold"/>
+                            <TextBlock Text="Where your per-user viewer settings are stored on disk."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="SettingsPathText" FontFamily="Consolas" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </NavigationView>

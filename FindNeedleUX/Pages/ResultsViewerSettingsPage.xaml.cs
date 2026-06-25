@@ -33,10 +33,18 @@ public sealed partial class ResultsViewerSettingsPage : Page
     /// <summary>Left-nav category switch: show only the selected category's panel.</summary>
     private void SettingsNav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
         // Panels may not exist yet if this fires during initial parse (IsSelected="True").
         if (PanelAppearance == null) return;
+        // Picking a category exits any active search filter (programmatic clear: TextChanged ignores it).
+        if (!string.IsNullOrEmpty(SettingsSearchBox?.Text)) SettingsSearchBox.Text = "";
+        ApplyCategory((args.SelectedItem as NavigationViewItem)?.Tag as string);
+    }
 
+    /// <summary>Show only the selected category's panel (or all), un-hide any cards a prior search filter
+    /// collapsed, and set the title.</summary>
+    private void ApplyCategory(string tag)
+    {
+        if (PanelAppearance == null) return;
         bool all = tag == "all";
         PanelAppearance.Visibility   = all || tag == "appearance"   ? Visibility.Visible : Visibility.Collapsed;
         PanelGeneral.Visibility      = all || tag == "general"      ? Visibility.Visible : Visibility.Collapsed;
@@ -44,6 +52,10 @@ public sealed partial class ResultsViewerSettingsPage : Page
         PanelColumns.Visibility      = all || tag == "columns"      ? Visibility.Visible : Visibility.Collapsed;
         PanelDecoding.Visibility     = all || tag == "decoding"     ? Visibility.Visible : Visibility.Collapsed;
         PanelIntegrations.Visibility = all || tag == "integrations" ? Visibility.Visible : Visibility.Collapsed;
+        PanelLogs.Visibility         = all || tag == "logs"         ? Visibility.Visible : Visibility.Collapsed;
+
+        // A prior search filter may have collapsed individual cards — restore them.
+        foreach (var e in _settingsCatalog) if (e.Card != null) e.Card.Visibility = Visibility.Visible;
 
         CategoryTitle.Text = tag switch
         {
@@ -53,6 +65,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             "columns"      => "Columns",
             "decoding"     => "Decoding (WPP symbols)",
             "integrations" => "Integrations",
+            "logs"         => "Logs",
             _              => "Appearance",
         };
     }
@@ -83,6 +96,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             (PanelColumns,      "Columns"),
             (PanelDecoding,     "Decoding"),
             (PanelIntegrations, "Integrations"),
+            (PanelLogs,         "Logs"),
         };
         foreach (var (panel, category) in panels)
         {
@@ -120,38 +134,41 @@ public sealed partial class ResultsViewerSettingsPage : Page
     private void SettingsSearch_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
         if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
-        var q = sender.Text?.Trim() ?? "";
-        if (q.Length == 0) { sender.ItemsSource = null; return; }
-        sender.ItemsSource = _settingsCatalog
-            .Where(e => e.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
-                     || e.Description.Contains(q, StringComparison.OrdinalIgnoreCase))
-            .Select(e => e.Suggestion)
-            .ToList();
+        ApplySettingsFilter(sender.Text);
     }
 
-    private void SettingsSearch_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
-    {
-        if (args.SelectedItem is string s)
-        {
-            var entry = _settingsCatalog.FirstOrDefault(e => e.Suggestion == s);
-            if (entry != null) JumpToSetting(entry);
-        }
-    }
-
+    // No dropdown suggestions — filtering is inline (the list itself narrows). These stay wired in XAML.
+    private void SettingsSearch_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args) { }
     private void SettingsSearch_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        => ApplySettingsFilter(args.QueryText);
+
+    /// <summary>Filter the settings cards live: show all panels, then hide every card whose title or
+    /// description doesn't contain the query — so only matching settings remain. Empty query restores the
+    /// currently-selected category.</summary>
+    private void ApplySettingsFilter(string query)
     {
-        SettingEntry entry = args.ChosenSuggestion is string s
-            ? _settingsCatalog.FirstOrDefault(e => e.Suggestion == s)
-            : null;
-        if (entry == null)
+        var q = (query ?? "").Trim();
+        if (q.Length == 0)
         {
-            var q = args.QueryText?.Trim() ?? "";
-            if (q.Length > 0)
-                entry = _settingsCatalog.FirstOrDefault(
-                    e => e.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
-                      || e.Description.Contains(q, StringComparison.OrdinalIgnoreCase));
+            ApplyCategory((SettingsNav.SelectedItem as NavigationViewItem)?.Tag as string ?? "appearance");
+            return;
         }
-        if (entry != null) JumpToSetting(entry);
+
+        // Show every category panel so matches from any category appear, then hide non-matching cards.
+        PanelAppearance.Visibility = PanelGeneral.Visibility = PanelSearch.Visibility =
+            PanelColumns.Visibility = PanelDecoding.Visibility = PanelIntegrations.Visibility =
+            PanelLogs.Visibility = Visibility.Visible;
+
+        int matches = 0;
+        foreach (var e in _settingsCatalog)
+        {
+            if (e.Card == null) continue;
+            bool match = (e.Title?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                      || (e.Description?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+            e.Card.Visibility = match ? Visibility.Visible : Visibility.Collapsed;
+            if (match) matches++;
+        }
+        CategoryTitle.Text = matches == 0 ? $"No settings match “{q}”" : $"Search: “{q}”";
     }
 
     /// <summary>Switch to "All settings" (so every panel is visible), scroll the matched card into view,
