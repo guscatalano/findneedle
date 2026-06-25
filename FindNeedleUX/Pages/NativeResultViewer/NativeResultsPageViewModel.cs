@@ -446,74 +446,67 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ThemePresets =
         new Dictionary<string, IReadOnlyDictionary<string, string>>
     {
+        // Keyed by the real Level enum names (Catastrophic / Error / Warning / Info / Verbose / Unknown).
+        // Info and Unknown are untinted (Transparent) so only the actionable severities stand out.
         ["Subtle"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#33D32F2F" }, { "Critical", "#28E53935" },
-            { "Error",        "#1FEF5350" }, { "Warning",  "#22FFA000" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#12808080" }, { "Debug",    "#14546E7A" }
+            { "Catastrophic", "#33D32F2F" }, { "Error",   "#1FEF5350" },
+            { "Warning",      "#22FFA000" }, { "Info",    "Transparent" },
+            { "Verbose",      "#12808080" }, { "Unknown", "Transparent" }
         },
         ["Vivid"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#FFB3B3" }, { "Critical", "#FFCCCC" },
-            { "Error",        "#FFE1E1" }, { "Warning",  "#FFF4CC" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#F1F1F1" }, { "Debug",    "#EEF3FF" }
+            { "Catastrophic", "#FFB3B3" }, { "Error",   "#FFE1E1" },
+            { "Warning",      "#FFF4CC" }, { "Info",    "Transparent" },
+            { "Verbose",      "#F1F1F1" }, { "Unknown", "Transparent" }
         },
-        // The familiar log/console look: red errors, yellow warnings, cyan/gray for trace levels.
+        // The familiar log/console look: red errors, yellow warnings, gray for trace levels.
         ["Classic"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#66B71C1C" }, { "Critical", "#55D32F2F" },
-            { "Error",        "#44F44336" }, { "Warning",  "#44FFEB3B" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#1F9E9E9E" }, { "Debug",    "#2200BCD4" }
+            { "Catastrophic", "#66B71C1C" }, { "Error",   "#44F44336" },
+            { "Warning",      "#44FFEB3B" }, { "Info",    "Transparent" },
+            { "Verbose",      "#1F9E9E9E" }, { "Unknown", "Transparent" }
         },
         // Stronger translucent semantic tints (red/amber) — same meaning as Subtle, more presence.
         ["Bold"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#59D50000" }, { "Critical", "#44D32F2F" },
-            { "Error",        "#33F44336" }, { "Warning",  "#3DFF9800" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#1F607D8B" }, { "Debug",    "#24455A64" }
+            { "Catastrophic", "#59D50000" }, { "Error",   "#33F44336" },
+            { "Warning",      "#3DFF9800" }, { "Info",    "Transparent" },
+            { "Verbose",      "#1F607D8B" }, { "Unknown", "Transparent" }
         },
         // Cool blue/teal palette (aesthetic, translucent — works on light or dark).
         ["Ocean"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#4601579B" }, { "Critical", "#3A0277BD" },
-            { "Error",        "#300288D1" }, { "Warning",  "#2A26A69A" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#1F4DD0E1" }, { "Debug",    "#18B3E5FC" }
+            { "Catastrophic", "#4601579B" }, { "Error",   "#300288D1" },
+            { "Warning",      "#2A26A69A" }, { "Info",    "Transparent" },
+            { "Verbose",      "#1F4DD0E1" }, { "Unknown", "Transparent" }
         },
         // Green / earth palette.
         ["Forest"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#461B5E20" }, { "Critical", "#3A2E7D32" },
-            { "Error",        "#30388E3C" }, { "Warning",  "#2A9E9D24" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#1F689F38" }, { "Debug",    "#18AED581" }
+            { "Catastrophic", "#461B5E20" }, { "Error",   "#30388E3C" },
+            { "Warning",      "#2A9E9D24" }, { "Info",    "Transparent" },
+            { "Verbose",      "#1F689F38" }, { "Unknown", "Transparent" }
         },
         // Warm purple → orange palette.
         ["Sunset"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#464A148C" }, { "Critical", "#3A6A1B9A" },
-            { "Error",        "#30AD1457" }, { "Warning",  "#2AEF6C00" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#1FF06292" }, { "Debug",    "#18FFCC80" }
+            { "Catastrophic", "#464A148C" }, { "Error",   "#30AD1457" },
+            { "Warning",      "#2AEF6C00" }, { "Info",    "Transparent" },
+            { "Verbose",      "#1FF06292" }, { "Unknown", "Transparent" }
         },
         // Neutral grayscale intensity ramp.
         ["Grayscale"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "#44424242" }, { "Critical", "#38616161" },
-            { "Error",        "#2C757575" }, { "Warning",  "#249E9E9E" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "#16BDBDBD" }, { "Debug",    "#10E0E0E0" }
+            { "Catastrophic", "#44424242" }, { "Error",   "#2C757575" },
+            { "Warning",      "#249E9E9E" }, { "Info",    "Transparent" },
+            { "Verbose",      "#16BDBDBD" }, { "Unknown", "Transparent" }
         },
         ["None"] = new Dictionary<string, string>
         {
-            { "Catastrophic", "Transparent" }, { "Critical", "Transparent" },
-            { "Error",        "Transparent" }, { "Warning",  "Transparent" },
-            { "Info",         "Transparent" },
-            { "Verbose",      "Transparent" }, { "Debug",    "Transparent" }
+            { "Catastrophic", "Transparent" }, { "Error",   "Transparent" },
+            { "Warning",      "Transparent" }, { "Info",    "Transparent" },
+            { "Verbose",      "Transparent" }, { "Unknown", "Transparent" }
         }
     };
 
@@ -608,11 +601,10 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 sample = r.s;
 
                 var levelSet = new HashSet<string>(distinct, StringComparer.OrdinalIgnoreCase);
-                // Only offer real Level enum values (plus whatever's actually in the data). The color
-                // presets in DefaultLevelColors include decorative-only names (e.g. "Critical",
-                // "Debug") that aren't Level members — if those leaked into the filter, selecting one
-                // would silently match nothing AND, because Enum.TryParse fails on them, drop the
-                // level filter entirely, showing every row. DefaultLevelColors stays for coloring only.
+                // Offer the real Level enum values plus whatever's actually in the data. Guard against a
+                // non-enum level name (e.g. left over in stale persisted data) leaking into the filter:
+                // selecting one would match nothing and, because Enum.TryParse fails on it, drop the
+                // level filter entirely and show every row.
                 foreach (var name in Enum.GetNames(typeof(FindNeedlePluginLib.Level))) levelSet.Add(name);
 
                 Levels.Clear();

@@ -378,9 +378,8 @@ public sealed partial class ResultsViewerSettingsPage : Page
         var overrides = ResultsViewerSettings.LevelColors;
 
         // Iterate the REAL Level enum (Catastrophic/Error/Warning/Info/Verbose/Unknown), in severity
-        // order, so this editor lists exactly the levels the result viewer colors. (The theme presets
-        // carry extra decorative keys like "Critical"/"Debug" that no row is ever tagged with — listing
-        // those here made the editor look out of sync with the grid.)
+        // order, so this editor lists exactly the levels the result viewer colors — the same set the
+        // theme presets are keyed by, so the editor and the grid stay in sync.
         foreach (var levelName in Enum.GetNames(typeof(FindNeedlePluginLib.Level)))
         {
             string hex = overrides.TryGetValue(levelName, out var ov) ? ov

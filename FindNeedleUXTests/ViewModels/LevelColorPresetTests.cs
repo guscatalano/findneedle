@@ -39,16 +39,14 @@ public class LevelColorPresetTests
     }
 
     [TestMethod]
-    public void EveryMeaningfulLevel_IsStyledInEveryPreset()
+    public void EveryPreset_KeysExactlyOnTheLevelEnum()
     {
-        // The viewer renders these enum levels; "Unknown" is intentionally unstyled (Transparent
-        // fallback in ApplyTheme), so it isn't required to appear as a preset key.
-        var levels = Enum.GetNames(typeof(FindNeedlePluginLib.Level))
-            .Where(n => !string.Equals(n, "Unknown", StringComparison.OrdinalIgnoreCase));
+        // The presets must be keyed by exactly the Level enum names — no real level left unstyled, and
+        // no decorative non-enum keys (which historically drifted in as "Critical"/"Debug").
+        var levelNames = Enum.GetNames(typeof(FindNeedlePluginLib.Level)).OrderBy(n => n).ToList();
         foreach (var (theme, colors) in NativeResultsPageViewModel.ThemePresets.Select(kv => (kv.Key, kv.Value)))
-            foreach (var level in levels)
-                Assert.IsTrue(colors.ContainsKey(level),
-                    $"theme '{theme}' is missing a color for level '{level}'");
+            CollectionAssert.AreEquivalent(levelNames, colors.Keys.ToList(),
+                $"theme '{theme}' must be keyed by exactly the Level enum values");
     }
 
     [TestMethod]
