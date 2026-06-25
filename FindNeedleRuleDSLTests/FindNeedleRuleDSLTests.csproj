@@ -43,5 +43,11 @@
       <Link>Examples\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Copy the bundled CommonRules so the fresh-install validity test can confirm every shipped
+         rule file parses + its regexes compile, even in CI's rebuild-skipping test-publish job. -->
+    <None Include="..\FindNeedleUX\CommonRules\*.rules.json">
+      <Link>CommonRules\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

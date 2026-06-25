@@ -280,6 +280,18 @@ public class NuSearchQuery : ISearchQuery
     }
 
     // Remove duplicate declaration of filePath in CreateStorage
+    /// <summary>
+    /// Pure tiering decision for "Auto" storage, extracted so the thresholds are unit-testable and
+    /// documented in one place:
+    ///   &lt; 10k rows and a quick (&lt;30s) estimate -> InMemory (no disk, fastest for tiny logs)
+    ///   10k–50k rows                            -> Hybrid   (RAM-hot; cheap settle at this size)
+    ///   &gt; 50k rows                              -> SqlLite  (write straight to disk during the scan)
+    /// </summary>
+    public static StorageType ChooseAutoStorageType(int totalRecords, TimeSpan totalTime) =>
+        (totalRecords < 10_000 && totalTime.TotalSeconds < 30) ? StorageType.InMemory
+        : (totalRecords < 50_000) ? StorageType.Hybrid
+        : StorageType.SqlLite;
+
     private ISearchStorage CreateStorage(CancellationToken cancellationToken)
     {
         var config = PluginManager.GetSingleton().config;
@@ -341,13 +353,14 @@ public class NuSearchQuery : ISearchQuery
                 // INSERT + prepared statement + journal_mode=MEMORY / synchronous=OFF), so the
                 // total wall-clock cost is roughly the same, but the user's wait between
                 // "search done" and "viewer open" disappears.
-                string autoType = (totalRecords < 10_000 && totalTime.TotalSeconds < 30) ? nameof(InMemoryStorage)
-                                : (totalRecords < 50_000) ? nameof(HybridStorage)
-                                : nameof(SqliteStorage);
-                PerfLog.Log("storage.selected", ("type", autoType), ("mode", "auto"), ("est", totalRecords));
-                if (autoType == nameof(InMemoryStorage)) return new InMemoryStorage();
-                if (autoType == nameof(HybridStorage)) return new HybridStorage(filePath);
-                return new SqliteStorage(filePath);
+                var autoChoice = ChooseAutoStorageType(totalRecords, totalTime);
+                PerfLog.Log("storage.selected", ("type", autoChoice.ToString()), ("mode", "auto"), ("est", totalRecords));
+                return autoChoice switch
+                {
+                    StorageType.InMemory => new InMemoryStorage(),
+                    StorageType.Hybrid => new HybridStorage(filePath),
+                    _ => new SqliteStorage(filePath),
+                };
         }
     }
 

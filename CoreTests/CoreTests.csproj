@@ -51,6 +51,16 @@
 
 
 
+  <!-- Copy the shipped plugin config into the test output (under a distinct name so it can't collide
+       with PluginManagerTests, which writes its own PluginConfig.json) so the fresh-install defaults
+       test can assert the as-shipped plugin list even in CI's rebuild-skipping test-publish job. -->
+  <ItemGroup>
+    <None Include="..\findneedle\PluginConfig.json">
+      <Link>ShippedPluginConfig.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <Folder Include="Configuration\" />
     <Folder Include="Helpers\" />
