@@ -837,7 +837,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     /// first ~1000 rows (already in memory via the fallback list) — this is a UX nicety, not a
     /// hard guarantee. Plain-text logs typically have empty TaskName for every single row.
     /// </summary>
-    private void AutoHideEmptyColumnsFromSample(IList<LogLine> sample)
+    internal void AutoHideEmptyColumnsFromSample(IList<LogLine> sample)
     {
         if (sample == null || sample.Count == 0) return;
 
