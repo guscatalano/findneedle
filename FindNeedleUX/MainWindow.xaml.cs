@@ -538,9 +538,11 @@ public sealed partial class MainWindow : Window
         {
             Color? accent = null;
             try { accent = (Color)Application.Current.Resources["SystemAccentColor"]; } catch { }
-            StatusSegments.Children.Add(MakeStatusSegment(Symbol.Edit, "CSV", "Remap columns…",
+            var remapBtn = MakeStatusSegment(Symbol.Edit, "CSV", "Remap columns…",
                 "Edit how this CSV's columns map to Time / Level / Message / …", accent,
-                () => _ = ShowCsvMappingDialogAsync()));
+                () => _ = ShowCsvMappingDialogAsync());
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(remapBtn, "CsvRemapButton");
+            StatusSegments.Children.Add(remapBtn);
         }
     }
 

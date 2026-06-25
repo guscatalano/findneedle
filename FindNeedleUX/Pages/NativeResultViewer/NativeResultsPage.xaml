@@ -246,6 +246,7 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
                 <Button x:Name="SourcesButton" Click="ShowLoadedSources_Click" Height="32"
+                        AutomationProperties.AutomationId="SourcesButton"
                         AutomationProperties.Name="Show loaded locations and rules"
                         ToolTipService.ToolTip="See which locations and rule files this search loaded">
                     <StackPanel Orientation="Horizontal" Spacing="4">
@@ -459,7 +460,7 @@
                 <!-- Per-column filter row -->
                 <Border Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                    <StackPanel x:Name="FilterRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <StackPanel x:Name="FilterRowPanel" AutomationProperties.AutomationId="FilterRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Filter:" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <!-- Toggle: free-text boxes vs "known value" dropdowns for Provider/TaskName/Source. -->
@@ -467,7 +468,8 @@
                                       Content="Known ▾" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
                                       ToolTipService.ToolTip="Pick from the values actually present (Provider / TaskName / Source) instead of typing."/>
                         <!-- Provider: text box OR known-value combo (one visible at a time) -->
-                        <TextBox x:Name="ProviderFilterBox" Width="120" Height="28" FontSize="12"
+                        <TextBox x:Name="ProviderFilterBox" AutomationProperties.AutomationId="ProviderFilterBox"
+                                 Width="120" Height="28" FontSize="12"
                                  PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
                         <ComboBox x:Name="ProviderFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
                                   DisplayMemberPath="Display"

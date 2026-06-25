@@ -15,6 +15,7 @@
                     SelectionChanged="SettingsNav_SelectionChanged">
         <NavigationView.AutoSuggestBox>
             <AutoSuggestBox x:Name="SettingsSearchBox" QueryIcon="Find"
+                            AutomationProperties.AutomationId="SettingsSearchBox"
                             PlaceholderText="Search settings…"
                             TextChanged="SettingsSearch_TextChanged"
                             SuggestionChosen="SettingsSearch_SuggestionChosen"
