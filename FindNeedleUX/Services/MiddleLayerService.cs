@@ -257,7 +257,7 @@ public class MiddleLayerService
     /// <summary>Build the auto-rule matching context from the current locations: their paths and the
     /// source kinds present (by location type + file extension), plus any provider/build metadata
     /// pre-scanned for this search (see <see cref="PreparePendingAutoRuleMetadata"/>).</summary>
-    private static FindPluginCore.Searching.AutoRules.AutoRuleContext BuildAutoRuleContext(
+    internal static FindPluginCore.Searching.AutoRules.AutoRuleContext BuildAutoRuleContext(
         IEnumerable<ISearchLocation> locations)
     {
         var ctx = new FindPluginCore.Searching.AutoRules.AutoRuleContext();

@@ -122,7 +122,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         RuleFilterActive = false;
     }
 
-    private void CompileRuleFilters(IEnumerable<string> ruleFiles)
+    internal void CompileRuleFilters(IEnumerable<string> ruleFiles)
     {
         _excludeRules.Clear();
         _includeRules.Clear();
@@ -170,7 +170,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     /// <summary>Blacklist-then-whitelist: a row is hidden if it matches any exclude rule, or (when
     /// include rules exist) if it matches none of them.</summary>
-    private bool RulePass(string data)
+    internal bool RulePass(string data)
     {
         data ??= "";
         foreach (var (m, u) in _excludeRules)
