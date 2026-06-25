@@ -145,6 +145,32 @@ public class PcapLogProcessorTests
     }
 
     [TestMethod]
+    public void DecodesDnsAaaaAnswer()
+    {
+        var path = PcapTestData.WriteClassicPcap(PcapTestData.ExtraProtocolFrames());
+        try
+        {
+            var dns = Load(path).First(r => r.GetSource() == "DNS");
+            StringAssert.Contains(dns.GetSearchableData(), "ipv6.example.com");
+            StringAssert.Contains(dns.GetSearchableData(), "2001:db8::1"); // AAAA rdata decoded to IPv6
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
+    public void DecodesIcmp()
+    {
+        var path = PcapTestData.WriteClassicPcap(PcapTestData.ExtraProtocolFrames());
+        try
+        {
+            var icmp = Load(path).First(r => r.GetSource() == "ICMP");
+            StringAssert.Contains(icmp.GetMessage(), "192.168.1.10");
+            StringAssert.Contains(icmp.GetMessage(), "8.8.8.8");
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
     public void CheckFileFormat_TrueForCapture_FalseForRandomBytes()
     {
         var path = ClassicSample();

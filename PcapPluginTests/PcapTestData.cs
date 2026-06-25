@@ -126,6 +126,55 @@ internal static class PcapTestData
     internal static byte[] HttpGet(string host, string path) =>
         Encoding.ASCII.GetBytes($"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: test\r\n\r\n");
 
+    /// <summary>A DNS response with a single AAAA answer (exercises IPv6 rdata decoding).</summary>
+    internal static byte[] DnsResponseAAAA(string name, string ipv6)
+    {
+        var ms = new MemoryStream();
+        void U16(int v) { ms.WriteByte((byte)(v >> 8)); ms.WriteByte((byte)v); }
+        U16(0x1234);              // id
+        U16(0x8180);              // flags: response, RD, RA
+        U16(1); U16(1); U16(0); U16(0); // QD=1, AN=1, NS=0, AR=0
+        foreach (var label in name.Split('.'))
+        {
+            ms.WriteByte((byte)label.Length);
+            var b = Encoding.ASCII.GetBytes(label); ms.Write(b, 0, b.Length);
+        }
+        ms.WriteByte(0);          // root
+        U16(28); U16(1);          // QTYPE AAAA, QCLASS IN
+        // answer: name pointer to the question name at offset 12
+        ms.WriteByte(0xC0); ms.WriteByte(0x0C);
+        U16(28); U16(1);          // type AAAA, class IN
+        U16(0); U16(60);          // TTL (4 bytes) = 60
+        var addr = System.Net.IPAddress.Parse(ipv6).GetAddressBytes(); // 16 bytes
+        U16(addr.Length);         // RDLENGTH = 16
+        ms.Write(addr, 0, addr.Length);
+        return ms.ToArray();
+    }
+
+    /// <summary>Ethernet/IPv4/ICMP echo-request frame (exercises the ICMP branch of the mapper).</summary>
+    internal static byte[] IcmpEchoFrame(string src, string dst)
+    {
+        var ip = new IPv4Packet(IPAddress.Parse(src), IPAddress.Parse(dst))
+        {
+            Protocol = ProtocolType.Icmp,
+            PayloadData = new byte[] { 8, 0, 0, 0, 0, 1, 0, 1 }, // type=8 (echo request), code=0, checksum, id, seq
+        };
+        var eth = new EthernetPacket(MacA, MacB, EthernetType.IPv4) { PayloadPacket = ip };
+        eth.UpdateCalculatedValues();
+        return eth.Bytes;
+    }
+
+    /// <summary>A DNS-AAAA response (UDP) + an ICMP echo — the protocol paths the SampleFrames set omits.</summary>
+    internal static List<Frame> ExtraProtocolFrames()
+    {
+        var t = new DateTime(2026, 6, 24, 12, 0, 0, DateTimeKind.Utc);
+        return new List<Frame>
+        {
+            new(t, UdpFrame("8.8.8.8", "192.168.1.10", 53, 51514, DnsResponseAAAA("ipv6.example.com", "2001:db8::1"))),
+            new(t.AddMilliseconds(5), IcmpEchoFrame("192.168.1.10", "8.8.8.8")),
+        };
+    }
+
     // ---- containers ---------------------------------------------------------------------------
 
     /// <summary>Write a classic libpcap (.pcap), little-endian, microsecond, Ethernet linktype.</summary>

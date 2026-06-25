@@ -779,7 +779,7 @@ public class OutputRuleProcessor
         File.WriteAllText(path, sb.ToString());
     }
 
-    private string GetFieldValue(ISearchResult result, string field)
+    public static string GetFieldValue(ISearchResult result, string field)
     {
         return field.ToLower() switch
         {
@@ -829,7 +829,7 @@ public class OutputRuleProcessor
         return Path.Combine(Path.GetTempPath(), $"findneedle_output_{DateTime.Now:yyyyMMdd_HHmmss}{ext}");
     }
 
-    private string EscapeCsvField(string value)
+    public static string EscapeCsvField(string value)
     {
         if (string.IsNullOrEmpty(value))
             return "";

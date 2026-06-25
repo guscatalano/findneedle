@@ -437,7 +437,7 @@ public class RuleEvaluationEngine
     /// <summary>
     /// Parses relative time strings like "1h", "24h", "7d".
     /// </summary>
-    private TimeSpan ParseTimeSpan(string timeStr)
+    public static TimeSpan ParseTimeSpan(string timeStr)
     {
         if (string.IsNullOrEmpty(timeStr))
             return TimeSpan.Zero;
@@ -466,7 +466,7 @@ public class RuleEvaluationEngine
     /// <summary>
     /// Parses absolute datetime strings (ISO 8601 or relative like "-30d").
     /// </summary>
-    private DateTime? ParseDateTime(string dateStr)
+    public static DateTime? ParseDateTime(string dateStr)
     {
         if (string.IsNullOrEmpty(dateStr))
             return null;

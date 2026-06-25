@@ -145,4 +145,17 @@ public class MessageReformatCatalogTests
         Assert.IsFalse(MessageReformatCatalog.TryValidatePattern(@"(?<X>(", out var err));
         Assert.IsFalse(string.IsNullOrEmpty(err));
     }
+
+    [TestMethod]
+    public void Move_ReordersUserRules()
+    {
+        var a = MessageReformatCatalog.Upsert(new MessageReformatRule { Name = "AAA", Pattern = @"(?<A>.+)" });
+        var b = MessageReformatCatalog.Upsert(new MessageReformatRule { Name = "BBB", Pattern = @"(?<B>.+)" });
+
+        int IndexOf(string id) => MessageReformatCatalog.GetAll().ToList().FindIndex(r => r.Id == id);
+        Assert.IsTrue(IndexOf(a.Id) < IndexOf(b.Id), "precondition: A added before B");
+
+        MessageReformatCatalog.Move(b.Id, -1); // move B up past A
+        Assert.IsTrue(IndexOf(b.Id) < IndexOf(a.Id), "after Move(-1), B should precede A");
+    }
 }

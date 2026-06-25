@@ -83,6 +83,38 @@ public class ViewerQuickRuleTests
         Assert.AreEqual("noise done", line.Message);
     }
 
+    // ----- ViewerQuickRulesStore (the session-only list that applies rules to each row) -----
+
+    [TestMethod]
+    public void Store_AddAndClear_TrackRules()
+    {
+        Assert.IsFalse(ViewerQuickRulesStore.Any, "Init clears the store");
+        ViewerQuickRulesStore.Add(new ViewerQuickRule { Pattern = Rx("x"), TargetField = "ProcessId" });
+        Assert.IsTrue(ViewerQuickRulesStore.Any);
+        Assert.AreEqual(1, ViewerQuickRulesStore.Rules.Count);
+        ViewerQuickRulesStore.Clear();
+        Assert.IsFalse(ViewerQuickRulesStore.Any);
+    }
+
+    [TestMethod]
+    public void Store_Add_IgnoresNull()
+    {
+        ViewerQuickRulesStore.Add(null);
+        Assert.IsFalse(ViewerQuickRulesStore.Any);
+    }
+
+    [TestMethod]
+    public void Store_Apply_RunsEveryRuleOnTheRow()
+    {
+        // Build the row while the store is empty (Init cleared it), then register rules and apply.
+        var line = new LogLine(new R("worker PID=11 TID=22 ok"), 0);
+        ViewerQuickRulesStore.Add(new ViewerQuickRule { Pattern = Rx(@"PID=(?<v>\d+)"), TargetField = "ProcessId" });
+        ViewerQuickRulesStore.Add(new ViewerQuickRule { Pattern = Rx(@"TID=(?<v>\d+)"), TargetField = "ThreadId" });
+        ViewerQuickRulesStore.Apply(line);
+        Assert.AreEqual("11", line.ProcessId);
+        Assert.AreEqual("22", line.ThreadId);
+    }
+
     private sealed class R : ISearchResult
     {
         private readonly string _m;
