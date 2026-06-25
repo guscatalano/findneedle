@@ -49,8 +49,25 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
 
     public string? GetMmdcPath()
     {
-        var path = Path.Combine(_installDirectory, "node_modules", ".bin", "mmdc.cmd");
-        return File.Exists(path) ? path : null;
+        // npm puts the mmdc launcher in different places depending on layout/version (local prefix vs
+        // global-style prefix), so check the common spots and then fall back to a recursive search —
+        // a single hardcoded path was the cause of "installed but mmdc not found" on fresh machines.
+        foreach (var c in new[]
+        {
+            Path.Combine(_installDirectory, "node_modules", ".bin", "mmdc.cmd"),
+            Path.Combine(_installDirectory, "node_modules", ".bin", "mmdc"),
+            Path.Combine(_installDirectory, "mmdc.cmd"),
+        })
+        {
+            if (File.Exists(c)) return c;
+        }
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(_installDirectory, "mmdc.cmd", SearchOption.AllDirectories))
+                return f;
+        }
+        catch { /* directory may not exist yet */ }
+        return null;
     }
 
     public string? GetNodePath()
@@ -248,13 +265,20 @@ public class MermaidInstaller : IDependencyInstaller, IMermaidInstaller
                 var mmdcPath = GetMmdcPath();
                 if (mmdcPath == null)
                 {
-                    var alt = Path.Combine(_installDirectory, "node_modules", ".bin", "mmdc.cmd");
-                    if (File.Exists(alt)) mmdcPath = alt;
-                }
-
-                if (mmdcPath == null)
-                {
-                    return InstallResult.Failed($"mermaid-cli installed but mmdc binary not found after installation.\n{log}");
+                    // Help diagnose where npm actually put things by listing the install dir.
+                    string listing;
+                    try
+                    {
+                        var found = Directory.EnumerateFileSystemEntries(_installDirectory, "*", SearchOption.AllDirectories)
+                            .Where(p => p.Contains("mmdc", StringComparison.OrdinalIgnoreCase)
+                                     || p.Contains(".bin", StringComparison.OrdinalIgnoreCase))
+                            .Take(40);
+                        listing = "Install dir contents (mmdc/.bin matches): " + string.Join("; ", found);
+                    }
+                    catch (Exception ex) { listing = "could not list install dir: " + ex.Message; }
+                    return InstallResult.Failed(
+                        $"mermaid-cli npm install reported success, but the mmdc launcher wasn't found under "
+                        + $"{_installDirectory} (checked node_modules/.bin and recursively).\n{listing}\n{log}");
                 }
 
                 // Create a wrapper script that sets up the environment for mmdc
