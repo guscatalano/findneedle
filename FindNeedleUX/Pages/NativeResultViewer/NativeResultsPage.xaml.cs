@@ -3163,6 +3163,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             dto.Username = l.Username;
             dto.OpCode = l.OpCode;
             dto.SearchableData = l.SearchableData;
+            dto.StructuredData = l.StructuredData; // decoded EventData / TraceLogging fields for the agent
+
             dto.ProcessName = l.ProcessName;
             dto.ActivityId = l.ActivityId;
             dto.Keywords = l.Keywords;

@@ -36,20 +36,22 @@
                             <RowDefinition/><RowDefinition/><RowDefinition/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Text="Index"    FontWeight="SemiBold"/>
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Index}" IsTextSelectionEnabled="True"/>
-                        <TextBlock Grid.Row="1" Text="Time"     FontWeight="SemiBold"/>
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Time}" IsTextSelectionEnabled="True"/>
-                        <TextBlock Grid.Row="2" Text="Provider" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Provider}" IsTextSelectionEnabled="True"/>
-                        <TextBlock Grid.Row="3" Text="TaskName" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TaskName}" IsTextSelectionEnabled="True"/>
-                        <TextBlock Grid.Row="4" Text="Message"  FontWeight="SemiBold"/>
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
-                        <TextBlock Grid.Row="5" Text="Source"   FontWeight="SemiBold"/>
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Source}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
-                        <TextBlock Grid.Row="6" Text="Level"    FontWeight="SemiBold"/>
-                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" IsTextSelectionEnabled="True"/>
+                        <!-- VerticalAlignment=Top so the labels line up with the TOP of a tall, wrapping
+                             Message/Source value instead of centering against it. -->
+                        <TextBlock Grid.Row="0" Text="Index"    FontWeight="SemiBold" VerticalAlignment="Top"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Index}" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="1" Text="Time"     FontWeight="SemiBold" VerticalAlignment="Top"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Time}" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="2" Text="Provider" FontWeight="SemiBold" VerticalAlignment="Top"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Provider}" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="3" Text="TaskName" FontWeight="SemiBold" VerticalAlignment="Top"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TaskName}" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="4" Text="Message"  FontWeight="SemiBold" VerticalAlignment="Top"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="5" Text="Source"   FontWeight="SemiBold" VerticalAlignment="Top"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Source}" TextWrapping="Wrap" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="6" Text="Level"    FontWeight="SemiBold" VerticalAlignment="Top"/>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
                     </Grid>
                     <Button Content="Copy as JSON" Click="CopyJson_Click" Margin="0,8,0,0"/>
                 </StackPanel>

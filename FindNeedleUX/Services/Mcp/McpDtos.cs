@@ -29,6 +29,10 @@ public sealed class RecordDto
     public string Username { get; set; }
     public string OpCode { get; set; }
     public string SearchableData { get; set; }
+    // Parsed structured payload (JSON of the event's named fields — EVTX EventData / ETW TraceLogging
+    // payload), so an agent can reason over the decoded fields, not just the rendered Message. Populated
+    // only for a full single-record fetch.
+    public string StructuredData { get; set; }
     // Correlation / detail columns — also where field-extraction enrichment writes (e.g. an
     // extracted HRESULT into EventId). Populated only for a full single-record fetch.
     public string EventId { get; set; }
