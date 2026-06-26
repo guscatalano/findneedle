@@ -1233,8 +1233,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 foreach (var c in counts.Values) total += c;
                 var values = counts
                     .Where(kv => !string.IsNullOrEmpty(kv.Key))
-                    .OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(kv => kv.Value)                          // cap to the most common N…
                     .Take(limit <= 0 ? 1000 : limit)
+                    .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)    // …then display alphabetically
                     .Select(kv => new FindNeedleUX.Services.Mcp.LogAnalysis.Facet(kv.Key, kv.Value))
                     .ToList();
                 // Exact (whole filtered set, not a sample) → Scanned == Total, not truncated.
