@@ -1264,6 +1264,26 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        /// <summary>Distinct ResultSource (the viewer's "Source" column = each row's file/origin) values
+        /// with row counts, unfiltered. One GROUP BY scan — no row materialization — so it's cheap even
+        /// on million-row tables (the Sources dialog uses it instead of an O(rows) facet scan).</summary>
+        public Dictionary<string, int> GetSourceCounts()
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            lock (_sync)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = "SELECT ResultSource, COUNT(*) FROM FilteredResults GROUP BY ResultSource";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    var src = reader.IsDBNull(0) ? "" : reader.GetString(0);
+                    counts[src] = reader.GetInt32(1);
+                }
+            }
+            return counts;
+        }
+
         // ----- WHERE / ORDER BY builders -----
 
         // Trigram FTS5 needs at least 3 characters in the query to generate any trigrams. Anything

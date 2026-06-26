@@ -1240,7 +1240,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         copyRow.Children.Add(copyJson);
         panel.Children.Add(copyRow);
 
-        var typeToggles = BuildSourceTypeToggles();
+        var typeToggles = await BuildSourceTypeTogglesAsync();
         if (typeToggles != null) panel.Children.Add(typeToggles);
 
         panel.Children.Add(SourcesHeader($"Locations ({locInfo.Count})"));
@@ -1281,21 +1281,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// it composes with cross-filter narrowing and needs no new storage-side filter dimension.
     /// Returns null when there's nothing worth grouping (0 or 1 distinct type).
     /// </summary>
-    private FrameworkElement? BuildSourceTypeToggles()
+    private async System.Threading.Tasks.Task<FrameworkElement?> BuildSourceTypeTogglesAsync()
     {
-        FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult? facets = null;
-        // Cross-filtered Source values (excludes the Source field's own selection so the list stays stable).
-        try { facets = ViewModel.GetFacetsExcludingField("Source", 100000, 1000000); } catch { }
-        if (facets?.Values == null || facets.Values.Count == 0) return null;
+        // Exact distinct Source values + counts via a cheap GROUP BY (bounded by the loaded files, not
+        // the row count), computed off the UI thread so a big result set never freezes the dialog.
+        // (Previously an O(rows) facet scan of up to ~1M rows on the UI thread — the slow Sources button.)
+        System.Collections.Generic.Dictionary<string, int> counts = null;
+        try { counts = await System.Threading.Tasks.Task.Run(() => ViewModel.GetSourceCounts()); } catch { }
+        if (counts == null || counts.Count == 0) return null;
 
         var byType = new System.Collections.Generic.Dictionary<string, (int count, System.Collections.Generic.List<string> values)>(StringComparer.Ordinal);
-        foreach (var fv in facets.Values)
+        foreach (var kv in counts)
         {
-            if (string.IsNullOrEmpty(fv.Value) || fv.Value == "(none)") continue;
-            var type = SourceTypeClassifier.Classify(fv.Value);
+            if (string.IsNullOrEmpty(kv.Key)) continue;
+            var type = SourceTypeClassifier.Classify(kv.Key);
             if (!byType.TryGetValue(type, out var agg)) agg = (0, new System.Collections.Generic.List<string>());
-            agg.count += fv.Count;
-            agg.values.Add(fv.Value);
+            agg.count += kv.Value;
+            agg.values.Add(kv.Key);
             byType[type] = agg;
         }
         if (byType.Count <= 1) return null; // only one kind of source — nothing to toggle between

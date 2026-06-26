@@ -93,6 +93,14 @@ public interface IPagedLogSource : IDisposable
     Dictionary<string, int> GetLevelCounts(FilterSpec filters);
 
     /// <summary>
+    /// Exact distinct values of the viewer's "Source" column (each row's GetResultSource — the file
+    /// path) with their row counts, ignoring filters. Cheap by design (a SQL GROUP BY for SQLite, a
+    /// tally for in-memory) — distinct sources are bounded by the loaded files, NOT the row count — so
+    /// the Sources dialog can list/group them without the O(rows) facet scan.
+    /// </summary>
+    Dictionary<string, int> GetSourceCounts();
+
+    /// <summary>
     /// Stream every row matching <paramref name="filters"/> (in <paramref name="sort"/> order)
     /// through <paramref name="onItem"/>. Used by CSV export — implementations must not
     /// materialize the entire result in memory.

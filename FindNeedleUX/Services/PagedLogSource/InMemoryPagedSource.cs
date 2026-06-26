@@ -80,6 +80,18 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         for (int i = 0; i < _filtered.Count; i++) onItem(_filtered[i]);
     }
 
+    public Dictionary<string, int> GetSourceCounts()
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < _all.Count; i++)
+        {
+            var k = string.IsNullOrEmpty(_all[i].Source) ? "" : _all[i].Source; // LogLine.Source = GetResultSource
+            counts.TryGetValue(k, out var c);
+            counts[k] = c + 1;
+        }
+        return counts;
+    }
+
     public void Dispose() { /* no unmanaged resources */ }
 
     // ----- Streaming surface (in-memory backing is always a fixed snapshot) -----

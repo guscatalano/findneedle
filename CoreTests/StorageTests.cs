@@ -150,6 +150,25 @@ public class StorageTests
     }
 
     [TestMethod]
+    public void Sqlite_GetSourceCounts_GroupsByResultSource()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+        storage.AddFilteredBatch(new List<ISearchResult>
+        {
+            new DummySearchResult(resultSource: @"C:\logs\a.log"),
+            new DummySearchResult(resultSource: @"C:\logs\a.log"),
+            new DummySearchResult(resultSource: @"C:\logs\b.etl"),
+        });
+
+        var counts = storage.GetSourceCounts();
+        Assert.AreEqual(2, counts.Count);
+        Assert.AreEqual(2, counts[@"C:\logs\a.log"]);
+        Assert.AreEqual(1, counts[@"C:\logs\b.etl"]);
+    }
+
+    [TestMethod]
     public void Sqlite_RunningLevelCounts_MatchSql_AndSurviveClear()
     {
         var (searchedFile, _) = CreateUniqueSearchFile();

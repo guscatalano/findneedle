@@ -1184,6 +1184,12 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public Dictionary<string, int> GetFilteredLevelCounts()
         => _source == null ? new Dictionary<string, int>() : new Dictionary<string, int>(_source.GetLevelCounts(BuildFilterSpec()));
 
+    /// <summary>Exact distinct Source values (file/origin) with row counts — cheap (GROUP BY / tally),
+    /// bounded by the number of loaded sources, not the row count. Used by the Sources dialog's
+    /// by-type toggles instead of the O(rows) facet scan.</summary>
+    public Dictionary<string, int> GetSourceCounts()
+        => _source?.GetSourceCounts() ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
     private void UpdateStatus()
     {
         StatusText = $"{_totalFilteredCount:N0} / {TotalCount:N0} results";
