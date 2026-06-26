@@ -10,6 +10,25 @@ namespace LogETWApp;
 public class LogSomeStuff
 {
     private static readonly EventSource log = new("LogETWApp");
+
+    /// <summary>The TraceLogging provider GUID (derived from the EventSource name) — needed to enable
+    /// this provider in an ETW capture session.</summary>
+    public static Guid ProviderGuid => log.Guid;
+
+    /// <summary>Emit <paramref name="count"/> TraceLogging events as fast as possible (no delays), for
+    /// generating a large fixture .etl. Varies fields so filters/facets have something to bite on.</summary>
+    public static void LogManyFast(int count)
+    {
+        var levels = new[] { "Info", "Warning", "Error" };
+        for (int i = 0; i < count; i++)
+        {
+            var d = new ExampleStructuredData { TransactionID = i, TransactionDate = DateTime.Now };
+            log.Write("Transaction processed", d);
+            log.Write("Sending some data",
+                new { seq = i, status = i % 256, level = levels[i % levels.Length], note = "tracelogging-record", task = "Worker" });
+        }
+    }
+
     public static void LogFor10Seconds()
     {
         Console.WriteLine("logging for 10 seconds...");
