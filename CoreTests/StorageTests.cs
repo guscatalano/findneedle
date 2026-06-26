@@ -262,6 +262,41 @@ public class StorageTests
         Assert.IsTrue(page.All(r => r.GetSource() == "Beta" || r.GetSource() == "Gamma"));
     }
 
+    // Backs the fast "known value" filter dropdowns (GetFieldCounts) — an exact GROUP BY per field
+    // instead of the old O(sample) row scan, so the dropdowns open quickly on big result sets.
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void GetFieldCounts_GroupsByField_AndHonorsCrossFilter()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+        storage.AddFilteredBatch(new List<ISearchResult>
+        {
+            new ProvResult("Alpha"), new ProvResult("Alpha"),
+            new ProvResult("Beta"),
+            new ProvResult("Gamma"), new ProvResult("Gamma"), new ProvResult("Gamma"),
+        });
+
+        // "Provider" facet → SQL Source column: exact distinct values + counts.
+        var prov = storage.GetFieldCounts("Provider", new SqliteStorage.FilterInput());
+        Assert.AreEqual(2, prov["Alpha"]);
+        Assert.AreEqual(1, prov["Beta"]);
+        Assert.AreEqual(3, prov["Gamma"]);
+
+        // "Source" facet → SQL ResultSource column (every ProvResult shares "RS").
+        var src = storage.GetFieldCounts("Source", new SqliteStorage.FilterInput());
+        Assert.AreEqual(6, src["RS"]);
+
+        // Cross-filter: counts reflect an active filter on another field.
+        var filtered = storage.GetFieldCounts("Provider", new SqliteStorage.FilterInput { ProviderSet = new[] { "Gamma" } });
+        Assert.AreEqual(1, filtered.Count);
+        Assert.AreEqual(3, filtered["Gamma"]);
+
+        // Unknown / non-column field → empty, never throws.
+        Assert.AreEqual(0, storage.GetFieldCounts("Nope", new SqliteStorage.FilterInput()).Count);
+    }
+
     // Parameterized tests using DataTestMethod to run each scenario for both implementations.
 
     [DataTestMethod]

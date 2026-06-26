@@ -101,6 +101,15 @@ public interface IPagedLogSource : IDisposable
     Dictionary<string, int> GetSourceCounts();
 
     /// <summary>
+    /// Exact distinct values + counts of one "known value" filter field (Provider / TaskName / Source)
+    /// over the rows matching <paramref name="filters"/>. A cheap SQL GROUP BY for SQLite (vs the old
+    /// O(sample) row scan) so the known-value dropdowns populate fast even on millions of rows.
+    /// <paramref name="filters"/> is the cross-filter spec with THIS field's own selection already
+    /// cleared (so its list shows what's reachable given the other filters, not just what's picked).
+    /// </summary>
+    Dictionary<string, int> GetFieldCounts(string field, FilterSpec filters);
+
+    /// <summary>
     /// Stream every row matching <paramref name="filters"/> (in <paramref name="sort"/> order)
     /// through <paramref name="onItem"/>. Used by CSV export — implementations must not
     /// materialize the entire result in memory.

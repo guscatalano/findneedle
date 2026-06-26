@@ -96,6 +96,9 @@ public sealed class SqlitePagedSource : IPagedLogSource
 
     public Dictionary<string, int> GetSourceCounts() => _storage.GetSourceCounts();
 
+    public Dictionary<string, int> GetFieldCounts(string field, FilterSpec filters)
+        => _storage.GetFieldCounts(field, ToInput(filters));
+
     public void WalkAllFiltered(FilterSpec filters, SortSpec sort, Action<FindNeedleUX.LogLine> onItem)
     {
         // Stream in pages so we never hold the whole filtered set in memory at once.

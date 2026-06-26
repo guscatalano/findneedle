@@ -1173,6 +1173,30 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             "Source"   => spec with { Source = "",   SourceSet = null },
             _ => spec,
         };
+
+        // Fast path: an exact GROUP BY on the field's column (SQLite) / a tally (in-memory) — far
+        // cheaper than scanning a 200k-row sample and materializing every column, so the known-value
+        // dropdowns open quickly even on a multi-million-row load. Falls back to the sampling scan if
+        // the source can't do it.
+        try
+        {
+            var counts = _source?.GetFieldCounts(field, spec);
+            if (counts != null && counts.Count > 0)
+            {
+                int total = 0;
+                foreach (var c in counts.Values) total += c;
+                var values = counts
+                    .Where(kv => !string.IsNullOrEmpty(kv.Key))
+                    .OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                    .Take(limit <= 0 ? 1000 : limit)
+                    .Select(kv => new FindNeedleUX.Services.Mcp.LogAnalysis.Facet(kv.Key, kv.Value))
+                    .ToList();
+                // Exact (whole filtered set, not a sample) → Scanned == Total, not truncated.
+                return new FindNeedleUX.Services.Mcp.LogAnalysis.FacetResult(field, total, total, false, values);
+            }
+        }
+        catch { /* fall back to the sampling scan below */ }
+
         return FindNeedleUX.Services.Mcp.LogAnalysis.Facets(_source, spec, field, limit, sampleCap);
     }
 

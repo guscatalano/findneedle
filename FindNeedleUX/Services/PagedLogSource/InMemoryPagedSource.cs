@@ -92,6 +92,29 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         return counts;
     }
 
+    public Dictionary<string, int> GetFieldCounts(string field, FilterSpec filters)
+    {
+        // Field → LogLine accessor (matches the SQLite column mapping: Provider=GetSource,
+        // Source=GetResultSource, TaskName=TaskName).
+        Func<LogLine, string> sel = (field ?? "").Trim().ToLowerInvariant() switch
+        {
+            "provider" => l => l.Provider,
+            "taskname" or "task" => l => l.TaskName,
+            "source" => l => l.Source,
+            _ => null,
+        };
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (sel == null) return counts;
+        EnsureCache(filters, _cachedSort);
+        for (int i = 0; i < _filtered.Count; i++)
+        {
+            var k = sel(_filtered[i]) ?? "";
+            counts.TryGetValue(k, out var c);
+            counts[k] = c + 1;
+        }
+        return counts;
+    }
+
     public void Dispose() { /* no unmanaged resources */ }
 
     // ----- Streaming surface (in-memory backing is always a fixed snapshot) -----

@@ -1284,6 +1284,41 @@ namespace FindPluginCore.Implementations.Storage
             return counts;
         }
 
+        /// <summary>Distinct values + counts of one known-filter field over the rows matching
+        /// <paramref name="filter"/> — a single GROUP BY (no row materialization), so the viewer's
+        /// "known value" dropdowns populate fast even on million-row tables instead of scanning a
+        /// 200k-row sample. The viewer field maps to its column: Provider→Source, Source→ResultSource,
+        /// TaskName→TaskName. Returns empty for any other field.</summary>
+        public Dictionary<string, int> GetFieldCounts(string viewerField, FilterInput filter)
+        {
+            var col = (viewerField ?? "").Trim().ToLowerInvariant() switch
+            {
+                "provider" => "Source",
+                "taskname" or "task" => "TaskName",
+                "source" => "ResultSource",
+                _ => null,
+            };
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (col == null) return counts;
+            lock (_sync)
+            {
+                void Run(bool ftsAvailable)
+                {
+                    counts.Clear();
+                    var (where, ps) = BuildWhere(filter, ftsAvailable);
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = $"SELECT {col}, COUNT(*) FROM FilteredResults {where} GROUP BY {col}";
+                    BindParams(cmd, ps);
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                        counts[reader.IsDBNull(0) ? "" : reader.GetString(0)] = reader.GetInt32(1);
+                }
+                try { Run(UseFts); }
+                catch (SqliteException) when (UseFts && HasGlobalSearch(filter)) { Run(false); }
+            }
+            return counts;
+        }
+
         // ----- WHERE / ORDER BY builders -----
 
         // Trigram FTS5 needs at least 3 characters in the query to generate any trigrams. Anything
