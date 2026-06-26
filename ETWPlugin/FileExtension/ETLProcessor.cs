@@ -254,6 +254,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 return;
             }
 
+            // Surface the decode phase on the loading screen. tracefmt runs synchronously (a black box
+            // until it finishes), so the count can't tick during it — but the phase label + animation
+            // show, and the parse loop below ticks the line count once tracefmt returns.
+            FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
             Logger.Instance.Log($"Calling TraceFmt.ParseSimpleETL for file: {inputfile}");
             currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath, _progressSink);
             if (currentResult == null)
@@ -356,7 +360,11 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     if (lineCount % 1000 == 0)
                     {
                         Logger.Instance.Log($"Processed {lineCount} lines for {inputfile}");
-                        _progressSink?.NotifyProgress(20 + (int)(70.0 * lineCount / 100000), $"Processed {lineCount} lines");
+                        var pct = 20 + (int)(70.0 * lineCount / 100000);
+                        _progressSink?.NotifyProgress(pct, $"Processed {lineCount} lines");
+                        // Tick the line count on the loading screen (the spinner reads FlowProgress, not the
+                        // progress sink) so a big WPP parse shows visible movement instead of sitting at 0.
+                        FindNeedlePluginLib.FlowProgress.Detail($"{lineCount:N0} lines parsed", pct, estimate: true);
                     }
                 }
                 if (corruptCount > 0)

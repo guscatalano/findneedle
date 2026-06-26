@@ -1399,10 +1399,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Wait until a streaming search has produced its first rows (or finished / timed out),
-    /// so the viewer opens with content instead of an empty grid.</summary>
+    /// <summary>Keep the loading screen up until a streaming search produces its FIRST rows (or
+    /// finishes), so the viewer opens with content instead of flipping to an empty grid. Slow decoders
+    /// — e.g. a WPP .etl that tracefmt grinds for 30s+ before any row lands — stay on the spinner (which
+    /// shows the decode phase + animation) rather than opening empty and sitting at "0 rows". The long
+    /// safety timeout only guards against a producer that never signals rows OR completion at all.</summary>
     private static async System.Threading.Tasks.Task WaitForFirstRowsAsync(
-        MiddleLayerService.StreamingSearchHandle handle, int timeoutMs = 8000)
+        MiddleLayerService.StreamingSearchHandle handle, int safetyTimeoutMs = 300_000)
     {
         var src = handle?.Source;
         if (src == null) return;
@@ -1412,9 +1415,12 @@ public sealed partial class MainWindow : Window
         try
         {
             if (src.TotalCount > 0) tcs.TrySetResult();
+            // Completes the wait when the search ends too (covers a genuinely-empty result, faults, and
+            // cancellation — ContinueWith fires on any terminal state), so a 0-row search still opens to
+            // its empty state instead of spinning forever.
             if (handle.SearchTask != null)
                 _ = handle.SearchTask.ContinueWith(_ => tcs.TrySetResult());
-            await System.Threading.Tasks.Task.WhenAny(tcs.Task, System.Threading.Tasks.Task.Delay(timeoutMs));
+            await System.Threading.Tasks.Task.WhenAny(tcs.Task, System.Threading.Tasks.Task.Delay(safetyTimeoutMs));
         }
         finally { src.RowsAvailable -= OnRows; }
     }
