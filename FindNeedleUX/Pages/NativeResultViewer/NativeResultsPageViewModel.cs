@@ -600,12 +600,14 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 distinct = r.d;
                 sample = r.s;
 
-                var levelSet = new HashSet<string>(distinct, StringComparer.OrdinalIgnoreCase);
-                // Offer the real Level enum values plus whatever's actually in the data. Guard against a
-                // non-enum level name (e.g. left over in stale persisted data) leaking into the filter:
-                // selecting one would match nothing and, because Enum.TryParse fails on it, drop the
-                // level filter entirely and show every row.
-                foreach (var name in Enum.GetNames(typeof(FindNeedlePluginLib.Level))) levelSet.Add(name);
+                // Show only the levels actually present in the data — NOT every enum value. Force-adding
+                // all of them surfaced "Catastrophic" (ETW Critical, usually absent) and "Unknown" (the
+                // can't-determine-level sentinel) as 0-count chips, which reads as "these aren't real
+                // levels." Keep only valid enum names (a stale/garbage name would match nothing and, via
+                // a failed Enum.TryParse, silently drop the level filter).
+                var levelSet = new HashSet<string>(
+                    distinct.Where(n => Enum.TryParse<FindNeedlePluginLib.Level>(n, out _)),
+                    StringComparer.OrdinalIgnoreCase);
 
                 Levels.Clear();
                 foreach (var level in levelSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))

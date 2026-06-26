@@ -461,12 +461,18 @@
                 <Border Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                     <StackPanel x:Name="FilterRowPanel" AutomationProperties.AutomationId="FilterRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="Filter:" VerticalAlignment="Center" FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <!-- Toggle: free-text boxes vs "known value" dropdowns for Provider/TaskName/Source. -->
-                        <ToggleButton x:Name="ShowKnownToggle" Height="28" FontSize="12" Padding="8,0"
-                                      Content="Known ▾" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
-                                      ToolTipService.ToolTip="Pick from the values actually present (Provider / TaskName / Source) instead of typing."/>
+                        <!-- Header actions on one horizontal row (stays a single row even when the panel
+                             stacks vertically in left dock, to save space): label · mode toggle · clear. -->
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="Filter:" VerticalAlignment="Center" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <!-- Toggle: free-text boxes vs "known value" dropdowns for Provider/TaskName/Source. -->
+                            <ToggleButton x:Name="ShowKnownToggle" Height="28" FontSize="12" Padding="8,0"
+                                          Content="Known ▾" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
+                                          ToolTipService.ToolTip="Pick from the values actually present (Provider / TaskName / Source) instead of typing."/>
+                            <Button Content="Clear filters" Click="ResetColumnFilters_Click" Height="28" FontSize="12"
+                                    ToolTipService.ToolTip="Clear all the per-field filters (Provider, TaskName, Message, Source, Level)"/>
+                        </StackPanel>
                         <!-- Provider: text box OR known-value combo (one visible at a time). A persistent
                              field label (like SimpleEventViewer's sections) so it's clear which filter is
                              which once a value is picked — the combo otherwise shows only the bare value. -->
@@ -557,8 +563,6 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <Button Content="Clear filters" Click="ResetColumnFilters_Click" Height="28" FontSize="12"
-                                ToolTipService.ToolTip="Clear all the per-field filters (Provider, TaskName, Message, Source, Level)"/>
                     </StackPanel>
                 </Border>
 
