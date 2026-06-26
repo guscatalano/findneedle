@@ -41,6 +41,14 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private bool _traceEventModern = false;
     private bool _decodedToList = false;
 
+    // The WPP/tracefmt text-parse (and the .txt/.log passthrough) is deferred the same way the modern
+    // decode is: tracefmt runs in DoPreProcessing (it can't be streamed), but the cheap line-parse of
+    // its formatted output is moved to GetResultsWithCallback / GetResults so rows stream straight to
+    // storage in batches instead of being materialized into one big list up front. PreLoad runs inline
+    // during that parse (so it never needs a separate LoadInMemory pass). _fmtParsed guards once.
+    private bool _deferredFmtParse = false;
+    private bool _fmtParsed = false;
+
     // How this file was decoded + the resulting row count, surfaced via GetDecodeInfo() for the
     // Statistics "Decode by file" breakdown. Set as DoPreProcessing / the decoders run.
     private string _decodeMethod = "(pending)";
@@ -196,7 +204,6 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     {
         Logger.Instance.Log($"DoPreProcessing started for file: {inputfile}");
         _progressSink?.NotifyProgress(0, $"Preprocessing {inputfile}");
-        var getLock = 50;
 
         // Reset per-run decode state. This processor instance can be reused across searches (e.g. the
         // fail-fast open followed by "Decode anyway"); without this, stale values like _decodeMethod
@@ -206,6 +213,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         _forcedGuidCounts.Clear();
         _prescanFailFast = false;
         _missingTmfGuids.Clear();
+        _deferredFmtParse = false;
+        _fmtParsed = false;
 
         if (inputfile.EndsWith(".txt") || inputfile.EndsWith(".log"))
         {
@@ -286,6 +295,60 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 return;
             }
         }
+        // tracefmt has run (it can't be streamed). Defer the cheap line-parse of its formatted output
+        // (and the .txt/.log passthrough) to GetResultsWithCallback / GetResults so rows flow to storage
+        // in batches and the viewer can open partway, instead of materializing the whole list here. Only
+        // the non-WPP fallback below is decoded eagerly.
+        RetainTracefmtArtifacts();
+
+        // Fallback for non-WPP traces. tracefmt only formats WPP (driver/software) traces; for a modern
+        // .etl (EventSource / manifest / kernel) it processes ~no events. Decode those directly with the
+        // TraceEvent library. Only when tracefmt processed ~no events — if it DID process events (a WPP
+        // trace) but formatted nothing, that's a missing-symbols problem TraceEvent can't fix. (The
+        // modern-trace probe + fail-fast usually catch these first; this covers the rest, incl. "Decode
+        // anyway".)
+        bool tracefmtProcessedEvents = currentResult != null && currentResult.TotalEventsProcessed > 0;
+        bool isTextPassthrough = inputfile.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
+                              || inputfile.EndsWith(".log", StringComparison.OrdinalIgnoreCase);
+        if (!tracefmtProcessedEvents && !isTextPassthrough && File.Exists(inputfile))
+        {
+            Logger.Instance.Log($"tracefmt produced no events for {inputfile}; falling back to TraceEvent decode");
+            _progressSink?.NotifyProgress(50, "Decoding ETL with TraceEvent (non-WPP trace)");
+            _decodeMethod = "TraceEvent (fallback after tracefmt)";
+            DecodeWithTraceEvent(cancellationToken); // eager (edge case); populates results
+        }
+        else
+        {
+            // WPP (tracefmt formatted events) or the text passthrough → defer the parse. Set a
+            // provisional method now so stats read before the stream don't show "(pending)"; the forced
+            // ("Decode anyway") label is finalized in ParseFormattedOutput.
+            _deferredFmtParse = true;
+            if (_decodeMethod == "(pending)") _decodeMethod = "tracefmt (WPP)";
+        }
+
+        Logger.Instance.Log(
+            $"Decode summary {inputfile}: method={_decodeMethod} deferredParse={_deferredFmtParse} " +
+            $"providers={providers.Count}" +
+            (currentResult != null && _decodeMethod.StartsWith("tracefmt")
+                ? $" eventsProcessed={currentResult.TotalEventsProcessed} formatErrors={currentResult.TotalFormatErrors} unknowns={currentResult.TotalFormatsUnknown}"
+                : ""));
+        Logger.Instance.Log($"DoPreProcessing complete for {inputfile}");
+        _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
+    }
+
+    /// <summary>
+    /// Parse tracefmt's formatted output (or the .txt/.log passthrough) line-by-line, PreLoading each
+    /// row and handing it to <paramref name="emit"/>. This is the body that used to run inline in
+    /// DoPreProcessing; deferring it lets the streaming search pump rows to storage in batches (and the
+    /// viewer open partway) rather than building the whole list first. Runs at most once (_fmtParsed).
+    /// Side effects mirror the old inline path: provider counts, missing-TMF GUIDs, "Decode anyway"
+    /// forced rows, the badly-formatted tally, and the decode method + row count.
+    /// </summary>
+    private void ParseFormattedOutput(Action<ISearchResult> emit, CancellationToken cancellationToken)
+    {
+        if (_fmtParsed) return;
+        _fmtParsed = true;
+        var getLock = 50;
         _progressSink?.NotifyProgress(20, "Parsing output file");
         while (getLock > 0)
         {
@@ -347,6 +410,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                         continue; // corrupted/incomplete (counted above); don't throw or we skip too much
                     }
                     var etlline = new ETLLogLine(line, inputfile);
+                    etlline.PreLoad(); // was a separate LoadInMemory pass — do it inline so streamed rows are ready
+                    if (etlline.tasktxt == "Badly formatted event") _badlyFormattedCount++;
                     if (providers.ContainsKey(etlline.GetSource()))
                     {
                         providers[etlline.GetSource()]++;
@@ -355,11 +420,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     {
                         providers[etlline.GetSource()] = 1;
                     }
-                    results.Add(etlline);
+                    emit(etlline);
                     lineCount++;
                     if (lineCount % 1000 == 0)
                     {
-                        Logger.Instance.Log($"Processed {lineCount} lines for {inputfile}");
                         var pct = 20 + (int)(70.0 * lineCount / 100000);
                         _progressSink?.NotifyProgress(pct, $"Processed {lineCount} lines");
                         // Tick the line count on the loading screen (the spinner reads FlowProgress, not the
@@ -375,20 +439,18 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 {
                     foreach (var kv in _forcedGuidCounts.OrderByDescending(kv => kv.Value))
                     {
-                        results.Add(ETLLogLine.Unformatted(kv.Key, kv.Value, inputfile));
+                        emit(ETLLogLine.Unformatted(kv.Key, kv.Value, inputfile));
                         lineCount++;
                     }
                     providers["(unformatted WPP)"] = checked((int)Math.Min(int.MaxValue, _forcedGuidCounts.Values.Sum()));
                 }
                 Logger.Instance.Log($"Finished reading output file for {inputfile}, total lines: {lineCount}");
                 _progressSink?.NotifyProgress(90, $"Finished reading output file, total lines: {lineCount}");
-                // Reaching here via the .etl branch means tracefmt formatted it (the text branch
-                // already set its method). Rows = what we parsed out of the formatted output.
-                if (_decodeMethod == "(pending)")
-                    _decodeMethod = DecodeOptions.ForceFullDecode && corruptCount > 0
-                        ? $"tracefmt (WPP) — forced; {corruptCount:N0} events unformatted across {_forcedGuidCounts.Count} GUID(s)"
-                        : "tracefmt (WPP)";
-                _lastDecodeRowCount = results.Count;
+                // The WPP/text method was set provisionally in DoPreProcessing; only upgrade the label
+                // for the forced ("Decode anyway") case, which we can't know until we've counted corrupts.
+                if (DecodeOptions.ForceFullDecode && corruptCount > 0)
+                    _decodeMethod = $"tracefmt (WPP) — forced; {corruptCount:N0} events unformatted across {_forcedGuidCounts.Count} GUID(s)";
+                _lastDecodeRowCount = lineCount;
                 break;
             }
             catch (Exception ex)
@@ -398,39 +460,6 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 getLock--; // Sometimes tracefmt can hold the lock, wait until file is ready
             }
         }
-
-        RetainTracefmtArtifacts();
-
-        // Fallback for non-WPP traces. tracefmt only formats WPP (driver/software) traces; for a
-        // modern .etl (EventSource / manifest / kernel) it emits "Unknown" lines and we end up
-        // with zero rows. In that case decode the .etl directly with the TraceEvent library — the
-        // same source LiveCollector uses for real-time — which understands those event kinds.
-        //
-        // Only fall back when tracefmt itself processed ~no events: that signals a non-WPP trace it
-        // couldn't read. If tracefmt DID process events (a WPP trace) but we got no rows, it's a
-        // missing-symbols problem — TraceEvent can't decode WPP either, so the fallback would just
-        // burn time for nothing. (The fail-fast normally catches this; "Decode anyway" reaches here.)
-        bool tracefmtProcessedEvents = currentResult != null && currentResult.TotalEventsProcessed > 0;
-        if (results.Count == 0
-            && !tracefmtProcessedEvents
-            && !inputfile.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
-            && !inputfile.EndsWith(".log", StringComparison.OrdinalIgnoreCase)
-            && File.Exists(inputfile))
-        {
-            Logger.Instance.Log($"tracefmt produced no rows for {inputfile}; falling back to TraceEvent decode");
-            _progressSink?.NotifyProgress(50, "Decoding ETL with TraceEvent (non-WPP trace)");
-            _decodeMethod = "TraceEvent (fallback after tracefmt)";
-            DecodeWithTraceEvent(cancellationToken);
-        }
-
-        Logger.Instance.Log(
-            $"Decode summary {inputfile}: method={_decodeMethod} rows={_lastDecodeRowCount:N0} " +
-            $"providers={providers.Count}" +
-            (currentResult != null && _decodeMethod.StartsWith("tracefmt")
-                ? $" eventsProcessed={currentResult.TotalEventsProcessed} formatErrors={currentResult.TotalFormatErrors} unknowns={currentResult.TotalFormatsUnknown}"
-                : ""));
-        Logger.Instance.Log($"DoPreProcessing complete for {inputfile}");
-        _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
     }
 
     /// <summary>
@@ -610,6 +639,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             DecodeWithTraceEvent(CancellationToken.None);
             _decodedToList = true;
         }
+        // Likewise for a deferred WPP/tracefmt (or text) parse: materialize into the list on first ask.
+        if (_deferredFmtParse && !_fmtParsed && results.Count == 0)
+        {
+            Logger.Instance.Log($"GetResults: lazily parsing deferred tracefmt/text output into list for {inputfile}");
+            ParseFormattedOutput(results.Add, CancellationToken.None);
+        }
         Logger.Instance.Log($"GetResults called for ETLProcessor, file: {inputfile}, results: {results.Count}");
         return results;
     }
@@ -640,7 +675,31 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             return;
         }
 
-        // Already materialized (text / WPP path, or a prior GetResults) → batch from the list.
+        // Streaming path for a deferred WPP/tracefmt (or text passthrough) parse: read the formatted
+        // output and hand each batch to onBatch (→ storage) without building the full list. Same memory
+        // win as the modern path, now for WPP too.
+        if (_deferredFmtParse && !_fmtParsed && results.Count == 0)
+        {
+            var streamBatch = new List<ISearchResult>(batchSize);
+            ParseFormattedOutput(line =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                streamBatch.Add(line);
+                if (streamBatch.Count >= batchSize)
+                {
+                    onBatch(streamBatch);
+                    streamBatch = new List<ISearchResult>(batchSize);
+                }
+            }, cancellationToken);
+            if (streamBatch.Count > 0 && !cancellationToken.IsCancellationRequested)
+            {
+                onBatch(streamBatch);
+            }
+            await Task.CompletedTask;
+            return;
+        }
+
+        // Already materialized (a prior GetResults, or the eager TraceEvent fallback) → batch from list.
         var batch = new List<ISearchResult>(batchSize);
         foreach (var result in results)
         {
