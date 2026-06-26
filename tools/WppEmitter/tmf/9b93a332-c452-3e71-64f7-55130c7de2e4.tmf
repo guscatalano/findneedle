@@ -1,0 +1,13 @@
+// PDB:  C:\Users\crimson\source\repos\guscatalano\findneedle\tools\WppEmitter\build\WppEmitter.pdb
+// PDB:  Last Updated :2026-06-26:03:04:42:356 (UTC) [tracepdb]
+9b93a332-c452-3e71-64f7-55130c7de2e4 findneedle // SRC=WppEmitter.cpp MJ= MN=
+#typev WppEmitter_cpp40 11 "%0WppEmitter detail seq=%10!d! note=processing-record value=%11!d! category=Detail" //   LEVEL=TRACE_DETAIL FUNC=main
+{
+i, ItemLong -- 10
+i % 7919, ItemLong -- 11
+}
+#typev WppEmitter_cpp36 10 "%0WppEmitter work item id=%10!d! status=0x%11!x! phase=startup provider=WppEmitter" //   LEVEL=TRACE_GENERAL FUNC=main
+{
+i, ItemLong -- 10
+(unsigned)(i & 0xff), ItemLong -- 11
+}
