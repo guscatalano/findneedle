@@ -467,7 +467,11 @@
                         <ToggleButton x:Name="ShowKnownToggle" Height="28" FontSize="12" Padding="8,0"
                                       Content="Known ▾" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
                                       ToolTipService.ToolTip="Pick from the values actually present (Provider / TaskName / Source) instead of typing."/>
-                        <!-- Provider: text box OR known-value combo (one visible at a time) -->
+                        <!-- Provider: text box OR known-value combo (one visible at a time). A persistent
+                             field label (like SimpleEventViewer's sections) so it's clear which filter is
+                             which once a value is picked — the combo otherwise shows only the bare value. -->
+                        <TextBlock Text="Provider" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                   Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBox x:Name="ProviderFilterBox" AutomationProperties.AutomationId="ProviderFilterBox"
                                  Width="120" Height="28" FontSize="12"
                                  PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
@@ -488,6 +492,8 @@
                                 </Flyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
+                        <TextBlock Text="TaskName" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                   Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBox x:Name="TaskNameFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="TaskName…" TextChanged="TaskNameFilter_TextChanged"/>
                         <ComboBox x:Name="TaskNameFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
@@ -509,6 +515,8 @@
                         </DropDownButton>
                         <TextBox x:Name="MessageFilterBox" Width="220" Height="28" FontSize="12"
                                  PlaceholderText="Message…" TextChanged="MessageFilter_TextChanged"/>
+                        <TextBlock Text="Source" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                   Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBox x:Name="SourceFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="Source…" TextChanged="SourceFilter_TextChanged"/>
                         <ComboBox x:Name="SourceFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
