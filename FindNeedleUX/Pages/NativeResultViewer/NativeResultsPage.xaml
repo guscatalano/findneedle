@@ -513,6 +513,8 @@
                                 </Flyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
+                        <TextBlock Text="Message" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                   Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBox x:Name="MessageFilterBox" Width="220" Height="28" FontSize="12"
                                  PlaceholderText="Message…" TextChanged="MessageFilter_TextChanged"/>
                         <TextBlock Text="Source" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
@@ -536,6 +538,8 @@
                                 </Flyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
+                        <TextBlock Text="Level" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                   Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ComboBox x:Name="LevelFilterCombo" Width="170" Height="28" FontSize="12"
                                   PlaceholderText="Level (all)"
                                   ItemsSource="{x:Bind ViewModel.Levels, Mode=OneWay}"
@@ -553,7 +557,8 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <Button Content="Reset row" Click="ResetColumnFilters_Click" Height="28" FontSize="12"/>
+                        <Button Content="Clear filters" Click="ResetColumnFilters_Click" Height="28" FontSize="12"
+                                ToolTipService.ToolTip="Clear all the per-field filters (Provider, TaskName, Message, Source, Level)"/>
                     </StackPanel>
                 </Border>
 

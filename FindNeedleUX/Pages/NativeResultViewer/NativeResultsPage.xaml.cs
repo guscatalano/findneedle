@@ -540,6 +540,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         Field(ProviderFilterBox, 120); Field(TaskNameFilterBox, 140);
         Field(MessageFilterBox, 220);  Field(SourceFilterBox, 140);
         Field(LevelFilterCombo, 140);
+        // The "known value" controls (combos + multi-select dropdowns) need the same treatment, or in
+        // left dock they'd keep their fixed width and look ragged next to the stretched text boxes.
+        Field(ProviderFilterCombo, 200); Field(TaskNameFilterCombo, 200); Field(SourceFilterCombo, 200);
+        Field(ProviderFilterMulti, double.NaN); Field(TaskNameFilterMulti, double.NaN); Field(SourceFilterMulti, double.NaN);
 
         // Host visibility follows the expand state; the inactive host stays collapsed.
         FiltersPanel.Visibility  = _filtersExpanded ? Visibility.Visible : Visibility.Collapsed;
