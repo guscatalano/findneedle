@@ -215,8 +215,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         RebindGrid();
         // Reflect the initial sort (from the Default sort preference) on the column headers.
         SyncSortArrowsFromViewModel();
-        // Now that rows are loaded, fill the known-value dropdowns (if shown).
-        if (ShowKnownToggle?.IsChecked == true) _ = PopulateKnownFilterCombosAsync();
+        // Precompute the known-value dropdowns as part of loading (even when the toggle is off) so
+        // switching to "Known" later shows populated lists instantly instead of an empty, lagging
+        // dropdown. Fire-and-forget + off the UI thread; the combos stay hidden until the toggle is on.
+        _ = PopulateKnownFilterCombosAsync();
 
         // Tell MainWindow to hide the pre-nav spinner now that we're fully rendered.
         MainWindowActions.HideNavigationSpinner();
@@ -313,8 +315,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         RebindGrid();
         // Reflect the initial sort (from the Default sort preference) on the column headers.
         SyncSortArrowsFromViewModel();
-        // Now that rows are loaded, fill the known-value dropdowns (if shown).
-        if (ShowKnownToggle?.IsChecked == true) _ = PopulateKnownFilterCombosAsync();
+        // Precompute the known-value dropdowns as part of loading (even when the toggle is off) so
+        // switching to "Known" later shows populated lists instantly instead of an empty, lagging
+        // dropdown. Fire-and-forget + off the UI thread; the combos stay hidden until the toggle is on.
+        _ = PopulateKnownFilterCombosAsync();
         RefreshSearchSubmitMode();
         UpdateDecodeBanner();
         UpdateStreamingIcon();
@@ -2017,7 +2021,13 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // captured, so a stale "missing symbols" warning clears (or the new file's own appears) — and
         // enable the Rule filter toggle (it was disabled while the load was still streaming).
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming) && !ViewModel.IsStreaming)
-            DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); UpdateEmptyState(); });
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); UpdateEmptyState();
+                // Streaming finished — refresh the precomputed known-value dropdowns against the full set
+                // (the precompute at first-page may have run against a partial stream).
+                _ = PopulateKnownFilterCombosAsync();
+            });
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.SearchQueryError))
             DispatcherQueue.TryEnqueue(UpdateSearchQueryError);
         // Filtering a large set runs off the UI thread; show the loader over the grid while it does so
