@@ -761,7 +761,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     /// <summary>Re-run the current filter (count + level counts + visible page) off the UI thread,
     /// preserving the current page, then publish on the UI thread. Used by the live streaming refresh.</summary>
-    private async Task ReloadFromSourceAsyncCore()
+    private async Task ReloadFromSourceAsyncCore(System.Threading.CancellationToken ct = default)
     {
         if (_source == null) return;
         var filters = BuildFilterSpec();
@@ -781,8 +781,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             return (total, levels, rows, page, tc, tl, tp);
         }).ConfigureAwait(false);
 
+        if (ct.IsCancellationRequested) return; // a newer filter apply superseded this one
+
         await RunOnUiAsync(() =>
         {
+            if (ct.IsCancellationRequested) return;
             TotalFilteredCount = r.total;
             UpdateLevelCountsFrom(r.levels);
             _currentPage = r.page;
@@ -863,10 +866,51 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     }
 
     // ----- Filtering -----
+
+    /// <summary>UI-driven filter apply: runs the query off the UI thread with a short debounce and a
+    /// busy flag (<see cref="IsApplyingFilter"/>) so a multi-second filter on a large set shows a loader
+    /// instead of freezing the window. Rapid changes cancel the prior apply.</summary>
     public void ApplyFilters()
     {
         _currentPage = 1;
+        _ = ApplyFiltersBusyAsync();
+    }
+
+    /// <summary>Synchronous filter apply — updates <see cref="TotalFilteredCount"/> immediately for
+    /// programmatic callers that read the count right after (e.g. MCP set-filters). Not for the UI
+    /// path (it would block the UI thread); UI changes use <see cref="ApplyFilters"/>.</summary>
+    public void ApplyFiltersSync()
+    {
+        _currentPage = 1;
         ReloadFromSource();
+    }
+
+    private System.Threading.CancellationTokenSource _applyCts;
+    private bool _isApplyingFilter;
+    /// <summary>True while a filter change is being applied off the UI thread — the viewer shows the
+    /// "Filtering…" loader so a slow query reads as "working" rather than "hung".</summary>
+    public bool IsApplyingFilter { get => _isApplyingFilter; private set => Set(ref _isApplyingFilter, value); }
+
+    private async Task ApplyFiltersBusyAsync()
+    {
+        _applyCts?.Cancel();
+        var cts = _applyCts = new System.Threading.CancellationTokenSource();
+        var ct = cts.Token;
+        try
+        {
+            // Debounce: coalesce rapid changes (multi-select clicks, typing) and don't flash the loader
+            // for queries that finish well under this.
+            await Task.Delay(120, ct).ConfigureAwait(false);
+            await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) IsApplyingFilter = true; });
+            await ReloadFromSourceAsyncCore(ct);
+        }
+        catch (System.OperationCanceledException) { /* superseded by a newer apply */ }
+        finally
+        {
+            // Only the most-recent apply owns the flag; a cancelled one leaves it to its successor.
+            if (ReferenceEquals(_applyCts, cts))
+                await RunOnUiAsync(() => IsApplyingFilter = false);
+        }
     }
 
     /// <summary>Reset filters to defaults without re-querying — the caller reloads. Used when a new file
@@ -1066,7 +1110,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         if (fromTime.HasValue || clearFromTime) { _fromDate = clearFromTime ? null : fromTime; OnPropertyChanged(nameof(FromDate)); }
         if (toTime.HasValue || clearToTime)     { _toDate = clearToTime ? null : toTime;       OnPropertyChanged(nameof(ToDate)); }
 
-        ApplyFilters();
+        ApplyFiltersSync(); // programmatic caller reads TotalFilteredCount below → must be synchronous
         return TotalFilteredCount;
     }
 

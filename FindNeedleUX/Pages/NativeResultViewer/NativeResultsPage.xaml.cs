@@ -2016,6 +2016,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             DispatcherQueue.TryEnqueue(() => { UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); UpdateEmptyState(); });
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.SearchQueryError))
             DispatcherQueue.TryEnqueue(UpdateSearchQueryError);
+        // Filtering a large set runs off the UI thread; show the loader over the grid while it does so
+        // (instead of the window appearing hung).
+        else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsApplyingFilter))
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (ViewModel.IsApplyingFilter)
+                {
+                    LoadingOverlayText.Text = "Filtering…";
+                    LoadingOverlay.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    LoadingOverlay.Visibility = Visibility.Collapsed;
+                    LoadingOverlayText.Text = "Loading results...";
+                    UpdateEmptyState();
+                }
+            });
     }
 
     /// <summary>Show/hide the inline parse error for a malformed structured query in the search box.</summary>
