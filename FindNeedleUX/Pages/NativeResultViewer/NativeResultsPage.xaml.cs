@@ -1204,74 +1204,116 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             : "See which locations and rule files this search loaded");
     }
 
+    // Guards the Sources dialog against re-entrancy. The handler is `async void`, and on a big load the
+    // source-type counts take a moment to compute — if the button still feels unresponsive a user clicks
+    // again, and a second ContentDialog.ShowAsync while the first is open is a hard WinUI error ("only a
+    // single ContentDialog can be open at any time") that took the app down. So: open at most one, and
+    // show it IMMEDIATELY (filling the counts after) so the button never feels dead in the first place.
+    private bool _sourcesDialogOpen;
+
     // ----- "Sources" dialog: which locations + rule files this search loaded -----
     private async void ShowLoadedSources_Click(object sender, RoutedEventArgs e)
     {
-        // Collect once, then render + build the copyable text/JSON from the same data.
-        var locInfo = new System.Collections.Generic.List<(string name, string description)>();
-        foreach (var loc in MiddleLayerService.Locations)
+        if (_sourcesDialogOpen) return; // already open/opening — ignore the extra click
+        _sourcesDialogOpen = true;
+        try
         {
-            string name, desc;
-            try { name = loc.GetName(); } catch { name = "(unknown)"; }
-            try { desc = loc.GetDescription(); } catch { desc = ""; }
-            locInfo.Add((name, desc));
-        }
-        // Auto-added rules are recorded at search time (independent of the query's RulesConfigPaths,
-        // which can be reset) — so they show reliably even when the query lists none. Merge them in and
-        // tag which ones were applied automatically.
-        var autoAdded = new System.Collections.Generic.HashSet<string>(
-            MiddleLayerService.LastAutoAddedRules ?? new System.Collections.Generic.List<string>(),
-            StringComparer.OrdinalIgnoreCase);
-        var rules = new System.Collections.Generic.List<string>(
-            MiddleLayerService.SearchQueryUX?.CurrentQuery?.RulesConfigPaths
-            ?? new System.Collections.Generic.List<string>());
-        foreach (var a in autoAdded)
-            if (!rules.Any(x => string.Equals(x, a, StringComparison.OrdinalIgnoreCase))) rules.Add(a);
-
-        var panel = new StackPanel { Spacing = 10 };
-
-        // Copy buttons (kept inside the content so the dialog stays open after copying).
-        var copyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        var copyText = new Button { Content = "Copy as text" };
-        copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules, autoAdded));
-        var copyJson = new Button { Content = "Copy as JSON" };
-        copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules, autoAdded));
-        copyRow.Children.Add(copyText);
-        copyRow.Children.Add(copyJson);
-        panel.Children.Add(copyRow);
-
-        var typeToggles = await BuildSourceTypeTogglesAsync();
-        if (typeToggles != null) panel.Children.Add(typeToggles);
-
-        panel.Children.Add(SourcesHeader($"Locations ({locInfo.Count})"));
-        if (locInfo.Count == 0)
-            panel.Children.Add(SourcesNote("No locations loaded."));
-        else
-            foreach (var (name, desc) in locInfo)
-                panel.Children.Add(SourcesItem(name, desc));
-
-        panel.Children.Add(SourcesHeader($"Rules ({rules.Count})"));
-        if (rules.Count == 0)
-            panel.Children.Add(SourcesNote("No rule files loaded."));
-        else
-            foreach (var r in rules)
-                panel.Children.Add(SourcesItem(
-                    System.IO.Path.GetFileName(r) + (autoAdded.Contains(r) ? "   — auto-added" : ""), r));
-
-        var dialog = new ContentDialog
-        {
-            Title = "Loaded sources",
-            Content = new ScrollViewer
+            // Collect once, then render + build the copyable text/JSON from the same data.
+            var locInfo = new System.Collections.Generic.List<(string name, string description)>();
+            foreach (var loc in MiddleLayerService.Locations)
             {
-                Content = panel,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = 460,
-            },
-            CloseButtonText = "Close",
-            XamlRoot = this.XamlRoot,
-        };
-        await dialog.ShowAsync();
+                string name, desc;
+                try { name = loc.GetName(); } catch { name = "(unknown)"; }
+                try { desc = loc.GetDescription(); } catch { desc = ""; }
+                locInfo.Add((name, desc));
+            }
+            // Auto-added rules are recorded at search time (independent of the query's RulesConfigPaths,
+            // which can be reset) — so they show reliably even when the query lists none. Merge them in
+            // and tag which ones were applied automatically.
+            var autoAdded = new System.Collections.Generic.HashSet<string>(
+                MiddleLayerService.LastAutoAddedRules ?? new System.Collections.Generic.List<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            var rules = new System.Collections.Generic.List<string>(
+                MiddleLayerService.SearchQueryUX?.CurrentQuery?.RulesConfigPaths
+                ?? new System.Collections.Generic.List<string>());
+            foreach (var a in autoAdded)
+                if (!rules.Any(x => string.Equals(x, a, StringComparison.OrdinalIgnoreCase))) rules.Add(a);
+
+            var panel = new StackPanel { Spacing = 10 };
+
+            // Copy buttons (kept inside the content so the dialog stays open after copying).
+            var copyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            var copyText = new Button { Content = "Copy as text" };
+            copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules, autoAdded));
+            var copyJson = new Button { Content = "Copy as JSON" };
+            copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules, autoAdded));
+            copyRow.Children.Add(copyText);
+            copyRow.Children.Add(copyJson);
+            panel.Children.Add(copyRow);
+
+            // The per-source-type toggles need a GROUP BY over the whole result set, which is slow on a
+            // multi-million-row load. Don't block the dialog on it: reserve a slot now and fill it after
+            // the dialog is already up (so the button responds instantly — no dead window to re-click).
+            var togglesHost = new StackPanel();
+            panel.Children.Add(togglesHost);
+
+            panel.Children.Add(SourcesHeader($"Locations ({locInfo.Count})"));
+            if (locInfo.Count == 0)
+                panel.Children.Add(SourcesNote("No locations loaded."));
+            else
+                foreach (var (name, desc) in locInfo)
+                    panel.Children.Add(SourcesItem(name, desc));
+
+            panel.Children.Add(SourcesHeader($"Rules ({rules.Count})"));
+            if (rules.Count == 0)
+                panel.Children.Add(SourcesNote("No rule files loaded."));
+            else
+                foreach (var r in rules)
+                    panel.Children.Add(SourcesItem(
+                        System.IO.Path.GetFileName(r) + (autoAdded.Contains(r) ? "   — auto-added" : ""), r));
+
+            var dialog = new ContentDialog
+            {
+                Title = "Loaded sources",
+                Content = new ScrollViewer
+                {
+                    Content = panel,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    MaxHeight = 460,
+                },
+                CloseButtonText = "Close",
+                XamlRoot = this.XamlRoot,
+            };
+            // Populate the source-type toggles in the background; the dialog is already interactive.
+            _ = FillSourceTypeTogglesAsync(togglesHost);
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            // An async-void handler must never let an exception escape — that's an unhandled UI-thread
+            // crash. Log and move on (the dialog just won't show).
+            FindNeedlePluginLib.Logger.Instance.Log($"ShowLoadedSources_Click failed: {ex}");
+        }
+        finally
+        {
+            _sourcesDialogOpen = false;
+        }
+    }
+
+    /// <summary>Compute the per-source-type toggle section (a slow GROUP BY off the UI thread) and add it
+    /// to <paramref name="host"/> once ready — the dialog is already shown, so this just fills it in.</summary>
+    private async System.Threading.Tasks.Task FillSourceTypeTogglesAsync(Panel host)
+    {
+        try
+        {
+            var section = await BuildSourceTypeTogglesAsync();
+            if (section != null) host.Children.Add(section);
+        }
+        catch (Exception ex)
+        {
+            FindNeedlePluginLib.Logger.Instance.Log($"FillSourceTypeTogglesAsync failed: {ex.Message}");
+        }
     }
 
     /// <summary>
