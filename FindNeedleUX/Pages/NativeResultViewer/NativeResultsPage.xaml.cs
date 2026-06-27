@@ -219,10 +219,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         RebindGrid();
         // Reflect the initial sort (from the Default sort preference) on the column headers.
         SyncSortArrowsFromViewModel();
-        // Precompute the known-value dropdowns as part of loading (even when the toggle is off) so
-        // switching to "Known" later shows populated lists instantly instead of an empty, lagging
-        // dropdown. Fire-and-forget + off the UI thread; the combos stay hidden until the toggle is on.
-        _ = PopulateKnownFilterCombosAsync();
+        // Precompute the known-value dropdowns as part of loading so switching to "Known" later is
+        // instant — but only up to KnownPrecomputeRowCap. On a huge set the facet GROUP BY contends with
+        // the long index build (5–11s), so above the cap we leave it to the on-demand path instead.
+        // Fire-and-forget + off the UI thread; the combos stay hidden until the toggle is on.
+        if (ViewModel.TotalCount <= KnownPrecomputeRowCap) _ = PopulateKnownFilterCombosAsync();
 
         // Tell MainWindow to hide the pre-nav spinner now that we're fully rendered.
         MainWindowActions.HideNavigationSpinner();
@@ -319,10 +320,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         RebindGrid();
         // Reflect the initial sort (from the Default sort preference) on the column headers.
         SyncSortArrowsFromViewModel();
-        // Precompute the known-value dropdowns as part of loading (even when the toggle is off) so
-        // switching to "Known" later shows populated lists instantly instead of an empty, lagging
-        // dropdown. Fire-and-forget + off the UI thread; the combos stay hidden until the toggle is on.
-        _ = PopulateKnownFilterCombosAsync();
+        // Precompute the known-value dropdowns as part of loading so switching to "Known" later is
+        // instant — but only up to KnownPrecomputeRowCap. On a huge set the facet GROUP BY contends with
+        // the long index build (5–11s), so above the cap we leave it to the on-demand path instead.
+        // Fire-and-forget + off the UI thread; the combos stay hidden until the toggle is on.
+        if (ViewModel.TotalCount <= KnownPrecomputeRowCap) _ = PopulateKnownFilterCombosAsync();
         RefreshSearchSubmitMode();
         UpdateDecodeBanner();
         UpdateStreamingIcon();
@@ -2029,8 +2031,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             {
                 UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); UpdateEmptyState();
                 // Streaming finished — refresh the precomputed known-value dropdowns against the full set
-                // (the precompute at first-page may have run against a partial stream).
-                _ = PopulateKnownFilterCombosAsync();
+                // (the precompute at first-page may have run against a partial stream). Same row cap: skip
+                // for very large sets so the facet GROUP BY doesn't contend with the index build.
+                if (ViewModel.TotalCount <= KnownPrecomputeRowCap) _ = PopulateKnownFilterCombosAsync();
             });
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.SearchQueryError))
             DispatcherQueue.TryEnqueue(UpdateSearchQueryError);
@@ -2123,6 +2126,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         DropDownButton multiButton, string current, System.Collections.Generic.IReadOnlyList<string> currentSet)
     {
         using var _ux = FindNeedleUX.Services.Diagnostics.UxMonitor.Track("KnownFacet:" + field);
+
+        // If this control has never been populated (e.g. a big set where we skipped the at-load
+        // precompute), show a transient "Loading…" row so the first on-demand open isn't a blank
+        // dropdown while the facet GROUP BY runs.
+        if ((combo != null && combo.ItemsSource == null) || (multiList != null && multiList.ItemsSource == null))
+        {
+            _suppressKnownCombo = true;
+            var loading = new List<KnownFacetItem> { new() { IsPlaceholder = true } };
+            if (combo != null && combo.ItemsSource == null) combo.ItemsSource = loading;
+            if (multiList != null && multiList.ItemsSource == null) multiList.ItemsSource = loading;
+            _suppressKnownCombo = false;
+        }
+
         var facets = new List<(string Value, int Count)>();
         int total = 0;
         try
@@ -3080,6 +3096,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     // grid updates as the agent acts; reads return plain DTOs (no WinUI types).
 
     private const int McpMessageCap = 300; // truncate Message in list results (token budget)
+
+    // Above this row count we DON'T precompute the known-value facets at load: the facet GROUP BY
+    // contends with the (long) FTS index build on a huge set and was measured at 5–11s by the UX
+    // recorder. Bigger sets compute the facets on-demand instead (with a loading affordance).
+    private const int KnownPrecomputeRowCap = 1_000_000;
 
     private Task McpOnUiAsync(Action a)
     {

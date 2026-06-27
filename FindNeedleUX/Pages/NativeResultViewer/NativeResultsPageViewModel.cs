@@ -1432,7 +1432,9 @@ public sealed class KnownFacetItem
     public string DisplayValue { get; init; }
     public int Count { get; init; }
     public bool IsAll { get; init; }
-    public string Display => IsAll ? "(All)" : $"{DisplayValue ?? Value}  ({Count:N0})";
+    // Transient "computing the facet" row, shown for an on-demand (not precomputed) open on a big set.
+    public bool IsPlaceholder { get; init; }
+    public string Display => IsPlaceholder ? "Loading…" : IsAll ? "(All)" : $"{DisplayValue ?? Value}  ({Count:N0})";
 }
 
 /// <summary>Pure label helpers for the known-value filter dropdowns (extracted so they're unit-testable

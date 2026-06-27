@@ -34,6 +34,20 @@ public static class Program
 
     private static bool DecideRedirection()
     {
+        // Test hook: the FlaUI suite launches the app many times in a row; with single-instancing each
+        // relaunch redirects to the still-alive owner and exits, breaking per-test isolation. When the
+        // UITests set FINDNEEDLE_NO_SINGLE_INSTANCE=1 (or pass --no-single-instance), skip registration
+        // entirely so every launch is its own independent instance.
+        try
+        {
+            if (string.Equals(Environment.GetEnvironmentVariable("FINDNEEDLE_NO_SINGLE_INSTANCE"), "1", StringComparison.Ordinal))
+                return false;
+            foreach (var a in Environment.GetCommandLineArgs())
+                if (string.Equals(a, "--no-single-instance", StringComparison.OrdinalIgnoreCase))
+                    return false;
+        }
+        catch { /* fall through to normal single-instancing */ }
+
         bool isRedirect = false;
         try
         {
