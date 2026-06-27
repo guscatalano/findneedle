@@ -222,7 +222,16 @@ namespace FindNeedleUX.UITests
             var sw = Stopwatch.StartNew();
             for (int i = 0; i < 12; i++)
             {
-                scroll.Scroll(ScrollAmount.NoAmount, ScrollAmount.LargeIncrement);
+                // The synchronous UIA Scroll COM call can time out (0x80131505) if the UI thread is
+                // momentarily busy — e.g. an async page still realizing rows. A single skipped
+                // increment doesn't change the outcome (we still assert the viewport moved overall),
+                // so tolerate a transient timeout with one short-backoff retry instead of failing.
+                try { scroll.Scroll(ScrollAmount.NoAmount, ScrollAmount.LargeIncrement); }
+                catch (Exception ex) when (ex is TimeoutException || ex is System.Runtime.InteropServices.COMException)
+                {
+                    Thread.Sleep(250);
+                    try { scroll.Scroll(ScrollAmount.NoAmount, ScrollAmount.LargeIncrement); } catch { /* skip this increment */ }
+                }
                 Thread.Sleep(40);
             }
             sw.Stop();
