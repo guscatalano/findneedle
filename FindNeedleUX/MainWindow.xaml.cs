@@ -24,6 +24,24 @@ public sealed partial class MainWindow : Window
     private CancellationTokenSource _quickActionCts;
     private string _lastRunSummary = "—";
 
+    // Identify the interacted element (AutomationId › Name › type) for the UX latency recorder.
+    private static void NoteUxInput(object originalSource, string kind)
+    {
+        try
+        {
+            string id = null;
+            if (originalSource is FrameworkElement fe)
+            {
+                var auto = Microsoft.UI.Xaml.Automation.AutomationProperties.GetAutomationId(fe);
+                id = !string.IsNullOrEmpty(auto) ? auto
+                   : !string.IsNullOrEmpty(fe.Name) ? fe.Name : fe.GetType().Name;
+            }
+            else id = originalSource?.GetType().Name;
+            FindNeedleUX.Services.Diagnostics.UxMonitor.NoteInput(id, kind);
+        }
+        catch { /* never break input handling */ }
+    }
+
     public MainWindow()
     {
         this.InitializeComponent();
@@ -50,6 +68,18 @@ public sealed partial class MainWindow : Window
             ApplyTitleBarColor();
         });
         InitMcpIndicator();
+
+        // Built-in UX latency recorder (Phase 1): measure every interaction, log the ones that block the
+        // UI thread > UxMonitor.ThresholdMs. Handlers are attached at the window root with
+        // handledEventsToo so they see input regardless of who handles it.
+        FindNeedleUX.Services.Diagnostics.UxMonitor.Configure(DispatcherQueue);
+        if (this.Content is UIElement rootEl)
+        {
+            rootEl.AddHandler(UIElement.PointerPressedEvent,
+                new Microsoft.UI.Xaml.Input.PointerEventHandler((_, e) => NoteUxInput(e.OriginalSource, "pointer")), true);
+            rootEl.AddHandler(UIElement.KeyDownEvent,
+                new Microsoft.UI.Xaml.Input.KeyEventHandler((_, e) => NoteUxInput(e.OriginalSource, "key")), true);
+        }
 
         // Pre-warm the heavy viewer pages on a low-priority dispatcher tick. Constructing the
         // page without attaching it to the visual tree primes the XAML parser cache, runs

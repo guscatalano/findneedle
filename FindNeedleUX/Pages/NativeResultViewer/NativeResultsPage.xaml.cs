@@ -90,6 +90,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // count was still small.
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 
+        // Built-in UX latency recorder: hand it a live snapshot of viewer state to attach to any slow
+        // interaction it logs (Phase 1/2). Last active results page wins — there's only one.
+        FindNeedleUX.Services.Diagnostics.UxMonitor.ConditionsProvider = BuildUxConditions;
+
         // Debounce for lazy index building: only act after the user pauses typing, so live search
         // keystrokes don't kick off the (expensive) index build on the 3rd character.
         _lazyIndexTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
@@ -2118,6 +2122,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private async System.Threading.Tasks.Task FillKnownFieldAsync(string field, ComboBox combo, ListView multiList,
         DropDownButton multiButton, string current, System.Collections.Generic.IReadOnlyList<string> currentSet)
     {
+        using var _ux = FindNeedleUX.Services.Diagnostics.UxMonitor.Track("KnownFacet:" + field);
         var facets = new List<(string Value, int Count)>();
         int total = 0;
         try
@@ -3183,6 +3188,33 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private static string McpTruncate(string s, int cap)
         => string.IsNullOrEmpty(s) || s.Length <= cap ? s : s.Substring(0, cap) + "…";
+
+    /// <summary>Live viewer-state snapshot for the UX latency recorder's "under what conditions" field.</summary>
+    private FindNeedleUX.Services.Diagnostics.UxConditions BuildUxConditions()
+    {
+        var af = new System.Collections.Generic.List<string>();
+        void Add(string name, string v) { if (!string.IsNullOrEmpty(v)) af.Add(name); }
+        Add("search", ViewModel.SearchText);
+        Add("provider", ViewModel.ProviderFilter);
+        Add("taskName", ViewModel.TaskNameFilter);
+        Add("message", ViewModel.MessageFilter);
+        Add("source", ViewModel.SourceFilter);
+        Add("level", ViewModel.LevelFilter);
+        if (ViewModel.FromDate != null) af.Add("from");
+        if (ViewModel.ToDate != null) af.Add("to");
+        return new FindNeedleUX.Services.Diagnostics.UxConditions
+        {
+            TotalRows = ViewModel.TotalCount,
+            FilteredRows = ViewModel.TotalFilteredCount,
+            StorageTier = ViewModel.StorageTierName,
+            IsStreaming = ViewModel.IsStreaming,
+            IsApplyingFilter = ViewModel.IsApplyingFilter,
+            PageSize = ViewModel.PageSize,
+            SortColumn = ViewModel.SortColumn,
+            ActiveFilters = af,
+            ViewerMode = "native",
+        };
+    }
 
     public Task<FindNeedleUX.Services.Mcp.ViewStateDto> GetViewAsync() => McpOnUiAsync(() =>
         new FindNeedleUX.Services.Mcp.ViewStateDto

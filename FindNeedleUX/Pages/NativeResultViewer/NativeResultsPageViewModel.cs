@@ -358,6 +358,20 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public string SortColumn => _sortColumn;
     public bool SortDescending => _sortDescending;
 
+    /// <summary>Friendly name of the active storage backend — for the UX diagnostics conditions snapshot.</summary>
+    internal string StorageTierName
+    {
+        get
+        {
+            var n = _source?.GetType().Name;
+            if (string.IsNullOrEmpty(n)) return "none";
+            if (n.Contains("Sqlite")) return "SqlLite";
+            if (n.Contains("InMemory")) return "InMemory";
+            if (n.Contains("Hybrid")) return "Hybrid";
+            return n;
+        }
+    }
+
     public void ApplySort(string column, bool descending)
     {
         _sortColumn = string.IsNullOrEmpty(column) ? null : column;
@@ -904,7 +918,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             // for queries that finish well under this.
             await Task.Delay(120, ct).ConfigureAwait(false);
             await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) IsApplyingFilter = true; });
-            await ReloadFromSourceAsyncCore(ct);
+            using (FindNeedleUX.Services.Diagnostics.UxMonitor.Track("FilterApply"))
+                await ReloadFromSourceAsyncCore(ct);
         }
         catch (System.OperationCanceledException) { /* superseded by a newer apply */ }
         finally
