@@ -22,6 +22,21 @@
                 <StackPanel x:Name="VersionPanel" Spacing="4"/>
             </Border>
 
+            <!-- Performance report -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Performance" FontWeight="SemiBold"/>
+                    <TextBlock Text="Export a human-readable report: this machine's spec, the most recent search's pipeline timings, any slow UX interactions, and the cache/disk footprint."
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                    <Button x:Name="ExportPerfReportButton" Content="Export performance report"
+                            Click="ExportPerfReport_Click"/>
+                    <TextBlock x:Name="PerfReportStatus" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" IsTextSelectionEnabled="True" Visibility="Collapsed"/>
+                </StackPanel>
+            </Border>
+
             <!-- Links -->
             <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

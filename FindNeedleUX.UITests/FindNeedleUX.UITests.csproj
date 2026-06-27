@@ -21,6 +21,8 @@
     <ProjectReference Include="..\FindNeedleUX\FindNeedleUX.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
+    <!-- Compile reference: the perf-test lane writes a PerformanceReport (lives in FindPluginCore). -->
+    <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
   </ItemGroup>
 
 </Project>

@@ -47,6 +47,9 @@ namespace FindNeedleUX.UITests
         private static string _logPath;
         private static long _genMs;
         private static UIA3Automation _automation;
+        // Each scenario's headline numbers, accumulated across the class's tests and written into a
+        // machine-anchored performance report at ClassCleanup.
+        private static readonly System.Collections.Generic.List<(string label, string value)> _benchmarks = new();
 
         public TestContext TestContext { get; set; }
 
@@ -64,6 +67,18 @@ namespace FindNeedleUX.UITests
         [ClassCleanup]
         public static void TearDown()
         {
+            // Write a machine-anchored performance report from the benchmark numbers this class measured
+            // (plus the app's persisted search-pipeline run, slow UX interactions, and cache footprint).
+            try
+            {
+                if (_benchmarks.Count > 0)
+                {
+                    var path = FindPluginCore.Diagnostics.PerformanceReport.Save(benchmarks: _benchmarks);
+                    System.Console.WriteLine($"Performance report written: {path}");
+                }
+            }
+            catch { /* reporting must never fail the run */ }
+
             try { _automation?.Dispose(); } catch { }
             try { if (_logPath != null && File.Exists(_logPath)) File.Delete(_logPath); } catch { }
         }
@@ -119,6 +134,8 @@ namespace FindNeedleUX.UITests
                 var window = app.GetMainWindow(_automation);
                 launchSw.Stop();
                 Assert.IsNotNull(window, "Failed to get main window");
+                // Maximize so the toolbar/pager don't overflow at a narrow persisted window width.
+                try { window.Patterns.Window.PatternOrDefault?.SetWindowVisualState(WindowVisualState.Maximized); } catch { }
 
                 var loadSw = Stopwatch.StartNew();
                 var grid = UiTestHelpers.WaitForPopulatedGrid(window, 480_000);
@@ -160,6 +177,10 @@ namespace FindNeedleUX.UITests
             TestContext.WriteLine(
                 $"SUMMARY mode={mode} rows={RowCount} genMs={_genMs} launchMs={t.LaunchMs} " +
                 $"loadMs={t.LoadMs} searchMs={t.SearchMs} maxProbeMs={t.MaxProbeMs}");
+
+            _benchmarks.Add(($"{mode} · load → populated grid ({RowCount:N0} rows)", $"{t.LoadMs:N0} ms"));
+            _benchmarks.Add(($"{mode} · search (Enter → 1 row)", $"{t.SearchMs:N0} ms"));
+            _benchmarks.Add(($"{mode} · max UI round-trip during search", $"{t.MaxProbeMs:N0} ms (budget {ResponsiveBudgetMs})"));
         }
 
         /// <summary>
@@ -210,12 +231,22 @@ namespace FindNeedleUX.UITests
         /// <summary>One pass: parse the "{filtered} / {total} results" status text's filtered count.</summary>
         private static int ReadFilteredCountOnce(AutomationElement window)
         {
-            var raw = UiTestHelpers.FindAllSkippingGrid(window, ControlType.Text)
-                          .Select(UiTestHelpers.SafeName)
-                          .FirstOrDefault(n => Regex.IsMatch(n ?? "", @"^[\d,]+\s*/\s*[\d,]+\s*results"));
-            if (raw == null) return -1;
-            var m = Regex.Match(raw, @"^([\d,]+)\s*/");
-            return m.Success && int.TryParse(m.Groups[1].Value.Replace(",", ""), out var n) ? n : -1;
+            // Read the row total from the PAGER, not the "{filtered} / {total} results" status text: that
+            // status TextBlock sits in a toolbar that overflows into a "More" menu on a narrow window, so
+            // it isn't reliably in the visible UIA tree (window width persists across launches). The pager
+            // is always present and ends with the filtered total ("… of {N}"). Targeted find by id, then
+            // take the last "of N" (the first is the page count). A TextBlock's UIA Name is its full text.
+            AutomationElement pager = null;
+            UiTestHelpers.WalkSkippingGrid(window, e =>
+            {
+                if (UiTestHelpers.SafeAutomationId(e) == "PagerStatus") { pager = e; return true; }
+                return false;
+            });
+            var raw = pager == null ? null : UiTestHelpers.SafeName(pager);
+            if (string.IsNullOrEmpty(raw)) return -1;
+            var ms = Regex.Matches(raw, @"of\s+([\d,]+)");
+            if (ms.Count == 0) return -1;
+            return int.TryParse(ms[ms.Count - 1].Groups[1].Value.Replace(",", ""), out var n) ? n : -1;
         }
     }
 }

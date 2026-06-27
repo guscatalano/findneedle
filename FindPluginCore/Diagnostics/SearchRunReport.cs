@@ -235,4 +235,17 @@ public static class PerfReport
     {
         try { File.WriteAllText(ReportFilePath, r.ToJson()); } catch { /* best-effort */ }
     }
+
+    /// <summary>The last run's report read from disk (<see cref="ReportFilePath"/>), or null. Use when
+    /// <see cref="Last"/> is unavailable because the search ran in another process (e.g. a UI test
+    /// driving the app reads what the app process persisted).</summary>
+    public static SearchRunReport LoadPersisted()
+    {
+        try
+        {
+            if (!File.Exists(ReportFilePath)) return null;
+            return JsonSerializer.Deserialize<SearchRunReport>(File.ReadAllText(ReportFilePath));
+        }
+        catch { return null; }
+    }
 }

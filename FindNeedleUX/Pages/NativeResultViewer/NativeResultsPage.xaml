@@ -292,6 +292,7 @@
                 </Button>
 
                 <TextBlock x:Name="StatusText" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                           AutomationProperties.AutomationId="StatusText"
                            VerticalAlignment="Center" Margin="16,0,0,0"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
@@ -791,7 +792,8 @@
                     <Button Content="Next ›"  Click="NextPage_Click"  Height="28" FontSize="12"/>
                     <Button Content="Last »"  Click="LastPage_Click"  Height="28" FontSize="12"/>
                 </StackPanel>
-                <TextBlock VerticalAlignment="Center" FontSize="12" Margin="8,0,0,0">
+                <TextBlock x:Name="PagerStatus" AutomationProperties.AutomationId="PagerStatus"
+                           VerticalAlignment="Center" FontSize="12" Margin="8,0,0,0">
                     <Run Text="Page "/>
                     <Run Text="{x:Bind ViewModel.CurrentPage, Mode=OneWay}"/>
                     <Run Text=" of "/>

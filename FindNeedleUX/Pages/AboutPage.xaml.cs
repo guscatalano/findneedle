@@ -46,6 +46,22 @@ public sealed partial class AboutPage : Page
         catch { /* no handler — ignore */ }
     }
 
+    private void ExportPerfReport_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var path = FindPluginCore.Diagnostics.PerformanceReport.Save();
+            PerfReportStatus.Text = $"Saved to {path} — opening…";
+            PerfReportStatus.Visibility = Visibility.Visible;
+            Open(path); // hand the .md to the default handler
+        }
+        catch (System.Exception ex)
+        {
+            PerfReportStatus.Text = $"Could not write the report: {ex.Message}";
+            PerfReportStatus.Visibility = Visibility.Visible;
+        }
+    }
+
     private void StoreLink_Click(object sender, RoutedEventArgs e) => Open(SystemInfoMiddleware.StoreUrl);
     private void MsStoreLink_Click(object sender, RoutedEventArgs e) => Open(SystemInfoMiddleware.MsStoreUrl);
     private void GithubReleasesLink_Click(object sender, RoutedEventArgs e) => Open(SystemInfoMiddleware.GithubReleasesUrl);
