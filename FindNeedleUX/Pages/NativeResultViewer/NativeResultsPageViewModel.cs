@@ -362,12 +362,16 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         var sort = new SortSpec(_sortColumn, _sortDescending);
         int offset = (_currentPage - 1) * _pageSize;
         int limit = _pageSize;
+        // Jump-to-last uses the reversed-query fast path (O(pageSize)) instead of a deep OFFSET scan.
+        bool lastPage = _currentPage >= TotalPages && TotalPages > 1;
         try
         {
             await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) IsApplyingFilter = true; });
             List<LogLine> rows;
             using (FindNeedleUX.Services.Diagnostics.UxMonitor.Track("Paging"))
-                rows = await Task.Run(() => _source.GetPage(filters, sort, offset, limit)).ConfigureAwait(false);
+                rows = await Task.Run(() => lastPage
+                    ? _source.GetLastPage(filters, sort, limit)
+                    : _source.GetPage(filters, sort, offset, limit)).ConfigureAwait(false);
             if (ct.IsCancellationRequested) return;
             await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) Results.ReplaceAll(rows); });
         }

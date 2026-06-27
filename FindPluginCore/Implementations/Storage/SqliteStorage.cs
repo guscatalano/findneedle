@@ -1135,6 +1135,39 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        /// <summary>
+        /// The LAST page of the filter+sort result, fetched WITHOUT a deep OFFSET. Jumping to the last
+        /// page of a multi-million-row set with <c>LIMIT n OFFSET ~rows</c> made SQLite scan every skipped
+        /// row (~10s). Instead run the query with the sort direction flipped, take the first
+        /// <paramref name="limit"/> rows (OFFSET 0 — O(limit)), then reverse them back into forward order.
+        /// Equivalent rows, O(pageSize) instead of O(rows).
+        /// </summary>
+        public List<ISearchResult> GetLastFilteredPage(FilterInput filter, SortInput sort, int limit)
+        {
+            const string select =
+                "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
+                "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, " +
+                "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData FROM FilteredResults ";
+            lock (_sync)
+            {
+                List<ISearchResult> Run(bool ftsAvailable)
+                {
+                    var (where, ps) = BuildWhere(filter, ftsAvailable);
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = select + $"{where} {BuildOrderByFlipped(sort)} LIMIT @limit";
+                    BindParams(cmd, ps);
+                    cmd.Parameters.AddWithValue("@limit", limit);
+                    var list = new List<ISearchResult>();
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read()) list.Add(new SqliteSearchResult(reader));
+                    list.Reverse(); // fetched in reverse order; flip back so the page reads forward
+                    return list;
+                }
+                try { return Run(UseFts); }
+                catch (SqliteException) when (UseFts && HasGlobalSearch(filter)) { return Run(false); }
+            }
+        }
+
         // Slow-path fallbacks. Used only when FTS5 was claimed available but the query against
         // FilteredResults_fts threw at runtime (e.g. malformed query expression). Same behavior
         // as the pre-FTS5 codepath: a six-column LIKE OR-chain.
@@ -1434,6 +1467,27 @@ namespace FindPluginCore.Implementations.Storage
             var dir = s.Descending ? "DESC" : "ASC";
             // Map viewer column names to SQL columns. See FilterInput note above for the
             // Provider/Source naming mismatch.
+            var sqlCol = s.Column switch
+            {
+                "Index" => "Id",
+                "Time" => "LogTime",
+                "Provider" => "Source",
+                "TaskName" => "TaskName",
+                "Message" => "Message",
+                "Source" => "ResultSource",
+                "Level" => "Level",
+                _ => "Id"
+            };
+            return $"ORDER BY {sqlCol} {dir}";
+        }
+
+        /// <summary>Same column mapping as <see cref="BuildOrderBy"/> but with the direction reversed —
+        /// including load order (Id), which BuildOrderBy always emits ASC. Used by
+        /// <see cref="GetLastFilteredPage"/> to fetch the tail without a deep OFFSET.</summary>
+        private static string BuildOrderByFlipped(SortInput s)
+        {
+            if (s == null || string.IsNullOrEmpty(s.Column)) return "ORDER BY Id DESC"; // reverse of load order
+            var dir = s.Descending ? "ASC" : "DESC"; // flipped
             var sqlCol = s.Column switch
             {
                 "Index" => "Id",

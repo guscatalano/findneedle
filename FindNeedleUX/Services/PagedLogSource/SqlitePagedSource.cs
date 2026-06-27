@@ -70,6 +70,27 @@ public sealed class SqlitePagedSource : IPagedLogSource
         return list;
     }
 
+    public List<FindNeedleUX.LogLine> GetLastPage(FilterSpec filters, SortSpec sort, int pageSize)
+    {
+        if (pageSize <= 0) return new List<FindNeedleUX.LogLine>();
+        var input = ToInput(filters);
+        int total = _storage.GetFilteredCount(input);
+        if (total == 0) return new List<FindNeedleUX.LogLine>();
+        // The last page can be a partial page; take exactly its row count (not a full pageSize, which
+        // would bleed into the previous page).
+        int pages = (total + pageSize - 1) / pageSize;
+        int lastCount = total - (pages - 1) * pageSize;
+        // Reversed-query fetch (O(lastCount)); storage flips the rows back into forward order.
+        var rows = _storage.GetLastFilteredPage(input, ToSortInput(sort), lastCount);
+        var list = new List<FindNeedleUX.LogLine>(rows.Count);
+        for (int i = 0; i < rows.Count; i++)
+        {
+            long id = rows[i].GetRowId();
+            list.Add(new FindNeedleUX.LogLine(rows[i], id >= 0 ? (int)id : i));
+        }
+        return list;
+    }
+
     public FindNeedleUX.LogLine GetByRowId(long rowId)
     {
         var r = _storage.GetById(rowId);

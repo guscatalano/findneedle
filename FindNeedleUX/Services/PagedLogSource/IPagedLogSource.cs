@@ -80,6 +80,13 @@ public interface IPagedLogSource : IDisposable
     List<FindNeedleUX.LogLine> GetPage(FilterSpec filters, SortSpec sort, int offset, int limit);
 
     /// <summary>
+    /// The LAST page of the filter+sort result (the final <paramref name="pageSize"/> rows). Lets a
+    /// "jump to last" avoid a deep OFFSET: SQLite fetches it via a reversed query (O(pageSize)); the
+    /// in-memory source just slices the tail. Rows carry the same Index as <see cref="GetPage"/>.
+    /// </summary>
+    List<FindNeedleUX.LogLine> GetLastPage(FilterSpec filters, SortSpec sort, int pageSize);
+
+    /// <summary>
     /// Look up a single row by its stable <see cref="FindNeedleUX.LogLine.RowId"/>, independent of
     /// the current filter/sort/paging. Returns null if no row with that id exists. Used for record
     /// lookup (the MCP <c>get_record</c> tool) and tagging by stable id.

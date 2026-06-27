@@ -42,6 +42,16 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         return _filtered.GetRange(offset, len);
     }
 
+    public List<LogLine> GetLastPage(FilterSpec filters, SortSpec sort, int pageSize)
+    {
+        // In-memory slicing is O(1) regardless of offset, so the tail is just the last page via GetPage.
+        EnsureCache(filters, sort);
+        if (pageSize <= 0 || _filtered.Count == 0) return new List<LogLine>();
+        int pages = (_filtered.Count + pageSize - 1) / pageSize;
+        int lastOffset = (pages - 1) * pageSize; // start of the (possibly partial) last page
+        return GetPage(filters, sort, lastOffset, pageSize);
+    }
+
     public LogLine GetByRowId(long rowId)
     {
         // In-memory RowId is the load-order position (see LogLine ctor); scan the master list.

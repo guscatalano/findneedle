@@ -297,6 +297,41 @@ public class StorageTests
         Assert.AreEqual(0, storage.GetFieldCounts("Nope", new SqliteStorage.FilterInput()).Count);
     }
 
+    // Keyset jump-to-last: GetLastFilteredPage (reversed query, no deep OFFSET) must return EXACTLY the
+    // same rows as a deep-OFFSET fetch of the final page — for ascending, descending, and load order.
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void GetLastFilteredPage_MatchesDeepOffset_AcrossSorts()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+        var rows = new System.Collections.Generic.List<ISearchResult>();
+        for (int i = 0; i < 25; i++) rows.Add(new ProvResult("p" + i)); // distinct, stable insert order
+        storage.AddFilteredBatch(rows);
+
+        const int pageSize = 10;           // 25 rows → 3 pages; last page is a partial 5 rows
+        const int total = 25, lastOffset = 20, lastCount = 5;
+        var filter = new SqliteStorage.FilterInput();
+
+        foreach (var sort in new[]
+        {
+            new SqliteStorage.SortInput(),                                         // load order (Id)
+            new SqliteStorage.SortInput { Column = "Index", Descending = false },  // Id asc
+            new SqliteStorage.SortInput { Column = "Index", Descending = true },   // Id desc
+        })
+        {
+            var viaOffset = storage.GetFilteredPage(filter, sort, lastOffset, pageSize)
+                                   .Select(r => r.GetRowId()).ToList();
+            var viaLast = storage.GetLastFilteredPage(filter, sort, lastCount)
+                                 .Select(r => r.GetRowId()).ToList();
+            Assert.AreEqual(lastCount, viaLast.Count, $"last page should have {lastCount} rows (sort col='{sort.Column}' desc={sort.Descending})");
+            CollectionAssert.AreEqual(viaOffset, viaLast,
+                $"reversed last page must equal the deep-offset last page (sort col='{sort.Column}' desc={sort.Descending})");
+        }
+        _ = total;
+    }
+
     // Parameterized tests using DataTestMethod to run each scenario for both implementations.
 
     [DataTestMethod]
