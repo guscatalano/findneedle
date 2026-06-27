@@ -100,7 +100,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             try
             {
-                if (ResultsGrid != null && ViewModel.Results.Count > 0)
+                if (ResultsViewerSettings.ScrollToTopOnPageChange
+                    && ResultsGrid != null && ViewModel.Results.Count > 0)
                     ResultsGrid.ScrollIntoView(ViewModel.Results[0], null);
             }
             catch { /* grid mid-realize — harmless */ }

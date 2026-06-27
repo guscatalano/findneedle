@@ -293,6 +293,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- Row tags ---
             ColorTaggedRowsCheck.IsChecked = ResultsViewerSettings.ColorTaggedRows;
+            ScrollToTopOnPageChangeCheck.IsChecked = ResultsViewerSettings.ScrollToTopOnPageChange;
             ShowWelcomeIntroCheck.IsChecked = ResultsViewerSettings.ShowWelcomeIntro;
             ShowStatusBarCheck.IsChecked = ResultsViewerSettings.ShowStatusBar;
 
@@ -705,6 +706,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (_suppressEvents) return;
         ResultsViewerSettings.ColorTaggedRows = ColorTaggedRowsCheck.IsChecked == true;
+    }
+
+    private void ScrollToTopOnPageChangeCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.ScrollToTopOnPageChange = ScrollToTopOnPageChangeCheck.IsChecked == true;
     }
 
     private void ShowWelcomeIntroCheck_Changed(object sender, RoutedEventArgs e)

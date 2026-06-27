@@ -254,6 +254,11 @@ namespace FindNeedleUX.UITests
                 var scroll = grid.Patterns.Scroll.PatternOrDefault;
                 Assert.IsNotNull(scroll, $"[size {pageSize}] DataGrid exposes no scroll pattern.");
                 bool scrollable = scroll.VerticallyScrollable.ValueOrDefault;
+                // Paging is async now, so the initial scroll offset is timing-dependent — after the
+                // previous size's jump-to-last the grid is parked at the bottom, and a "First" click when
+                // already on page 1 is a no-op (no reload → no auto scroll-to-top). Pin to the top here so
+                // "did scrolling move the viewport?" is deterministic regardless of load timing.
+                if (scrollable) { scroll.SetScrollPercent(-1, 0); Thread.Sleep(300); }
                 double before = scroll.VerticalScrollPercent.ValueOrDefault;
                 var scrollSw = Stopwatch.StartNew();
                 // Only drive Scroll when the grid reports it's scrollable — calling Scroll on a

@@ -186,6 +186,16 @@ public static class ResultsViewerSettings
         set { Data.FilterDock = value.ToString(); Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>When true (default), navigating to another page (Next/Prev/First/Last/page-size change)
+    /// scrolls the result grid back to the top of the new page rather than keeping the previous page's
+    /// scroll offset. Some users prefer the offset retained, so it's toggleable.</summary>
+    public const bool DefaultScrollToTopOnPageChange = true;
+    public static bool ScrollToTopOnPageChange
+    {
+        get => Data.ScrollToTopOnPageChange ?? DefaultScrollToTopOnPageChange;
+        set { Data.ScrollToTopOnPageChange = value; Save(); /* read live by the viewer; no Changed needed */ }
+    }
+
     /// <summary>When a row is tagged (right-click → Tag), also tint the whole row with the tag
     /// color (in addition to the tag glyph in the row header). Off by default.</summary>
     public const bool DefaultColorTaggedRows = false;
@@ -732,6 +742,7 @@ public static class ResultsViewerSettings
         public string LoadingAnimation { get; set; }
         public bool? RobotWide { get; set; }
         public bool? ColorTaggedRows { get; set; }
+        public bool? ScrollToTopOnPageChange { get; set; }
         public bool? ShowWelcomeIntro { get; set; }
         public bool? ShowStatusBar { get; set; }
         public bool? McpServerEnabled { get; set; }

@@ -310,6 +310,19 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Paging -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Paging" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ScrollToTopOnPageChangeCheck" Content="Scroll to the top when changing pages"
+                                      Checked="ScrollToTopOnPageChangeCheck_Changed" Unchecked="ScrollToTopOnPageChangeCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="When you move to another page (Next / Prev / First / Last / change page size), jump to the top of the new page. Turn off to keep your scroll position."/>
+                        </StackPanel>
+                    </Border>
+
                 </StackPanel>
 
                 <!-- ============================ GENERAL ============================ -->
