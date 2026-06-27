@@ -56,6 +56,25 @@ namespace FindNeedleCoreUtils
         public static long Prune(long maxBytes = DefaultMaxCacheBytes, int maxFiles = int.MaxValue)
             => PruneDirectory(AppDataCacheDir, maxBytes, maxFiles);
 
+        private static int _pruning;
+
+        /// <summary>
+        /// Fire-and-forget prune to the default cap, off the calling thread. Coalesces concurrent calls
+        /// (a single prune covers writes that land while it runs). Call this after a cache write so the
+        /// ceiling is enforced continuously within a session — not only at the next startup, where a long
+        /// session opening several large files could otherwise blow far past the cap unbounded.
+        /// </summary>
+        public static void PruneInBackground(long maxBytes = DefaultMaxCacheBytes)
+        {
+            if (System.Threading.Interlocked.Exchange(ref _pruning, 1) == 1) return; // one already queued
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try { Prune(maxBytes); }
+                catch { /* best-effort */ }
+                finally { System.Threading.Interlocked.Exchange(ref _pruning, 0); }
+            });
+        }
+
         /// <summary>Prune an arbitrary cache directory (testable overload; see <see cref="Prune"/>).</summary>
         public static long PruneDirectory(string directory, long maxBytes, int maxFiles = int.MaxValue)
         {

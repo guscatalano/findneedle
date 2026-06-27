@@ -10,6 +10,16 @@ public class TempStorage : IDisposable
 
     private static readonly TempStorage gTemp = new();
 
+    static TempStorage()
+    {
+        // Delete the singleton's extraction dir when the process exits normally (graceful app close or
+        // CLI return). Without this, every clean run still leaked its session dir until the next
+        // startup's CleanupStaleSessions sweep. Killed/crashed runs don't fire ProcessExit — the
+        // startup sweep is the backstop for those.
+        try { AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { gTemp.Dispose(); } catch { } }; }
+        catch { /* never block construction on the hook */ }
+    }
+
     public static TempStorage GetSingleton()
     {
         return gTemp;

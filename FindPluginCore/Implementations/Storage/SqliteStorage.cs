@@ -695,6 +695,9 @@ namespace FindPluginCore.Implementations.Storage
                     WriteMetaKey(tx, "completed_at",   DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
                     tx.Commit();
                     FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", true), ("size", size), ("path_len", sourcePath.Length));
+                    // A new cache entry just completed — enforce the size ceiling now (off-thread), not
+                    // only at the next startup, so a long session can't grow the cache past the cap.
+                    CachedStorage.PruneInBackground();
                 }
                 catch (Exception ex)
                 {
