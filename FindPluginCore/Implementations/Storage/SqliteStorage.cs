@@ -58,9 +58,10 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         // v2: added ProcessId/ThreadId/ActivityId. v3: EventId/Keywords/RelatedActivityId/Channel/
         // ProviderGuid/RecordId. v4: ProcessName/StructuredData. v5: folder-aware source signature
-        // (source_count added; size/mtime now aggregate across a folder's files). Old caches rescan;
-        // EnsureColumns migrates table structure in place.
-        public const int CacheSchemaVersion = 5;
+        // (source_count added; size/mtime now aggregate across a folder's files). v6: FTS no longer
+        // double-indexes SearchableData when it equals Message (trigram build ~halved for text logs);
+        // old caches rebuild the index. Old caches rescan; EnsureColumns migrates table structure in place.
+        public const int CacheSchemaVersion = 6;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -362,6 +363,12 @@ namespace FindPluginCore.Implementations.Storage
                     -- load is ~2.8x slower than inserting rows trigger-free and running one
                     -- 'rebuild' afterward (see BuildSearchIndex / SqliteInsertBenchmark). The
                     -- delete/update triggers stay so incremental row changes remain consistent.
+                    -- SearchableData is identical to Message for plain-text results (the common case),
+                    -- so indexing both trigram-tokenizes the dominant text twice. Blank it when it equals
+                    -- Message so it's only indexed when it genuinely differs (e.g. ETW structured data) —
+                    -- Message already covers the shared text, so table-wide MATCH coverage is unchanged.
+                    -- The same CASE must appear everywhere we write the index (build + these triggers) so
+                    -- the external-content index stays consistent on later delete/update.
                     CREATE TRIGGER IF NOT EXISTS FilteredResults_ad AFTER DELETE ON FilteredResults
                     BEGIN
                         INSERT INTO FilteredResults_fts
@@ -369,7 +376,9 @@ namespace FindPluginCore.Implementations.Storage
                              ResultSource, SearchableData, LogTime)
                         VALUES
                             ('delete', old.Id, old.Source, old.TaskName, old.Message,
-                             old.ResultSource, old.SearchableData, old.LogTime);
+                             old.ResultSource,
+                             CASE WHEN old.SearchableData = old.Message THEN '' ELSE old.SearchableData END,
+                             old.LogTime);
                     END;
 
                     CREATE TRIGGER IF NOT EXISTS FilteredResults_au AFTER UPDATE ON FilteredResults
@@ -379,12 +388,15 @@ namespace FindPluginCore.Implementations.Storage
                              ResultSource, SearchableData, LogTime)
                         VALUES
                             ('delete', old.Id, old.Source, old.TaskName, old.Message,
-                             old.ResultSource, old.SearchableData, old.LogTime);
+                             old.ResultSource,
+                             CASE WHEN old.SearchableData = old.Message THEN '' ELSE old.SearchableData END,
+                             old.LogTime);
                         INSERT INTO FilteredResults_fts
                             (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
                         VALUES
-                            (new.Id, new.Source, new.TaskName, new.Message,
-                             new.ResultSource, new.SearchableData, new.LogTime);
+                            (new.Id, new.Source, new.TaskName, new.Message, new.ResultSource,
+                             CASE WHEN new.SearchableData = new.Message THEN '' ELSE new.SearchableData END,
+                             new.LogTime);
                     END;
                 ";
                 cmd.ExecuteNonQuery();
@@ -459,10 +471,14 @@ namespace FindPluginCore.Implementations.Storage
                         using (var cmd = _connection.CreateCommand())
                         {
                             cmd.Transaction = tx;
+                            // Blank SearchableData when it equals Message (see InitializeFts5) so the
+                            // dominant text isn't trigram-indexed twice — must match the triggers' CASE.
                             cmd.CommandText = @"
                                 INSERT INTO FilteredResults_fts
                                     (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
-                                SELECT Id, Source, TaskName, Message, ResultSource, SearchableData, LogTime
+                                SELECT Id, Source, TaskName, Message, ResultSource,
+                                       CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END,
+                                       LogTime
                                 FROM FilteredResults WHERE Id > @last ORDER BY Id LIMIT @bs;";
                             cmd.Parameters.AddWithValue("@last", lastId);
                             cmd.Parameters.AddWithValue("@bs", IndexBatchRows);
