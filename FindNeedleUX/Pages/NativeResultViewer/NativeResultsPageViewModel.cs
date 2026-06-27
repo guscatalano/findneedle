@@ -342,8 +342,42 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(PageSize));
         OnPropertyChanged(nameof(TotalPages));
         OnPropertyChanged(nameof(PageRangeText));
-        PublishCurrentPage();
+        _ = PublishCurrentPageBusyAsync(); // off the UI thread + loader; a deep OFFSET (jump-to-last on
+                                           // millions of rows) used to freeze the UI here for ~10s
         UpdateStatus();
+    }
+
+    private System.Threading.CancellationTokenSource _pageCts;
+
+    /// <summary>Fetch the current page off the UI thread with a loader, so paging a large set (a deep
+    /// SQLite OFFSET — e.g. jump-to-last on millions of rows) doesn't freeze the window. Rapid page
+    /// changes cancel the prior fetch so only the latest page publishes.</summary>
+    private async Task PublishCurrentPageBusyAsync()
+    {
+        if (_source == null) return;
+        _pageCts?.Cancel();
+        var cts = _pageCts = new System.Threading.CancellationTokenSource();
+        var ct = cts.Token;
+        var filters = BuildFilterSpec();
+        var sort = new SortSpec(_sortColumn, _sortDescending);
+        int offset = (_currentPage - 1) * _pageSize;
+        int limit = _pageSize;
+        try
+        {
+            await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) IsApplyingFilter = true; });
+            List<LogLine> rows;
+            using (FindNeedleUX.Services.Diagnostics.UxMonitor.Track("Paging"))
+                rows = await Task.Run(() => _source.GetPage(filters, sort, offset, limit)).ConfigureAwait(false);
+            if (ct.IsCancellationRequested) return;
+            await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) Results.ReplaceAll(rows); });
+        }
+        catch (System.OperationCanceledException) { /* superseded by a newer page change */ }
+        catch { /* transient read during a concurrent write — leave the current rows */ }
+        finally
+        {
+            if (ReferenceEquals(_pageCts, cts))
+                await RunOnUiAsync(() => IsApplyingFilter = false);
+        }
     }
 
     public void GoToPage(int page) => CurrentPage = page;

@@ -354,7 +354,16 @@ public class NuSearchQuery : ISearchQuery
                 // total wall-clock cost is roughly the same, but the user's wait between
                 // "search done" and "viewer open" disappears.
                 var autoChoice = ChooseAutoStorageType(totalRecords, totalTime);
-                PerfLog.Log("storage.selected", ("type", autoChoice.ToString()), ("mode", "auto"), ("est", totalRecords));
+                // Report the actual storage CLASS name (matching the forced cases above), not the
+                // StorageType enum — so the perf report's StorageType is consistent however it was chosen
+                // (was "SqlLite" here vs "SqliteStorage" when forced).
+                string autoTypeName = autoChoice switch
+                {
+                    StorageType.Hybrid => nameof(HybridStorage),
+                    StorageType.InMemory => nameof(InMemoryStorage),
+                    _ => nameof(SqliteStorage),
+                };
+                PerfLog.Log("storage.selected", ("type", autoTypeName), ("mode", "auto"), ("est", totalRecords));
                 return autoChoice switch
                 {
                     StorageType.InMemory => new InMemoryStorage(),
