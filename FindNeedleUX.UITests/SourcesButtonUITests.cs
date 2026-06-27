@@ -84,6 +84,8 @@ namespace FindNeedleUX.UITests
             finally
             {
                 try { if (app != null && !app.HasExited) app.Close(); } catch { }
+                // Close() may not terminate the process and Dispose() never does — Kill so it can't linger.
+                try { if (app != null && !app.HasExited) app.Kill(); } catch { }
                 try { app?.Dispose(); } catch { }
                 try { automation?.Dispose(); } catch { }
             }

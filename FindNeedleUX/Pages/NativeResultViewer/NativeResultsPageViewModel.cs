@@ -368,17 +368,24 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         {
             await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) IsApplyingFilter = true; });
             List<LogLine> rows;
+            // Outer "Paging" measures the whole interaction; the nested scopes attribute a breach to a
+            // sub-phase — "Paging.Fetch" (the storage query off the UI thread) vs "Paging.Render" (the
+            // grid rebuild on the UI thread) — so a slow page tells us *where* without a heap snapshot.
             using (FindNeedleUX.Services.Diagnostics.UxMonitor.Track("Paging"))
-                rows = await Task.Run(() => lastPage
-                    ? _source.GetLastPage(filters, sort, limit)
-                    : _source.GetPage(filters, sort, offset, limit)).ConfigureAwait(false);
-            if (ct.IsCancellationRequested) return;
-            await RunOnUiAsync(() =>
             {
+                using (FindNeedleUX.Services.Diagnostics.UxMonitor.Track("Paging.Fetch"))
+                    rows = await Task.Run(() => lastPage
+                        ? _source.GetLastPage(filters, sort, limit)
+                        : _source.GetPage(filters, sort, offset, limit)).ConfigureAwait(false);
                 if (ct.IsCancellationRequested) return;
-                Results.ReplaceAll(rows);
-                ScrollToTopRequested?.Invoke(); // a new page shows its top, not the prior page's offset
-            });
+                using (FindNeedleUX.Services.Diagnostics.UxMonitor.Track("Paging.Render"))
+                    await RunOnUiAsync(() =>
+                    {
+                        if (ct.IsCancellationRequested) return;
+                        Results.ReplaceAll(rows);
+                        ScrollToTopRequested?.Invoke(); // a new page shows its top, not the prior page's offset
+                    });
+            }
         }
         catch (System.OperationCanceledException) { /* superseded by a newer page change */ }
         catch { /* transient read during a concurrent write — leave the current rows */ }

@@ -132,6 +132,9 @@ namespace FindNeedleUX.UITests
             try
             {
                 _mainWindow?.Close();
+                // Dispose() only releases the FlaUI wrapper — it does NOT terminate the WinUI process;
+                // Kill it so the app doesn't linger for the rest of the run.
+                try { if (_app != null && !_app.HasExited) _app.Kill(); } catch { }
                 _app?.Dispose();
                 _automation?.Dispose();
             }

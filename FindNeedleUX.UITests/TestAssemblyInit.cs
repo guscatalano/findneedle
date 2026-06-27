@@ -1,5 +1,11 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+// MSTest's default runs [ClassCleanup] at end-of-assembly, so each UI-test class's app instance lingers
+// until the whole suite finishes — instances pile up (peak ~4 concurrent), starving the foreground app's
+// UI thread and hanging FlaUI's synchronous UIA calls (e.g. the pixel-scroll test times out). Force
+// cleanup to run at end-of-class so only one app is alive at a time, like running each class in isolation.
+[assembly: ClassCleanupExecution(ClassCleanupBehavior.EndOfClass)]
+
 namespace FindNeedleUX.UITests
 {
     /// <summary>

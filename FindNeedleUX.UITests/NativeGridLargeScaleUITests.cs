@@ -109,6 +109,9 @@ namespace FindNeedleUX.UITests
         public static void TearDown()
         {
             try { _mainWindow?.Close(); } catch { }
+            // Dispose() only releases the FlaUI wrapper — it does NOT terminate the WinUI process. Without
+            // an explicit Kill the app lingers for the rest of the run, so instances pile up across classes.
+            try { if (_app != null && !_app.HasExited) _app.Kill(); } catch { }
             try { _app?.Dispose(); } catch { }
             try { _automation?.Dispose(); } catch { }
             try { if (_tempLogPath != null && File.Exists(_tempLogPath)) File.Delete(_tempLogPath); } catch { }

@@ -122,6 +122,9 @@ namespace FindNeedleUX.UITests
         public static void TearDown()
         {
             try { _mainWindow?.Close(); } catch { }
+            // Dispose() only releases the FlaUI wrapper — it does NOT terminate the WinUI process. Without
+            // an explicit Kill the app lingers for the rest of the run, so instances pile up across classes.
+            try { if (_app != null && !_app.HasExited) _app.Kill(); } catch { }
             try { _app?.Dispose(); } catch { }
             try { _automation?.Dispose(); } catch { }
             try { if (_tempLogPath != null && File.Exists(_tempLogPath)) File.Delete(_tempLogPath); } catch { }
@@ -220,17 +223,16 @@ namespace FindNeedleUX.UITests
             // real DataGrid render/virtualization path (the thing that makes scrolling feel fast),
             // not just the data source.
             var sw = Stopwatch.StartNew();
-            for (int i = 0; i < 12; i++)
+            for (int i = 0; i < 12 && sw.ElapsedMilliseconds < 20000; i++)
             {
                 // The synchronous UIA Scroll COM call can time out (0x80131505) if the UI thread is
-                // momentarily busy — e.g. an async page still realizing rows. A single skipped
-                // increment doesn't change the outcome (we still assert the viewport moved overall),
-                // so tolerate a transient timeout with one short-backoff retry instead of failing.
+                // momentarily busy. Don't retry — a blocked Scroll already burned the full UIA timeout,
+                // and piling on more blocking calls can exceed the test's own timeout. Whatever we've
+                // scrolled so far is enough to assert the viewport moved; stop on the first failure.
                 try { scroll.Scroll(ScrollAmount.NoAmount, ScrollAmount.LargeIncrement); }
                 catch (Exception ex) when (ex is TimeoutException || ex is System.Runtime.InteropServices.COMException)
                 {
-                    Thread.Sleep(250);
-                    try { scroll.Scroll(ScrollAmount.NoAmount, ScrollAmount.LargeIncrement); } catch { /* skip this increment */ }
+                    break;
                 }
                 Thread.Sleep(40);
             }
