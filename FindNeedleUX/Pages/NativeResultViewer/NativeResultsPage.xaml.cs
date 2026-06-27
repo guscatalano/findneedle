@@ -2143,18 +2143,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (currentSet != null) foreach (var v in currentSet) EnsurePresent(v);
         EnsurePresent(current);
 
+        // Source values carry the (long) temp-extraction path; show a trimmed form but filter on the
+        // real value (DisplayValue is display-only).
+        bool isSource = string.Equals(field, "Source", StringComparison.Ordinal);
+        string FriendlyOf(string v) => isSource ? SourcePathTrimmer.Trim(v) : null;
+
         _suppressKnownCombo = true;
         if (combo != null)
         {
             var items = new List<KnownFacetItem> { new() { IsAll = true, Count = total } };
-            items.AddRange(facets.Select(x => new KnownFacetItem { Value = x.Value, Count = x.Count }));
+            items.AddRange(facets.Select(x => new KnownFacetItem { Value = x.Value, Count = x.Count, DisplayValue = FriendlyOf(x.Value) }));
             combo.ItemsSource = items;
             combo.SelectedItem = items.FirstOrDefault(i => !i.IsAll
                 && string.Equals(i.Value, current, StringComparison.OrdinalIgnoreCase)) ?? items[0]; // (All)
         }
         if (multiList != null)
         {
-            var items = facets.Select(x => new KnownFacetItem { Value = x.Value, Count = x.Count }).ToList();
+            var items = facets.Select(x => new KnownFacetItem { Value = x.Value, Count = x.Count, DisplayValue = FriendlyOf(x.Value) }).ToList();
             multiList.ItemsSource = items;
             multiList.SelectedItems.Clear();
             if (currentSet != null)
@@ -2169,7 +2174,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private static void UpdateMultiButtonLabel(string field, DropDownButton button, ListView list)
     {
         if (button == null) return;
-        var sel = list?.SelectedItems.OfType<KnownFacetItem>().Where(i => !i.IsAll).Select(i => i.Value).ToList()
+        // Source selections carry the long temp path; summarize with the trimmed display form.
+        bool isSource = string.Equals(field, "Source", StringComparison.Ordinal);
+        var sel = list?.SelectedItems.OfType<KnownFacetItem>().Where(i => !i.IsAll)
+                      .Select(i => isSource ? SourcePathTrimmer.Trim(i.Value) : i.Value).ToList()
                   ?? new List<string>();
         button.Content = KnownFilterLabel.Summarize(field, sel);
     }

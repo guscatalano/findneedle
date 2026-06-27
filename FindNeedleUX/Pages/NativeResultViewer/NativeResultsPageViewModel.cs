@@ -1412,9 +1412,12 @@ public class LevelEntry : INotifyPropertyChanged
 public sealed class KnownFacetItem
 {
     public string Value { get; init; } = "";
+    // Optional friendly text for display (e.g. a Source value with its temp-extraction path trimmed).
+    // Null → show Value. Filtering always uses Value, so trimming is display-only.
+    public string DisplayValue { get; init; }
     public int Count { get; init; }
     public bool IsAll { get; init; }
-    public string Display => IsAll ? "(All)" : $"{Value}  ({Count:N0})";
+    public string Display => IsAll ? "(All)" : $"{DisplayValue ?? Value}  ({Count:N0})";
 }
 
 /// <summary>Pure label helpers for the known-value filter dropdowns (extracted so they're unit-testable

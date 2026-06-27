@@ -10,6 +10,7 @@
     <Page.Resources>
         <local:HexToBrushConverter x:Key="HexToBrush"/>
         <local:TimeFormatConverter x:Key="TimeFmt"/>
+        <local:SourcePathConverter x:Key="SourceTrim"/>
         <pages:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
         <!-- Grid cell text: align to the TOP of the (fixed-height) row so a multi-line value (e.g. a
@@ -49,7 +50,7 @@
                         <TextBlock Grid.Row="4" Text="Message"  FontWeight="SemiBold" VerticalAlignment="Top"/>
                         <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
                         <TextBlock Grid.Row="5" Text="Source"   FontWeight="SemiBold" VerticalAlignment="Top"/>
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Source}" TextWrapping="Wrap" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Source, Converter={StaticResource SourceTrim}}" TextWrapping="Wrap" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
                         <TextBlock Grid.Row="6" Text="Level"    FontWeight="SemiBold" VerticalAlignment="Top"/>
                         <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
                     </Grid>
@@ -656,7 +657,7 @@
                     <ctWinUI:DataGridTextColumn Header="Provider" Binding="{Binding Provider}" Width="120" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="TaskName" Binding="{Binding TaskName}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800" ElementStyle="{StaticResource GridCellText}"/>
-                    <ctWinUI:DataGridTextColumn Header="Source"   Binding="{Binding Source}"   Width="140" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Source"   Binding="{Binding Source, Converter={StaticResource SourceTrim}}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="Level"    Binding="{Binding Level}"    Width="90"  ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="ProcessId"  Binding="{Binding ProcessId}"  Width="80"  ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="ProcessName" Binding="{Binding ProcessName}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
