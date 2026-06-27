@@ -94,6 +94,18 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // interaction it logs (Phase 1/2). Last active results page wins — there's only one.
         FindNeedleUX.Services.Diagnostics.UxMonitor.ConditionsProvider = BuildUxConditions;
 
+        // A page navigation should show the top of the new page — the DataGrid otherwise keeps the prior
+        // page's scroll offset (you'd land mid-page after Next, or stuck at the bottom after jump-to-last).
+        ViewModel.ScrollToTopRequested += () => DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                if (ResultsGrid != null && ViewModel.Results.Count > 0)
+                    ResultsGrid.ScrollIntoView(ViewModel.Results[0], null);
+            }
+            catch { /* grid mid-realize — harmless */ }
+        });
+
         // Debounce for lazy index building: only act after the user pauses typing, so live search
         // keystrokes don't kick off the (expensive) index build on the 3rd character.
         _lazyIndexTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };

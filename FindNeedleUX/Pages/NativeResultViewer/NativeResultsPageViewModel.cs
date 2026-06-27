@@ -373,7 +373,12 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                     ? _source.GetLastPage(filters, sort, limit)
                     : _source.GetPage(filters, sort, offset, limit)).ConfigureAwait(false);
             if (ct.IsCancellationRequested) return;
-            await RunOnUiAsync(() => { if (!ct.IsCancellationRequested) Results.ReplaceAll(rows); });
+            await RunOnUiAsync(() =>
+            {
+                if (ct.IsCancellationRequested) return;
+                Results.ReplaceAll(rows);
+                ScrollToTopRequested?.Invoke(); // a new page shows its top, not the prior page's offset
+            });
         }
         catch (System.OperationCanceledException) { /* superseded by a newer page change */ }
         catch { /* transient read during a concurrent write — leave the current rows */ }
@@ -1418,6 +1423,10 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ExportFormat.Xml  => FindNeedleUX.Services.ResultExporter.Format.Xml,
         _                 => FindNeedleUX.Services.ResultExporter.Format.Csv,
     };
+
+    /// <summary>Raised after a page-navigation load publishes new rows, so the view can scroll the grid
+    /// back to the top of the new page (instead of retaining the previous page's scroll offset).</summary>
+    public event Action ScrollToTopRequested;
 
     // ----- INPC plumbing -----
     public event PropertyChangedEventHandler PropertyChanged;
