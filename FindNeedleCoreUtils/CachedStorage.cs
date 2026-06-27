@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -21,6 +22,66 @@ namespace FindNeedleCoreUtils
 
         /// <summary>The directory where cache files live (created on first use).</summary>
         public static string CacheDirectory => AppDataCacheDir;
+
+        /// <summary>Default cache-size ceiling (10 GB) used when the host doesn't supply one. The cache
+        /// is keyed by source path and reused on a hit, but nothing pruned it before — it grew unbounded
+        /// (hundreds of GB). <see cref="Prune"/> enforces a ceiling.</summary>
+        public const long DefaultMaxCacheBytes = 10L * 1024 * 1024 * 1024;
+
+        /// <summary>Current cache footprint: number of files and total bytes.</summary>
+        public static (int files, long bytes) GetCacheStats() => GetStats(AppDataCacheDir);
+
+        /// <summary>Footprint of an arbitrary cache directory (testable overload).</summary>
+        public static (int files, long bytes) GetStats(string directory)
+        {
+            int n = 0; long bytes = 0;
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(directory))
+                {
+                    try { bytes += new FileInfo(f).Length; n++; } catch { }
+                }
+            }
+            catch { }
+            return (n, bytes);
+        }
+
+        /// <summary>
+        /// Evict least-recently-written cache files until the cache is under <paramref name="maxBytes"/>
+        /// (and <paramref name="maxFiles"/>). Safe to call anytime: a file that's currently open (an
+        /// active search's db) can't be deleted on Windows, so the attempt simply fails and that file is
+        /// skipped. Best run at startup (nothing open) and after a new cache is written. Returns bytes
+        /// freed. LRU uses LastWriteTime (NTFS last-access is usually disabled).
+        /// </summary>
+        public static long Prune(long maxBytes = DefaultMaxCacheBytes, int maxFiles = int.MaxValue)
+            => PruneDirectory(AppDataCacheDir, maxBytes, maxFiles);
+
+        /// <summary>Prune an arbitrary cache directory (testable overload; see <see cref="Prune"/>).</summary>
+        public static long PruneDirectory(string directory, long maxBytes, int maxFiles = int.MaxValue)
+        {
+            long freed = 0;
+            try
+            {
+                var files = new List<FileInfo>();
+                foreach (var f in Directory.EnumerateFiles(directory))
+                {
+                    try { files.Add(new FileInfo(f)); } catch { }
+                }
+                long total = 0; foreach (var f in files) total += f.Length;
+                int count = files.Count;
+                if (total <= maxBytes && count <= maxFiles) return 0;
+
+                files.Sort((a, b) => a.LastWriteTimeUtc.CompareTo(b.LastWriteTimeUtc)); // oldest first
+                foreach (var f in files)
+                {
+                    if (total <= maxBytes && count <= maxFiles) break;
+                    try { long len = f.Length; f.Delete(); freed += len; total -= len; count--; }
+                    catch { /* open / locked — skip, it'll be eligible next time */ }
+                }
+            }
+            catch { /* pruning is best-effort, never throw into the caller */ }
+            return freed;
+        }
 
         /// <summary>
         /// Gets a unique filename for a cache file based on a one-way hash of the original filename.

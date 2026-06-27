@@ -61,6 +61,25 @@ public partial class App : Application
         }
         catch (Exception ex) { Logger.Instance.Log($"TraceFormat config init failed: {ex.Message}"); }
 
+        // Disk hygiene: the result cache had no eviction (it grew into the hundreds of GB) and a
+        // killed/crashed run leaks its %Temp% extraction dir. Prune both on startup, off the UI thread,
+        // and log the outcome so we can prove the cache stays bounded.
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                long cacheFreed = FindNeedleCoreUtils.CachedStorage.Prune(FindNeedleCoreUtils.CachedStorage.DefaultMaxCacheBytes);
+                long tempFreed = FindNeedleCoreUtils.TempStorage.CleanupStaleSessions(TimeSpan.FromHours(2));
+                var (files, bytes) = FindNeedleCoreUtils.CachedStorage.GetCacheStats();
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.maintenance",
+                    ("cache_freed_mb", cacheFreed / (1024 * 1024)), ("temp_freed_mb", tempFreed / (1024 * 1024)),
+                    ("cache_files", files), ("cache_mb", bytes / (1024 * 1024)));
+                Logger.Instance.Log($"Cache maintenance: freed {cacheFreed / (1024 * 1024)} MB cache + " +
+                    $"{tempFreed / (1024 * 1024)} MB temp; cache now {files} files / {bytes / (1024 * 1024)} MB");
+            }
+            catch (Exception ex) { Logger.Instance.Log($"Cache maintenance failed: {ex.Message}"); }
+        });
+
         // GUI equivalent of the findneedle.exe CLI: if a log file/folder was passed on the
         // command line, load it, run the search, and open straight to the viewer — no file
         // picker. Usage: FindNeedleUX.exe "C:\path\log.etl" [--rules=rules.json] [--viewer=native|web]

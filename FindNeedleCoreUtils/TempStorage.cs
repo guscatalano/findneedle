@@ -39,6 +39,42 @@ public class TempStorage : IDisposable
         }
     }
 
+    /// <summary>
+    /// Delete leaked extraction temp dirs from earlier sessions. Each run creates a
+    /// <c>%Temp%\FindNeedleTemp_*</c> tree that the finalizer/Dispose removes — but a killed/crashed
+    /// process leaves it behind (these were observed totalling several GB). Removes every FindNeedleTemp_*
+    /// dir older than <paramref name="olderThan"/>, EXCEPT the current session's, so a concurrently
+    /// running instance (and our own live dir) is never touched. Best-effort; returns bytes freed.
+    /// </summary>
+    public static long CleanupStaleSessions(TimeSpan olderThan)
+    {
+        long freed = 0;
+        try
+        {
+            string root = Path.GetTempPath();
+            string current = gTemp?.tempPath;
+            var cutoff = DateTime.UtcNow - olderThan;
+            foreach (var dir in Directory.EnumerateDirectories(root, "FindNeedleTemp_*"))
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(current) &&
+                        string.Equals(Path.GetFullPath(dir), Path.GetFullPath(current), StringComparison.OrdinalIgnoreCase))
+                        continue; // our own live session
+                    if (Directory.GetLastWriteTimeUtc(dir) > cutoff) continue; // possibly a live concurrent run
+                    long size = 0;
+                    foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                        try { size += new FileInfo(f).Length; } catch { }
+                    Directory.Delete(dir, true);
+                    freed += size;
+                }
+                catch { /* in use / racing another instance — skip */ }
+            }
+        }
+        catch { }
+        return freed;
+    }
+
     /**
     * Generates a new temp path without replacing the main temp one
     * Caller is responsible for cleanup
