@@ -12,7 +12,24 @@ namespace ETWPluginTests;
 [TestClass]
 public class ETLProcessorLargeETLTests
 {
-    private const string SampleEtlPath = @"C:\Users\crimson\Desktop\stuff\samplelogs\test1.etl";
+    // Resolve a large .etl to exercise the eager GetResults() materialization path (the legacy/CLI path).
+    // Prefer FINDNEEDLE_ETL, else the repo's portable LargeSamples\large-5M.etl, so this runs as part of
+    // the local suite instead of depending on a personal file. Inconclusive if none is present.
+    private static string ResolveSampleEtl()
+    {
+        var env = Environment.GetEnvironmentVariable("FINDNEEDLE_ETL");
+        if (!string.IsNullOrEmpty(env) && File.Exists(env)) return env;
+        var dir = AppContext.BaseDirectory;
+        for (int i = 0; i < 8 && dir != null; i++)
+        {
+            var cand = Path.Combine(dir, "LargeSamples", "large-5M.etl");
+            if (File.Exists(cand)) return cand;
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+        return null;
+    }
+
+    private static readonly string SampleEtlPath = ResolveSampleEtl();
     private TestContext? _testContext;
 
     public TestContext TestContext
