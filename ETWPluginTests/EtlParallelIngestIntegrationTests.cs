@@ -1,6 +1,7 @@
 using System.Diagnostics.Tracing;
 using System.IO;
 using System.Threading;
+using FindNeedleCoreUtils;
 using findneedle.Implementations;
 using findneedle.Implementations.FileExtensions;
 using FindNeedlePluginLib;
@@ -83,6 +84,68 @@ public sealed class EtlParallelIngestIntegrationTests
 
         query.DisposeStorage();
         return (count, msgs, hits);
+    }
+
+    private static string FindLargeEtl()
+    {
+        var env = Environment.GetEnvironmentVariable("FINDNEEDLE_ETL");
+        if (!string.IsNullOrEmpty(env) && File.Exists(env)) return env;
+        var dir = AppContext.BaseDirectory;
+        for (int i = 0; i < 8 && dir != null; i++)
+        {
+            var cand = Path.Combine(dir, "LargeSamples", "large-5M.etl");
+            if (File.Exists(cand)) return cand;
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+        return null;
+    }
+
+    /// <summary>Real production-path speedup on the large local .etl (FTS disabled to isolate ingest):
+    /// time NuSearchQuery.RunThrough with the fan-out OFF then ON, asserting equal row counts and reporting
+    /// the ratio. Needs the multi-million-event sample, so SkipCI/local-only.</summary>
+    [TestMethod]
+    [TestCategory("Performance")]
+    [TestCategory("SkipCI")]
+    [Timeout(600000)]
+    public void ParallelIngest_RealEtl_ProductionSpeedup()
+    {
+        var etl = FindLargeEtl();
+        if (etl == null) { Assert.Inconclusive("No large .etl (set FINDNEEDLE_ETL or place LargeSamples\\large-5M.etl)."); return; }
+        bool savedFts = SqliteStorage.DisableFtsForMeasurement;
+        SqliteStorage.DisableFtsForMeasurement = true; // isolate ingest (FTS is equal on both sides)
+        try
+        {
+            TestContext.WriteLine($"file: {Path.GetFileName(etl)} ({new FileInfo(etl).Length / 1024.0 / 1024.0:N0} MB), shards={SqliteStorage.ParallelIngestShardCount()}");
+
+            (long ms, long rows) Run(bool parallel)
+            {
+                SqliteStorage.ParallelIngestEnabled = parallel;
+                SqliteStorage.ParallelIngestMinRows = 1;
+                ETWTestUtils.UseTestTraceFmt();
+                var loc = new FolderLocation { path = etl };
+                loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new ETLProcessor() });
+                // Start from a clean cache so each run measures a true first-open (no cross-run residue).
+                var cacheDb = CachedStorage.GetCacheFilePath(loc.GetName(), ".db");
+                foreach (var p in new[] { cacheDb, cacheDb + "-wal", cacheDb + "-shm", cacheDb + "-journal" })
+                    try { if (File.Exists(p)) File.Delete(p); } catch { }
+                var q = new NuSearchQuery { OverrideStorageType = StorageType.SqlLite, CacheReuseMode = CacheReuseMode.Never };
+                q.Locations.Add(loc);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                q.RunThrough();
+                sw.Stop();
+                long rows = ((SqliteStorage)q.ResultStorage!).GetStatistics().filteredRecordCount;
+                q.DisposeStorage();
+                return (sw.ElapsedMilliseconds, rows);
+            }
+
+            var serial = Run(false);
+            var parallel = Run(true);
+            TestContext.WriteLine($"SERIAL   RunThrough (ingest, FTS off): {serial.ms,7:N0} ms  ({serial.rows:N0} rows)");
+            TestContext.WriteLine($"PARALLEL RunThrough (ingest, FTS off): {parallel.ms,7:N0} ms  ({parallel.rows:N0} rows)");
+            TestContext.WriteLine($"speedup: {(double)serial.ms / Math.Max(1, parallel.ms):F2}x");
+            Assert.AreEqual(serial.rows, parallel.rows, "parallel ingest loads the same row count as serial");
+        }
+        finally { SqliteStorage.DisableFtsForMeasurement = savedFts; }
     }
 
     [TestMethod]

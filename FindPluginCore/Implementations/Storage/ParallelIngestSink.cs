@@ -50,6 +50,8 @@ namespace FindPluginCore.Implementations.Storage
 
         public int ShardCount => _shards.Length;
         public long ProducedCount => Interlocked.Read(ref _seq);
+        /// <summary>Wall-clock ms spent in the shard→target merge (set by CompleteAndMergeInto). Diagnostics.</summary>
+        public long LastMergeMs { get; private set; }
 
         public ParallelIngestSink(int shardCount, CancellationToken ct)
         {
@@ -113,9 +115,17 @@ namespace FindPluginCore.Implementations.Storage
 
             if (_ct.IsCancellationRequested) { DeleteShardFiles(); return 0; }
 
+            // The fan-out owns the target's final content (the scan went to shards, not the target), so the
+            // target MUST be empty for the global-Id merge to not collide. Step2 already ClearTables'd it,
+            // but clear again here so the merge is self-guarding even on a re-scan of a populated cache
+            // (CacheReuseMode.Never) — MergeFilteredFrom asserts emptiness and would otherwise throw.
+            target.ClearTables();
+
             long merged;
+            var mergeWatch = System.Diagnostics.Stopwatch.StartNew();
             using (PerfLog.Scope("ingest.merge", ("shards", _shards.Length), ("rows", ProducedCount)))
                 merged = target.MergeFilteredFrom(_shardDbPaths);
+            LastMergeMs = mergeWatch.ElapsedMilliseconds;
             DeleteShardFiles();
             return merged;
         }

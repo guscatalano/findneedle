@@ -1130,16 +1130,28 @@ namespace FindPluginCore.Implementations.Storage
                     while (r.Read()) cols.Add(r.GetString(1));
                 }
                 string colList = string.Join(",", cols);
-                long before = _filteredCount;
+
+                // The fan-out copies global Ids verbatim (so the viewer's default ORDER BY Id reproduces scan
+                // order), which requires the target to be empty — Step2 / the caller ClearTables() first. This
+                // asserts that invariant rather than silently colliding on a populated cache.
+                long before = GetCount("FilteredResults");
+                if (before != 0)
+                    throw new InvalidOperationException(
+                        $"MergeFilteredFrom requires an empty target but it has {before:N0} rows — the fan-out " +
+                        "merge copies global Ids verbatim, so a non-empty target collides. Caller must ClearTables first.");
+
+                // ATTACH each shard and copy its rows into the target (Id included → global scan order is
+                // preserved; the viewer's default ORDER BY Id sorts on it regardless of physical layout).
                 using (var tx = _connection.BeginTransaction())
                 {
                     for (int k = 0; k < shardDbPaths.Count; k++)
                     {
                         using (var a = _connection.CreateCommand()) { a.Transaction = tx; a.CommandText = $"ATTACH DATABASE '{shardDbPaths[k].Replace("'", "''")}' AS msrc{k};"; a.ExecuteNonQuery(); }
-                        using (var ins = _connection.CreateCommand()) { ins.Transaction = tx; ins.CommandText = $"INSERT INTO main.FilteredResults ({colList}) SELECT {colList} FROM msrc{k}.FilteredResults ORDER BY Id"; ins.ExecuteNonQuery(); }
+                        using (var ins = _connection.CreateCommand()) { ins.Transaction = tx; ins.CommandText = $"INSERT INTO main.FilteredResults ({colList}) SELECT {colList} FROM msrc{k}.FilteredResults"; ins.ExecuteNonQuery(); }
                     }
                     tx.Commit();
                 }
+
                 for (int k = 0; k < shardDbPaths.Count; k++)
                     try { using var d = _connection.CreateCommand(); d.CommandText = $"DETACH DATABASE msrc{k};"; d.ExecuteNonQuery(); } catch { }
 

@@ -134,6 +134,63 @@ public class ParallelIngestTests
     }
 
     [TestMethod]
+    public void MergeIntoReusedCachePath_AfterClearTables_NoIdCollision()
+    {
+        // Mirrors the production "reopen a previously-cached log with fan-out" path: a store at path P is
+        // filled serially (autoincrement Ids 1..N) and disposed, then a NEW store at the SAME path P is
+        // ClearTables()'d and a fan-out merge (explicit global Ids 1..N) folds into it. Must not collide.
+        const int batch = 500, batches = 20; // 10,000 rows
+        var searched = Path.Combine(Path.GetTempPath(), "pingest_reuse_" + Guid.NewGuid().ToString("N"));
+        var dbPath = CachedStorage.GetCacheFilePath(searched, ".db");
+        _dbPaths.Add(dbPath);
+
+        // (1) serial fill at path P (autoincrement)
+        using (var first = new SqliteStorage(searched))
+        {
+            first.ClearTables();
+            for (int bi = 0; bi < batches; bi++) first.AddFilteredBatch(Batch(bi * batch, batch));
+            Assert.AreEqual(batch * batches, first.GetFilteredCount(new SqliteStorage.FilterInput()));
+        }
+        SqliteConnection.ClearAllPools();
+
+        // (2) reopen SAME path, clear, fan-out merge with explicit global Ids
+        var sink = new ParallelIngestSink(4, CancellationToken.None);
+        for (int bi = 0; bi < batches; bi++) sink.Add(Batch(bi * batch, batch));
+        long merged;
+        using (var reopened = new SqliteStorage(searched))
+        {
+            reopened.ClearTables();
+            using (sink) merged = sink.CompleteAndMergeInto(reopened);
+            Assert.AreEqual(batch * batches, merged, "merge after reuse+clear must not collide");
+            var msgs = ReadMessagesInIdOrder(reopened);
+            for (int i = 0; i < msgs.Count; i++) Assert.AreEqual($"msg-{i:D7}", msgs[i], $"scan order at {i}");
+        }
+    }
+
+    [TestMethod]
+    [TestCategory("Performance")]
+    public void ParallelIngestSink_FiveMillion_NoCollision()
+    {
+        // Reproduce the production scale in isolation (no ETL decode): 5,000,003 rows through the sink +
+        // merge. Catches any large-scale Id-assignment / merge collision the 10k test can't.
+        const int batch = 1000;
+        const int total = 5_000_003;
+        var sink = new ParallelIngestSink(8, CancellationToken.None);
+        int produced = 0;
+        while (produced < total)
+        {
+            int n = Math.Min(batch, total - produced);
+            sink.Add(Batch(produced, n));
+            produced += n;
+        }
+        var target = NewStore();
+        long merged;
+        using (sink) merged = sink.CompleteAndMergeInto(target);
+        Assert.AreEqual(total, merged, "all 5M rows merged with unique Ids");
+        Assert.AreEqual(total, target.GetFilteredCount(new SqliteStorage.FilterInput()), "count");
+    }
+
+    [TestMethod]
     public void AddFilteredBatchWithIds_AssignsExplicitSequentialIds()
     {
         // A single shard, one batch at base 5000 → rows must land at Ids 5000..5009 (not autoincrement 1..10).

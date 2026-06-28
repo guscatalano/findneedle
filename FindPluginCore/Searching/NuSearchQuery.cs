@@ -743,6 +743,10 @@ public class NuSearchQuery : ISearchQuery
                 PerfLog.Log("ingest.parallel.begin", ("shards", ingestSink.ShardCount), ("est_rows", estTotal));
             }
         }
+        // Bigger scan batches on the fan-out path: each shard insert is one transaction, so 1k batches mean
+        // ~5k tiny transactions on a 5M log; 8k batches cut that ~8× (the single-writer serial path keeps
+        // its tuned 1k default). This is the main lever closing the gap to the prototype's overlap.
+        int scanBatchSize = ingestSink != null ? 8192 : 1000;
 
         FlowProgress.Begin(FlowPhase.ReadParse);
         foreach (var loc in _locations)
@@ -875,7 +879,7 @@ public class NuSearchQuery : ISearchQuery
                                 estCapture.HasValue && estCapture.Value > 0
                                     ? Math.Clamp((int)(n * 100L / estCapture.Value), 0, 100) : (int?)null);
                         }
-                    }, cancellationToken).Wait();
+                    }, cancellationToken, scanBatchSize).Wait();
                 }
                 catch (NotImplementedException)
                 {
