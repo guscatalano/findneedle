@@ -103,7 +103,7 @@ namespace FindPluginCore.Implementations.Storage
         /// shards into <paramref name="target"/> (the caller's real, empty storage) and delete the shard
         /// files. Returns rows merged. Rethrows the first shard-writer fault if any (the toggle is the
         /// operator's recovery — turn parallel ingest off and re-run on the serial path).</summary>
-        public long CompleteAndMergeInto(SqliteStorage target)
+        public long CompleteAndMergeInto(SqliteStorage target, Action<int, int> onMergeProgress = null)
         {
             _channel.Writer.Complete();
             try { Task.WaitAll(_consumers); }
@@ -124,7 +124,7 @@ namespace FindPluginCore.Implementations.Storage
             long merged;
             var mergeWatch = System.Diagnostics.Stopwatch.StartNew();
             using (PerfLog.Scope("ingest.merge", ("shards", _shards.Length), ("rows", ProducedCount)))
-                merged = target.MergeFilteredFrom(_shardDbPaths);
+                merged = target.MergeFilteredFrom(_shardDbPaths, onMergeProgress);
             LastMergeMs = mergeWatch.ElapsedMilliseconds;
             DeleteShardFiles();
             return merged;

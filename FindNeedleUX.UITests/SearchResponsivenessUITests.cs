@@ -39,6 +39,10 @@ namespace FindNeedleUX.UITests
         // A synchronous LIKE scan of 5M rows takes ~2s+; a responsive (off-thread) UI answers a
         // round-trip in well under this. Wide enough to be a stable threshold.
         private const long ResponsiveBudgetMs = 1500;
+        // Load saturates the CPU (parallel ingest across all cores), so the UI thread can see brief
+        // scheduling stalls — use a more lenient budget that still catches a real hang (the merge freeze
+        // was ~16 s). Matches the app's own 2.5 s slow-interaction threshold.
+        private const long LoadResponsiveBudgetMs = 2500;
         // With the index built, the search itself should be quick (a few hundred ms incl. UI polling).
         private const long FastSearchBudgetMs = 4000;
         // Probe responsiveness for at least this long after Enter so the max is a stable sample.
@@ -115,6 +119,74 @@ namespace FindNeedleUX.UITests
                 $"UI blocked for {t.MaxProbeMs} ms during search (budget {ResponsiveBudgetMs})");
             Assert.IsTrue(t.SearchMs < FastSearchBudgetMs,
                 $"with the index built the search should be fast, was {t.SearchMs} ms (budget {FastSearchBudgetMs})");
+        }
+
+        /// <summary>
+        /// Loading a multi-million-row log must keep the UI thread responsive the WHOLE time — including
+        /// the parallel fan-out ingest's shard→target merge, which previously held the storage lock for
+        /// ~16 s with no progress, freezing the loading status and risking a UI-thread stall. Probe a live
+        /// UI round-trip continuously from launch until the grid is populated; the slowest must stay under
+        /// budget, and the load must actually finish (no hang). This is the regression guard for the
+        /// "loading status broken / UX thread hangs" reports.
+        /// </summary>
+        [TestMethod]
+        [Timeout(600_000)]
+        public void Load_StaysResponsive_ThroughIngestAndMerge()
+        {
+            // Default (Background) indexing + SQLite + parallel ingest (the shipped default) — the real
+            // first-open path for a large log. cache=off forces a fresh scan every run.
+            var args = $"\"{_logPath}\" --viewer=native --storage=sqlite --cache=off".Trim();
+            var psi = new ProcessStartInfo(UiTestHelpers.GetAppExecutablePath()) { Arguments = args, UseShellExecute = false };
+            var app = Application.Launch(psi);
+            try
+            {
+                Thread.Sleep(3000);
+                var window = app.GetMainWindow(_automation);
+                Assert.IsNotNull(window, "Failed to get main window");
+                try { window.Patterns.Window.PatternOrDefault?.SetWindowVisualState(WindowVisualState.Maximized); } catch { }
+
+                // Probe a lightweight UI-thread round-trip every ~50 ms while the load runs in the
+                // background; check for load completion (pager shows the full count) less often.
+                long maxProbe = 0; int probes = 0; int lastCount = -1;
+                var loadSw = Stopwatch.StartNew();
+                var deadline = DateTime.Now.AddMilliseconds(480_000);
+                long lastCompletionCheck = 0;
+                while (DateTime.Now < deadline)
+                {
+                    var probe = Stopwatch.StartNew();
+                    try { _ = window.Properties.Name.Value; } catch { /* transient */ }
+                    probe.Stop();
+                    probes++;
+                    if (probe.ElapsedMilliseconds > maxProbe) maxProbe = probe.ElapsedMilliseconds;
+
+                    if (loadSw.ElapsedMilliseconds - lastCompletionCheck >= 500)
+                    {
+                        lastCompletionCheck = loadSw.ElapsedMilliseconds;
+                        lastCount = ReadFilteredCountOnce(window);
+                        if (lastCount >= RowCount - 5) break; // viewer populated → load (incl. merge) finished
+                    }
+                    Thread.Sleep(50);
+                }
+                loadSw.Stop();
+
+                TestContext.WriteLine($"=== LOAD RESPONSIVENESS ({RowCount:N0} rows) ===");
+                TestContext.WriteLine($"  load (→ populated grid)       : {loadSw.ElapsedMilliseconds,7:N0} ms");
+                TestContext.WriteLine($"  UI probes during load         : {probes}");
+                TestContext.WriteLine($"  max UI round-trip during load : {maxProbe,7:N0} ms  (budget {LoadResponsiveBudgetMs})");
+                _benchmarks.Add(($"load · max UI round-trip during load ({RowCount:N0} rows)", $"{maxProbe:N0} ms (budget {LoadResponsiveBudgetMs})"));
+
+                Assert.IsTrue(lastCount >= RowCount - 5,
+                    $"load never completed (saw {lastCount:N0} rows) — the load hung");
+                Assert.IsTrue(maxProbe < LoadResponsiveBudgetMs,
+                    $"UI blocked for {maxProbe} ms DURING LOAD (budget {LoadResponsiveBudgetMs}) — loading work is on the UI thread or the ingest/merge stalls it");
+            }
+            finally
+            {
+                try { if (!app.HasExited) app.Close(); } catch { }
+                try { if (!app.HasExited) app.Kill(); } catch { }
+                try { app.Dispose(); } catch { }
+                Thread.Sleep(1000);
+            }
         }
 
         private Timings RunScenario(string indexingArgs)

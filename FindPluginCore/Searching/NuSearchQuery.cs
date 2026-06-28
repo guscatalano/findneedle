@@ -1008,10 +1008,19 @@ public class NuSearchQuery : ISearchQuery
         {
             using (ingestSink)
             {
-                _stepnotifysink.progressSink.NotifyProgress(
-                    100, $"merging {ingestSink.ProducedCount:N0} rows from {ingestSink.ShardCount} shards…");
-                long merged = ingestSink.CompleteAndMergeInto((SqliteStorage)_resultStorage);
-                Logger.Instance.Log($"Step2: parallel ingest merged {merged:N0} rows from {ingestSink.ShardCount} shards into {storageLabel}");
+                long produced = ingestSink.ProducedCount;
+                int shards = ingestSink.ShardCount;
+                // Report climbing progress as each shard merges (the copy runs tens of seconds on a large
+                // log). Without this the status froze at 100% "merging…" for the whole merge, which read as
+                // a hang. Map shard k/N to 90–99% so the bar keeps moving through the merge phase.
+                FlowProgress.Begin(FlowPhase.Consolidate);
+                long merged = ingestSink.CompleteAndMergeInto((SqliteStorage)_resultStorage, (done, n) =>
+                {
+                    int pct = n > 0 ? 90 + (int)(9.0 * done / n) : 90;
+                    _stepnotifysink.progressSink.NotifyProgress(pct, $"merging logs · {done}/{n} · {produced:N0} rows · {storageLabel}");
+                    FlowProgress.Detail($"merging {produced:N0} rows ({done}/{n})", pct, estimate: false);
+                });
+                Logger.Instance.Log($"Step2: parallel ingest merged {merged:N0} rows from {shards} shards into {storageLabel}");
             }
             ingestSink = null;
         }
