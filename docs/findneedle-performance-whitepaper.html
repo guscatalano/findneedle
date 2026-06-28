@@ -163,37 +163,37 @@
     <tr><td>Memory footprint</td><td>O(1)</td><td>Rows are paged from disk; RAM stays flat at any scale</td></tr>
   </table>
 
-  <p>The chart contrasts the two behaviours measured at 200k, 5M, and 36M rows: <b>ingest grows with the
-  log</b> (the rising lines), while <b>search and opening a page stay flat</b> (the bottom line) regardless
-  of size.</p>
+  <p>The chart plots first-open ingest measured on a synthetic series at 5, 10, 25, and 50 million rows
+  (identical row shape — only the count varies). <b>Ingest grows linearly with the log</b> (the rising
+  lines); <b>search and opening a page stay flat</b> (the bottom line) regardless of size.</p>
 
   <svg viewBox="0 0 640 300" width="100%" style="max-width:640px;display:block;margin:14px auto;font-family:-apple-system,'Segoe UI',sans-serif;font-size:12px">
     <g stroke="#e1e6ea" stroke-width="1">
       <line x1="90" y1="40" x2="600" y2="40"/><line x1="90" y1="94" x2="600" y2="94"/>
-      <line x1="90" y1="147" x2="600" y2="147"/><line x1="90" y1="201" x2="600" y2="201"/>
+      <line x1="90" y1="148" x2="600" y2="148"/><line x1="90" y1="201" x2="600" y2="201"/>
       <line x1="90" y1="255" x2="600" y2="255"/>
     </g>
     <g fill="#5b6b7b" text-anchor="end">
-      <text x="84" y="44">560s</text><text x="84" y="98">420s</text><text x="84" y="151">280s</text>
-      <text x="84" y="205">140s</text><text x="84" y="259">0s</text>
+      <text x="84" y="44">460s</text><text x="84" y="98">345s</text><text x="84" y="152">230s</text>
+      <text x="84" y="205">115s</text><text x="84" y="259">0s</text>
     </g>
     <line x1="90" y1="40" x2="90" y2="255" stroke="#9aa7b3"/>
     <line x1="90" y1="255" x2="600" y2="255" stroke="#9aa7b3"/>
     <g fill="#28323c" text-anchor="middle">
-      <text x="130" y="272">200k rows</text><text x="345" y="272">5M rows</text><text x="560" y="272">36M rows</text>
+      <text x="141" y="272">5M</text><text x="192" y="272">10M</text><text x="345" y="272">25M</text><text x="600" y="272">50M rows</text>
     </g>
-    <!-- serial ingest O(n) -->
-    <polyline points="130,254 345,237 560,86" fill="none" stroke="#2d7d9a" stroke-width="2.5"/>
-    <circle cx="130" cy="254" r="3" fill="#2d7d9a"/><circle cx="345" cy="237" r="3" fill="#2d7d9a"/><circle cx="560" cy="86" r="3" fill="#2d7d9a"/>
-    <text x="552" y="84" fill="#2d7d9a" text-anchor="end">439s</text>
-    <!-- parallel ingest: crosses ABOVE serial at extreme scale -->
-    <polyline points="130,254 345,241 560,42" fill="none" stroke="#c0822a" stroke-width="2.5" stroke-dasharray="6,4"/>
-    <circle cx="345" cy="241" r="3" fill="#c0822a"/><circle cx="560" cy="42" r="3" fill="#c0822a"/>
-    <text x="552" y="40" fill="#c0822a" text-anchor="end">554s</text>
-    <!-- search / page O(1) -->
-    <polyline points="130,255 345,255 560,255" fill="none" stroke="#6aa84f" stroke-width="2.5"/>
-    <circle cx="130" cy="255" r="3" fill="#6aa84f"/><circle cx="345" cy="255" r="3" fill="#6aa84f"/><circle cx="560" cy="255" r="3" fill="#6aa84f"/>
-    <text x="568" y="258" fill="#6aa84f">&lt;1s</text>
+    <!-- serial ingest O(n): 51.7 / 95.6 / 229 / 443 s -->
+    <polyline points="141,231 192,210 345,148 600,48" fill="none" stroke="#2d7d9a" stroke-width="2.5"/>
+    <circle cx="141" cy="231" r="3" fill="#2d7d9a"/><circle cx="192" cy="210" r="3" fill="#2d7d9a"/><circle cx="345" cy="148" r="3" fill="#2d7d9a"/><circle cx="600" cy="48" r="3" fill="#2d7d9a"/>
+    <text x="592" y="44" fill="#2d7d9a" text-anchor="end">443s</text>
+    <!-- parallel ingest O(n), advantage shrinks: 40.4 / 78 / 199 / 405 s -->
+    <polyline points="141,236 192,218 345,162 600,66" fill="none" stroke="#c0822a" stroke-width="2.5" stroke-dasharray="6,4"/>
+    <circle cx="141" cy="236" r="3" fill="#c0822a"/><circle cx="192" cy="218" r="3" fill="#c0822a"/><circle cx="345" cy="162" r="3" fill="#c0822a"/><circle cx="600" cy="66" r="3" fill="#c0822a"/>
+    <text x="592" y="76" fill="#c0822a" text-anchor="end">405s</text>
+    <!-- search / open a page O(1) -->
+    <polyline points="141,255 192,255 345,255 600,255" fill="none" stroke="#6aa84f" stroke-width="2.5"/>
+    <circle cx="141" cy="255" r="3" fill="#6aa84f"/><circle cx="600" cy="255" r="3" fill="#6aa84f"/>
+    <text x="568" y="250" fill="#6aa84f">&lt;1s</text>
     <g font-size="12">
       <rect x="110" y="55" width="16" height="3" fill="#2d7d9a"/><text x="132" y="59" fill="#28323c">Ingest — serial</text>
       <rect x="110" y="71" width="16" height="3" fill="#c0822a"/><text x="132" y="75" fill="#28323c">Ingest — parallel fan-out</text>
@@ -201,21 +201,22 @@
     </g>
   </svg>
 
-  <h3>Two reference logs, end to end</h3>
   <table>
-    <tr><th></th><th class="num">large-5M.etl · synthetic</th><th class="num">test.etl · real capture</th></tr>
-    <tr><td>File size</td><td class="num">880 MB</td><td class="num">3.72 GB</td></tr>
-    <tr><td>Rows</td><td class="num">5,000,003</td><td class="num">35,996,175</td></tr>
-    <tr><td>Providers</td><td class="num">1 (synthetic)</td><td class="num">26 (≈90% kernel)</td></tr>
-    <tr><td>First-open ingest — serial</td><td class="num">47 s</td><td class="num">439 s</td></tr>
-    <tr><td>First-open ingest — parallel</td><td class="num">37 s</td><td class="num">554 s</td></tr>
+    <tr><th class="num">Rows</th><th class="num">File</th><th class="num">Ingest · serial</th><th class="num">Ingest · parallel</th><th class="num">Parallel speed-up</th></tr>
+    <tr><td class="num">5,000,003</td><td class="num">880 MB</td><td class="num">51.7 s</td><td class="num">40.4 s</td><td class="num">1.28×</td></tr>
+    <tr><td class="num">10,000,003</td><td class="num">1.76 GB</td><td class="num">95.6 s</td><td class="num">78.1 s</td><td class="num">1.22×</td></tr>
+    <tr><td class="num">25,000,003</td><td class="num">4.40 GB</td><td class="num">229 s</td><td class="num">199 s</td><td class="num">1.15×</td></tr>
+    <tr><td class="num">50,000,003</td><td class="num">8.80 GB</td><td class="num">443 s</td><td class="num">405 s</td><td class="num">1.09×</td></tr>
   </table>
+  <p>Serial ingest is cleanly linear — ≈9–10 µs per row at every size. Parallel fan-out is faster across
+  this whole range, but its advantage steadily shrinks (1.28× → 1.09×) because the shard-merge step grows
+  faster than the parallel insert saves.</p>
 
-  <p class="note callout"><b>Parallel ingest has a sweet spot.</b> Splitting the insert across cores and
-  merging the parts back into one database is faster in the multi-million-row range (37 s vs 47 s at 5M).
-  But the merge step itself grows super-linearly (17 s at 5M → 182 s at 36M), so beyond a point it costs
-  more than the parallel insert saves — at 36M rows the serial load (439 s) actually <em>beats</em> the
-  parallel one (554 s). For the very largest logs the single-writer serial load is the better choice.</p>
+  <p class="note callout"><b>On real captures the advantage erodes sooner.</b> The series above is uniform
+  synthetic data. A real 36-million-event capture (3.7 GB, ≈90% kernel events, varied payloads) has much
+  heavier rows, so its merge costs far more — there, parallel ingest was actually <em>slower</em> than
+  serial (554 s vs 439 s, 0.79×). So fan-out helps most in the low tens of millions of rows; for the very
+  largest real logs the single-writer serial load is the safer choice.</p>
 
   <h2>9. How these numbers were produced</h2>
   <p>Every figure is regenerated by the automated test suites and the app's phase-timing log
