@@ -106,7 +106,7 @@ public sealed class EtlParallelIngestIntegrationTests
     [TestMethod]
     [TestCategory("Performance")]
     [TestCategory("SkipCI")]
-    [Timeout(600000)]
+    [Timeout(2400000)] // up to 40 min — a multi-GB real capture (tens of millions of rows) loads slowly
     public void ParallelIngest_RealEtl_ProductionSpeedup()
     {
         var etl = FindLargeEtl();

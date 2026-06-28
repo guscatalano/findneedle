@@ -90,7 +90,8 @@
   </div>
   <p>Large logs (millions of rows) load by inserting across several CPU cores in parallel while one thread
   reads and parses, which is the default. The file is streamed (never fully buffered in memory) and fields
-  are parsed lazily.</p>
+  are parsed lazily. Parallel insert helps in the multi-million-row range; for very large logs (tens of
+  millions of rows) the picture changes — see §8 on scaling.</p>
 
   <h2>4. Full-text index build</h2>
   <p>Substring search over large logs is served by a full-text (trigram) index. Building it is the most
@@ -146,7 +147,77 @@
   <p>The on-disk cache limits itself to 10 GB (least-recently-used eviction), and temporary directories
   extracted from <code>.zip</code>/<code>.cab</code> archives are removed when the app exits.</p>
 
-  <h2>8. How these numbers were produced</h2>
+  <h2>8. How performance scales with log size</h2>
+  <p>Most of what a user does is designed <em>not</em> to grow with the size of the log — opening a page,
+  searching once indexed, scrolling, and reopening are all near-constant whether the log has thousands or
+  tens of millions of rows. Only the one-time work of ingesting and indexing grows with size.</p>
+  <table>
+    <tr><th>Operation</th><th>Scales as</th><th>What that means in practice</th></tr>
+    <tr><td>First-open ingest (read + parse + store)</td><td>O(n)</td><td>Linear in rows — the unavoidable one-time cost</td></tr>
+    <tr><td>Full-text index build</td><td>≈ O(n), super-linear in text</td><td>Grows with rows and with how much text is indexed</td></tr>
+    <tr><td>Indexed search</td><td>≈ O(1)</td><td>Sub-second whether 200k or 36M rows</td></tr>
+    <tr><td>Un-indexed first search</td><td>O(n)</td><td>A bounded scan before the index is ready</td></tr>
+    <tr><td>Open a page / jump to last page</td><td>O(1)</td><td>Constant — independent of size <em>and</em> of how deep the page is</td></tr>
+    <tr><td>Scroll · UI round-trip</td><td>O(1)</td><td>Paged + off-thread; the window never blocks</td></tr>
+    <tr><td>Reopen a cached log</td><td>O(1)</td><td>Scan + index build are skipped entirely</td></tr>
+    <tr><td>Memory footprint</td><td>O(1)</td><td>Rows are paged from disk; RAM stays flat at any scale</td></tr>
+  </table>
+
+  <p>The chart contrasts the two behaviours measured at 200k, 5M, and 36M rows: <b>ingest grows with the
+  log</b> (the rising lines), while <b>search and opening a page stay flat</b> (the bottom line) regardless
+  of size.</p>
+
+  <svg viewBox="0 0 640 300" width="100%" style="max-width:640px;display:block;margin:14px auto;font-family:-apple-system,'Segoe UI',sans-serif;font-size:12px">
+    <g stroke="#e1e6ea" stroke-width="1">
+      <line x1="90" y1="40" x2="600" y2="40"/><line x1="90" y1="94" x2="600" y2="94"/>
+      <line x1="90" y1="147" x2="600" y2="147"/><line x1="90" y1="201" x2="600" y2="201"/>
+      <line x1="90" y1="255" x2="600" y2="255"/>
+    </g>
+    <g fill="#5b6b7b" text-anchor="end">
+      <text x="84" y="44">560s</text><text x="84" y="98">420s</text><text x="84" y="151">280s</text>
+      <text x="84" y="205">140s</text><text x="84" y="259">0s</text>
+    </g>
+    <line x1="90" y1="40" x2="90" y2="255" stroke="#9aa7b3"/>
+    <line x1="90" y1="255" x2="600" y2="255" stroke="#9aa7b3"/>
+    <g fill="#28323c" text-anchor="middle">
+      <text x="130" y="272">200k rows</text><text x="345" y="272">5M rows</text><text x="560" y="272">36M rows</text>
+    </g>
+    <!-- serial ingest O(n) -->
+    <polyline points="130,254 345,237 560,86" fill="none" stroke="#2d7d9a" stroke-width="2.5"/>
+    <circle cx="130" cy="254" r="3" fill="#2d7d9a"/><circle cx="345" cy="237" r="3" fill="#2d7d9a"/><circle cx="560" cy="86" r="3" fill="#2d7d9a"/>
+    <text x="552" y="84" fill="#2d7d9a" text-anchor="end">439s</text>
+    <!-- parallel ingest: crosses ABOVE serial at extreme scale -->
+    <polyline points="130,254 345,241 560,42" fill="none" stroke="#c0822a" stroke-width="2.5" stroke-dasharray="6,4"/>
+    <circle cx="345" cy="241" r="3" fill="#c0822a"/><circle cx="560" cy="42" r="3" fill="#c0822a"/>
+    <text x="552" y="40" fill="#c0822a" text-anchor="end">554s</text>
+    <!-- search / page O(1) -->
+    <polyline points="130,255 345,255 560,255" fill="none" stroke="#6aa84f" stroke-width="2.5"/>
+    <circle cx="130" cy="255" r="3" fill="#6aa84f"/><circle cx="345" cy="255" r="3" fill="#6aa84f"/><circle cx="560" cy="255" r="3" fill="#6aa84f"/>
+    <text x="568" y="258" fill="#6aa84f">&lt;1s</text>
+    <g font-size="12">
+      <rect x="110" y="55" width="16" height="3" fill="#2d7d9a"/><text x="132" y="59" fill="#28323c">Ingest — serial</text>
+      <rect x="110" y="71" width="16" height="3" fill="#c0822a"/><text x="132" y="75" fill="#28323c">Ingest — parallel fan-out</text>
+      <rect x="110" y="87" width="16" height="3" fill="#6aa84f"/><text x="132" y="91" fill="#28323c">Search / open a page</text>
+    </g>
+  </svg>
+
+  <h3>Two reference logs, end to end</h3>
+  <table>
+    <tr><th></th><th class="num">large-5M.etl · synthetic</th><th class="num">test.etl · real capture</th></tr>
+    <tr><td>File size</td><td class="num">880 MB</td><td class="num">3.72 GB</td></tr>
+    <tr><td>Rows</td><td class="num">5,000,003</td><td class="num">35,996,175</td></tr>
+    <tr><td>Providers</td><td class="num">1 (synthetic)</td><td class="num">26 (≈90% kernel)</td></tr>
+    <tr><td>First-open ingest — serial</td><td class="num">47 s</td><td class="num">439 s</td></tr>
+    <tr><td>First-open ingest — parallel</td><td class="num">37 s</td><td class="num">554 s</td></tr>
+  </table>
+
+  <p class="note callout"><b>Parallel ingest has a sweet spot.</b> Splitting the insert across cores and
+  merging the parts back into one database is faster in the multi-million-row range (37 s vs 47 s at 5M).
+  But the merge step itself grows super-linearly (17 s at 5M → 182 s at 36M), so beyond a point it costs
+  more than the parallel insert saves — at 36M rows the serial load (439 s) actually <em>beats</em> the
+  parallel one (554 s). For the very largest logs the single-writer serial load is the better choice.</p>
+
+  <h2>9. How these numbers were produced</h2>
   <p>Every figure is regenerated by the automated test suites and the app's phase-timing log
   (<code>%LocalAppData%\FindNeedle\perf-log.txt</code>). Key entry points:</p>
   <ul>
@@ -159,7 +230,7 @@
         open's phase timings, any slow interactions, and cache footprint).</li>
   </ul>
 
-  <h2>9. Notes</h2>
+  <h2>10. Notes</h2>
   <ul>
     <li>Measured on one reference machine (a laptop CPU). Absolute times vary with CPU and SSD; sustained
         multi-second builds show some thermal variance.</li>
