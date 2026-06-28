@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FindNeedle — Performance Whitepaper</title>
+<style>
+  :root{
+    --ink:#1b2733; --muted:#5b6b7b; --line:#e1e6ea; --accent:#2d7d9a; --accent2:#6aa84f;
+    --warn:#c0822a; --bg:#ffffff; --soft:#f6f8fa; --bar:#2d7d9a; --bar2:#9fc7d6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--soft);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .page{max-width:880px;margin:0 auto;background:var(--bg);padding:56px 64px;
+    box-shadow:0 1px 4px rgba(0,0,0,.06);}
+  h1{font-size:30px;margin:0 0 4px;letter-spacing:-.3px}
+  h2{font-size:21px;margin:42px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+  h3{font-size:16px;margin:26px 0 6px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:15px;margin:0 0 4px}
+  p{margin:10px 0}
+  code{background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .lead{font-size:17px;color:#28323c}
+  .callout{background:var(--soft);border-left:4px solid var(--accent);border-radius:0 6px 6px 0;
+    padding:12px 16px;margin:16px 0;font-size:14.5px}
+  .win{border-left-color:var(--accent2)}
+  .note{border-left-color:var(--warn)}
+  .kpis{display:flex;flex-wrap:wrap;gap:14px;margin:20px 0}
+  .kpi{flex:1 1 150px;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .kpi .v{font-size:24px;font-weight:700;color:var(--accent);letter-spacing:-.5px}
+  .kpi .l{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .chart{margin:14px 0}
+  .row{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:13.5px}
+  .row .lab{flex:0 0 215px;color:#28323c}
+  .row .track{flex:1;background:#eef2f5;border-radius:4px;height:20px;position:relative;overflow:hidden}
+  .row .fill{height:100%;background:var(--bar);border-radius:4px}
+  .row .fill.alt{background:var(--bar2)}
+  .row .fill.good{background:var(--accent2)}
+  .row .val{flex:0 0 96px;text-align:right;font-variant-numeric:tabular-nums;color:#28323c}
+  .foot{margin-top:48px;border-top:1px solid var(--line);padding-top:14px;color:var(--muted);font-size:12.5px}
+  ul{margin:8px 0 8px 2px;padding-left:20px}
+  li{margin:4px 0}
+  .tag{display:inline-block;background:var(--accent);color:#fff;font-size:11px;font-weight:600;
+    border-radius:4px;padding:1px 7px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>FindNeedle — Performance Whitepaper</h1>
+  <p class="sub">Behaviour across realistic log-search scenarios · scaling, indexing, search latency, responsiveness, and memory/disk footprint</p>
+  <p class="sub">Reference build 17.1200.24.56501 · .NET 8 · June 2026</p>
+
+  <h2>1. Executive summary</h2>
+  <p class="lead">FindNeedle stays interactive on multi-million-row logs by keeping the heavy work off
+  the UI thread and never holding the full result set in memory. The dominant cost on large logs is the
+  full-text index build; this build is now parallelised so a 5-million-row log is searchable in seconds
+  rather than minutes.</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="v">5M</div><div class="l">rows ingested in ~44&nbsp;s (~115k rows/s)</div></div>
+    <div class="kpi"><div class="v">~16&nbsp;s</div><div class="l">full-text index over 5M rows (was ~260&nbsp;s)</div></div>
+    <div class="kpi"><div class="v">~12&nbsp;ms</div><div class="l">UI round-trip while a search runs</div></div>
+    <div class="kpi"><div class="v">&lt;0.2&nbsp;s</div><div class="l">page render at any offset (5M rows)</div></div>
+  </div>
+
+  <ul>
+    <li><b>Ingestion</b> sustains ~115k rows/s; it is write-bound (SQLite insert), not parse-bound.</li>
+    <li><b>Index build</b> — the single biggest cost — was cut ~48% by trimming redundant indexed text,
+        then parallelised across cores for a further ~5× on large logs.</li>
+    <li><b>Search</b> is sub-second once indexed; the un-indexed first search degrades gracefully to a
+        bounded scan while a background index builds.</li>
+    <li><b>The viewer never blocks</b>: results are paged from storage on demand, so the UI thread stays
+        responsive (~12&nbsp;ms round-trips) regardless of result-set size.</li>
+    <li><b>Footprint is bounded</b>: storage tier is chosen by size, the on-disk cache self-limits to
+        10&nbsp;GB, and temp extraction dirs are cleaned on exit.</li>
+  </ul>
+
+  <h2>2. Test environment</h2>
+  <p>All figures below were measured on a single reference machine. <b>Absolute times scale with hardware
+  — the ratios and shapes are the portable result.</b> This is a laptop CPU, so sustained multi-minute
+  builds show some thermal variance (noted where relevant).</p>
+  <table>
+    <tr><th>Component</th><th>Detail</th></tr>
+    <tr><td>CPU</td><td>AMD Ryzen 7 7840U · 16 logical cores</td></tr>
+    <tr><td>Memory</td><td>61.8 GB</td></tr>
+    <tr><td>OS / Runtime</td><td>Windows 11 (10.0.26200) · .NET 8.0.28</td></tr>
+    <tr><td>Storage backend</td><td>SQLite (FTS5 trigram index); NVMe SSD</td></tr>
+  </table>
+
+  <h2>3. Methodology</h2>
+  <p>Scenarios are driven by the project's automated test suites and a structured timing log the app
+  emits for every phase (<code>%LocalAppData%\FindNeedle\perf-log.txt</code>):</p>
+  <ul>
+    <li><b>End-to-end (FlaUI UI tests)</b> drive the real app — load a file, search, paginate, scroll —
+        and read timings from the live UI. e.g. <code>SearchResponsivenessUITests</code>,
+        <code>NativeGridLargeScaleUITests</code> (the 5M-row paging/scroll suite).</li>
+    <li><b>Component benchmarks (MSTest)</b> isolate one mechanism for a fast feedback loop:
+        <code>SqliteInsertBenchmark</code> (insert throughput), <code>FtsShardSpike</code>
+        (single vs parallel index build + query).</li>
+    <li><b>Synthetic logs</b> use realistic line shapes (~120–210 chars: timestamp, level, message,
+        ids, paths) so string lengths and index sizes resemble production logs.</li>
+  </ul>
+  <p class="note callout"><b>Caveat.</b> Synthetic data has uniform structure; real logs vary. Index-build
+  ratios were validated on both synthetic and realistic-message data and held within a few points.</p>
+
+  <h2>4. Data ingestion</h2>
+  <p>Ingestion = read the file → parse each line into a record → insert into SQLite. Measured on 5,000,000
+  rows. The insert dominates; parsing is comparatively cheap and the file read is sequential.</p>
+  <div class="chart">
+    <div class="row"><div class="lab">Insert into SQLite</div><div class="track"><div class="fill" style="width:71%"></div></div><div class="val">~31 s</div></div>
+    <div class="row"><div class="lab">Read + parse</div><div class="track"><div class="fill alt" style="width:30%"></div></div><div class="val">~13 s</div></div>
+    <div class="row"><div class="lab">Total (read+parse+insert)</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">~44 s</div></div>
+    <div class="row"><div class="lab">In-memory tier (no SQLite)</div><div class="track"><div class="fill good" style="width:2%"></div></div><div class="val">0.9 s</div></div>
+  </div>
+  <p>≈115k rows/s end-to-end (≈160k rows/s for the insert alone). The parser streams the file (no
+  full-file buffering), parses fields lazily, and the insert reuses one prepared statement — so the
+  remaining cost is SQLite's single-writer insert, which is a hard floor for one database.</p>
+
+  <h2>5. Full-text index build <span class="tag">biggest lever</span></h2>
+  <p>Substring search over large logs is served by a SQLite FTS5 <em>trigram</em> index. Building it is
+  the single most expensive phase, and its cost is super-linear in indexed text. Two rounds of work took
+  a 5M-row build from ~260&nbsp;s to ~16&nbsp;s:</p>
+  <div class="chart">
+    <div class="row"><div class="lab">Original (all columns, 1 index)</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">~260 s</div></div>
+    <div class="row"><div class="lab">+ stop double-indexing text</div><div class="track"><div class="fill" style="width:62%"></div></div><div class="val">~160 s</div></div>
+    <div class="row"><div class="lab">+ drop constant path/timestamp cols</div><div class="track"><div class="fill" style="width:42%"></div></div><div class="val">~110 s*</div></div>
+    <div class="row"><div class="lab">+ parallel shards (8 cores)</div><div class="track"><div class="fill good" style="width:6.5%"></div></div><div class="val">~16 s</div></div>
+  </div>
+  <h3>Column trimming (−48% on a realistic log)</h3>
+  <p>The index covered six columns; several were redundant or low-value. On a 500k-row realistic log the
+  build dropped <b>39.5&nbsp;s → 20.5&nbsp;s</b> by (a) not trigram-indexing the message twice
+  (<code>SearchableData</code> duplicated <code>Message</code> for text logs), and (b) skipping the
+  <code>Source</code>/<code>ResultSource</code> file paths and <code>LogTime</code> when they are a single
+  constant value — a repeated path produces huge, useless trigram lists. Multi-file/folder loads still
+  index paths so path search keeps working; timestamps remain covered by the dedicated time-range filters.</p>
+  <h3>Parallel sharding (~5×)</h3>
+  <p>A single index is built by one writer thread. The build is instead split into N shards (one
+  contentless FTS index per CPU, capped at 8), built concurrently, and queried by attaching the shards and
+  unioning the per-shard matches. Rows stay in one table, so paging/sort/count are unchanged.</p>
+  <table>
+    <tr><th>Rows</th><th class="num">Single index</th><th class="num">Sharded</th><th class="num">Speed-up</th></tr>
+    <tr><td>2,000,000</td><td class="num">35.0 s</td><td class="num">8.3 s</td><td class="num">4.2×</td></tr>
+    <tr><td>5,000,000</td><td class="num">102.6 s</td><td class="num">20.9 s</td><td class="num">4.9×</td></tr>
+    <tr><td>5,000,000 (in-app, eager)</td><td class="num">~80–130 s</td><td class="num">~16–17 s</td><td class="num">~5–7×</td></tr>
+  </table>
+  <p class="win callout"><b>Net effect:</b> "ready for fast full-text search" on a 5-million-row log went
+  from <b>minutes</b> to <b>~16 seconds</b>. The index also warm-reuses across reopens (no rebuild) and is
+  bounded by the same 10&nbsp;GB cache cap.</p>
+
+  <h2>6. Search latency</h2>
+  <p>Once the index exists, substring search is effectively instant. Before it exists, the app falls back
+  to a bounded table scan rather than freezing — and builds the index in the background so subsequent
+  searches are fast.</p>
+  <div class="chart">
+    <div class="row"><div class="lab">Un-indexed first search (5M LIKE scan)</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">~15 s</div></div>
+    <div class="row"><div class="lab">Indexed search (selective term)</div><div class="track"><div class="fill good" style="width:1%"></div></div><div class="val">&lt;0.1 s</div></div>
+    <div class="row"><div class="lab">Cross-shard match (worst case, all rows)</div><div class="track"><div class="fill alt" style="width:1.4%"></div></div><div class="val">~0.2 s</div></div>
+  </div>
+  <p>Indexing modes let the user trade open-time for search-time: <b>lazy</b> (skip the index until the
+  first search), <b>background</b> (build right after open, off the critical path — the default), or
+  <b>eager</b> (build during load for an instant first search).</p>
+
+  <h2>7. UI responsiveness &amp; the result viewer</h2>
+  <p>The viewer reads rows through a paged source — it never materialises the whole result set. Search and
+  paging run off the UI thread, so the window stays interactive no matter how large the log.</p>
+  <table>
+    <tr><th>Interaction (5,000,000 rows)</th><th class="num">Time</th></tr>
+    <tr><td>UI round-trip sampled <em>during</em> a running search</td><td class="num">~12 ms</td></tr>
+    <tr><td>Render a page (first page)</td><td class="num">~0.17 s</td></tr>
+    <tr><td>Jump to last page (keyset, not deep OFFSET)</td><td class="num">O(page size)</td></tr>
+    <tr><td>Pixel-scroll within a page</td><td class="num">no UI block</td></tr>
+  </table>
+  <p>Deep pagination uses a keyset (reverse-sort + limit) instead of a large <code>OFFSET</code> scan, so
+  "jump to the last page" of a 5M-row set is as fast as the first — it does not degrade with offset. A
+  built-in UX monitor records any interaction exceeding 2.5&nbsp;s; across a full automated suite none did.</p>
+
+  <h2>8. Storage tier &amp; footprint</h2>
+  <p>The backend is chosen automatically by estimated row count, balancing speed against memory:</p>
+  <table>
+    <tr><th>Estimated rows</th><th>Backend</th><th>Rationale</th></tr>
+    <tr><td>&lt; 10,000</td><td>In-memory</td><td>Fastest; trivial memory</td></tr>
+    <tr><td>10,000 – 50,000</td><td>Hybrid</td><td>In-memory working set, settles to disk</td></tr>
+    <tr><td>&gt; 50,000</td><td>SQLite</td><td>Pages from disk; constant memory at any scale</td></tr>
+  </table>
+  <p>If the estimate proves wrong mid-load, the engine falls back to a lower-memory tier rather than
+  exhausting RAM. On disk, completed scans are cached (keyed by source path + size + mtime) so reopening a
+  log skips the scan entirely; the cache self-limits to 10&nbsp;GB (LRU eviction, enforced after every
+  write), and temp extraction directories (from <code>.zip</code>/<code>.cab</code>) are removed on exit.</p>
+
+  <h2>9. Caching: cold vs. warm open</h2>
+  <div class="chart">
+    <div class="row"><div class="lab">Cold open — full scan (5M)</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">~44 s + index</div></div>
+    <div class="row"><div class="lab">Warm reopen — cache reused</div><div class="track"><div class="fill good" style="width:1%"></div></div><div class="val">scan skipped</div></div>
+  </div>
+  <p>A warm reopen validates the cached database (and re-attaches any index shards) and goes straight to
+  the viewer — the scan, parse, and index build are all skipped.</p>
+
+  <h2>10. Optimisation journey</h2>
+  <p>The figures above reflect a sequence of measured improvements, each validated by tests:</p>
+  <table>
+    <tr><th>Area</th><th>Change</th><th class="num">Result</th></tr>
+    <tr><td>Index build</td><td>Stop double-indexing message text; skip constant path/time columns</td><td class="num">−48%</td></tr>
+    <tr><td>Index build</td><td>Parallel shard build across cores</td><td class="num">~5×</td></tr>
+    <tr><td>Pagination</td><td>Async paging + keyset jump-to-last</td><td class="num">10.7 s freeze → off-thread</td></tr>
+    <tr><td>Disk</td><td>Continuous cache-cap enforcement; temp cleanup on exit</td><td class="num">bounded ≤ 10 GB</td></tr>
+    <tr><td>Shutdown</td><td>Graceful close verified by test</td><td class="num">~1.3 s</td></tr>
+  </table>
+
+  <h2>11. Reproducibility</h2>
+  <p>Every figure here is regenerated by the test suite. Key entry points:</p>
+  <ul>
+    <li><code>SqliteInsertBenchmark.Insert_Throughput_5M</code> — ingestion / insert throughput.</li>
+    <li><code>FtsShardSpike</code> — single vs parallel index build + cross-shard query
+        (tunable via <code>FINDNEEDLE_SPIKE_ROWS</code> / <code>_SHARDS</code>).</li>
+    <li><code>SearchResponsivenessUITests</code> — end-to-end load, search latency, UI responsiveness.</li>
+    <li><code>NativeGridLargeScaleUITests</code> — 5M-row pagination + scroll across page sizes.</li>
+    <li><code>StorageBackendScaleUITests</code> — tier selection &amp; fallback.</li>
+    <li>The in-app <b>About → Export performance report</b> writes a machine-anchored snapshot
+        (spec + last search's phase timings + slow interactions + cache footprint).</li>
+  </ul>
+
+  <h2>12. Limitations &amp; honest notes</h2>
+  <ul>
+    <li>Single reference machine (a laptop). Absolute times vary with CPU/SSD; multi-minute builds show
+        thermal variance. Treat ratios as the durable result.</li>
+    <li>Sharded index builds parallelise only line-oriented and already-ingested data; ETL decode is
+        sequential by nature (stateful, single-pass) and is not chunked.</li>
+    <li>SQLite single-writer insert is a floor for ingestion on one database; it was not parallelised
+        (parallelising it would require multi-database row sharding, a larger change).</li>
+  </ul>
+
+  <div class="foot">
+    FindNeedle performance whitepaper · generated from automated-test measurements on the reference
+    machine above · figures marked <b>*</b> are interpolated between measured points; all others are
+    measured. Re-run the suites in §11 to reproduce.
+  </div>
+
+</div>
+</body>
+</html>
