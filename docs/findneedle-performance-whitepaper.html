@@ -98,9 +98,12 @@
   expensive phase on a large log. By default it builds in the background right after the viewer opens, so
   the user can browse immediately; substring search becomes instant once it completes.</p>
   <div class="chart">
-    <div class="row"><div class="lab">200,000 rows</div><div class="track"><div class="fill good" style="width:3%"></div></div><div class="val">&lt;1 s</div></div>
-    <div class="row"><div class="lab">5,000,000 rows</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">~21 s</div></div>
+    <div class="row"><div class="lab">500,000 rows</div><div class="track"><div class="fill good" style="width:3%"></div></div><div class="val">~5 s</div></div>
+    <div class="row"><div class="lab">5,000,000 rows</div><div class="track"><div class="fill" style="width:8%"></div></div><div class="val">~15 s</div></div>
+    <div class="row"><div class="lab">50,000,000 rows</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">~187 s</div></div>
   </div>
+  <p>The build is super-linear in indexed text (≈12× for 10× more rows), so it dominates the "ready to
+  search" time on the largest logs — see the per-size matrix in §8.</p>
   <p>Three index timings are available as a setting: <b>background</b> (build right after the viewer opens
   — the default), <b>lazy</b> (build on the first search, or never if the user never searches), and
   <b>eager</b> (build during load, so the first search is instant but the open takes longer — a 5M-row log
@@ -114,6 +117,9 @@
     <div class="row"><div class="lab">Warm reopen (cached), search</div><div class="track"><div class="fill good" style="width:1%"></div></div><div class="val">~0.1 s</div></div>
     <div class="row"><div class="lab">Un-indexed first search, 5M rows (scan)</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">~16 s</div></div>
   </div>
+  <p>Indexed-search time depends on how many rows the term matches, not just the log size: a <b>selective</b>
+  term (rare in the log) is sub-second at any size, while a term that matches a large share of rows scales
+  with the match count (on a log of near-identical lines a broad term can take seconds — see the §8 matrix).</p>
 
   <h2>6. UI responsiveness &amp; the result viewer</h2>
   <p>The viewer reads rows from storage a page at a time and never loads the whole result set into memory.
@@ -162,6 +168,27 @@
     <tr><td>Reopen a cached log</td><td>O(1)</td><td>Scan + index build are skipped entirely</td></tr>
     <tr><td>Memory footprint</td><td>O(1)</td><td>Rows are paged from disk; RAM stays flat at any scale</td></tr>
   </table>
+
+  <h3>Per-size matrix (default settings)</h3>
+  <p>Measured across seven sizes — the storage tier the app auto-selects, first-open ingest (to a browsable
+  viewer), the full-text index build, and search latency.</p>
+  <table>
+    <tr><th class="num">Rows</th><th>Storage tier</th><th class="num">Open · ingest</th><th class="num">Index build</th><th class="num">Search*</th></tr>
+    <tr><td class="num">5,000</td><td>In-memory</td><td class="num">0.2 s</td><td class="num">—</td><td class="num">instant</td></tr>
+    <tr><td class="num">50,000</td><td>SQLite</td><td class="num">0.7 s</td><td class="num">0.3 s</td><td class="num">&lt;10 ms</td></tr>
+    <tr><td class="num">500,000</td><td>SQLite</td><td class="num">4.4 s</td><td class="num">5.2 s</td><td class="num">0.15 s</td></tr>
+    <tr><td class="num">5,000,000</td><td>SQLite</td><td class="num">33 s</td><td class="num">15 s</td><td class="num">1.6 s</td></tr>
+    <tr><td class="num">10,000,000</td><td>SQLite</td><td class="num">68 s</td><td class="num">34 s</td><td class="num">3.2 s</td></tr>
+    <tr><td class="num">25,000,000</td><td>SQLite</td><td class="num">160 s</td><td class="num">85 s</td><td class="num">7.7 s</td></tr>
+    <tr><td class="num">50,000,000</td><td>SQLite</td><td class="num">328 s</td><td class="num">187 s</td><td class="num">14.8 s</td></tr>
+  </table>
+  <p class="sub" style="font-size:13px">* Search here is a near-worst case: the synthetic rows are nearly
+  identical, so a common term matches a large share of them and the time scales with the match count. A
+  <b>selective</b> term (rare in the log) returns sub-second at every size — about 0.7 s on 5 M rows in the
+  real-app test. <b>UI responsiveness is intentionally not in this table because it does not vary with
+  size</b>: the viewer pages off-thread, so a UI round-trip stays a few milliseconds (≤7 ms measured) and
+  opening a page stays ~0.5 s whether the log is 5 thousand or 50 million rows. Ingest is the default
+  (parallel fan-out where it engages); the serial/parallel detail and the merge caveat are below.</p>
 
   <p>The chart plots first-open ingest measured on a synthetic series at 5, 10, 25, and 50 million rows
   (identical row shape — only the count varies). <b>Ingest grows linearly with the log</b> (the rising
@@ -218,7 +245,26 @@
   serial (554 s vs 439 s, 0.79×). So fan-out helps most in the low tens of millions of rows; for the very
   largest real logs the single-writer serial load is the safer choice.</p>
 
-  <h2>9. How these numbers were produced</h2>
+  <h2>9. Scoped loading for huge files (prototype)</h2>
+  <p>Because ingest is O(n) in the rows actually stored — and can't be meaningfully sped up at the top of
+  the curve (the merge even backfires) — the real win for a multi-GB capture is to <em>not load what you
+  don't need</em>. A prototype adds a triage step: <b>inspect the file for its provider mix first</b>
+  (providers, per-provider counts, time span — seconds, not minutes), then <b>load only the providers
+  (and/or the time window) you pick</b>. A decode-time filter drops the rest <em>before</em> the expensive
+  wrap + insert, so you pay for only the events you keep.</p>
+  <p>Measured on the real 36-million-event, 3.7 GB capture — scoping to the 24 non-kernel providers
+  (dropping the ~90% kernel scheduling firehose):</p>
+  <div class="chart">
+    <div class="row"><div class="lab">Full load — all 36M rows</div><div class="track"><div class="fill" style="width:100%"></div></div><div class="val">409 s</div></div>
+    <div class="row"><div class="lab">Scoped load — 2.8M rows kept</div><div class="track"><div class="fill good" style="width:12%"></div></div><div class="val">49 s</div></div>
+  </div>
+  <p class="callout"><b>≈8× faster by loading 8% of the file.</b> Scoping lets the user choose where on the
+  §8 cost curve they land — e.g. "just the application + .NET events", a specific time window, or a
+  diagram-only pass — instead of waiting on the whole capture. The file is still scanned once to filter, so
+  the decode pass is the floor; everything above it is what you chose to keep. (Prototype: the scope is set
+  globally for the load; production wiring would drive it from the triage panel per open.)</p>
+
+  <h2>10. How these numbers were produced</h2>
   <p>Every figure is regenerated by the automated test suites and the app's phase-timing log
   (<code>%LocalAppData%\FindNeedle\perf-log.txt</code>). Key entry points:</p>
   <ul>
@@ -231,7 +277,7 @@
         open's phase timings, any slow interactions, and cache footprint).</li>
   </ul>
 
-  <h2>10. Notes</h2>
+  <h2>11. Notes</h2>
   <ul>
     <li>Measured on one reference machine (a laptop CPU). Absolute times vary with CPU and SSD; sustained
         multi-second builds show some thermal variance.</li>

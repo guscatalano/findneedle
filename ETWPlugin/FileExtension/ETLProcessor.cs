@@ -30,6 +30,22 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     public string inputfile = "";
     private SearchProgressSink? _progressSink;
 
+    // ----- Triage scope (prototype) -----
+    // When set, the TraceEvent decode path only emits events whose provider is in this set (case-insensitive)
+    // and/or fall inside the [from,to] window — so a scoped "load only these providers / this time range"
+    // request from the triage panel ingests a fraction of a huge capture. Null/empty = load everything.
+    //
+    // PROTOTYPE: this is process-global (static) because FolderLocation creates its own ETLProcessor per
+    // file during the scan, so a per-instance setting wouldn't reach the decoder. Production wiring would
+    // plumb the scope per-load through the location/search config instead of a static.
+    public static System.Collections.Generic.HashSet<string>? ProviderScope;
+    public static DateTime? ScopeFromUtc;
+    public static DateTime? ScopeToUtc;
+    /// <summary>Set the global provider allow-list for a scoped load (case-insensitive; null clears it).</summary>
+    public static void SetProviderScope(System.Collections.Generic.IEnumerable<string>? providers)
+        => ProviderScope = providers == null ? null
+            : new System.Collections.Generic.HashSet<string>(providers, StringComparer.OrdinalIgnoreCase);
+
     private int _badlyFormattedCount = 0;
 
     // A modern (non-WPP) .etl decodes via the TraceEvent library. We *defer* that decode to the
@@ -547,6 +563,15 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             void Handle(Microsoft.Diagnostics.Tracing.TraceEvent e)
             {
                 if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
+                // ----- Triage scope filter (prototype) -----
+                // Drop events outside the requested provider set / time window BEFORE wrapping them into an
+                // ETLLogLine (the wrap + insert is the expensive part). This is what lets a "load only these
+                // providers / this time range" choice from the triage panel skip most of a huge capture
+                // (e.g. the ~90% kernel events you don't want) instead of ingesting everything.
+                if (ProviderScope != null && ProviderScope.Count > 0
+                    && !ProviderScope.Contains(e.ProviderName ?? string.Empty)) return;
+                if (ScopeFromUtc.HasValue && e.TimeStamp.ToUniversalTime() < ScopeFromUtc.Value) return;
+                if (ScopeToUtc.HasValue && e.TimeStamp.ToUniversalTime() > ScopeToUtc.Value) return;
                 var line = new ETLLogLine(e);
                 var src = line.GetSource() ?? string.Empty;
                 providers[src] = providers.TryGetValue(src, out var c) ? c + 1 : 1;
