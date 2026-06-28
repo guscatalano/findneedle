@@ -27,6 +27,14 @@ public class SqliteInsertBenchmark
 
     private readonly List<string> _dbPaths = new();
 
+    [TestInitialize]
+    public void Init()
+    {
+        // This benchmark isolates the SINGLE-DB insert + FTS-rebuild cost; keep sharding off regardless
+        // of the production default so the numbers stay comparable (sharding is measured by FtsShardSpike).
+        SqliteStorage.FtsShardThreshold = int.MaxValue;
+    }
+
     [TestCleanup]
     public void Cleanup()
     {
@@ -34,6 +42,7 @@ public class SqliteInsertBenchmark
             try { if (File.Exists(p)) File.Delete(p); } catch { }
         SqliteStorage.DisableFtsForMeasurement =
             !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_DISABLE_FTS"));
+        SqliteStorage.FtsShardThreshold = SqliteStorage.DefaultFtsShardThreshold;
     }
 
     /// <summary>Realistic ~120-char, unique-per-row log lines so string lengths match real logs.</summary>

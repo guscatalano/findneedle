@@ -126,8 +126,7 @@ namespace FindPluginCore.Implementations.Storage
             try
             {
                 var meta = ReadMeta();
-                if (_ftsAvailable && meta != null && meta.TryGetValue("fts_built", out var fb) && fb == "1")
-                    _ftsIndexBuilt = true;
+                _ftsIndexBuilt = RestoreFtsFromMeta(meta); // re-attaches shard files if the cache was sharded
             }
             catch { /* best effort */ }
         }
@@ -359,13 +358,16 @@ namespace FindPluginCore.Implementations.Storage
         /// When the filtered row count is at least this, the FTS index is built as N parallel shards
         /// (separate contentless fts5 DB files built concurrently and queried via ATTACH + UNION) instead
         /// of one single-writer index — the trigram build is the dominant, single-threaded cost, so this
-        /// parallelizes it (~5x measured). Default int.MaxValue = never (the single external-content index,
-        /// unchanged). Set via FINDNEEDLE_FTS_SHARD_THRESHOLD. NOTE (increment 1): a sharded cache does not
-        /// warm-reuse its index across sessions yet — it rebuilds on reopen (fts_built is stored 0).
+        /// parallelizes it (~5x measured). Default 2,000,000 (only genuinely large logs, where the single
+        /// build runs tens of seconds to minutes and the win clearly amortizes the per-shard overhead);
+        /// smaller logs keep the single external-content index. Override via FINDNEEDLE_FTS_SHARD_THRESHOLD
+        /// (set very high to disable). Sharded caches warm-reuse across sessions (shard files persist next
+        /// to the .db and are re-attached on reopen; the cache pruner evicts them with their .db).
         /// </summary>
+        public const int DefaultFtsShardThreshold = 2_000_000;
         public static int FtsShardThreshold { get; set; } =
             int.TryParse(Environment.GetEnvironmentVariable("FINDNEEDLE_FTS_SHARD_THRESHOLD"), out var _fst) && _fst > 0
-                ? _fst : int.MaxValue;
+                ? _fst : DefaultFtsShardThreshold;
 
         // Sharded-FTS state for the current session, set by BuildShardedIndex.
         private bool _ftsSharded;
@@ -732,7 +734,9 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         /// <summary>Detach any attached shard DBs from the query connection and delete the shard files.</summary>
-        private void DetachAndDeleteShards()
+        /// <summary>Detach shard DBs from the query connection (release file handles) WITHOUT deleting the
+        /// files — so a clean Dispose leaves them on disk for the next session to warm-reuse.</summary>
+        private void DetachShards()
         {
             lock (_sync)
             {
@@ -742,6 +746,13 @@ namespace FindPluginCore.Implementations.Storage
                     catch { /* not attached — fine */ }
                 }
             }
+        }
+
+        /// <summary>Detach AND delete the shard files — for a cache wipe / fresh rebuild (the index they
+        /// hold is being discarded). NOT for Dispose (that keeps them for reuse — see <see cref="DetachShards"/>).</summary>
+        private void DetachAndDeleteShards()
+        {
+            DetachShards();
             for (int k = 0; k < MaxShards; k++)
             {
                 var p = ShardDbPath(k);
@@ -751,6 +762,38 @@ namespace FindPluginCore.Implementations.Storage
             }
             _ftsSharded = false;
             _shardCount = 0;
+        }
+
+        /// <summary>
+        /// On cache reuse, restore FTS readiness from the cache metadata. If the cache recorded a sharded
+        /// index (fts_shards>0), re-ATTACH the shard files (detach-then-attach so it's idempotent across
+        /// the constructor + EvaluateCacheReuse paths). If any shard file is missing, returns false so the
+        /// caller rebuilds. Returns whether the FTS index is ready to query.
+        /// </summary>
+        private bool RestoreFtsFromMeta(Dictionary<string, string> meta)
+        {
+            if (!_ftsAvailable || meta == null) return false;
+            if (!(meta.TryGetValue("fts_built", out var fb) && fb == "1")) return false;
+            int shards = meta.TryGetValue("fts_shards", out var fs) && int.TryParse(fs, out var n) ? n : 0;
+            if (shards <= 0) return true; // single external-content index — already in this DB.
+
+            for (int k = 0; k < shards; k++)
+                if (!System.IO.File.Exists(ShardDbPath(k))) { DetachAndDeleteShards(); return false; }
+            try
+            {
+                lock (_sync)
+                    for (int k = 0; k < shards; k++)
+                    {
+                        try { using var d = _connection.CreateCommand(); d.CommandText = $"DETACH DATABASE shard{k};"; d.ExecuteNonQuery(); } catch { }
+                        using var a = _connection.CreateCommand();
+                        a.CommandText = $"ATTACH DATABASE '{ShardDbPath(k).Replace("'", "''")}' AS shard{k};";
+                        a.ExecuteNonQuery();
+                    }
+                _ftsSharded = true;
+                _shardCount = shards;
+                return true;
+            }
+            catch { DetachAndDeleteShards(); return false; }
         }
 
         /// <summary>Whether <paramref name="column"/> has at least two distinct values (short-circuits at 2,
@@ -900,10 +943,10 @@ namespace FindPluginCore.Implementations.Storage
                 // built one (eager search, or a deferred build that completed before close). If
                 // fts_built=0 (deferred run that was never searched), substring search uses LIKE
                 // until a lazy/background build runs.
-                bool cachedIndex = meta.TryGetValue("fts_built", out var fb) && fb == "1";
-                _ftsIndexBuilt = _ftsAvailable && cachedIndex;
+                _ftsIndexBuilt = RestoreFtsFromMeta(meta); // re-attaches shard files if the cache was sharded
 
-                FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", true), ("rows", rows), ("fts_built", cachedIndex));
+                FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", true), ("rows", rows),
+                    ("fts_built", _ftsIndexBuilt), ("fts_shards", _shardCount));
                 ReusedExistingCache = true;
                 return true;
             }
@@ -955,9 +998,10 @@ namespace FindPluginCore.Implementations.Storage
                     // Whether the FTS index is already built. With deferred (lazy/background) indexing
                     // the rows can be cache-complete while the index isn't built yet — a warm reopen
                     // reads this to decide whether substring search can use FTS or must (re)build.
-                    // Sharded indexes aren't warm-reused yet (the shard files would need re-attaching on
-                    // reopen) — store 0 so a reused cache rebuilds the index. Follow-up: persist + re-attach.
-                    WriteMetaKey(tx, "fts_built",      (_ftsIndexBuilt && !_ftsSharded) ? "1" : "0");
+                    WriteMetaKey(tx, "fts_built",      _ftsIndexBuilt ? "1" : "0");
+                    // Shard count (0 = single external-content index). A warm reopen re-attaches this many
+                    // shard files (RestoreFtsFromMeta); the files live next to this .db as {db}.fts{k}.
+                    WriteMetaKey(tx, "fts_shards",     _ftsSharded ? _shardCount.ToString(System.Globalization.CultureInfo.InvariantCulture) : "0");
                     // Part of cache validity: a cache built with a different LogTime-in-FTS setting has a
                     // differently-tokenized index, so reuse must reject it (EvaluateCacheReuse).
                     WriteMetaKey(tx, "fts_logtime",    IndexLogTimeInFts ? "1" : "0");
@@ -1834,10 +1878,9 @@ namespace FindPluginCore.Implementations.Storage
             {
                 try
                 {
-                    // Detach + delete shard FTS files while the connection is still open (increment 1
-                    // doesn't warm-reuse them, so they're rebuilt next time). The cache pruner only knows
-                    // about the main .db, so leaving shards would leak them.
-                    if (_shardCount > 0) { try { DetachAndDeleteShards(); } catch { } }
+                    // Detach (don't delete) shard files so the next session can warm-reuse them; just
+                    // release the attach handles before closing. Eviction is handled by the cache pruner.
+                    if (_shardCount > 0) { try { DetachShards(); } catch { } }
                     // Ensure connection is closed before disposing to release any file locks
                     try { _connection?.Close(); } catch { }
                     _connection?.Dispose();

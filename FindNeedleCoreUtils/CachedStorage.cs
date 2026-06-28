@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -75,27 +76,68 @@ namespace FindNeedleCoreUtils
             });
         }
 
-        /// <summary>Prune an arbitrary cache directory (testable overload; see <see cref="Prune"/>).</summary>
+        /// <summary>The base <c>.db</c> a sidecar/shard file belongs to, or null if it's a primary db /
+        /// unrelated. Sidecars: <c>{db}-wal/-shm/-journal</c>; shards: <c>{db}.fts{k}</c>.</summary>
+        private static string BaseDbOf(string path)
+        {
+            foreach (var s in new[] { "-wal", "-shm", "-journal" })
+                if (path.EndsWith(s, StringComparison.OrdinalIgnoreCase)) return path.Substring(0, path.Length - s.Length);
+            int i = path.IndexOf(".db.fts", StringComparison.OrdinalIgnoreCase);
+            if (i >= 0) return path.Substring(0, i + 3); // up to and including ".db"
+            return null;
+        }
+
+        /// <summary>
+        /// Prune an arbitrary cache directory (testable overload; see <see cref="Prune"/>). Shard-aware:
+        /// a cache entry is a <c>.db</c> plus its sidecar/shard files; they're sized and evicted together,
+        /// and orphaned sidecars/shards (whose <c>.db</c> is gone — e.g. leaked by a killed app) are swept.
+        /// </summary>
         public static long PruneDirectory(string directory, long maxBytes, int maxFiles = int.MaxValue)
         {
             long freed = 0;
             try
             {
-                var files = new List<FileInfo>();
+                var all = new List<FileInfo>();
                 foreach (var f in Directory.EnumerateFiles(directory))
                 {
-                    try { files.Add(new FileInfo(f)); } catch { }
+                    try { all.Add(new FileInfo(f)); } catch { }
                 }
-                long total = 0; foreach (var f in files) total += f.Length;
-                int count = files.Count;
-                if (total <= maxBytes && count <= maxFiles) return 0;
 
-                files.Sort((a, b) => a.LastWriteTimeUtc.CompareTo(b.LastWriteTimeUtc)); // oldest first
-                foreach (var f in files)
+                // Orphan sweep: delete any sidecar/shard whose base .db no longer exists.
+                var present = new HashSet<string>(all.Select(f => f.FullName), StringComparer.OrdinalIgnoreCase);
+                foreach (var f in all.ToList())
+                {
+                    var b = BaseDbOf(f.FullName);
+                    if (b != null && !present.Contains(b))
+                    {
+                        try { long l = f.Length; f.Delete(); freed += l; all.Remove(f); } catch { }
+                    }
+                }
+
+                // Group the rest into cache entries: each .db + its sidecars/shards.
+                var sidecars = all.Where(f => BaseDbOf(f.FullName) != null)
+                                  .GroupBy(f => BaseDbOf(f.FullName), StringComparer.OrdinalIgnoreCase)
+                                  .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+                var dbs = all.Where(f => f.Name.EndsWith(".db", StringComparison.OrdinalIgnoreCase)
+                                         && BaseDbOf(f.FullName) == null).ToList();
+                long EntrySize(FileInfo db) =>
+                    db.Length + (sidecars.TryGetValue(db.FullName, out var sc) ? sc.Sum(x => x.Length) : 0);
+
+                long total = dbs.Sum(EntrySize);
+                int count = dbs.Count;
+                if (total <= maxBytes && count <= maxFiles) return freed;
+
+                dbs.Sort((a, b) => a.LastWriteTimeUtc.CompareTo(b.LastWriteTimeUtc)); // oldest first
+                foreach (var db in dbs)
                 {
                     if (total <= maxBytes && count <= maxFiles) break;
-                    try { long len = f.Length; f.Delete(); freed += len; total -= len; count--; }
-                    catch { /* open / locked — skip, it'll be eligible next time */ }
+                    long entry = EntrySize(db);
+                    try { db.Delete(); }
+                    catch { continue; /* open / locked — skip, eligible next time */ }
+                    // The .db is gone; delete its sidecars/shards too.
+                    if (sidecars.TryGetValue(db.FullName, out var sc))
+                        foreach (var x in sc) { try { x.Delete(); } catch { } }
+                    freed += entry; total -= entry; count--;
                 }
             }
             catch { /* pruning is best-effort, never throw into the caller */ }

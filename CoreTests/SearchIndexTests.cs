@@ -210,6 +210,45 @@ public class SearchIndexTests
     }
 
     [TestMethod]
+    public void Cache_ShardedFts_WarmReuses_AcrossReopen()
+    {
+        var prev = SqliteStorage.FtsShardThreshold;
+        SqliteStorage.FtsShardThreshold = 50;
+        var src = NewSourceFile();
+        var dbPath = CachedStorage.GetCacheFilePath(src, ".db");
+        for (int k = 0; k < 8; k++) _dbPaths.Add(dbPath + $".fts{k}");
+        const int sver = SqliteStorage.CacheSchemaVersion;
+        try
+        {
+            using (var s = new SqliteStorage(src))
+            {
+                s.ClearTables();
+                var list = new List<ISearchResult>(300);
+                for (int i = 0; i < 300; i++)
+                    list.Add(new R(i % 5 == 0 ? $"needle row {i}" : $"hay row {i}", src: $"Prov{i % 3}", rs: $@"C:\l\f{i % 4}.log"));
+                s.AddFilteredBatch(list);
+                s.BuildSearchIndex(); // sharded (300 >= 50)
+                Assert.IsTrue(s.IsSearchIndexBuilt);
+                Assert.IsTrue(File.Exists(dbPath + ".fts0"), "sharded build created shard files");
+                s.WriteCompletionMetadata(src, sver);
+            }
+            // Shard files must survive Dispose so the next session can reuse them.
+            Assert.IsTrue(File.Exists(dbPath + ".fts0"), "shard files must survive Dispose for warm reuse");
+
+            // Reopen: the sharded index is re-attached and queried WITHOUT a rebuild. (If re-attach failed,
+            // the empty single index would return 0 — so a correct count here proves the shards are live.)
+            using (var s = new SqliteStorage(src))
+            {
+                Assert.IsTrue(s.EvaluateCacheReuse(src, sver), "sharded cache should be reusable");
+                Assert.IsTrue(s.IsSearchIndexBuilt, "sharded index should be recognized + re-attached on reopen");
+                Assert.AreEqual(60, SearchCount(s, "needle"), "search works on the reused sharded cache (no rebuild)");
+                Assert.IsTrue(SearchCount(s, "Prov1") > 0, "Source path searchable via re-attached shards");
+            }
+        }
+        finally { SqliteStorage.FtsShardThreshold = prev; }
+    }
+
+    [TestMethod]
     public void ShardedBuild_SearchMatchesAcrossShards()
     {
         var prev = SqliteStorage.FtsShardThreshold;

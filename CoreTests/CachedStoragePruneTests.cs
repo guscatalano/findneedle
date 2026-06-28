@@ -32,6 +32,34 @@ public class CachedStoragePruneTests
 
     [TestMethod]
     [TestCategory("Storage")]
+    public void PruneDirectory_ShardAware_EvictsShardsWithDb_AndSweepsOrphans()
+    {
+        var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        // Oldest cache entry: a.db (500) + two shard files (500 each) = 1500.
+        var aDb = MakeFile("a.db", 500, t);
+        var aS0 = MakeFile("a.db.fts0", 500, t);
+        var aS1 = MakeFile("a.db.fts1", 500, t);
+        // Newer entry: b.db (500) + one shard (500) = 1000.
+        var bDb = MakeFile("b.db", 500, t.AddHours(2));
+        var bS0 = MakeFile("b.db.fts0", 500, t.AddHours(2));
+        // Orphan shard: its base (gone.db) doesn't exist → should be swept regardless of cap.
+        var orphan = MakeFile("gone.db.fts0", 400, t.AddHours(1));
+
+        // Total real-entry bytes = 1500 + 1000 = 2500 (orphan excluded). Cap 1200 → evict the oldest
+        // entry (a.db + its 2 shards = 1500). Orphan is swept too.
+        long freed = CachedStorage.PruneDirectory(_dir, maxBytes: 1200);
+
+        Assert.IsFalse(File.Exists(aDb), "oldest .db evicted");
+        Assert.IsFalse(File.Exists(aS0), "its shard evicted with the .db");
+        Assert.IsFalse(File.Exists(aS1), "its shard evicted with the .db");
+        Assert.IsFalse(File.Exists(orphan), "orphan shard (no base .db) swept");
+        Assert.IsTrue(File.Exists(bDb), "newer entry kept");
+        Assert.IsTrue(File.Exists(bS0), "newer entry's shard kept");
+        Assert.AreEqual(1500 + 400, freed, "freed = evicted entry (1500) + orphan (400)");
+    }
+
+    [TestMethod]
+    [TestCategory("Storage")]
     public void PruneDirectory_EvictsOldestFirst_UntilUnderCap()
     {
         var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
