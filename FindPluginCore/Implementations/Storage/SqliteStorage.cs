@@ -355,6 +355,26 @@ namespace FindPluginCore.Implementations.Storage
         public static bool IndexLogTimeInFts { get; set; } =
             !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_FTS_INDEX_LOGTIME"));
 
+        /// <summary>
+        /// When the filtered row count is at least this, the FTS index is built as N parallel shards
+        /// (separate contentless fts5 DB files built concurrently and queried via ATTACH + UNION) instead
+        /// of one single-writer index — the trigram build is the dominant, single-threaded cost, so this
+        /// parallelizes it (~5x measured). Default int.MaxValue = never (the single external-content index,
+        /// unchanged). Set via FINDNEEDLE_FTS_SHARD_THRESHOLD. NOTE (increment 1): a sharded cache does not
+        /// warm-reuse its index across sessions yet — it rebuilds on reopen (fts_built is stored 0).
+        /// </summary>
+        public static int FtsShardThreshold { get; set; } =
+            int.TryParse(Environment.GetEnvironmentVariable("FINDNEEDLE_FTS_SHARD_THRESHOLD"), out var _fst) && _fst > 0
+                ? _fst : int.MaxValue;
+
+        // Sharded-FTS state for the current session, set by BuildShardedIndex.
+        private bool _ftsSharded;
+        private int _shardCount;
+        // SQLite's default SQLITE_MAX_ATTACHED is 10 → cap at 8 to leave headroom for the main + temp dbs.
+        private const int MaxShards = 8;
+        private static int ShardCountFor(long rows) => Math.Max(2, Math.Min(MaxShards, Environment.ProcessorCount - 1));
+        private string ShardDbPath(int k) => $"{_dbPath}.fts{k}";
+
         private void InitializeFts5()
         {
             if (DisableFtsForMeasurement)
@@ -479,6 +499,14 @@ namespace FindPluginCore.Implementations.Storage
         {
             if (!_ftsAvailable) { _ftsIndexBuilt = false; return; }
 
+            // Large logs: build the index as parallel shards (the trigram build is the dominant
+            // single-threaded cost). Below the threshold, the single external-content index below.
+            if (_filteredCount >= FtsShardThreshold)
+            {
+                BuildShardedIndex(cancellationToken, onProgress);
+                return;
+            }
+
             long total = _filteredCount;
             long indexed = 0;
             long lastId = 0;
@@ -571,6 +599,135 @@ namespace FindPluginCore.Implementations.Storage
                 System.Diagnostics.Debug.WriteLine(
                     $"[SqliteStorage] FTS build failed; substring search falls back to LIKE: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Build the trigram index as N parallel shards: each shard is a contentless fts5 table in its own
+        /// DB file, built concurrently by reading a contiguous Id-range from the (attached) main DB. The
+        /// shards are ATTACHed to the main connection; <see cref="BuildWhere"/> unions the per-shard MATCH.
+        /// Rows stay in the one main table, so paging/sort/count are unchanged. Same column-blanking
+        /// decisions as the single build so search semantics are identical.
+        /// </summary>
+        private void BuildShardedIndex(CancellationToken ct, Action<long, long> onProgress)
+        {
+            var start = Environment.TickCount64;
+            int shardCount = ShardCountFor(_filteredCount);
+
+            bool indexSource, indexResultSource;
+            long minId, maxId;
+            lock (_sync)
+            {
+                indexSource = DistinctAtLeastTwo("Source");
+                indexResultSource = DistinctAtLeastTwo("ResultSource");
+                using var mm = _connection.CreateCommand();
+                mm.CommandText = "SELECT MIN(Id), MAX(Id) FROM FilteredResults";
+                using var r = mm.ExecuteReader();
+                if (!r.Read() || r.IsDBNull(0)) { _ftsSharded = false; _ftsIndexBuilt = false; return; }
+                minId = r.GetInt64(0); maxId = r.GetInt64(1);
+            }
+            string srcExpr = indexSource ? "Source" : "''";
+            string rsExpr = indexResultSource ? "ResultSource" : "''";
+            string ltExpr = IndexLogTimeInFts ? "LogTime" : "''";
+
+            // Clear any prior shards (detach from the connection + delete the files) before rebuilding.
+            DetachAndDeleteShards();
+
+            long span = maxId - minId + 1;
+            long per = (span + shardCount - 1) / shardCount;
+            long indexed = 0;
+            try
+            {
+                System.Threading.Tasks.Parallel.For(0, shardCount, k =>
+                {
+                    if (ct.IsCancellationRequested) return;
+                    long lo = minId + (long)k * per;
+                    long hi = Math.Min(lo + per, maxId + 1); // [lo, hi)
+                    var path = ShardDbPath(k);
+                    try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch { }
+
+                    using var sc = new SqliteConnection($"Data Source={path}");
+                    sc.Open();
+                    using (var p = sc.CreateCommand())
+                    { p.CommandText = "PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-65536;"; p.ExecuteNonQuery(); }
+                    // Contentless: stores the inverted index + rowid only (we fetch the row from the main
+                    // table by Id). Same 6 columns as the single index so MATCH semantics match.
+                    using (var cr = sc.CreateCommand())
+                    { cr.CommandText = $"CREATE VIRTUAL TABLE fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');"; cr.ExecuteNonQuery(); }
+                    // Read this shard's range straight from the main DB (attached read-only; concurrent
+                    // readers are fine — the main connection isn't writing during the build).
+                    using (var at = sc.CreateCommand())
+                    { at.CommandText = $"ATTACH DATABASE '{_dbPath.Replace("'", "''")}' AS src;"; at.ExecuteNonQuery(); }
+                    using (var tx = sc.BeginTransaction())
+                    using (var ins = sc.CreateCommand())
+                    {
+                        ins.Transaction = tx;
+                        ins.CommandText = $@"
+                            INSERT INTO fts{k}(rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
+                            SELECT Id, {srcExpr}, TaskName, Message, {rsExpr},
+                                   CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END, {ltExpr}
+                            FROM src.FilteredResults WHERE Id >= @lo AND Id < @hi;";
+                        ins.Parameters.AddWithValue("@lo", lo);
+                        ins.Parameters.AddWithValue("@hi", hi);
+                        int n = ins.ExecuteNonQuery();
+                        tx.Commit();
+                        System.Threading.Interlocked.Add(ref indexed, n);
+                        onProgress?.Invoke(System.Threading.Interlocked.Read(ref indexed), _filteredCount);
+                    }
+                });
+
+                if (ct.IsCancellationRequested)
+                {
+                    DetachAndDeleteShards();
+                    _ftsIndexBuilt = false;
+                    FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false), ("reason", "cancelled"), ("sharded", true));
+                    return;
+                }
+
+                // Attach the freshly-built shards to the query connection.
+                lock (_sync)
+                {
+                    for (int k = 0; k < shardCount; k++)
+                    {
+                        using var a = _connection.CreateCommand();
+                        a.CommandText = $"ATTACH DATABASE '{ShardDbPath(k).Replace("'", "''")}' AS shard{k};";
+                        a.ExecuteNonQuery();
+                    }
+                }
+                _ftsSharded = true;
+                _shardCount = shardCount;
+                _ftsIndexBuilt = true;
+                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", true),
+                    ("rebuild_ms", Environment.TickCount64 - start), ("sharded", true), ("shards", shardCount), ("rows", indexed));
+            }
+            catch (SqliteException ex)
+            {
+                DetachAndDeleteShards();
+                _ftsIndexBuilt = false;
+                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false), ("reason", "shard_build_failed"), ("msg", ex.GetType().Name));
+                System.Diagnostics.Debug.WriteLine($"[SqliteStorage] sharded FTS build failed; falls back to LIKE: {ex.Message}");
+            }
+        }
+
+        /// <summary>Detach any attached shard DBs from the query connection and delete the shard files.</summary>
+        private void DetachAndDeleteShards()
+        {
+            lock (_sync)
+            {
+                for (int k = 0; k < MaxShards; k++)
+                {
+                    try { using var d = _connection.CreateCommand(); d.CommandText = $"DETACH DATABASE shard{k};"; d.ExecuteNonQuery(); }
+                    catch { /* not attached — fine */ }
+                }
+            }
+            for (int k = 0; k < MaxShards; k++)
+            {
+                var p = ShardDbPath(k);
+                try { if (System.IO.File.Exists(p)) System.IO.File.Delete(p); } catch { }
+                foreach (var s in new[] { "-wal", "-shm", "-journal" })
+                    try { if (System.IO.File.Exists(p + s)) System.IO.File.Delete(p + s); } catch { }
+            }
+            _ftsSharded = false;
+            _shardCount = 0;
         }
 
         /// <summary>Whether <paramref name="column"/> has at least two distinct values (short-circuits at 2,
@@ -775,7 +932,9 @@ namespace FindPluginCore.Implementations.Storage
                     // Whether the FTS index is already built. With deferred (lazy/background) indexing
                     // the rows can be cache-complete while the index isn't built yet — a warm reopen
                     // reads this to decide whether substring search can use FTS or must (re)build.
-                    WriteMetaKey(tx, "fts_built",      _ftsIndexBuilt ? "1" : "0");
+                    // Sharded indexes aren't warm-reused yet (the shard files would need re-attaching on
+                    // reopen) — store 0 so a reused cache rebuilds the index. Follow-up: persist + re-attach.
+                    WriteMetaKey(tx, "fts_built",      (_ftsIndexBuilt && !_ftsSharded) ? "1" : "0");
                     // Part of cache validity: a cache built with a different LogTime-in-FTS setting has a
                     // differently-tokenized index, so reuse must reject it (EvaluateCacheReuse).
                     WriteMetaKey(tx, "fts_logtime",    IndexLogTimeInFts ? "1" : "0");
@@ -855,6 +1014,10 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
+                // Sharded FTS lives in separate files attached to this connection — detach + delete them
+                // so a wiped cache doesn't leave stale shards behind.
+                DetachAndDeleteShards();
+
                 // For large existing FTS5 indexes, dropping the triggers + FTS table and then
                 // re-running InitializeFts5() is much faster than letting the AD trigger fire
                 // once per FilteredResults row. The new index is empty, ready for the next batch.
@@ -1181,7 +1344,7 @@ namespace FindPluginCore.Implementations.Storage
 
             lock (_sync)
             {
-                var (where, ps) = BuildWhere(filter, UseFts);
+                var (where, ps) = BuildWhere(filter, UseFts, _shardCount);
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = $"SELECT COUNT(*) FROM FilteredResults {where}";
                 BindParams(cmd, ps);
@@ -1200,7 +1363,7 @@ namespace FindPluginCore.Implementations.Storage
         {
             lock (_sync)
             {
-                var (where, ps) = BuildWhere(filter, UseFts);
+                var (where, ps) = BuildWhere(filter, UseFts, _shardCount);
                 var orderBy = BuildOrderBy(sort);
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText =
@@ -1242,7 +1405,7 @@ namespace FindPluginCore.Implementations.Storage
             {
                 List<ISearchResult> Run(bool ftsAvailable)
                 {
-                    var (where, ps) = BuildWhere(filter, ftsAvailable);
+                    var (where, ps) = BuildWhere(filter, ftsAvailable, _shardCount);
                     using var cmd = _connection.CreateCommand();
                     cmd.CommandText = select + $"{where} {BuildOrderByFlipped(sort)} LIMIT @limit";
                     BindParams(cmd, ps);
@@ -1363,7 +1526,7 @@ namespace FindPluginCore.Implementations.Storage
             }
             lock (_sync)
             {
-                var (where, ps) = BuildWhere(filter, UseFts);
+                var (where, ps) = BuildWhere(filter, UseFts, _shardCount);
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = $"SELECT Level, COUNT(*) FROM FilteredResults {where} GROUP BY Level";
                 BindParams(cmd, ps);
@@ -1428,7 +1591,7 @@ namespace FindPluginCore.Implementations.Storage
                 void Run(bool ftsAvailable)
                 {
                     counts.Clear();
-                    var (where, ps) = BuildWhere(filter, ftsAvailable);
+                    var (where, ps) = BuildWhere(filter, ftsAvailable, _shardCount);
                     using var cmd = _connection.CreateCommand();
                     cmd.CommandText = $"SELECT {col}, COUNT(*) FROM FilteredResults {where} GROUP BY {col}";
                     BindParams(cmd, ps);
@@ -1448,7 +1611,7 @@ namespace FindPluginCore.Implementations.Storage
         // shorter would return zero results, so the global search falls back to LIKE for those.
         private const int TrigramMinLength = 3;
 
-        private static (string clause, List<KeyValuePair<string, object>> parameters) BuildWhere(FilterInput f, bool ftsAvailable)
+        private static (string clause, List<KeyValuePair<string, object>> parameters) BuildWhere(FilterInput f, bool ftsAvailable, int shardCount = 0)
         {
             var conditions = new List<string>();
             var ps = new List<KeyValuePair<string, object>>();
@@ -1514,7 +1677,18 @@ namespace FindPluginCore.Implementations.Storage
                         // index instead of a full table scan. The user's text becomes a single
                         // FTS5 phrase so any character is treated literally.
                         var name = "@p" + (idx++);
-                        conditions.Add($"Id IN (SELECT rowid FROM FilteredResults_fts WHERE FilteredResults_fts MATCH {name})");
+                        if (shardCount > 0)
+                        {
+                            // Union the per-shard MATCH (Id ranges are disjoint → UNION ALL, no dupes).
+                            // FTS5 MATCH needs the bare unique table name (fts0/fts1/…), not schema-qualified.
+                            var union = string.Join(" UNION ALL ", Enumerable.Range(0, shardCount)
+                                .Select(k => $"SELECT rowid FROM shard{k}.fts{k} WHERE fts{k} MATCH {name}"));
+                            conditions.Add($"Id IN ({union})");
+                        }
+                        else
+                        {
+                            conditions.Add($"Id IN (SELECT rowid FROM FilteredResults_fts WHERE FilteredResults_fts MATCH {name})");
+                        }
                         ps.Add(new KeyValuePair<string, object>(name, EscapeFts5Phrase(f.Search)));
                     }
                     else
@@ -1637,6 +1811,10 @@ namespace FindPluginCore.Implementations.Storage
             {
                 try
                 {
+                    // Detach + delete shard FTS files while the connection is still open (increment 1
+                    // doesn't warm-reuse them, so they're rebuilt next time). The cache pruner only knows
+                    // about the main .db, so leaving shards would leak them.
+                    if (_shardCount > 0) { try { DetachAndDeleteShards(); } catch { } }
                     // Ensure connection is closed before disposing to release any file locks
                     try { _connection?.Close(); } catch { }
                     _connection?.Dispose();

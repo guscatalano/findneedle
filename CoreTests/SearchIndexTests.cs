@@ -210,6 +210,36 @@ public class SearchIndexTests
     }
 
     [TestMethod]
+    public void ShardedBuild_SearchMatchesAcrossShards()
+    {
+        var prev = SqliteStorage.FtsShardThreshold;
+        SqliteStorage.FtsShardThreshold = 50; // force the parallel-shard path for this small set
+        var searched = Path.Combine(Path.GetTempPath(), "shardtest_" + Guid.NewGuid().ToString("N"));
+        var dbPath = CachedStorage.GetCacheFilePath(searched, ".db");
+        _dbPaths.Add(dbPath);
+        for (int k = 0; k < 8; k++) _dbPaths.Add(dbPath + $".fts{k}");
+        try
+        {
+            using var s = new SqliteStorage(searched);
+            var list = new List<ISearchResult>(400);
+            for (int i = 0; i < 400; i++)
+                list.Add(new R(i % 5 == 0 ? $"needle alpha row {i}" : $"hay bravo row {i}",
+                               src: $"Provider{i % 3}", rs: $@"C:\logs\file{i % 7}.log"));
+            s.AddFilteredBatch(list);
+            s.BuildSearchIndex(); // 400 >= 50 → sharded path
+
+            Assert.IsTrue(File.Exists(dbPath + ".fts0"), "sharded build should have created shard DB files");
+            Assert.AreEqual(80, SearchCount(s, "needle"), "every 5th row → 80 matches via the sharded union");
+            Assert.AreEqual(400, SearchCount(s, "row"), "every row contains 'row'");
+            Assert.AreEqual(0, SearchCount(s, "zzznotpresent"), "absent term → 0");
+            // Multi-source: Source/ResultSource are indexed in the shards too → path substrings searchable.
+            Assert.IsTrue(SearchCount(s, "Provider1") > 0, "Source substring searchable across shards");
+            Assert.IsTrue(SearchCount(s, "file3.log") > 0, "ResultSource substring searchable across shards");
+        }
+        finally { SqliteStorage.FtsShardThreshold = prev; }
+    }
+
+    [TestMethod]
     public void BuildSearchIndex_MultiSource_PathColumnsRemainSearchable()
     {
         using var s = NewSqlite();
