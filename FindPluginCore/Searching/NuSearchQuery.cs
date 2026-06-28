@@ -715,6 +715,35 @@ public class NuSearchQuery : ISearchQuery
         if (enrichActive)
             Logger.Instance.Log($"Step2: enrichment ON ({_enrichmentSections.Count} section(s)) — extracting fields per-row");
 
+        // ----- Parallel fan-out ingest (large streaming loads) -----
+        // One thread can't keep the disk busy while it also decodes/wraps events, so when the streaming
+        // path is active for a large log we fan the per-shard SQLite inserts out across N writer threads,
+        // then merge the shards into _resultStorage. Each shard row carries its global scan-order Id, so
+        // the merged DB's default ORDER BY Id ASC still shows events in scan order. Gated by the toggle
+        // (default on) and a row-estimate floor; off ⇒ the untouched serial insert below (and the viewer
+        // can fill in live, which the fan-out can't — rows are queryable only after the merge).
+        ParallelIngestSink ingestSink = null;
+        if (streamFilteredDuringScan && SqliteStorage.ParallelIngestEnabled)
+        {
+            long estTotal = 0;
+            foreach (var loc in _locations)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                try
+                {
+                    var pe = loc.GetSearchPerformanceEstimate(cancellationToken);
+                    if (pe.recordCount.HasValue && pe.recordCount.Value > 0) estTotal += pe.recordCount.Value;
+                }
+                catch { /* unknown estimate — leave at 0 (stays serial below the floor) */ }
+            }
+            if (estTotal >= SqliteStorage.ParallelIngestMinRows)
+            {
+                ingestSink = new ParallelIngestSink(SqliteStorage.ParallelIngestShardCount(), cancellationToken);
+                Logger.Instance.Log($"Step2: parallel fan-out ingest ON — {ingestSink.ShardCount} shards, ~{estTotal:N0} est rows");
+                PerfLog.Log("ingest.parallel.begin", ("shards", ingestSink.ShardCount), ("est_rows", estTotal));
+            }
+        }
+
         FlowProgress.Begin(FlowPhase.ReadParse);
         foreach (var loc in _locations)
         {
@@ -788,7 +817,9 @@ public class NuSearchQuery : ISearchQuery
                             // raw table too just doubles the SQLite insert work during the scan (on a
                             // 1.45M-row DISM folder that's the bulk of a ~21s load). See CaptureStats,
                             // which already treats raw as 0 on the streaming pipeline.
-                            _resultStorage.AddFilteredBatch(EnrichBatch(batch), cancellationToken);
+                            var enriched = EnrichBatch(batch);
+                            if (ingestSink != null) ingestSink.Add(enriched);          // fan out to shard writers
+                            else _resultStorage.AddFilteredBatch(enriched, cancellationToken); // serial single writer
                             streamedCount += batch.Count;
                         }
                         else
@@ -873,11 +904,14 @@ public class NuSearchQuery : ISearchQuery
             {
                 Logger.Instance.Log($"Results streamed to storage for location: {loc.GetName()} ({streamedCount:N0} rows)");
                 int locEndPctStream = locBasePercent + locSpan;
+                // During fan-out the rows live in shards (not _resultStorage) until the post-loop merge, so
+                // report the sink's running produced count rather than SafeFilteredCount() (which is 0 then).
+                long streamDoneRows = ingestSink != null ? ingestSink.ProducedCount : SafeFilteredCount();
                 _stepnotifysink.progressSink.NotifyProgress(
                     locEndPctStream,
-                    $"[{count}/{total}] done {basename} · {SafeFilteredCount():N0} rows · {storageLabel}");
+                    $"[{count}/{total}] done {basename} · {streamDoneRows:N0} rows · {storageLabel}");
                 PerfLog.Log("location.end", ("idx", count), ("name", basename),
-                    ("rows_total", SafeFilteredCount()),
+                    ("rows_total", streamDoneRows),
                     ("rows_this_loc_raw", streamedCount),
                     ("enriched", _enrichedRowCount), ("enrich_ms", _enrichWatch.ElapsedMilliseconds),
                     ("elapsed_ms", Environment.TickCount64 - locStart));
@@ -959,6 +993,23 @@ public class NuSearchQuery : ISearchQuery
                 ("enriched", _enrichedRowCount), ("enrich_ms", _enrichWatch.ElapsedMilliseconds),
                 ("elapsed_ms", Environment.TickCount64 - locStart));
             count++;
+        }
+
+        // ----- Merge the fan-out shards into _resultStorage -----
+        // The scan wrote rows into N shard DBs; fold them into the real store (INSERT…SELECT, preserving
+        // the global scan-order Id) so everything downstream — consolidate, FTS, the viewer — runs on one
+        // DB exactly as the serial path produces. A shard-writer fault rethrows here; the toggle is the
+        // operator's recovery (disable parallel ingest and re-run on the serial path).
+        if (ingestSink != null)
+        {
+            using (ingestSink)
+            {
+                _stepnotifysink.progressSink.NotifyProgress(
+                    100, $"merging {ingestSink.ProducedCount:N0} rows from {ingestSink.ShardCount} shards…");
+                long merged = ingestSink.CompleteAndMergeInto((SqliteStorage)_resultStorage);
+                Logger.Instance.Log($"Step2: parallel ingest merged {merged:N0} rows from {ingestSink.ShardCount} shards into {storageLabel}");
+            }
+            ingestSink = null;
         }
 
         // Per-rule enrichment cost (this scan) → perf log, so it's queryable via get_diagnostics.

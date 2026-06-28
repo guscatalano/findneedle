@@ -785,7 +785,24 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
 
     public (TimeSpan? timeTaken, int? recordCount) GetSearchPerformanceEstimate(CancellationToken cancellationToken = default)
     {
-        // Stub: no performance data available
+        // An .etl has no event count in its header, so estimate from file size using the same
+        // typical bytes-per-event figure the decoder uses for its "~%" progress (≈180 B/event). Rough
+        // (event sizes vary by provider) but good enough for the "12,345 / ~N rows" denominator and for
+        // the parallel-ingest size gate. WPP traces decode via a different path and report no estimate.
+        const long AvgEtlBytesPerEvent = 180;
+        try
+        {
+            if (!string.IsNullOrEmpty(inputfile) && System.IO.File.Exists(inputfile))
+            {
+                long bytes = new System.IO.FileInfo(inputfile).Length;
+                if (bytes > 0)
+                {
+                    long est = Math.Max(1, bytes / AvgEtlBytesPerEvent);
+                    return (null, (int)Math.Min(est, int.MaxValue));
+                }
+            }
+        }
+        catch { /* unknown — fall through */ }
         return (null, null);
     }
 }

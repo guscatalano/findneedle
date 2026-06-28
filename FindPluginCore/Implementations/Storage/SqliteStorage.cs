@@ -369,6 +369,35 @@ namespace FindPluginCore.Implementations.Storage
             int.TryParse(Environment.GetEnvironmentVariable("FINDNEEDLE_FTS_SHARD_THRESHOLD"), out var _fst) && _fst > 0
                 ? _fst : DefaultFtsShardThreshold;
 
+        /// <summary>
+        /// When true (default), large streaming "just view a log" ingests fan out the per-shard SQLite
+        /// inserts across N writer threads while one thread decodes, then merge the shards into one DB —
+        /// measured ~2× faster first-open on a 5M .etl than the serial single-writer insert. The toggle is
+        /// the fail-safe: off ⇒ the untouched serial streaming insert (and live row-fill in the viewer,
+        /// which the fan-out can't do since rows appear only after the merge). Set the app setting (applied
+        /// at startup) or FINDNEEDLE_PARALLEL_INGEST=0/false to disable. See <see cref="ParallelIngestSink"/>.
+        /// </summary>
+        public static bool ParallelIngestEnabled { get; set; } =
+            !IsEnvFalse(Environment.GetEnvironmentVariable("FINDNEEDLE_PARALLEL_INGEST"));
+
+        private static bool IsEnvFalse(string v) =>
+            !string.IsNullOrEmpty(v) && (v == "0" || v.Equals("false", StringComparison.OrdinalIgnoreCase) || v.Equals("off", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// Estimated-row floor below which a streaming ingest stays on the serial path even when
+        /// <see cref="ParallelIngestEnabled"/> — the fan-out's shard setup + merge tail only amortize on
+        /// genuinely large logs (a 60k-row log inserts serially in well under a second). Default 500,000;
+        /// override via FINDNEEDLE_PARALLEL_INGEST_MIN.
+        /// </summary>
+        public const int DefaultParallelIngestMinRows = 500_000;
+        public static int ParallelIngestMinRows { get; set; } =
+            int.TryParse(Environment.GetEnvironmentVariable("FINDNEEDLE_PARALLEL_INGEST_MIN"), out var _pim) && _pim > 0
+                ? _pim : DefaultParallelIngestMinRows;
+
+        /// <summary>Number of shard writers for the parallel fan-out ingest (same core-bound cap as the
+        /// FTS shard count: leave a core for the producer + the OS).</summary>
+        public static int ParallelIngestShardCount() => Math.Max(2, Math.Min(MaxShards, Environment.ProcessorCount - 1));
+
         // Sharded-FTS state for the current session, set by BuildShardedIndex.
         private bool _ftsSharded;
         private int _shardCount;
@@ -1077,6 +1106,49 @@ namespace FindPluginCore.Implementations.Storage
         /// Truncate both tables and reclaim disk space. Public so callers can also force a wipe
         /// mid-lifetime (e.g. for tests).
         /// </summary>
+        /// <summary>
+        /// Merge the FilteredResults rows from other SqliteStorage cache DB files into this store, via
+        /// ATTACH + INSERT…SELECT (SQLite-internal row copy — no managed binding). Used by the parallel
+        /// fan-out ingest to consolidate per-shard stores into one queryable DB. The Id column IS copied
+        /// (not re-assigned): the fan-out stamps each shard row with its global scan position via
+        /// <see cref="AddFilteredBatchWithIds"/>, so copying Id verbatim makes the default ORDER BY Id ASC
+        /// reproduce true scan order even though rows were written out of order across shards. This store
+        /// must be empty before merging (the caller scans into shards, not here). Recomputes the row count
+        /// and invalidates the level-count cache (the copy bypasses BumpLevelCount). Returns rows merged.
+        /// </summary>
+        public long MergeFilteredFrom(IReadOnlyList<string> shardDbPaths)
+        {
+            if (shardDbPaths == null || shardDbPaths.Count == 0) return 0;
+            lock (_sync)
+            {
+                // Copy every column INCLUDING Id (shards carry the global scan-order Id; preserve it).
+                var cols = new List<string>();
+                using (var ti = _connection.CreateCommand())
+                {
+                    ti.CommandText = "PRAGMA table_info(FilteredResults)";
+                    using var r = ti.ExecuteReader();
+                    while (r.Read()) cols.Add(r.GetString(1));
+                }
+                string colList = string.Join(",", cols);
+                long before = _filteredCount;
+                using (var tx = _connection.BeginTransaction())
+                {
+                    for (int k = 0; k < shardDbPaths.Count; k++)
+                    {
+                        using (var a = _connection.CreateCommand()) { a.Transaction = tx; a.CommandText = $"ATTACH DATABASE '{shardDbPaths[k].Replace("'", "''")}' AS msrc{k};"; a.ExecuteNonQuery(); }
+                        using (var ins = _connection.CreateCommand()) { ins.Transaction = tx; ins.CommandText = $"INSERT INTO main.FilteredResults ({colList}) SELECT {colList} FROM msrc{k}.FilteredResults ORDER BY Id"; ins.ExecuteNonQuery(); }
+                    }
+                    tx.Commit();
+                }
+                for (int k = 0; k < shardDbPaths.Count; k++)
+                    try { using var d = _connection.CreateCommand(); d.CommandText = $"DETACH DATABASE msrc{k};"; d.ExecuteNonQuery(); } catch { }
+
+                _filteredCount = GetCount("FilteredResults");
+                _levelCountsValid = false; // INSERT…SELECT bypassed BumpLevelCount — recompute lazily from SQL
+                return _filteredCount - before;
+            }
+        }
+
         public void ClearTables()
         {
             lock (_sync)
@@ -1195,6 +1267,27 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         /// <summary>
+        /// Insert a filtered batch assigning each row an explicit Id starting at <paramref name="baseId"/>
+        /// (baseId, baseId+1, …). Used only by the parallel fan-out ingest: the single producer hands each
+        /// shard a batch already stamped with its GLOBAL scan position, so after the shards merge into one
+        /// DB the default ORDER BY Id ASC reproduces true scan order despite the rows having been written
+        /// out of order across N shards. Same prepared-insert fast path as <see cref="AddFilteredBatch"/>.
+        /// </summary>
+        public void AddFilteredBatchWithIds(IEnumerable<ISearchResult> batch, long baseId, CancellationToken cancellationToken = default)
+        {
+            if (batch == null) throw new ArgumentNullException(nameof(batch));
+            int inserted;
+            lock (_sync)
+            {
+                using var transaction = _connection.BeginTransaction();
+                BulkInsert("FilteredResults", batch, transaction, cancellationToken, out inserted, onProgress: null, baseId: baseId);
+                transaction.Commit();
+                _filteredCount += inserted;
+                if (inserted > 0) _ftsIndexBuilt = false;
+            }
+        }
+
+        /// <summary>
         /// Bulk-insert path used by both AddRawBatch and AddFilteredBatch. Accumulates rows up to
         /// <see cref="InsertChunkRows"/>, flushes via a single multi-row <c>INSERT … VALUES (…),(…)</c>
         /// statement, then drains any tail through the single-row prepared command. Both commands
@@ -1206,7 +1299,8 @@ namespace FindPluginCore.Implementations.Storage
             SqliteTransaction tx,
             CancellationToken cancellationToken,
             out int inserted,
-            Action<int> onProgress = null)
+            Action<int> onProgress = null,
+            long? baseId = null)
         {
             inserted = 0;
 
@@ -1216,11 +1310,16 @@ namespace FindPluginCore.Implementations.Storage
             // expensive than 500 cheap single-row binds. (Benchmarked: ~370k rows/s vs ~13k rows/s.)
             // Maintain the running level map only for the filtered table (what the viewer reads).
             // BindAndExecute has just set p.Level.Value, so read it back rather than re-deriving.
+            // baseId set ⇒ assign each row an explicit Id (baseId, baseId+1, …) instead of letting
+            // AUTOINCREMENT pick it. The parallel fan-out ingest uses this to stamp each shard row with
+            // its GLOBAL scan position, so the merged DB's default ORDER BY Id ASC = true scan order.
             bool trackLevels = string.Equals(table, "FilteredResults", StringComparison.Ordinal);
-            using var cmd = CreatePreparedInsert(table, tx, out var p);
+            bool withId = baseId.HasValue;
+            using var cmd = CreatePreparedInsert(table, tx, out var p, withId);
             foreach (var result in batch)
             {
                 if (cancellationToken.IsCancellationRequested) break;
+                if (withId) p.Id.Value = baseId.Value + inserted;
                 BindAndExecute(cmd, p, result);
                 if (trackLevels) BumpLevelCount(p.Level.Value);
                 inserted++;
@@ -1238,6 +1337,7 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         private struct InsertParams
         {
+            public SqliteParameter Id; // only bound when CreatePreparedInsert(withId:true) — the fan-out shard path
             public SqliteParameter LogTime, MachineName, Level, Username, TaskName,
                                    OpCode, Source, SearchableData, Message, ResultSource,
                                    ProcessId, ThreadId, ActivityId,
@@ -1250,14 +1350,17 @@ namespace FindPluginCore.Implementations.Storage
         /// it across all rows in one batch by mutating the returned <see cref="InsertParams"/>
         /// values and calling <c>ExecuteNonQuery</c> per row.
         /// </summary>
-        private SqliteCommand CreatePreparedInsert(string table, SqliteTransaction tx, out InsertParams p)
+        private SqliteCommand CreatePreparedInsert(string table, SqliteTransaction tx, out InsertParams p, bool withId = false)
         {
             var cmd = _connection.CreateCommand();
             cmd.Transaction = tx;
+            // withId prepends an explicit Id column (the fan-out shard path stamps global scan position).
+            string idCol = withId ? "Id, " : "";
+            string idVal = withId ? "@Id, " : "";
             cmd.CommandText = $@"
                 INSERT INTO {table}
-                (LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData)
-                VALUES (@LogTime, @MachineName, @Level, @Username, @TaskName, @OpCode, @Source, @SearchableData, @Message, @ResultSource, @ProcessId, @ThreadId, @ActivityId, @EventId, @Keywords, @RelatedActivityId, @Channel, @ProviderGuid, @RecordId, @ProcessName, @StructuredData)";
+                ({idCol}LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData)
+                VALUES ({idVal}@LogTime, @MachineName, @Level, @Username, @TaskName, @OpCode, @Source, @SearchableData, @Message, @ResultSource, @ProcessId, @ThreadId, @ActivityId, @EventId, @Keywords, @RelatedActivityId, @Channel, @ProviderGuid, @RecordId, @ProcessName, @StructuredData)";
 
             p = new InsertParams
             {
@@ -1283,6 +1386,7 @@ namespace FindPluginCore.Implementations.Storage
                 ProcessName       = cmd.Parameters.Add("@ProcessName",       SqliteType.Text),
                 StructuredData    = cmd.Parameters.Add("@StructuredData",    SqliteType.Text),
             };
+            if (withId) p.Id = cmd.Parameters.Add("@Id", SqliteType.Integer);
             cmd.Prepare();
             return cmd;
         }

@@ -173,6 +173,25 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// When on (default), large streaming log loads fan the SQLite inserts out across N writer threads
+    /// while one thread decodes, then merge — measured ~2× faster first-open on a 5M-event .etl. Off
+    /// falls back to the serial single-writer insert (the fail-safe), which also lets the viewer fill in
+    /// rows live during the load (the fan-out makes rows queryable only after the merge). Applied to
+    /// <c>SqliteStorage.ParallelIngestEnabled</c> (also at startup); takes effect on the next search.
+    /// </summary>
+    public const bool DefaultParallelIngest = true;
+    public static bool ParallelIngest
+    {
+        get => Data.ParallelIngest ?? DefaultParallelIngest;
+        set
+        {
+            Data.ParallelIngest = value;
+            FindPluginCore.Implementations.Storage.SqliteStorage.ParallelIngestEnabled = value;
+            Save();
+        }
+    }
+
+    /// <summary>
     /// How the result viewer's search box submits searches:
     ///   Auto    — live until a search is slow (>~1s) or the log is large, then Enter-to-search (default)
     ///   Live    — search on every keystroke
@@ -756,6 +775,7 @@ public static class ResultsViewerSettings
         public string CacheReuseMode { get; set; }
         public string IndexingMode { get; set; }
         public bool? IndexTimestampsInSearch { get; set; }
+        public bool? ParallelIngest { get; set; }
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }

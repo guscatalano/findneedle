@@ -70,6 +70,15 @@ public partial class App : Application
         }
         catch (Exception ex) { Logger.Instance.Log($"Apply IndexTimestampsInSearch failed: {ex.Message}"); }
 
+        // Apply the persisted "parallel fan-out ingest" preference (default on — first-open speed). Off
+        // falls back to the serial single-writer insert. See ResultsViewerSettings.ParallelIngest.
+        try
+        {
+            FindPluginCore.Implementations.Storage.SqliteStorage.ParallelIngestEnabled =
+                FindNeedleUX.Services.ResultsViewerSettings.ParallelIngest;
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Apply ParallelIngest failed: {ex.Message}"); }
+
         // Disk hygiene: the result cache had no eviction (it grew into the hundreds of GB) and a
         // killed/crashed run leaks its %Temp% extraction dir. Prune both on startup, off the UI thread,
         // and log the outcome so we can prove the cache stays bounded.

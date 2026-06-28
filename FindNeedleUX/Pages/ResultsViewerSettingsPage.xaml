@@ -496,6 +496,20 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Loading performance -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Loading performance" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ParallelIngestCheck" Margin="0,4,0,0"
+                                      Content="Parallel ingest for large logs (faster first open)"
+                                      Checked="ParallelIngestCheck_Changed" Unchecked="ParallelIngestCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="On by default. Large logs load by inserting across several writer threads while one thread decodes, then merging — about 2× faster first open on a multi-million-event .etl. Turn off to use the slower single-writer load (the fail-safe), which also lets rows appear in the viewer live as they load. Takes effect on the next search."/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Search box submit -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
