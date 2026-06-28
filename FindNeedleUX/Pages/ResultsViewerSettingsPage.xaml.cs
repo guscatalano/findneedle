@@ -281,6 +281,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- Indexing mode ---
             SelectIndexingMode();
+            IndexTimestampsCheck.IsChecked = ResultsViewerSettings.IndexTimestampsInSearch;
 
             // --- Search submit mode ---
             SelectSearchSubmitMode();
@@ -675,6 +676,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
         {
             ResultsViewerSettings.IndexingMode = mode;
         }
+    }
+
+    private void IndexTimestampsCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.IndexTimestampsInSearch = IndexTimestampsCheck.IsChecked == true;
     }
 
     // ----- Search submit mode -----

@@ -488,6 +488,11 @@
                             </ComboBox>
                             <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
                                        Text="Lazy opens fastest and skips the index entirely if you never search. Until the index is built, substring search uses a slower scan. Takes effect on the next search."/>
+                            <CheckBox x:Name="IndexTimestampsCheck" Margin="0,4,0,0"
+                                      Content="Include timestamps in substring search"
+                                      Checked="IndexTimestampsCheck_Changed" Unchecked="IndexTimestampsCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="Off by default: timestamps are very uniform, so indexing them makes the index build markedly slower for little benefit — the time-range filters cover time either way. Turn on only if you type date/time text into the search box. Changing this rebuilds the index on the next search."/>
                         </StackPanel>
                     </Border>
 

@@ -59,9 +59,11 @@ namespace FindPluginCore.Implementations.Storage
         // v2: added ProcessId/ThreadId/ActivityId. v3: EventId/Keywords/RelatedActivityId/Channel/
         // ProviderGuid/RecordId. v4: ProcessName/StructuredData. v5: folder-aware source signature
         // (source_count added; size/mtime now aggregate across a folder's files). v6: FTS no longer
-        // double-indexes SearchableData when it equals Message (trigram build ~halved for text logs);
-        // old caches rebuild the index. Old caches rescan; EnsureColumns migrates table structure in place.
-        public const int CacheSchemaVersion = 6;
+        // double-indexes SearchableData when it equals Message (trigram build ~halved for text logs).
+        // v7: LogTime is excluded from the FTS index by default (IndexLogTimeInFts toggle); bumped so
+        // old v6 caches (which indexed timestamps) rebuild under the toggle-aware schema rather than
+        // being reused with a mismatched setting. Old caches rescan; EnsureColumns migrates in place.
+        public const int CacheSchemaVersion = 7;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -340,6 +342,17 @@ namespace FindPluginCore.Implementations.Storage
         public static bool DisableFtsForMeasurement { get; set; } =
             !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_DISABLE_FTS"));
 
+        /// <summary>
+        /// When true, the LogTime (timestamp) column is included in the FTS trigram index, so a timestamp
+        /// fragment typed in the free-text search box matches. Default false: timestamps are highly uniform
+        /// (huge, near-universal trigram postings) so indexing them is costly and low-value — time filtering
+        /// is served by the dedicated time-range filters (structured LogTime SQL), which are unaffected
+        /// either way. Toggled via the app setting (applied at startup) or the FINDNEEDLE_FTS_INDEX_LOGTIME
+        /// env var. Flipping it makes a warm cache rescan (the stored value is part of cache validity).
+        /// </summary>
+        public static bool IndexLogTimeInFts { get; set; } =
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_FTS_INDEX_LOGTIME"));
+
         private void InitializeFts5()
         {
             if (DisableFtsForMeasurement)
@@ -350,8 +363,15 @@ namespace FindPluginCore.Implementations.Storage
             }
             try
             {
+                // LogTime is kept as an FTS column for a stable schema, but its indexed *value* is gated
+                // by IndexLogTimeInFts: '' (not indexed) by default, the real timestamp when enabled. The
+                // build's INSERT…SELECT uses the same expression, and cache validity stores the flag, so a
+                // warm cache's triggers always match how its index was built.
+                string ltOld = IndexLogTimeInFts ? "old.LogTime" : "''";
+                string ltNew = IndexLogTimeInFts ? "new.LogTime" : "''";
+
                 using var cmd = _connection.CreateCommand();
-                cmd.CommandText = @"
+                cmd.CommandText = $@"
                     CREATE VIRTUAL TABLE IF NOT EXISTS FilteredResults_fts USING fts5(
                         Source, TaskName, Message, ResultSource, SearchableData, LogTime,
                         content='FilteredResults',
@@ -363,12 +383,10 @@ namespace FindPluginCore.Implementations.Storage
                     -- load is ~2.8x slower than inserting rows trigger-free and running one
                     -- 'rebuild' afterward (see BuildSearchIndex / SqliteInsertBenchmark). The
                     -- delete/update triggers stay so incremental row changes remain consistent.
-                    -- SearchableData is identical to Message for plain-text results (the common case),
-                    -- so indexing both trigram-tokenizes the dominant text twice. Blank it when it equals
-                    -- Message so it's only indexed when it genuinely differs (e.g. ETW structured data) —
-                    -- Message already covers the shared text, so table-wide MATCH coverage is unchanged.
-                    -- The same CASE must appear everywhere we write the index (build + these triggers) so
-                    -- the external-content index stays consistent on later delete/update.
+                    -- SearchableData is blanked when it equals Message (don't trigram the dominant text
+                    -- twice); LogTime is blanked unless IndexLogTimeInFts. The same expressions must appear
+                    -- everywhere we write the index (build + these triggers) so the external-content index
+                    -- stays consistent on later delete/update.
                     CREATE TRIGGER IF NOT EXISTS FilteredResults_ad AFTER DELETE ON FilteredResults
                     BEGIN
                         INSERT INTO FilteredResults_fts
@@ -378,7 +396,7 @@ namespace FindPluginCore.Implementations.Storage
                             ('delete', old.Id, old.Source, old.TaskName, old.Message,
                              old.ResultSource,
                              CASE WHEN old.SearchableData = old.Message THEN '' ELSE old.SearchableData END,
-                             old.LogTime);
+                             {ltOld});
                     END;
 
                     CREATE TRIGGER IF NOT EXISTS FilteredResults_au AFTER UPDATE ON FilteredResults
@@ -390,13 +408,13 @@ namespace FindPluginCore.Implementations.Storage
                             ('delete', old.Id, old.Source, old.TaskName, old.Message,
                              old.ResultSource,
                              CASE WHEN old.SearchableData = old.Message THEN '' ELSE old.SearchableData END,
-                             old.LogTime);
+                             {ltOld});
                         INSERT INTO FilteredResults_fts
                             (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
                         VALUES
                             (new.Id, new.Source, new.TaskName, new.Message, new.ResultSource,
                              CASE WHEN new.SearchableData = new.Message THEN '' ELSE new.SearchableData END,
-                             new.LogTime);
+                             {ltNew});
                     END;
                 ";
                 cmd.ExecuteNonQuery();
@@ -471,14 +489,15 @@ namespace FindPluginCore.Implementations.Storage
                         using (var cmd = _connection.CreateCommand())
                         {
                             cmd.Transaction = tx;
-                            // Blank SearchableData when it equals Message (see InitializeFts5) so the
-                            // dominant text isn't trigram-indexed twice — must match the triggers' CASE.
-                            cmd.CommandText = @"
+                            // Blank SearchableData when it equals Message, and LogTime unless
+                            // IndexLogTimeInFts (see InitializeFts5) — must match the triggers' expressions.
+                            string ltExpr = IndexLogTimeInFts ? "LogTime" : "''";
+                            cmd.CommandText = $@"
                                 INSERT INTO FilteredResults_fts
                                     (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
                                 SELECT Id, Source, TaskName, Message, ResultSource,
                                        CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END,
-                                       LogTime
+                                       {ltExpr}
                                 FROM FilteredResults WHERE Id > @last ORDER BY Id LIMIT @bs;";
                             cmd.Parameters.AddWithValue("@last", lastId);
                             cmd.Parameters.AddWithValue("@bs", IndexBatchRows);
@@ -601,6 +620,16 @@ namespace FindPluginCore.Implementations.Storage
                     ClearTables();
                     return false;
                 }
+                // The LogTime-in-FTS setting changes how the index is tokenized; a cache built under the
+                // other setting has a mismatched index (and triggers), so don't reuse it — rescan fresh.
+                var wantLogTime = IndexLogTimeInFts ? "1" : "0";
+                if ((meta.TryGetValue("fts_logtime", out var flt) ? flt : "0") != wantLogTime)
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "fts_logtime_differs"),
+                        ("got", flt ?? "(null)"), ("want", wantLogTime));
+                    ClearTables();
+                    return false;
+                }
                 if (!meta.TryGetValue("source_path", out var sp) || !string.Equals(sp, sourcePath, StringComparison.OrdinalIgnoreCase))
                 {
                     FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "path_differs"),
@@ -708,6 +737,9 @@ namespace FindPluginCore.Implementations.Storage
                     // the rows can be cache-complete while the index isn't built yet — a warm reopen
                     // reads this to decide whether substring search can use FTS or must (re)build.
                     WriteMetaKey(tx, "fts_built",      _ftsIndexBuilt ? "1" : "0");
+                    // Part of cache validity: a cache built with a different LogTime-in-FTS setting has a
+                    // differently-tokenized index, so reuse must reject it (EvaluateCacheReuse).
+                    WriteMetaKey(tx, "fts_logtime",    IndexLogTimeInFts ? "1" : "0");
                     WriteMetaKey(tx, "completed_at",   DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
                     tx.Commit();
                     FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", true), ("size", size), ("path_len", sourcePath.Length));

@@ -153,6 +153,26 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// When on, timestamps are included in the full-text (substring) search index, so a date/time
+    /// fragment typed in the search box matches. Off by default: timestamps are highly uniform, so
+    /// trigram-indexing them makes the index build markedly slower for little value — the dedicated
+    /// time-range filters cover time either way. Applied to <c>SqliteStorage.IndexLogTimeInFts</c>
+    /// (also at startup); takes effect on the next search (a changed value rescans the log's cache).
+    /// </summary>
+    public const bool DefaultIndexTimestampsInSearch = false;
+    public static bool IndexTimestampsInSearch
+    {
+        get => Data.IndexTimestampsInSearch ?? DefaultIndexTimestampsInSearch;
+        set
+        {
+            Data.IndexTimestampsInSearch = value;
+            // Apply live so the next search uses it without an app restart.
+            FindPluginCore.Implementations.Storage.SqliteStorage.IndexLogTimeInFts = value;
+            Save();
+        }
+    }
+
+    /// <summary>
     /// How the result viewer's search box submits searches:
     ///   Auto    — live until a search is slow (>~1s) or the log is large, then Enter-to-search (default)
     ///   Live    — search on every keystroke
@@ -735,6 +755,7 @@ public static class ResultsViewerSettings
         public bool? UseSearchCache { get; set; } // legacy; superseded by CacheReuseMode
         public string CacheReuseMode { get; set; }
         public string IndexingMode { get; set; }
+        public bool? IndexTimestampsInSearch { get; set; }
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }

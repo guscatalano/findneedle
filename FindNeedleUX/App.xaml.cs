@@ -61,6 +61,15 @@ public partial class App : Application
         }
         catch (Exception ex) { Logger.Instance.Log($"TraceFormat config init failed: {ex.Message}"); }
 
+        // Apply the persisted "index timestamps in search" preference to the storage layer before any
+        // search runs (default off — see ResultsViewerSettings.IndexTimestampsInSearch).
+        try
+        {
+            FindPluginCore.Implementations.Storage.SqliteStorage.IndexLogTimeInFts =
+                FindNeedleUX.Services.ResultsViewerSettings.IndexTimestampsInSearch;
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Apply IndexTimestampsInSearch failed: {ex.Message}"); }
+
         // Disk hygiene: the result cache had no eviction (it grew into the hundreds of GB) and a
         // killed/crashed run leaks its %Temp% extraction dir. Prune both on startup, off the UI thread,
         // and log the outcome so we can prove the cache stays bounded.
