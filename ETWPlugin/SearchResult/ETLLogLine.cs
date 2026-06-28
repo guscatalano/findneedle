@@ -156,9 +156,12 @@ public class ETLLogLine : ISearchResult
         // event name is NOT prepended — it's already the TaskName column, so repeating it just
         // duplicates that column.
         var formatted = obj.FormattedMessage;
+        // Render the message straight from the fields we already have — NOT from this.structuredData,
+        // which would re-parse the JSON we just serialized (a wasted JsonDocument.Parse per event over
+        // millions of ETL rows). Dictionary + JSON both preserve insertion order, so output is identical.
         string payload = structured.Count > 0
             ? FindNeedlePluginUtils.StructuredLog.StructuredPayloadFormatter.Render(
-                this.structuredData, FindNeedlePluginUtils.StructuredLog.PayloadFormat.KeyValueQuoted)
+                System.Linq.Enumerable.ToList(structured), FindNeedlePluginUtils.StructuredLog.PayloadFormat.KeyValueQuoted)
             : string.Empty;
         if (!string.IsNullOrEmpty(formatted))
             this.eventtxt = payload.Length > 0 ? formatted + " == " + payload : formatted!;
