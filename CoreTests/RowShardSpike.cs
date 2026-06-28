@@ -188,6 +188,96 @@ public class RowShardSpike
         return list;
     }
 
+    // ---- Wide-row variant: 21 columns with ETL-realistic sizes (long message + JSON StructuredData),
+    //      so the insert cost matches production (~128k rows/s) rather than the trivial 4-col table.
+    //      Validates that parallel-insert + merge-back scaling holds for the real ETL row shape. ----
+    private static void CreateWideTable(SqliteConnection c)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "CREATE TABLE T(Id INTEGER PRIMARY KEY, LogTime TEXT, MachineName TEXT, Level INTEGER, " +
+            "Username TEXT, TaskName TEXT, OpCode TEXT, Source TEXT, SearchableData TEXT, Message TEXT, ResultSource TEXT, " +
+            "ProcessId TEXT, ThreadId TEXT, ActivityId TEXT, EventId TEXT, Keywords TEXT, RelatedActivityId TEXT, " +
+            "Channel TEXT, ProviderGuid TEXT, RecordId TEXT, ProcessName TEXT, StructuredData TEXT);";
+        cmd.ExecuteNonQuery();
+    }
+
+    private static void InsertWideRange(SqliteConnection conn, long lo, long hi)
+    {
+        using var tx = conn.BeginTransaction();
+        using var ins = conn.CreateCommand();
+        ins.Transaction = tx;
+        ins.CommandText = "INSERT INTO T VALUES(@Id,@LogTime,@MachineName,@Level,@Username,@TaskName,@OpCode,@Source," +
+            "@SearchableData,@Message,@ResultSource,@ProcessId,@ThreadId,@ActivityId,@EventId,@Keywords,@RelatedActivityId," +
+            "@Channel,@ProviderGuid,@RecordId,@ProcessName,@StructuredData)";
+        SqliteParameter P(string n) { var p = ins.CreateParameter(); p.ParameterName = n; ins.Parameters.Add(p); return p; }
+        var pid = P("@Id"); var plt = P("@LogTime"); var pmn = P("@MachineName"); var plv = P("@Level");
+        var pun = P("@Username"); var ptn = P("@TaskName"); var poc = P("@OpCode"); var psr = P("@Source");
+        var psd = P("@SearchableData"); var pmsg = P("@Message"); var prs = P("@ResultSource"); var ppid = P("@ProcessId");
+        var ptid = P("@ThreadId"); var pact = P("@ActivityId"); var pev = P("@EventId"); var pkw = P("@Keywords");
+        var prel = P("@RelatedActivityId"); var pch = P("@Channel"); var ppg = P("@ProviderGuid"); var prec = P("@RecordId");
+        var ppn = P("@ProcessName"); var pstr = P("@StructuredData");
+        ins.Prepare();
+        for (long i = lo; i < hi; i++)
+        {
+            pid.Value = i;
+            plt.Value = "2026-01-01T00:00:00.0000000Z";
+            pmn.Value = "MACHINE01"; plv.Value = (int)(i % 6); pun.Value = ""; ptn.Value = "MyProvider/MyTask";
+            poc.Value = "Info"; psr.Value = "Microsoft-Windows-MyProvider"; prs.Value = "ETW: trace.etl";
+            var msg = $"MyProvider/MyTask == requestId=\"req-{i % 9973}\" durationMs=\"{i % 1500}\" status=\"200\" node=\"node-{i % 64}.dc{i % 8}\" user=\"user{i % 4096}\"";
+            pmsg.Value = msg; psd.Value = msg; // SearchableData==Message (deduped at FTS, but stored both here)
+            ppid.Value = (i % 60000).ToString("X"); ptid.Value = (i % 9000).ToString("X");
+            pact.Value = ""; pev.Value = (i % 200).ToString(); pkw.Value = ""; prel.Value = ""; pch.Value = "";
+            ppg.Value = "{11111111-2222-3333-4444-555555555555}"; prec.Value = ""; ppn.Value = "myservice.exe";
+            pstr.Value = $"{{\"requestId\":\"req-{i % 9973}\",\"durationMs\":\"{i % 1500}\",\"status\":\"200\",\"node\":\"node-{i % 64}.dc{i % 8}\",\"user\":\"user{i % 4096}\"}}";
+            ins.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    [TestMethod]
+    [Timeout(900_000)]
+    public void WideRow_ParallelInsert_AndMerge_EtlShape()
+    {
+        int rows = EnvInt("FINDNEEDLE_SPIKE_ROWS", 5_000_000);
+        int shards = EnvInt("FINDNEEDLE_SPIKE_SHARDS", 8);
+
+        var singlePath = NewDb("wsingle");
+        var swS = Stopwatch.StartNew();
+        using (var c = new SqliteConnection($"Data Source={singlePath}")) { c.Open(); Pragmas(c); CreateWideTable(c); InsertWideRange(c, 0, rows); }
+        swS.Stop();
+        TestContext.WriteLine($"WIDE rows={rows:N0} shards={shards}");
+        TestContext.WriteLine($"SINGLE wide insert : {swS.ElapsedMilliseconds,7:N0} ms   ({Rate(rows, swS.ElapsedMilliseconds)})");
+
+        var shardPaths = Enumerable.Range(0, shards).Select(k => NewDb($"ws{k}")).ToArray();
+        long per = (rows + shards - 1) / shards;
+        var swP = Stopwatch.StartNew();
+        Parallel.For(0, shards, k =>
+        {
+            long lo = k * per, hi = Math.Min(lo + per, rows);
+            using var c = new SqliteConnection($"Data Source={shardPaths[k]}");
+            c.Open(); Pragmas(c); CreateWideTable(c); InsertWideRange(c, lo, hi);
+        });
+        swP.Stop();
+
+        var mergedPath = NewDb("wmerged");
+        var swM = Stopwatch.StartNew();
+        using (var c = new SqliteConnection($"Data Source={mergedPath}"))
+        {
+            c.Open(); Pragmas(c); CreateWideTable(c);
+            for (int k = 0; k < shards; k++)
+                using (var a = c.CreateCommand()) { a.CommandText = $"ATTACH DATABASE '{shardPaths[k].Replace("'", "''")}' AS s{k};"; a.ExecuteNonQuery(); }
+            using var tx = c.BeginTransaction();
+            for (int k = 0; k < shards; k++)
+                using (var insm = c.CreateCommand()) { insm.Transaction = tx; insm.CommandText = $"INSERT INTO main.T SELECT * FROM s{k}.T"; insm.ExecuteNonQuery(); }
+            tx.Commit();
+        }
+        swM.Stop();
+        long parMerge = swP.ElapsedMilliseconds + swM.ElapsedMilliseconds;
+        TestContext.WriteLine($"PARALLEL wide ins  : {swP.ElapsedMilliseconds,7:N0} ms   ({Rate(rows, swP.ElapsedMilliseconds)})   speedup={(double)swS.ElapsedMilliseconds / Math.Max(1, swP.ElapsedMilliseconds):F2}x");
+        TestContext.WriteLine($"MERGE wide shards→1: {swM.ElapsedMilliseconds,7:N0} ms   →  parallel+merge total {parMerge:N0} ms vs single {swS.ElapsedMilliseconds:N0} ms   (net {(double)swS.ElapsedMilliseconds / Math.Max(1, parMerge):F2}x, queries stay single-DB)");
+        using (var mc = new SqliteConnection($"Data Source={mergedPath};Mode=ReadOnly")) { mc.Open(); Assert.AreEqual((long)rows, Count(mc, "T", null), "merged wide row count"); }
+    }
+
     private static long Time(Action a) { var sw = Stopwatch.StartNew(); a(); sw.Stop(); return sw.ElapsedMilliseconds; }
     private static string Rate(long rows, long ms) => ms > 0 ? $"{rows * 1000L / ms:N0} rows/s" : "n/a";
     private static int EnvInt(string n, int d) => int.TryParse(Environment.GetEnvironmentVariable(n), out var v) && v > 0 ? v : d;
