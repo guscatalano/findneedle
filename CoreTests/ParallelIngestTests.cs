@@ -131,6 +131,12 @@ public class ParallelIngestTests
         Assert.AreEqual(serialMatch, target.GetFilteredCount(new SqliteStorage.FilterInput { Message = "msg-0000012" }),
             "substring search returns the same rows after merge");
         Assert.AreEqual(serialMsgs.Count, target.GetFilteredCount(new SqliteStorage.FilterInput()), "total count");
+
+        // Level counts must survive the merge WITHOUT a GROUP BY recompute (the sink carries each shard's
+        // exact counts across). All SeqResult rows are Info, so the Info bucket equals the row count.
+        var levels = target.GetLevelCounts(new SqliteStorage.FilterInput());
+        Assert.AreEqual(batch * batches, levels.TryGetValue((int)Level.Info, out var c) ? c : 0,
+            "merged level counts preserved (Info bucket == row count)");
     }
 
     [TestMethod]

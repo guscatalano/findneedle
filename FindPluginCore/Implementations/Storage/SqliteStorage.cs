@@ -1454,6 +1454,27 @@ namespace FindPluginCore.Implementations.Storage
             else _levelCountsValid = false;
         }
 
+        /// <summary>Snapshot the per-level row counts if the running map is currently exact, else null.
+        /// Used by the parallel fan-out ingest to carry each shard's exact counts across the merge instead
+        /// of recomputing them with a full GROUP BY (which, on a multi-million-row log, stalled the first
+        /// filter query in the viewer).</summary>
+        public int[] GetLevelCountSnapshotOrNull()
+        {
+            lock (_sync) { return _levelCountsValid ? (int[])_levelCounts.Clone() : null; }
+        }
+
+        /// <summary>Install an exact per-level count map (e.g. the summed shard snapshots after a fan-out
+        /// merge) and mark it valid, so GetLevelCounts answers from memory instead of a GROUP BY.</summary>
+        public void SetLevelCountsExact(int[] counts)
+        {
+            if (counts == null || counts.Length != _levelCounts.Length) return;
+            lock (_sync)
+            {
+                Array.Copy(counts, _levelCounts, _levelCounts.Length);
+                _levelCountsValid = true;
+            }
+        }
+
         public void GetRawResultsInBatches(Action<List<ISearchResult>> onBatch, int batchSize = 1000, CancellationToken cancellationToken = default)
         {
             GetResultsInBatches("RawResults", onBatch, batchSize, cancellationToken);

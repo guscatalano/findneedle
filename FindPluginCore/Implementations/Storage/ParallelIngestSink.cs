@@ -109,6 +109,22 @@ namespace FindPluginCore.Implementations.Storage
             try { Task.WaitAll(_consumers); }
             catch (AggregateException ae) { throw ae.Flatten().InnerExceptions.FirstOrDefault() ?? ae; }
 
+            // Sum each shard's exact per-level counts BEFORE disposing them, so the merged store can serve
+            // GetLevelCounts from memory instead of a full GROUP BY over millions of rows (that recompute
+            // stalled the viewer's first filter query on a large log). Null from any shard ⇒ fall back.
+            int[] levelSum = null;
+            try
+            {
+                levelSum = new int[16];
+                foreach (var s in _shards)
+                {
+                    var snap = s.GetLevelCountSnapshotOrNull();
+                    if (snap == null || snap.Length != levelSum.Length) { levelSum = null; break; }
+                    for (int i = 0; i < levelSum.Length; i++) levelSum[i] += snap[i];
+                }
+            }
+            catch { levelSum = null; }
+
             // Release shard file handles before ATTACH — pooled connections keep the file open otherwise.
             foreach (var s in _shards) { try { s.Dispose(); } catch { } }
             SqliteConnection.ClearAllPools();
@@ -126,6 +142,10 @@ namespace FindPluginCore.Implementations.Storage
             using (PerfLog.Scope("ingest.merge", ("shards", _shards.Length), ("rows", ProducedCount)))
                 merged = target.MergeFilteredFrom(_shardDbPaths, onMergeProgress);
             LastMergeMs = mergeWatch.ElapsedMilliseconds;
+
+            // Restore the exact per-level counts (the merge's INSERT…SELECT bypassed the running map and
+            // invalidated it). Avoids the first filter query paying for a 5M-row GROUP BY.
+            if (levelSum != null) target.SetLevelCountsExact(levelSum);
             DeleteShardFiles();
             return merged;
         }

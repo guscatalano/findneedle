@@ -798,21 +798,41 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                 return;
             }
         }
-        else
+        bool justFinished = false;
+        if (!stillLoading)
         {
-            // Producer finished — stop the timer, do one final refresh below, drop spinner/Stop.
+            // Producer finished — stop the timer and do one final refresh below. Crucially we do NOT drop
+            // IsLoading/IsStreaming yet: with the parallel fan-out ingest the live count stays at 0 until
+            // the merge, so this final refresh is the FIRST time the real count is read. Flipping loading
+            // off before it binds left a window where the loading bar was gone but the count was still 0,
+            // which flashed the "No results" empty-state while the first page was actually rendering.
             _refreshTimer?.Stop();
-            IsLoading = false;
-            IsStreaming = false;
+            justFinished = true;
         }
 
         // No filter (or load just finished): refresh the visible page + counts OFF the UI thread so a
-        // re-query during a heavy load never freezes the UI. Skip overlapping refreshes.
-        if (_liveRefreshInFlight) return;
-        _liveRefreshInFlight = true;
-        try { await ReloadFromSourceAsyncCore(); HasPendingRows = false; }
-        catch { /* transient read during a concurrent write — the next tick (or completion) retries */ }
-        finally { _liveRefreshInFlight = false; }
+        // re-query during a heavy load never freezes the UI. Normal ticks skip if a refresh is already
+        // running; the completion tick still proceeds to finalize (so loading never gets stuck on).
+        if (!_liveRefreshInFlight)
+        {
+            _liveRefreshInFlight = true;
+            try { await ReloadFromSourceAsyncCore(); HasPendingRows = false; }
+            catch { /* transient read during a concurrent write — the next tick (or completion) retries */ }
+            finally { _liveRefreshInFlight = false; }
+        }
+        else if (!justFinished)
+        {
+            return; // a refresh is in flight and this isn't the final tick — let it finish
+        }
+
+        // Only now that the final page + count are bound do we drop the loading state, so the loading bar
+        // stays up until there are rows to show and the empty-state never flashes on a stale 0 count.
+        if (justFinished)
+        {
+            IsLoading = false;
+            IsStreaming = false;
+            UpdateStatus();
+        }
     }
 
     /// <summary>Manually fold newly-loaded rows into the current (filtered) view, then keep streaming.</summary>
