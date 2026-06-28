@@ -653,24 +653,43 @@ namespace FindPluginCore.Implementations.Storage
                     // table by Id). Same 6 columns as the single index so MATCH semantics match.
                     using (var cr = sc.CreateCommand())
                     { cr.CommandText = $"CREATE VIRTUAL TABLE fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');"; cr.ExecuteNonQuery(); }
-                    // Read this shard's range straight from the main DB (attached read-only; concurrent
-                    // readers are fine — the main connection isn't writing during the build).
-                    using (var at = sc.CreateCommand())
-                    { at.CommandText = $"ATTACH DATABASE '{_dbPath.Replace("'", "''")}' AS src;"; at.ExecuteNonQuery(); }
+                    // Read this shard's range from a SEPARATE read-only connection to the main DB. A
+                    // read-only connection doesn't take a write lock, so N workers read concurrently
+                    // without contention — a read-write ATTACH from many workers hits "database is locked".
+                    using var src = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly");
+                    src.Open();
+                    using var read = src.CreateCommand();
+                    read.CommandText = $@"SELECT Id, {srcExpr}, TaskName, Message, {rsExpr},
+                                          CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END, {ltExpr}
+                                          FROM FilteredResults WHERE Id >= @lo AND Id < @hi";
+                    read.Parameters.AddWithValue("@lo", lo);
+                    read.Parameters.AddWithValue("@hi", hi);
                     using (var tx = sc.BeginTransaction())
                     using (var ins = sc.CreateCommand())
                     {
                         ins.Transaction = tx;
-                        ins.CommandText = $@"
-                            INSERT INTO fts{k}(rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
-                            SELECT Id, {srcExpr}, TaskName, Message, {rsExpr},
-                                   CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END, {ltExpr}
-                            FROM src.FilteredResults WHERE Id >= @lo AND Id < @hi;";
-                        ins.Parameters.AddWithValue("@lo", lo);
-                        ins.Parameters.AddWithValue("@hi", hi);
-                        int n = ins.ExecuteNonQuery();
+                        ins.CommandText = $"INSERT INTO fts{k}(rowid,Source,TaskName,Message,ResultSource,SearchableData,LogTime) VALUES(@r,@s,@t,@m,@rs,@sd,@lt)";
+                        SqliteParameter Add(string n2) { var p2 = ins.CreateParameter(); p2.ParameterName = n2; ins.Parameters.Add(p2); return p2; }
+                        var pr = Add("@r"); var psr = Add("@s"); var pt = Add("@t"); var pm = Add("@m");
+                        var prs = Add("@rs"); var psd = Add("@sd"); var plt = Add("@lt");
+                        ins.Prepare();
+                        long localN = 0;
+                        using (var rd = read.ExecuteReader())
+                            while (rd.Read())
+                            {
+                                if (ct.IsCancellationRequested) break;
+                                pr.Value = rd.GetInt64(0);
+                                psr.Value = rd.IsDBNull(1) ? "" : rd.GetString(1);
+                                pt.Value = rd.IsDBNull(2) ? "" : rd.GetString(2);
+                                pm.Value = rd.IsDBNull(3) ? "" : rd.GetString(3);
+                                prs.Value = rd.IsDBNull(4) ? "" : rd.GetString(4);
+                                psd.Value = rd.IsDBNull(5) ? "" : rd.GetString(5);
+                                plt.Value = rd.IsDBNull(6) ? "" : rd.GetString(6);
+                                ins.ExecuteNonQuery();
+                                localN++;
+                            }
                         tx.Commit();
-                        System.Threading.Interlocked.Add(ref indexed, n);
+                        System.Threading.Interlocked.Add(ref indexed, localN);
                         onProgress?.Invoke(System.Threading.Interlocked.Read(ref indexed), _filteredCount);
                     }
                 });
@@ -699,12 +718,16 @@ namespace FindPluginCore.Implementations.Storage
                 FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", true),
                     ("rebuild_ms", Environment.TickCount64 - start), ("sharded", true), ("shards", shardCount), ("rows", indexed));
             }
-            catch (SqliteException ex)
+            catch (Exception ex)
             {
+                // Parallel.For wraps worker exceptions in AggregateException — unwrap to log the real
+                // cause. Any failure falls back to the LIKE scan (search stays correct, just slower).
+                var real = (ex as AggregateException)?.Flatten().InnerException ?? ex;
                 DetachAndDeleteShards();
                 _ftsIndexBuilt = false;
-                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false), ("reason", "shard_build_failed"), ("msg", ex.GetType().Name));
-                System.Diagnostics.Debug.WriteLine($"[SqliteStorage] sharded FTS build failed; falls back to LIKE: {ex.Message}");
+                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false), ("reason", "shard_build_failed"),
+                    ("msg", real.GetType().Name), ("detail", real.Message));
+                System.Diagnostics.Debug.WriteLine($"[SqliteStorage] sharded FTS build failed; falls back to LIKE: {real.Message}");
             }
         }
 
