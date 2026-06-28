@@ -31,7 +31,15 @@ public class ETLLogLine : ISearchResult
     public string datetime = string.Empty;
     public DateTime parsedTime = DateTime.MinValue;
     public string json = string.Empty;
-    public Dictionary<string, dynamic> keyjson = new();
+    // Lazily allocated: TraceEvent-sourced rows (the modern-ETL hot path) carry their level/fields on the
+    // event itself and never touch keyjson, so allocating an empty dictionary for every one of millions of
+    // events is pure GC pressure. Only the WPP/tracefmt text path populates it. Getter never returns null.
+    private Dictionary<string, dynamic> _keyjson;
+    public Dictionary<string, dynamic> keyjson
+    {
+        get => _keyjson ??= new Dictionary<string, dynamic>();
+        set => _keyjson = value;
+    }
     public string filename = string.Empty;
 
     public string originalLine = string.Empty;
@@ -158,10 +166,11 @@ public class ETLLogLine : ISearchResult
         var formatted = obj.FormattedMessage;
         // Render the message straight from the fields we already have — NOT from this.structuredData,
         // which would re-parse the JSON we just serialized (a wasted JsonDocument.Parse per event over
-        // millions of ETL rows). Dictionary + JSON both preserve insertion order, so output is identical.
+        // millions of ETL rows). Pass the dictionary directly (Render takes IEnumerable, so no per-event
+        // list copy); Dictionary + JSON both preserve insertion order, so output is identical.
         string payload = structured.Count > 0
             ? FindNeedlePluginUtils.StructuredLog.StructuredPayloadFormatter.Render(
-                System.Linq.Enumerable.ToList(structured), FindNeedlePluginUtils.StructuredLog.PayloadFormat.KeyValueQuoted)
+                structured, FindNeedlePluginUtils.StructuredLog.PayloadFormat.KeyValueQuoted)
             : string.Empty;
         if (!string.IsNullOrEmpty(formatted))
             this.eventtxt = payload.Length > 0 ? formatted + " == " + payload : formatted!;
@@ -310,11 +319,11 @@ public class ETLLogLine : ISearchResult
             };
         }
         // Try to extract from JSON if available
-        if (keyjson != null && keyjson.ContainsKey("meta"))
+        if (_keyjson != null && _keyjson.ContainsKey("meta"))
         {
             try
             {
-                var meta = keyjson["meta"];
+                var meta = _keyjson["meta"];
                 if (meta is Newtonsoft.Json.Linq.JObject metaObj && metaObj["level"] != null)
                 {
                     var levelStr = metaObj["level"]?.ToString(); // Use null conditional operator to avoid null dereference

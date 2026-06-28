@@ -54,7 +54,7 @@ public static class StructuredPayloadFormatter
         return message.Substring(0, message.Length - fromRender.Length) + toRender;
     }
 
-    public static string Render(IReadOnlyList<KeyValuePair<string, string>> fields, PayloadFormat format, string? customTemplate = null)
+    public static string Render(IEnumerable<KeyValuePair<string, string>> fields, PayloadFormat format, string? customTemplate = null)
     {
         switch (format)
         {
@@ -123,13 +123,15 @@ public static class StructuredPayloadFormatter
 
     private static string Quote(string v) => "\"" + v.Replace("\"", "\\\"") + "\"";
 
-    private static string ToJson(IReadOnlyList<KeyValuePair<string, string>> fields)
+    private static string ToJson(IEnumerable<KeyValuePair<string, string>> fields)
     {
         var sb = new StringBuilder("{");
-        for (int i = 0; i < fields.Count; i++)
+        bool first = true;
+        foreach (var f in fields)
         {
-            if (i > 0) sb.Append(',');
-            sb.Append(JsonStr(fields[i].Key)).Append(':').Append(JsonStr(fields[i].Value));
+            if (!first) sb.Append(',');
+            first = false;
+            sb.Append(JsonStr(f.Key)).Append(':').Append(JsonStr(f.Value));
         }
         return sb.Append('}').ToString();
     }
