@@ -209,10 +209,39 @@ public class SearchIndexTests
         Assert.AreEqual(0, SqliteStorage.PredictIndexBuildMs(0));
     }
 
+    [TestMethod]
+    public void BuildSearchIndex_MultiSource_PathColumnsRemainSearchable()
+    {
+        using var s = NewSqlite();
+        // >1 distinct Source AND ResultSource → both path columns ARE trigram-indexed → searchable.
+        s.AddFilteredBatch(new List<ISearchResult>
+        {
+            new R("[2026-01-01 00:00:00] INFO: alpha", src: "ProviderAlpha", rs: @"C:\logs\alpha.log"),
+            new R("[2026-01-01 00:00:00] INFO: bravo", src: "ProviderBravo", rs: @"C:\logs\bravo.log"),
+        });
+        s.BuildSearchIndex();
+
+        Assert.AreEqual(1, SearchCount(s, "ProviderAlpha"), "Source substring must match when >1 distinct source");
+        Assert.AreEqual(1, SearchCount(s, "bravo.log"), "ResultSource substring must match when >1 distinct result-source");
+        Assert.AreEqual(2, SearchCount(s, "logs"), "shared path fragment matches both rows");
+    }
+
+    [TestMethod]
+    public void BuildSearchIndex_SingleSource_MessageSearchUnaffected()
+    {
+        using var s = NewSqlite();
+        // One distinct Source/ResultSource (the default) → those columns are blanked in the index to save
+        // build cost, but message substring search is unaffected (the point: no useful search is lost).
+        s.AddFilteredBatch(MakeRows());
+        s.BuildSearchIndex();
+        Assert.AreEqual(ExpectedNeedles, SearchCount(s, "needle"), "message search must work despite single-source path blanking");
+        Assert.AreEqual(N, SearchCount(s, "row"));
+    }
+
     private sealed class R : ISearchResult
     {
-        private readonly string _m;
-        public R(string m) { _m = m; }
+        private readonly string _m, _src, _rs;
+        public R(string m, string src = "s", string rs = "rs") { _m = m; _src = src; _rs = rs; }
         public DateTime GetLogTime() => new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         public string GetMachineName() => "M";
         public void WriteToConsole() { }
@@ -220,9 +249,9 @@ public class SearchIndexTests
         public string GetUsername() => "u";
         public string GetTaskName() => "t";
         public string GetOpCode() => "";
-        public string GetSource() => "s";
+        public string GetSource() => _src;
         public string GetSearchableData() => _m;
         public string GetMessage() => _m;
-        public string GetResultSource() => "rs";
+        public string GetResultSource() => _rs;
     }
 }

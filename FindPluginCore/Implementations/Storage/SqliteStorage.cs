@@ -62,8 +62,10 @@ namespace FindPluginCore.Implementations.Storage
         // double-indexes SearchableData when it equals Message (trigram build ~halved for text logs).
         // v7: LogTime is excluded from the FTS index by default (IndexLogTimeInFts toggle); bumped so
         // old v6 caches (which indexed timestamps) rebuild under the toggle-aware schema rather than
-        // being reused with a mismatched setting. Old caches rescan; EnsureColumns migrates in place.
-        public const int CacheSchemaVersion = 7;
+        // being reused with a mismatched setting. v8: Source/ResultSource are excluded from the FTS when
+        // the load has a single distinct value (constant path = repetitive trigrams, no search value);
+        // bumped so old caches rebuild with the new triggers. Old caches rescan; EnsureColumns migrates.
+        public const int CacheSchemaVersion = 8;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -363,61 +365,24 @@ namespace FindPluginCore.Implementations.Storage
             }
             try
             {
-                // LogTime is kept as an FTS column for a stable schema, but its indexed *value* is gated
-                // by IndexLogTimeInFts: '' (not indexed) by default, the real timestamp when enabled. The
-                // build's INSERT…SELECT uses the same expression, and cache validity stores the flag, so a
-                // warm cache's triggers always match how its index was built.
-                string ltOld = IndexLogTimeInFts ? "old.LogTime" : "''";
-                string ltNew = IndexLogTimeInFts ? "new.LogTime" : "''";
+                using (var cmd = _connection.CreateCommand())
+                {
+                    cmd.CommandText = @"
+                        CREATE VIRTUAL TABLE IF NOT EXISTS FilteredResults_fts USING fts5(
+                            Source, TaskName, Message, ResultSource, SearchableData, LogTime,
+                            content='FilteredResults',
+                            content_rowid='Id',
+                            tokenize='trigram'
+                        );";
+                    cmd.ExecuteNonQuery();
+                }
 
-                using var cmd = _connection.CreateCommand();
-                cmd.CommandText = $@"
-                    CREATE VIRTUAL TABLE IF NOT EXISTS FilteredResults_fts USING fts5(
-                        Source, TaskName, Message, ResultSource, SearchableData, LogTime,
-                        content='FilteredResults',
-                        content_rowid='Id',
-                        tokenize='trigram'
-                    );
-
-                    -- No AFTER INSERT trigger: maintaining the trigram index per row during a bulk
-                    -- load is ~2.8x slower than inserting rows trigger-free and running one
-                    -- 'rebuild' afterward (see BuildSearchIndex / SqliteInsertBenchmark). The
-                    -- delete/update triggers stay so incremental row changes remain consistent.
-                    -- SearchableData is blanked when it equals Message (don't trigram the dominant text
-                    -- twice); LogTime is blanked unless IndexLogTimeInFts. The same expressions must appear
-                    -- everywhere we write the index (build + these triggers) so the external-content index
-                    -- stays consistent on later delete/update.
-                    CREATE TRIGGER IF NOT EXISTS FilteredResults_ad AFTER DELETE ON FilteredResults
-                    BEGIN
-                        INSERT INTO FilteredResults_fts
-                            (FilteredResults_fts, rowid, Source, TaskName, Message,
-                             ResultSource, SearchableData, LogTime)
-                        VALUES
-                            ('delete', old.Id, old.Source, old.TaskName, old.Message,
-                             old.ResultSource,
-                             CASE WHEN old.SearchableData = old.Message THEN '' ELSE old.SearchableData END,
-                             {ltOld});
-                    END;
-
-                    CREATE TRIGGER IF NOT EXISTS FilteredResults_au AFTER UPDATE ON FilteredResults
-                    BEGIN
-                        INSERT INTO FilteredResults_fts
-                            (FilteredResults_fts, rowid, Source, TaskName, Message,
-                             ResultSource, SearchableData, LogTime)
-                        VALUES
-                            ('delete', old.Id, old.Source, old.TaskName, old.Message,
-                             old.ResultSource,
-                             CASE WHEN old.SearchableData = old.Message THEN '' ELSE old.SearchableData END,
-                             {ltOld});
-                        INSERT INTO FilteredResults_fts
-                            (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
-                        VALUES
-                            (new.Id, new.Source, new.TaskName, new.Message, new.ResultSource,
-                             CASE WHEN new.SearchableData = new.Message THEN '' ELSE new.SearchableData END,
-                             {ltNew});
-                    END;
-                ";
-                cmd.ExecuteNonQuery();
+                // No AFTER INSERT trigger: maintaining the trigram index per row during a bulk load is
+                // ~2.8x slower than inserting trigger-free and running one bulk pass afterward (see
+                // BuildSearchIndex). The delete/update triggers keep incremental row changes consistent.
+                // Create them with conservative defaults (index everything) now; BuildSearchIndex
+                // recreates them with the data-driven decision once row counts are known.
+                CreateFtsTriggers(indexSource: true, indexResultSource: true);
                 _ftsAvailable = true;
                 _ftsIndexBuilt = false; // empty until BuildSearchIndex runs
             }
@@ -430,6 +395,54 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         private bool _ftsAvailable;
+
+        /// <summary>
+        /// (Re)create the FTS delete/update triggers with the column expressions that decide what gets
+        /// trigram-indexed, so the external-content index stays consistent on later delete/update:
+        ///   • Source / ResultSource — indexed only when the load has &gt;1 distinct value. A single-source
+        ///     load's path is a constant repeated on every row → pure repetitive-trigram cost with no search
+        ///     value (matching it returns all-or-nothing); the structured Source/ResultSource filters are
+        ///     unaffected. Folder/zip/multi-file loads (&gt;1 distinct) index it normally so path search works.
+        ///   • SearchableData — blanked when it equals Message (don't trigram the dominant text twice).
+        ///   • LogTime — blanked unless <see cref="IndexLogTimeInFts"/>.
+        /// <see cref="BuildSearchIndex"/>'s INSERT…SELECT must use the same expressions. Caller provides
+        /// connection-thread safety (ctor, or under the build's lock).
+        /// </summary>
+        private void CreateFtsTriggers(bool indexSource, bool indexResultSource)
+        {
+            string srcOld = indexSource ? "old.Source" : "''";
+            string srcNew = indexSource ? "new.Source" : "''";
+            string rsOld = indexResultSource ? "old.ResultSource" : "''";
+            string rsNew = indexResultSource ? "new.ResultSource" : "''";
+            string ltOld = IndexLogTimeInFts ? "old.LogTime" : "''";
+            string ltNew = IndexLogTimeInFts ? "new.LogTime" : "''";
+            const string sdOld = "CASE WHEN old.SearchableData = old.Message THEN '' ELSE old.SearchableData END";
+            const string sdNew = "CASE WHEN new.SearchableData = new.Message THEN '' ELSE new.SearchableData END";
+
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = $@"
+                DROP TRIGGER IF EXISTS FilteredResults_ad;
+                DROP TRIGGER IF EXISTS FilteredResults_au;
+                CREATE TRIGGER FilteredResults_ad AFTER DELETE ON FilteredResults
+                BEGIN
+                    INSERT INTO FilteredResults_fts
+                        (FilteredResults_fts, rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
+                    VALUES
+                        ('delete', old.Id, {srcOld}, old.TaskName, old.Message, {rsOld}, {sdOld}, {ltOld});
+                END;
+                CREATE TRIGGER FilteredResults_au AFTER UPDATE ON FilteredResults
+                BEGIN
+                    INSERT INTO FilteredResults_fts
+                        (FilteredResults_fts, rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
+                    VALUES
+                        ('delete', old.Id, {srcOld}, old.TaskName, old.Message, {rsOld}, {sdOld}, {ltOld});
+                    INSERT INTO FilteredResults_fts
+                        (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
+                    VALUES
+                        (new.Id, {srcNew}, new.TaskName, new.Message, {rsNew}, {sdNew}, {ltNew});
+                END;";
+            cmd.ExecuteNonQuery();
+        }
 
         // The FTS5 index is built in one bulk step (BuildSearchIndex) after ingest, not per-row via
         // an insert trigger (~2.8x faster). Until that runs the index is stale, so substring search
@@ -472,6 +485,22 @@ namespace FindPluginCore.Implementations.Storage
             var start = Environment.TickCount64;
             try
             {
+                // Decide which path columns are worth trigram-indexing: skip Source / ResultSource when the
+                // load has a single distinct value (a constant path repeated on every row is pure repetitive-
+                // trigram cost with no search value). Recreate the triggers to match before building, so the
+                // external-content index stays consistent on later delete/update.
+                bool indexSource, indexResultSource;
+                lock (_sync)
+                {
+                    indexSource = DistinctAtLeastTwo("Source");
+                    indexResultSource = DistinctAtLeastTwo("ResultSource");
+                    CreateFtsTriggers(indexSource, indexResultSource);
+                }
+                // These expressions must match CreateFtsTriggers exactly.
+                string srcExpr = indexSource ? "Source" : "''";
+                string rsExpr = indexResultSource ? "ResultSource" : "''";
+                string ltExpr = IndexLogTimeInFts ? "LogTime" : "''";
+
                 // Start from an empty index so a re-run (or a resume after cancel) never double-inserts.
                 lock (_sync)
                 {
@@ -489,13 +518,12 @@ namespace FindPluginCore.Implementations.Storage
                         using (var cmd = _connection.CreateCommand())
                         {
                             cmd.Transaction = tx;
-                            // Blank SearchableData when it equals Message, and LogTime unless
-                            // IndexLogTimeInFts (see InitializeFts5) — must match the triggers' expressions.
-                            string ltExpr = IndexLogTimeInFts ? "LogTime" : "''";
+                            // Blank Source/ResultSource (single-distinct loads), SearchableData (== Message),
+                            // and LogTime (unless IndexLogTimeInFts) — must match CreateFtsTriggers exactly.
                             cmd.CommandText = $@"
                                 INSERT INTO FilteredResults_fts
                                     (rowid, Source, TaskName, Message, ResultSource, SearchableData, LogTime)
-                                SELECT Id, Source, TaskName, Message, ResultSource,
+                                SELECT Id, {srcExpr}, TaskName, Message, {rsExpr},
                                        CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END,
                                        {ltExpr}
                                 FROM FilteredResults WHERE Id > @last ORDER BY Id LIMIT @bs;";
@@ -531,7 +559,8 @@ namespace FindPluginCore.Implementations.Storage
                 {
                     _ftsIndexBuilt = true;
                     FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", true),
-                        ("rebuild_ms", Environment.TickCount64 - start), ("batched", true), ("rows", indexed));
+                        ("rebuild_ms", Environment.TickCount64 - start), ("batched", true), ("rows", indexed),
+                        ("idx_source", indexSource), ("idx_resultsource", indexResultSource));
                 }
             }
             catch (SqliteException ex)
@@ -542,6 +571,16 @@ namespace FindPluginCore.Implementations.Storage
                 System.Diagnostics.Debug.WriteLine(
                     $"[SqliteStorage] FTS build failed; substring search falls back to LIKE: {ex.Message}");
             }
+        }
+
+        /// <summary>Whether <paramref name="column"/> has at least two distinct values (short-circuits at 2,
+        /// so it's cheap even on millions of rows). Used to decide if a path column is worth indexing.
+        /// <paramref name="column"/> is always a hard-coded identifier — never user input.</summary>
+        private bool DistinctAtLeastTwo(string column)
+        {
+            using var c = _connection.CreateCommand();
+            c.CommandText = $"SELECT COUNT(*) FROM (SELECT 1 FROM FilteredResults GROUP BY {column} LIMIT 2)";
+            return Convert.ToInt64(c.ExecuteScalar()) >= 2;
         }
 
         /// <summary>
