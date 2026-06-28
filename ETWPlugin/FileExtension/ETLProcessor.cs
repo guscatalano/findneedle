@@ -424,7 +424,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     lineCount++;
                     if (lineCount % 1000 == 0)
                     {
-                        var pct = 20 + (int)(70.0 * lineCount / 100000);
+                        // Estimate against ~100k lines but clamp to [20,90] — a file with >100k lines must
+                        // not push the bar past 100% (this was the "300%" bug on big WPP/ETL files).
+                        var pct = Math.Clamp(20 + (int)(70.0 * lineCount / 100000), 20, 90);
                         _progressSink?.NotifyProgress(pct, $"Processed {lineCount} lines");
                         // Tick the line count on the loading screen (the spinner reads FlowProgress, not the
                         // progress sink) so a big WPP parse shows visible movement instead of sitting at 0.

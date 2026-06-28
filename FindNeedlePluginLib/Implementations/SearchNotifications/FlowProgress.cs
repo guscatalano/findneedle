@@ -99,6 +99,9 @@ public static class FlowProgress
 
     public static void Detail(string detail, int? percent = null, bool estimate = false)
     {
+        // Guard the bar: a caller computing percent from a bad/estimated denominator must never push it
+        // past 100% (e.g. an ETL line-count estimate that overshoots showed "300%"). Clamp at the source.
+        if (percent.HasValue) percent = Math.Clamp(percent.Value, 0, 100);
         lock (_lock)
         {
             if (_current >= 0 && _current < _details.Count)
