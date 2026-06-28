@@ -133,15 +133,136 @@ public class FtsShardSpike
                 $"parallel ({parSw.ElapsedMilliseconds} ms) should beat single ({singleSw.ElapsedMilliseconds} ms)");
     }
 
-    private static void CreateContentlessFts(SqliteConnection c)
+    /// <summary>
+    /// SPIKE: prove the QUERY side of sharding — ATTACH N shard DBs to the main connection and union the
+    /// per-shard MATCH, then run the real filtered/sorted/paged query (the production shape:
+    /// <c>SELECT … FROM main WHERE Id IN (&lt;fts rowids&gt;) ORDER BY … LIMIT … OFFSET …</c>) plus the
+    /// pager COUNT. Assert the sharded results are byte-identical to a single-index query across pages and
+    /// both sort directions, and measure latency. This de-risks the query-layer change before productionizing.
+    /// </summary>
+    [TestMethod]
+    [Timeout(900_000)]
+    public void ShardedQuery_MatchesSingleIndex_AcrossPagesSortsAndCount()
+    {
+        int rows = EnvInt("FINDNEEDLE_SPIKE_ROWS", 2_000_000);
+        int shards = EnvInt("FINDNEEDLE_SPIKE_SHARDS", 4);
+        int needle = rows / 2 + 7;
+
+        // main DB (rows) — paging/sort/count run here in production, unchanged.
+        var mainPath = NewDbPath("qmain");
+        BuildMain(mainPath, rows);
+
+        // single index (baseline) + N parallel shards.
+        var singlePath = NewDbPath("qsingle");
+        using (var fts = new SqliteConnection($"Data Source={singlePath}")) { fts.Open(); Pragmas(fts); CreateContentlessFts(fts, "ftsS"); BuildShardFromMain(fts, mainPath, 0, rows, "ftsS"); }
+        var shardPaths = Enumerable.Range(0, shards).Select(k => NewDbPath($"qshard{k}")).ToArray();
+        int chunk = (rows + shards - 1) / shards;
+        Parallel.For(0, shards, k =>
+        {
+            long lo = (long)k * chunk, hi = Math.Min(lo + chunk, rows);
+            using var fts = new SqliteConnection($"Data Source={shardPaths[k]}");
+            fts.Open(); Pragmas(fts); CreateContentlessFts(fts, $"fts{k}"); BuildShardFromMain(fts, mainPath, lo, hi, $"fts{k}");
+        });
+
+        using var q = new SqliteConnection($"Data Source={mainPath}");
+        q.Open();
+        Attach(q, singlePath, "single");
+        for (int k = 0; k < shards; k++) Attach(q, shardPaths[k], $"s{k}");
+
+        // Production-shaped FTS rowid subqueries: one index vs UNION ALL across shards (Id ranges are
+        // disjoint, so ALL has no dupes and is cheaper than UNION).
+        // FTS5 MATCH needs the bare table name (no schema qualifier, no alias), so each shard's table has
+        // a globally-unique name (ftsS / fts0 / fts1 …); FROM picks the attached schema, MATCH names the table.
+        string singleSub = "SELECT rowid FROM single.ftsS WHERE ftsS MATCH @q";
+        string shardSub = string.Join(" UNION ALL ", Enumerable.Range(0, shards).Select(k => $"SELECT rowid FROM s{k}.fts{k} WHERE fts{k} MATCH @q"));
+
+        // "scroll test" is in every row (exercises COUNT=all + deep paging); the needle hits exactly one row.
+        foreach (var term in new[] { "scroll test", $"line number {needle} " })
+        {
+            long cSingle = CountMatch(q, singleSub, term);
+            long cShard = CountMatch(q, shardSub, term);
+            Assert.AreEqual(cSingle, cShard, $"COUNT mismatch for '{term}' (single={cSingle}, sharded={cShard})");
+
+            foreach (var desc in new[] { false, true })
+                foreach (var off in new[] { 0, 100, (int)Math.Max(0, cSingle - 50) })
+                {
+                    var a = PageMatch(q, singleSub, term, 50, off, desc);
+                    var b = PageMatch(q, shardSub, term, 50, off, desc);
+                    CollectionAssert.AreEqual(a, b, $"page mismatch term='{term}' desc={desc} off={off}");
+                }
+            TestContext.WriteLine($"term='{term}' count={cSingle:N0} — single==sharded across pages & sorts ✓");
+        }
+
+        // Latency: a first page and a deep page over the all-matching term, via the sharded union.
+        var warm = PageMatch(q, shardSub, "scroll test", 100, 0, false);
+        var sw1 = Stopwatch.StartNew(); _ = PageMatch(q, shardSub, "scroll test", 100, 0, false); sw1.Stop();
+        long deep = Math.Max(0, rows - 100);
+        var sw2 = Stopwatch.StartNew(); _ = PageMatch(q, shardSub, "scroll test", 100, (int)deep, false); sw2.Stop();
+        TestContext.WriteLine($"sharded query latency: first page {sw1.ElapsedMilliseconds} ms, deep page (offset {deep:N0}) {sw2.ElapsedMilliseconds} ms");
+        Assert.IsTrue(warm.Count == 100, "first page should return a full page");
+    }
+
+    private void BuildMain(string mainPath, int rows)
+    {
+        using var main = new SqliteConnection($"Data Source={mainPath}");
+        main.Open();
+        Pragmas(main);
+        using (var c = main.CreateCommand()) { c.CommandText = "CREATE TABLE main(Id INTEGER PRIMARY KEY, Message TEXT);"; c.ExecuteNonQuery(); }
+        using var tx = main.BeginTransaction();
+        using var ins = main.CreateCommand();
+        ins.Transaction = tx;
+        ins.CommandText = "INSERT INTO main(Id, Message) VALUES(@id,@m)";
+        var pid = ins.CreateParameter(); pid.ParameterName = "@id"; ins.Parameters.Add(pid);
+        var pm = ins.CreateParameter(); pm.ParameterName = "@m"; ins.Parameters.Add(pm);
+        ins.Prepare();
+        for (int i = 0; i < rows; i++)
+        {
+            pid.Value = i;
+            pm.Value = $"[2026-01-01 00:00:00] INFO: scroll test message line number {i} with some extra padding text to reach a realistic width";
+            ins.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    private static void Attach(SqliteConnection conn, string path, string alias)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"ATTACH DATABASE '{path.Replace("'", "''")}' AS {alias};";
+        cmd.ExecuteNonQuery();
+    }
+
+    private static long CountMatch(SqliteConnection conn, string ftsSub, string term)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT COUNT(*) FROM main WHERE Id IN ({ftsSub})";
+        cmd.Parameters.AddWithValue("@q", $"\"{term}\"");
+        return Convert.ToInt64(cmd.ExecuteScalar());
+    }
+
+    private static List<long> PageMatch(SqliteConnection conn, string ftsSub, string term, int limit, int offset, bool desc)
+    {
+        var list = new List<long>(limit);
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT Id FROM main WHERE Id IN ({ftsSub}) ORDER BY Id {(desc ? "DESC" : "ASC")} LIMIT @lim OFFSET @off";
+        cmd.Parameters.AddWithValue("@q", $"\"{term}\"");
+        cmd.Parameters.AddWithValue("@lim", limit);
+        cmd.Parameters.AddWithValue("@off", offset);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(r.GetInt64(0));
+        return list;
+    }
+
+    // A unique table name per shard so the bare-name MATCH operand is unambiguous once the shards are
+    // ATTACHed together (FTS5 MATCH won't take a schema-qualified name or an alias).
+    private static void CreateContentlessFts(SqliteConnection c, string name = "fts")
     {
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "CREATE VIRTUAL TABLE fts USING fts5(Message, content='', tokenize='trigram');";
+        cmd.CommandText = $"CREATE VIRTUAL TABLE {name} USING fts5(Message, content='', tokenize='trigram');";
         cmd.ExecuteNonQuery();
     }
 
     /// <summary>Index rows [lo,hi) read from the main DB into this connection's contentless fts (rowid=Id).</summary>
-    private static void BuildShardFromMain(SqliteConnection ftsConn, string mainPath, long lo, long hi)
+    private static void BuildShardFromMain(SqliteConnection ftsConn, string mainPath, long lo, long hi, string ftsTable = "fts")
     {
         using var src = new SqliteConnection($"Data Source={mainPath};Mode=ReadOnly");
         src.Open();
@@ -153,7 +274,7 @@ public class FtsShardSpike
         using var tx = ftsConn.BeginTransaction();
         using var ins = ftsConn.CreateCommand();
         ins.Transaction = tx;
-        ins.CommandText = "INSERT INTO fts(rowid, Message) VALUES(@r,@m)";
+        ins.CommandText = $"INSERT INTO {ftsTable}(rowid, Message) VALUES(@r,@m)";
         var pr = ins.CreateParameter(); pr.ParameterName = "@r"; ins.Parameters.Add(pr);
         var pm = ins.CreateParameter(); pm.ParameterName = "@m"; ins.Parameters.Add(pm);
         ins.Prepare();
