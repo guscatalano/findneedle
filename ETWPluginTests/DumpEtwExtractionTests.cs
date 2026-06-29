@@ -60,6 +60,7 @@ public sealed class DumpEtwExtractionTests
             {
                 var proc = new ETLProcessor();
                 proc.OpenFile(etl);
+                proc.DoPreProcessing();   // detect modern/WPP + arm the decode (the FolderLocation pipeline does this)
                 proc.GetResultsWithCallback(b => System.Threading.Interlocked.Add(ref rows, b.Count)).Wait();
             }
             catch (Exception ex) { TestContext.WriteLine($"  {Path.GetFileName(etl)}: decode error {ex.GetType().Name}: {ex.Message}"); }
