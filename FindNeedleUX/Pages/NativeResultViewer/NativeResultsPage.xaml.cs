@@ -216,6 +216,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // new file's own warning appears).
         ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        // Overlays key off the visible row count (rows bound to the grid), so re-evaluate whenever the
+        // bound page changes — the moment the first page lands, the spinner gives way to the grid.
+        ViewModel.Results.CollectionChanged -= OnResultsCollectionChanged;
+        ViewModel.Results.CollectionChanged += OnResultsCollectionChanged;
 
         // Apply persisted prefs BEFORE rendering so the first paint already has the user's choices.
         ApplyPersistedSettings();
@@ -400,13 +404,26 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// nothing decoded) from "filters hid everything" (offers Clear filters). No-op while loading.</summary>
     private void UpdateEmptyState()
     {
-        if (EmptyOverlay == null) return; // during initial parse
-        // Never show "No results" while anything is still loading — the overlay is opaque and sits on top,
-        // so a transient zero count (e.g. a streaming/large load before the first page + count are bound)
-        // must not flash over the loading spinner. IsLoading covers the streaming window where the loading
-        // *overlay* has given way to the streaming banner but rows/counts aren't bound yet.
-        bool loading = LoadingOverlay.Visibility == Visibility.Visible || ViewModel.IsStreaming || ViewModel.IsLoading;
-        if (loading || ViewModel.TotalFilteredCount > 0)
+        if (EmptyOverlay == null || LoadingOverlay == null) return; // during initial parse
+
+        // One decision drives BOTH overlays so they can never disagree (the recurring "No results" /
+        // blank-grid-with-no-spinner bug came from the loading + empty overlays being toggled independently).
+        var state = ResultsOverlayPolicy.Decide(
+            ViewModel.IsLoading, ViewModel.IsStreaming, ViewModel.IsApplyingFilter, ViewModel.Results?.Count ?? 0);
+
+        // Loading spinner: shown whenever work is in flight with nothing yet to show. (The "Filtering…"
+        // text is set by the IsApplyingFilter handler; don't clobber it here.)
+        if (state == ResultsOverlay.Loading)
+        {
+            if (!ViewModel.IsApplyingFilter) LoadingOverlayText.Text = "Loading results...";
+            LoadingOverlay.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            LoadingOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        if (state != ResultsOverlay.Empty)
         {
             EmptyOverlay.Visibility = Visibility.Collapsed;
             return;
@@ -2038,19 +2055,29 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         UpdateSearchHint(hasPendingEdit: false);
     }
 
+    private void OnResultsCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        => DispatcherQueue.TryEnqueue(UpdateEmptyState);
+
     private void OnViewModelPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalCount))
             DispatcherQueue.TryEnqueue(RefreshSearchSubmitMode);
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalFilteredCount))
             DispatcherQueue.TryEnqueue(UpdateEmptyState);
+        // IsLoading drives the loading-spinner-vs-empty-state decision (UpdateEmptyState routes both via
+        // ResultsOverlayPolicy), so the spinner appears the instant a load starts and the empty state can't
+        // show mid-load — regardless of which entry point triggered the load.
+        else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsLoading))
+            DispatcherQueue.TryEnqueue(UpdateEmptyState);
         // When a streaming load finishes, re-check the decode banner — the new file's stats are now
         // captured, so a stale "missing symbols" warning clears (or the new file's own appears) — and
         // enable the Rule filter toggle (it was disabled while the load was still streaming).
-        else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming) && !ViewModel.IsStreaming)
+        else if (e.PropertyName == nameof(NativeResultsPageViewModel.IsStreaming))
             DispatcherQueue.TryEnqueue(() =>
             {
-                UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState(); UpdateEmptyState();
+                UpdateEmptyState(); // streaming start → spinner; streaming end → re-evaluate
+                if (ViewModel.IsStreaming) return;
+                UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState();
                 // Streaming finished — refresh the precomputed known-value dropdowns against the full set
                 // (the precompute at first-page may have run against a partial stream). Same row cap: skip
                 // for very large sets so the facet GROUP BY doesn't contend with the index build.
