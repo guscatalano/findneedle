@@ -70,11 +70,13 @@ public class EtlInfoExtractor
     /// bounded scan, plus whether the scan hit its cap (<paramref name="maxEvents"/>) — i.e. the counts are a
     /// SAMPLE of a larger file, not the full totals. Used by the triage picker to show relative provider
     /// volume (which logger is the firehose) and to filter the list.</summary>
-    public static (Dictionary<string, int> providers, bool capped, int? build) QuickScanCounts(string etlPath, int maxEvents = 200000)
+    public static (Dictionary<string, int> providers, bool capped, int? build) QuickScanCounts(
+        string etlPath, int maxEvents = 200000, int maxMs = 5000)
     {
         var providers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         int? build = null;
         int n = 0;
+        bool timedOut = false;
         try
         {
             if (string.IsNullOrEmpty(etlPath) || !File.Exists(etlPath)) return (providers, false, build);
@@ -100,10 +102,16 @@ public class EtlInfoExtractor
             }
             source.Dynamic.All += Handle;
             source.Kernel.All += Handle;
+            // Hard wall-clock cap: a WPP (or otherwise odd) trace may not dispatch through Dynamic/Kernel, so
+            // the per-event cap never trips and Process() would grind the WHOLE file (looks hung). Stop it
+            // after maxMs regardless — the partial counts are still a useful sample for the triage picker.
+            using var timer = new System.Threading.Timer(
+                _ => { timedOut = true; try { source.StopProcessing(); } catch { /* already stopped */ } },
+                null, maxMs, System.Threading.Timeout.Infinite);
             source.Process();
         }
         catch { /* best-effort — partial metadata is fine for matching */ }
-        return (providers, n >= maxEvents, build);
+        return (providers, n >= maxEvents || timedOut, build);
     }
 
     /// <summary>

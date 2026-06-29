@@ -1459,8 +1459,12 @@ public sealed partial class MainWindow : Window
             _triageDialogOpen = true;
             try
             {
+                // The provider scan (bounded, but seconds on a big/odd trace) runs off the UI thread — show a
+                // spinner meanwhile so the window isn't frozen with no feedback before the dialog appears.
+                ShowSpinner(true, "Inspecting log — reading providers…");
                 var (providersWithCounts, sampled) = await System.Threading.Tasks.Task.Run(
                     () => FindNeedleUX.Services.TriageService.InspectProvidersWithCounts(path));
+                ShowSpinner(false);
                 if (providersWithCounts.Count <= 1) return true; // nothing meaningful to scope
 
                 var header = new TextBlock
@@ -1539,7 +1543,7 @@ public sealed partial class MainWindow : Window
                 // Secondary (Load everything) leaves PendingScopeRulePath null.
                 return true;
             }
-            finally { _triageDialogOpen = false; }
+            finally { _triageDialogOpen = false; ShowSpinner(false); } // clear the inspect spinner on every path
         }
         catch (Exception ex) { Logger.Instance.Log($"Triage offer skipped: {ex.Message}"); return true; }
     }
