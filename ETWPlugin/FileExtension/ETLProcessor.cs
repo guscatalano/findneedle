@@ -31,13 +31,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private SearchProgressSink? _progressSink;
 
     // ----- Triage scope -----
-    // The compiled `scope` rule (provider/time/level) the decode loop honors BEFORE wrapping each event, so a
-    // scoped "load only these providers / this window" ingests a fraction of a huge capture. Null = load all.
-    //
-    // PROTOTYPE: process-global (static) because FolderLocation creates its own ETLProcessor per file during
-    // the scan, so a per-instance setting wouldn't reach the decoder. Production wiring would thread the
-    // scope per-load through the location/search config (see docs/scope-rule-design.md §8).
-    public static DecodeScope? ActiveScope;
+    // The decode loop honors the ambient DecodeScope.Current (a compiled `scope` rule: provider/time/level)
+    // BEFORE wrapping each event, so a scoped "load only these providers / this window" ingests a fraction
+    // of a huge capture. The scope is set by the search pipeline (NuSearchQuery) from the loaded scope rule.
 
     private int _badlyFormattedCount = 0;
 
@@ -561,7 +557,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 // ETLLogLine (the wrap + insert is the expensive part). This is what lets a "load only these
                 // providers / this time range" choice from the triage panel skip most of a huge capture
                 // (e.g. the ~90% kernel events you don't want) instead of ingesting everything.
-                if (ActiveScope != null && !ActiveScope.Keep(e.ProviderName, e.TimeStamp.ToUniversalTime(), -1)) return;
+                var scope = DecodeScope.Current;
+                if (scope != null && !scope.Keep(e.ProviderName, e.TimeStamp.ToUniversalTime(), -1)) return;
                 var line = new ETLLogLine(e);
                 var src = line.GetSource() ?? string.Empty;
                 providers[src] = providers.TryGetValue(src, out var c) ? c + 1 : 1;

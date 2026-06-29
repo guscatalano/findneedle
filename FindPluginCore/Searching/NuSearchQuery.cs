@@ -250,6 +250,59 @@ public class NuSearchQuery : ISearchQuery
         catch { return "|enrich=on"; }
     }
 
+    /// <summary>Typed `scope` sections from the loaded rules files (purpose == "scope").</summary>
+    private List<FindNeedleRuleDSL.UnifiedRuleSection> GetScopeSectionsTyped()
+    {
+        var result = new List<FindNeedleRuleDSL.UnifiedRuleSection>();
+        if (RulesConfigPaths == null) return result;
+        foreach (var path in RulesConfigPaths)
+        {
+            try
+            {
+                var set = _ruleLoader.LoadUnifiedRuleSet(path);
+                if (set?.Sections != null)
+                    foreach (var s in set.Sections)
+                        if (string.Equals(s.Purpose, "scope", StringComparison.OrdinalIgnoreCase)) result.Add(s);
+            }
+            catch (Exception ex) { Logger.Instance.Log($"Failed to read scope sections from {path}: {ex.Message}"); }
+        }
+        return result;
+    }
+
+    /// <summary>Compile the loaded `scope` rule into a decode-time <see cref="FindNeedlePluginLib.DecodeScope"/>.
+    /// Invalid scope (e.g. tries to test message) is logged and ignored rather than silently run.</summary>
+    private FindNeedlePluginLib.DecodeScope? ResolveDecodeScope()
+    {
+        var sections = GetScopeSectionsTyped();
+        if (sections.Count == 0) return null;
+        var errors = FindNeedleRuleDSL.ScopeRuleParser.Validate(sections);
+        if (errors.Count > 0)
+        {
+            foreach (var e in errors) Logger.Instance.Log($"Scope rule invalid (ignored): {e}");
+            return null;
+        }
+        var scope = FindNeedleRuleDSL.ScopeRuleParser.Build(sections);
+        if (scope != null)
+            Logger.Instance.Log("Step2: scope rule active — the load is filtered at decode time (only the chosen providers/window are ingested).");
+        return scope;
+    }
+
+    /// <summary>Cache-key suffix that keeps a scoped load's cache db distinct from a full load's (the scope
+    /// changes which rows are stored). Empty when there's no scope. Mirrors EnrichmentCacheSuffix.</summary>
+    private string ScopeCacheSuffix()
+    {
+        try
+        {
+            var sections = GetScopeSectionsTyped();
+            if (sections.Count == 0) return string.Empty;
+            var json = System.Text.Json.JsonSerializer.Serialize(sections);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(json));
+            return "|scope=" + Convert.ToHexString(hash, 0, 4).ToLowerInvariant();
+        }
+        catch { return "|scope=on"; }
+    }
+
     /// <summary>
     /// Release the result storage so its SQLite connection (if any) drops the file lock on the
     /// cache <c>.db</c>. Called when this query is being replaced by a fresh one — otherwise the
@@ -299,6 +352,7 @@ public class NuSearchQuery : ISearchQuery
         // Enriched scans get their own cache db (different rows than a plain scan). Suffix only changes
         // the hashed db filename; empty when enrichment is off so the default cache key is unchanged.
         filePath += EnrichmentCacheSuffix();
+        filePath += ScopeCacheSuffix(); // a scoped load stores different rows → distinct cache db
         var requested = OverrideStorageType ?? config?.SearchStorageType;
         switch (requested)
         {
@@ -715,6 +769,12 @@ public class NuSearchQuery : ISearchQuery
         if (enrichActive)
             Logger.Instance.Log($"Step2: enrichment ON ({_enrichmentSections.Count} section(s)) — extracting fields per-row");
 
+        // ----- Pre-decode scope (triage) -----
+        // A loaded `scope` rule filters the load at decode time (before the wrap). Resolve it once and set
+        // the ambient DecodeScope the format decoders read; cleared after the scan loop below. Set fresh each
+        // Step2 so a leaked scope from a prior/failed search can't bleed in. See docs/scope-rule-design.md.
+        FindNeedlePluginLib.DecodeScope.Current = ResolveDecodeScope();
+
         // ----- Parallel fan-out ingest (large streaming loads) -----
         // One thread can't keep the disk busy while it also decodes/wraps events, so when the streaming
         // path is active for a large log we fan the per-shard SQLite inserts out across N writer threads,
@@ -998,6 +1058,9 @@ public class NuSearchQuery : ISearchQuery
                 ("elapsed_ms", Environment.TickCount64 - locStart));
             count++;
         }
+
+        // Decode is done — drop the ambient scope so it can't affect anything downstream or a later search.
+        FindNeedlePluginLib.DecodeScope.Current = null;
 
         // ----- Merge the fan-out shards into _resultStorage -----
         // The scan wrote rows into N shard DBs; fold them into the real store (INSERT…SELECT, preserving

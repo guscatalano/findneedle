@@ -33,7 +33,7 @@ public sealed class TriageScopeTests
     public TestContext TestContext { get; set; } = null!;
 
     [TestCleanup]
-    public void Cleanup() => ETLProcessor.ActiveScope = null; // don't leak the global scope to other tests
+    public void Cleanup() => DecodeScope.Current = null; // don't leak the global scope to other tests
 
     [TestMethod]
     [Timeout(2_400_000)]
@@ -83,7 +83,7 @@ public sealed class TriageScopeTests
     {
         SqliteStorage.ParallelIngestEnabled = false; // serial — the recommended path for very large logs
         ETWTestUtils.UseTestTraceFmt();
-        ETLProcessor.ActiveScope = scope; // process-global (prototype); null = full load
+        DecodeScope.Current = scope; // process-global (prototype); null = full load
         var loc = new FolderLocation { path = etl };
         loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new ETLProcessor() });
         var cacheDb = CachedStorage.GetCacheFilePath(loc.GetName(), ".db");

@@ -14,6 +14,11 @@ namespace FindNeedlePluginLib;
 /// </summary>
 public sealed class DecodeScope
 {
+    /// <summary>Ambient scope for the current load, set by the search pipeline and read by format decoders
+    /// (they don't reference the core, so this shared static is how the scope reaches them). Null = load all.
+    /// PROTOTYPE: process-global; production would thread it per-search (see docs/scope-rule-design.md §8).</summary>
+    public static DecodeScope? Current;
+
     /// <summary>Allow-list: if non-empty, only these providers pass (case-insensitive).</summary>
     public HashSet<string>? IncludeProviders { get; init; }
     /// <summary>Drop-list: these providers never pass (e.g. the kernel firehose). Applied after include.</summary>
