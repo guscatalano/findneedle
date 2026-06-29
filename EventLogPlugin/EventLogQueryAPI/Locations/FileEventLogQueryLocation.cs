@@ -49,6 +49,7 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
         numRecordsInLastResult = 0;
         numRecordsInMemory = 0;
         var results = new List<ISearchResult>();
+        var scope = DecodeScope.Current;
 
         var overallStopwatch = System.Diagnostics.Stopwatch.StartNew();
         EventLogQuery eventsQuery = new EventLogQuery(filename, PathType.FilePath);
@@ -67,6 +68,12 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
             Logger.Instance.Log($"[PERF] logReader.ReadEvent() took {readEventStopwatch.Elapsed.TotalMilliseconds:F0} ms");
             if (eventdetail == null) break;
             count++;
+            // Triage scope: a `scope` rule's provider/time predicate, checked on the cheap EventRecord
+            // properties BEFORE the wrap. EventRecordResult's ctor calls FormatDescription() (the expensive
+            // message render), so skipping out-of-scope events here is the whole win. (Level isn't applied —
+            // GetLevel() reads LevelDisplayName, which loads provider metadata and defeats the savings.)
+            if (scope != null && !scope.Keep(eventdetail.ProviderName, eventdetail.TimeCreated?.ToUniversalTime(), -1))
+                continue;
             if ((DateTime.UtcNow - lastSecondTime).TotalSeconds >= 1)
             {
                 int eventsThisSecond = count - lastSecondCount;
@@ -120,7 +127,8 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
     {
         numRecordsInLastResult = 0;
         numRecordsInMemory = 0;
-       
+        var scope = DecodeScope.Current;
+
         var overallStopwatch = System.Diagnostics.Stopwatch.StartNew();
         EventLogQuery eventsQuery = new EventLogQuery(filename, PathType.FilePath);
         EventLogReader logReader = new EventLogReader(eventsQuery);
@@ -139,6 +147,10 @@ public class FileEventLogQueryLocation : IEventLogQueryLocation, IReportProgress
             Logger.Instance.Log($"[PERF] logReader.ReadEvent() took {readEventStopwatch.Elapsed.TotalMilliseconds:F0} ms");
             if (eventdetail == null) break;
             count++;
+            // Triage scope (see Search): provider/time filter on the cheap EventRecord, before the
+            // FormatDescription() render in EventRecordResult's ctor.
+            if (scope != null && !scope.Keep(eventdetail.ProviderName, eventdetail.TimeCreated?.ToUniversalTime(), -1))
+                continue;
             if ((DateTime.UtcNow - lastSecondTime).TotalSeconds >= 1)
             {
                 int eventsThisSecond = count - lastSecondCount;

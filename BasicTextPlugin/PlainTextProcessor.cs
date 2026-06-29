@@ -88,6 +88,11 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
             // Stream the file instead of File.ReadAllLines — ReadAllLines materialises every
             // line in a single string[] before we touch the first one, so a 500 MB log eats
             // ~1 GB of strings up front before we can even start parsing.
+            // Triage scope: plain text has no provider/level cheaply, so only the time window applies
+            // (and only to lines that actually parse a timestamp — un-timestamped lines are always kept).
+            var scope = DecodeScope.Current;
+            bool scopeTime = scope != null && (scope.FromUtc.HasValue || scope.ToUtc.HasValue);
+
             using var sr = new StreamReader(_filePath, detectEncodingFromByteOrderMarks: true);
             var lineNumber = 0;
             string line;
@@ -97,12 +102,14 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
                 lineNumber++;
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                _results.Add(new PlainTextSearchResult
+                var result = new PlainTextSearchResult
                 {
                     LineNumber = lineNumber,
                     Text = line,
                     SourceFile = _filePath
-                });
+                };
+                if (scopeTime && !KeptByScope(result, scope)) continue;
+                _results.Add(result);
             }
 
             _hasLoaded = true;
@@ -111,6 +118,17 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
         {
             System.Diagnostics.Debug.WriteLine($"Error loading text file {_filePath}: {ex.Message}");
         }
+    }
+
+    /// <summary>True if a line passes the scope's time window. A line with no parseable timestamp is always
+    /// kept (we can't classify it, so we don't drop it). The parsed time is treated as local and compared in
+    /// UTC against the scope's UTC bounds — text logs rarely carry a timezone, so this is a best-effort window.</summary>
+    private static bool KeptByScope(PlainTextSearchResult result, DecodeScope scope)
+    {
+        var ts = result.GetLogTime();
+        if (ts <= DateTime.MinValue) return true; // un-timestamped line — keep
+        var tsUtc = ts.Kind == DateTimeKind.Utc ? ts : DateTime.SpecifyKind(ts, DateTimeKind.Local).ToUniversalTime();
+        return scope.Keep(null, tsUtc, -1); // provider/level unknown for plain text → time window only
     }
 
     public void DoPreProcessing()
@@ -156,6 +174,8 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
 
         // Cold path: nobody called LoadInMemory first. Stream the file (one pass, no
         // ReadAllLines), populate _results, and yield batches as we go.
+        var scope = DecodeScope.Current;
+        bool scopeTime = scope != null && (scope.FromUtc.HasValue || scope.ToUtc.HasValue);
         var batch = new List<ISearchResult>(batchSize);
         using var sr = new StreamReader(_filePath, detectEncodingFromByteOrderMarks: true);
         var lineNumber = 0;
@@ -172,6 +192,7 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
                 Text = line,
                 SourceFile = _filePath
             };
+            if (scopeTime && !KeptByScope(result, scope)) continue;
             _results.Add(result);
             batch.Add(result);
 

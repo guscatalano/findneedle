@@ -31,6 +31,7 @@
     <ProjectReference Include="..\FakeLoadPlugin\FakeLoadPlugin.csproj" />
     <ProjectReference Include="..\FindPluginCore\FindPluginCore.csproj" />
     <ProjectReference Include="..\TestProcessorPlugin\TestProcessorPlugin.csproj" />
+    <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
   </ItemGroup>
 
   <ItemGroup>

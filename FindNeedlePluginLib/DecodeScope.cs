@@ -37,14 +37,17 @@ public sealed class DecodeScope
         && FromUtc == null && ToUtc == null
         && (Levels == null || Levels.Count == 0);
 
-    /// <summary>O(1) keep test, called per raw decoded event (tens of millions) — hash lookups + compares only.</summary>
-    public bool Keep(string? provider, DateTime tsUtc, int level)
+    /// <summary>O(1) keep test, called per raw decoded event (tens of millions) — hash lookups + compares only.
+    /// Each argument is "unknown" when the decoder can't cheaply supply it, and an unknown dimension is NOT
+    /// filtered (so a format applies only the dimensions it actually has): a <c>null</c> <paramref name="provider"/>
+    /// skips the provider lists (plain text has no provider), a <c>null</c> <paramref name="tsUtc"/> skips the time
+    /// window (an un-timestamped line), and a <paramref name="level"/> &lt; 0 skips the level set.</summary>
+    public bool Keep(string? provider, DateTime? tsUtc, int level)
     {
-        provider ??= string.Empty;
-        if (IncludeProviders != null && IncludeProviders.Count > 0 && !IncludeProviders.Contains(provider)) return false;
-        if (ExcludeProviders != null && ExcludeProviders.Count > 0 && ExcludeProviders.Contains(provider)) return false;
-        if (FromUtc.HasValue && tsUtc < FromUtc.Value) return false;
-        if (ToUtc.HasValue && tsUtc > ToUtc.Value) return false;
+        if (provider != null && IncludeProviders != null && IncludeProviders.Count > 0 && !IncludeProviders.Contains(provider)) return false;
+        if (provider != null && ExcludeProviders != null && ExcludeProviders.Count > 0 && ExcludeProviders.Contains(provider)) return false;
+        if (tsUtc.HasValue && FromUtc.HasValue && tsUtc.Value < FromUtc.Value) return false;
+        if (tsUtc.HasValue && ToUtc.HasValue && tsUtc.Value > ToUtc.Value) return false;
         if (Levels != null && Levels.Count > 0 && level >= 0 && !Levels.Contains(level)) return false;
         return true;
     }
