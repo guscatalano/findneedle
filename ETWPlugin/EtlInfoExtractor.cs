@@ -60,7 +60,7 @@ public class EtlInfoExtractor
     /// and the common providers appear quickly, so this stays fast even on multi-GB ETLs. Never throws —
     /// returns whatever it managed to read.
     /// </summary>
-    public static (HashSet<string> providers, int? build) QuickScan(string etlPath, int maxEvents = 50000)
+    public static (HashSet<string> providers, int? build) QuickScan(string etlPath, int maxEvents = 200000)
     {
         var providers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         int? build = null;
@@ -69,7 +69,11 @@ public class EtlInfoExtractor
             if (string.IsNullOrEmpty(etlPath) || !File.Exists(etlPath)) return (providers, build);
             using var source = new ETWTraceEventSource(etlPath);
             int n = 0;
-            source.AllEvents += e =>
+            // Subscribe to Dynamic (manifest/TraceLogging/EventSource) + Kernel — the SAME parsers the real
+            // load uses (ETLProcessor) — so the provider NAMES here match what the decode-time scope sees.
+            // The raw AllEvents stream reports self-described/TraceLogging providers by GUID, which both
+            // looked like "doesn't know the provider" in the picker AND wouldn't match a scope rule at decode.
+            void Handle(Microsoft.Diagnostics.Tracing.TraceEvent e)
             {
                 var p = e.ProviderName;
                 if (!string.IsNullOrEmpty(p)) providers.Add(p);
@@ -83,7 +87,9 @@ public class EtlInfoExtractor
                 }
 
                 if (++n >= maxEvents) source.StopProcessing();
-            };
+            }
+            source.Dynamic.All += Handle;
+            source.Kernel.All += Handle;
             source.Process();
         }
         catch { /* best-effort — partial metadata is fine for matching */ }
