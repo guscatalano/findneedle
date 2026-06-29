@@ -127,6 +127,8 @@ public class SystemInfoMiddleware
         bool tracefmtOk = !string.IsNullOrWhiteSpace(tracefmt) && File.Exists(tracefmt);
         list.Add(new("tracefmt (ETL / WPP decode)", tracefmtOk ? tracefmt! : "not found — WPP/.etl traces can't be decoded", tracefmtOk));
 
+        list.Add(CdbHealth());
+
         // UML diagram generation — one row covering both renderers. OK if EITHER Mermaid or PlantUML is
         // available (a managed install via Diagram Tools, or for PlantUML a custom JAR path). The old
         // check only looked at PlantUML's custom config path, so a working managed install read "not set".
@@ -148,6 +150,42 @@ public class SystemInfoMiddleware
             umlOk));
 
         return list;
+    }
+
+    /// <summary>cdb.exe (Debugging Tools for Windows) — used to extract ETW logs from crash dumps (.dmp).
+    /// Reports presence + version, and flags it when clearly OLDER than this OS build (its wmitrace can't
+    /// parse a newer OS's ETW buffer layout — the dump's loggers enumerate but won't decode). NOTE: this is
+    /// only a reliable signal for the SDK debugger whose build tracks the OS; a WinDbg-app build uses a
+    /// different version space, so the message stays advisory there. Not required for normal use — only for
+    /// reading ETW logs out of a .dmp.</summary>
+    private static HealthItem CdbHealth()
+    {
+        string? cdb = null;
+        try { cdb = findneedle.Implementations.DumpEtwExtractor.FindCdb(); } catch { /* core not loaded */ }
+        if (string.IsNullOrWhiteSpace(cdb) || !File.Exists(cdb))
+            return new("cdb (crash-dump ETW extraction)",
+                "not found — install Debugging Tools for Windows (or set FINDNEEDLE_CDB) to read ETW logs from .dmp files", false);
+
+        int cdbBuild = 0, osBuild = 0;
+        try
+        {
+            var fi = System.Diagnostics.FileVersionInfo.GetVersionInfo(cdb);
+            if (Version.TryParse(fi.ProductVersion ?? fi.FileVersion ?? "", out var v)) cdbBuild = v.Build;
+        }
+        catch { /* version unreadable */ }
+        try { osBuild = Environment.OSVersion.Version.Build; } catch { /* ignore */ }
+
+        string verLabel = cdbBuild > 0 ? $"build {cdbBuild}" : "version unknown";
+
+        // SDK debugger builds share the OS build's number space; a build below the OS build can't parse this
+        // OS's ETW buffers. (WinDbg-app builds are much higher numbers — they won't trip this and read as ok.)
+        if (cdbBuild > 0 && osBuild > 0 && cdbBuild < osBuild)
+            return new("cdb (crash-dump ETW extraction)",
+                $"{cdb}  ({verLabel}, older than this OS build {osBuild}) — its wmitrace likely can't decode this OS's dump buffers. Update Debugging Tools / WinDbg, or set FINDNEEDLE_CDB to a newer cdb.exe.",
+                false);
+
+        return new("cdb (crash-dump ETW extraction)",
+            $"{cdb}  ({verLabel}; must be ≥ the dump's OS build to decode its ETW buffers)", true);
     }
 
     /// <summary>App version / build metadata for the About page.</summary>
