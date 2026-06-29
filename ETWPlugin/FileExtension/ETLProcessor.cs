@@ -113,22 +113,38 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             var rlog = new StringBuilder();
             rlog.AppendLine($"WPP symbol resolution for: {inputfile}");
             rlog.AppendLine($"Decoded: {DateTime.Now}");
-            rlog.AppendLine();
-            rlog.AppendLine("Search paths consulted:");
-            rlog.AppendLine($"  TRACE_FORMAT_SEARCH_PATH = {Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH")}");
-            rlog.AppendLine($"  _NT_SYMBOL_PATH          = {Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH")}");
-            rlog.AppendLine();
-            rlog.AppendLine("Outcome:");
             if (_prescanFailFast)
-                rlog.AppendLine("  (Fast pre-scan of the first ~8 MB only — the full file was NOT decoded. Counts are sample-scoped.)");
-            rlog.AppendLine($"  events={currentResult.TotalEventsProcessed:N0}  formatErrors={currentResult.TotalFormatErrors:N0}  unknowns={currentResult.TotalFormatsUnknown:N0}");
-            rlog.AppendLine($"  {(currentResult.TotalFormatsUnknown == 0 ? "All events formatted — every required TMF was found." : "Some events couldn't be formatted — a TMF is missing. Add the matching PDB/symbol path and Build TMFs.")}");
-            if (_missingTmfGuids.Count > 0)
+                rlog.AppendLine("(Fast pre-scan of the first ~8 MB only — the full file was NOT decoded. Counts are sample-scoped.)");
+            rlog.AppendLine();
+
+            // ---- WHAT IT TRIED ---- each search-path entry, annotated with whether it actually exists.
+            rlog.AppendLine("What it tried — TMF search paths (TRACE_FORMAT_SEARCH_PATH):");
+            AppendPaths(rlog, Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH"));
+            rlog.AppendLine("What it tried — symbol paths (_NT_SYMBOL_PATH, for PDB→TMF):");
+            AppendPaths(rlog, Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH"));
+            rlog.AppendLine();
+
+            // ---- WHAT WORKED ----
+            long total = currentResult.TotalEventsProcessed;
+            long formatted = Math.Max(0, total - currentResult.TotalFormatsUnknown);
+            var pct = total > 0 ? $"{formatted * 100.0 / total:0.#}%" : "n/a";
+            rlog.AppendLine("What worked:");
+            rlog.AppendLine($"  resolved {pct} — {formatted:N0} of {total:N0} events formatted " +
+                            $"(formatErrors={currentResult.TotalFormatErrors:N0}, eventsLost={currentResult.TotalEventsLost:N0})");
+            rlog.AppendLine();
+
+            // ---- WHAT DIDN'T WORK ----
+            if (_missingTmfGuids.Count == 0 && currentResult.TotalFormatsUnknown == 0)
             {
-                rlog.AppendLine();
-                rlog.AppendLine($"Missing TMFs ({_missingTmfGuids.Count}) — these message GUIDs had no format info; supply each TMF (or the PDB it comes from):");
+                rlog.AppendLine("What didn't work: nothing — every required TMF was found.");
+            }
+            else
+            {
+                rlog.AppendLine($"What didn't work — {_missingTmfGuids.Count} message GUID(s) had no TMF " +
+                                $"({currentResult.TotalFormatsUnknown:N0} events unformatted). Supply each TMF (or the PDB it comes from):");
                 foreach (var g in _missingTmfGuids)
                     rlog.AppendLine($"  {g}   →  expected file {g}.tmf");
+                rlog.AppendLine("  Fix: set a PDB folder + symbol path under Settings → Results viewer → Logs, then \"Build TMFs from symbols\" and reopen. (The symbol path defaults to the Microsoft symbol server.)");
             }
             rlog.AppendLine();
             rlog.AppendLine("----- tracefmt output -----");
@@ -139,6 +155,22 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             Logger.Instance.Log($"Retained tracefmt artifacts: {stable} + {resolveStable}");
         }
         catch (Exception ex) { Logger.Instance.Log($"Could not retain tracefmt output: {ex.Message}"); }
+    }
+
+    /// <summary>Write each ';'-separated search-path entry annotated with whether it actually exists
+    /// (or is a symbol server), so the resolution log shows what was really searched.</summary>
+    private static void AppendPaths(StringBuilder sb, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) { sb.AppendLine("  (none set)"); return; }
+        foreach (var raw in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            string note;
+            if (raw.StartsWith("srv*", StringComparison.OrdinalIgnoreCase) || raw.StartsWith("cache*", StringComparison.OrdinalIgnoreCase))
+                note = raw.Contains("msdl.microsoft.com", StringComparison.OrdinalIgnoreCase) ? "[Microsoft symbol server]" : "[symbol server]";
+            else if (Directory.Exists(raw) || File.Exists(raw)) note = "[found]";
+            else note = "[MISSING]";
+            sb.AppendLine($"  {raw}   {note}");
+        }
     }
 
     /// <summary>Read just the first <paramref name="maxLines"/> of tracefmt's output to collect the
