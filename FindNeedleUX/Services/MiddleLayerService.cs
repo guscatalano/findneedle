@@ -221,6 +221,28 @@ public class MiddleLayerService
         catch { /* best-effort; conditions needing metadata simply won't match */ }
     }
 
+    /// <summary>Warm the per-file ETL/EVTX metadata cache that <see cref="PreparePendingAutoRuleMetadata"/>
+    /// reads, so the (synchronous, UI-thread) search prep is a cache hit instead of a multi-second scan.
+    /// Safe to call from a background thread (pure model/IO) — the UI does so before starting the search so
+    /// the slow peek (e.g. a WPP .etl, which has no fast provider scan) doesn't freeze the open.</summary>
+    public static void WarmMetadataCache()
+    {
+        try
+        {
+            if (!FindPluginCore.Searching.AutoRules.AutoRulesStore.AnyEnabledNeedsMetadata()) return;
+            foreach (var loc in Locations ?? Enumerable.Empty<ISearchLocation>())
+            {
+                string path = "";
+                try { path = loc?.GetName() ?? ""; } catch { }
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
+                var ext = System.IO.Path.GetExtension(path);
+                if (ext.Equals(".etl", StringComparison.OrdinalIgnoreCase)) GetEtlMetaCached(path);
+                else if (ext.Equals(".evtx", StringComparison.OrdinalIgnoreCase)) GetEvtxProvidersCached(path);
+            }
+        }
+        catch { /* best-effort warm; PreparePendingAutoRuleMetadata re-reads (cache hit) anyway */ }
+    }
+
     private static void ClearPendingAutoRuleMetadata()
     {
         _pendingAutoRuleProviders = null;
@@ -234,7 +256,11 @@ public class MiddleLayerService
             var fi = new FileInfo(path);
             var key = $"{path}|{fi.Length}|{fi.LastWriteTimeUtc.Ticks}";
             if (_etlMetaCache.TryGetValue(key, out var cached)) return cached;
-            var meta = findneedle.ETWPlugin.EtlInfoExtractor.QuickScan(path);
+            // Tight budget: this is just a metadata peek for auto-rule matching. A WPP trace doesn't dispatch
+            // through Dynamic/Kernel so the event cap never trips — without the wall-clock cap this grinds the
+            // whole file (was 5s on a WPP .etl, freezing the open). 1.5s is plenty for manifest/kernel.
+            var (counts, _, build) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(path, maxEvents: 120000, maxMs: 1500);
+            var meta = (new HashSet<string>(counts.Keys, StringComparer.OrdinalIgnoreCase), build);
             _etlMetaCache[key] = meta;
             return meta;
         }

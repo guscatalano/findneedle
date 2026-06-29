@@ -1425,6 +1425,16 @@ public sealed partial class MainWindow : Window
             // providers the user wants (a `scope` rule → decode-time filter). Cancelling aborts the open.
             if (!await MaybeOfferTriageAsync()) { ShowSpinner(false); return; }
 
+            // Warm the auto-rule metadata cache OFF the UI thread first. The streaming search prep
+            // (RunSearchStreaming → PreparePendingAutoRuleMetadata) runs synchronously on the UI thread, and
+            // for a WPP .etl that provider peek can take ~1.5s — doing it here (spinner animating) makes that
+            // synchronous step a cache hit instead of a frozen window.
+            ShowSpinner(true, label);
+            await System.Threading.Tasks.Task.Yield();
+            Logger.Instance.Log("[triage] warming metadata cache (off UI)…");
+            await System.Threading.Tasks.Task.Run(() => MiddleLayerService.WarmMetadataCache());
+            Logger.Instance.Log("[triage] metadata warm done");
+
             if (ResultsViewerSettings.StreamWhileLoading)
             {
                 ShowSpinner(true, label);
