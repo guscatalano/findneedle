@@ -77,10 +77,13 @@ public class EtlInfoExtractor
         int? build = null;
         int n = 0;
         bool timedOut = false;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        FindNeedlePluginLib.Logger.Instance.Log($"[triage] QuickScanCounts START {etlPath} maxEvents={maxEvents} maxMs={maxMs}");
         try
         {
             if (string.IsNullOrEmpty(etlPath) || !File.Exists(etlPath)) return (providers, false, build);
             using var source = new ETWTraceEventSource(etlPath);
+            FindNeedlePluginLib.Logger.Instance.Log($"[triage] ETWTraceEventSource ctor done at {sw.ElapsedMilliseconds}ms");
             // Subscribe to Dynamic (manifest/TraceLogging/EventSource) + Kernel — the SAME parsers the real
             // load uses (ETLProcessor) — so the provider NAMES here match what the decode-time scope sees.
             // The raw AllEvents stream reports self-described/TraceLogging providers by GUID, which both
@@ -108,9 +111,12 @@ public class EtlInfoExtractor
             using var timer = new System.Threading.Timer(
                 _ => { timedOut = true; try { source.StopProcessing(); } catch { /* already stopped */ } },
                 null, maxMs, System.Threading.Timeout.Infinite);
+            FindNeedlePluginLib.Logger.Instance.Log($"[triage] Process() starting at {sw.ElapsedMilliseconds}ms");
             source.Process();
+            FindNeedlePluginLib.Logger.Instance.Log($"[triage] Process() done at {sw.ElapsedMilliseconds}ms events={n} providers={providers.Count} timedOut={timedOut}");
         }
-        catch { /* best-effort — partial metadata is fine for matching */ }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"[triage] QuickScanCounts EX at {sw.ElapsedMilliseconds}ms: {ex.GetType().Name}: {ex.Message}"); }
+        FindNeedlePluginLib.Logger.Instance.Log($"[triage] QuickScanCounts RETURN at {sw.ElapsedMilliseconds}ms providers={providers.Count}");
         return (providers, n >= maxEvents || timedOut, build);
     }
 

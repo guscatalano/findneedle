@@ -1418,6 +1418,7 @@ public sealed partial class MainWindow : Window
 
     private async System.Threading.Tasks.Task OpenWithOptionalStreamingAsync(string label)
     {
+        Logger.Instance.Log($"[triage] OpenWithOptionalStreamingAsync ENTER ({label})");
         try
         {
             // Large-file triage: before committing to a multi-minute full load, offer to load only the
@@ -1449,12 +1450,14 @@ public sealed partial class MainWindow : Window
     private async System.Threading.Tasks.Task<bool> MaybeOfferTriageAsync()
     {
         MiddleLayerService.PendingScopeRulePath = null;
+        var tsw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var locs = MiddleLayerService.Locations;
             if (_triageDialogOpen || locs == null || locs.Count != 1) return true;
             var path = locs[0].GetName();
             if (!FindNeedleUX.Services.TriageService.ShouldOfferTriage(path)) return true;
+            Logger.Instance.Log($"[triage] offered for {path} at {tsw.ElapsedMilliseconds}ms");
 
             _triageDialogOpen = true;
             try
@@ -1462,9 +1465,12 @@ public sealed partial class MainWindow : Window
                 // The provider scan (bounded, but seconds on a big/odd trace) runs off the UI thread — show a
                 // spinner meanwhile so the window isn't frozen with no feedback before the dialog appears.
                 ShowSpinner(true, "Inspecting log — reading providers…");
+                Logger.Instance.Log($"[triage] spinner shown at {tsw.ElapsedMilliseconds}ms");
                 await System.Threading.Tasks.Task.Yield(); // let the spinner actually paint before the scan starts
+                Logger.Instance.Log($"[triage] yield done, starting scan at {tsw.ElapsedMilliseconds}ms");
                 var (providersWithCounts, sampled) = await System.Threading.Tasks.Task.Run(
                     () => FindNeedleUX.Services.TriageService.InspectProvidersWithCounts(path));
+                Logger.Instance.Log($"[triage] scan returned {providersWithCounts.Count} providers at {tsw.ElapsedMilliseconds}ms");
                 ShowSpinner(false);
                 if (providersWithCounts.Count <= 1) return true; // nothing meaningful to scope
 
@@ -1532,6 +1538,7 @@ public sealed partial class MainWindow : Window
                     DefaultButton = ContentDialogButton.Primary,
                     XamlRoot = this.Content.XamlRoot,
                 };
+                Logger.Instance.Log($"[triage] showing dialog at {tsw.ElapsedMilliseconds}ms");
                 var result = await dlg.ShowAsync();
                 if (result == ContentDialogResult.None) return false; // Cancel
                 if (result == ContentDialogResult.Primary)
