@@ -152,6 +152,9 @@ public class UnifiedRuleSection
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 
+    [JsonPropertyName("purpose")]
+    public string? Purpose { get; set; } // "enrichment" | "filter" | "output" | "uml" | "scope"
+
     [JsonPropertyName("providers")]
     public List<string> Providers { get; set; } = new();
 
@@ -245,6 +248,19 @@ public class UnifiedRuleAction
 
     [JsonPropertyName("pretty")]
     public bool Pretty { get; set; } = true; // For JSON/XML: pretty print
+
+    // ----- "scope" action properties (pre-decode load scoping; see docs/scope-rule-design.md) -----
+    [JsonPropertyName("timeFrom")]
+    public string? TimeFrom { get; set; } // ISO-8601 UTC inclusive lower bound; omit for open-ended
+
+    [JsonPropertyName("timeTo")]
+    public string? TimeTo { get; set; } // ISO-8601 UTC inclusive upper bound
+
+    [JsonPropertyName("levels")]
+    public List<string>? Levels { get; set; } // allow-list of level names; omit = all levels
+
+    [JsonPropertyName("providerMode")]
+    public string? ProviderMode { get; set; } // "include" (default) or "exclude" the section's providers
 }
 
 // Input Location Configuration

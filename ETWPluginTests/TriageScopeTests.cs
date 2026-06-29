@@ -33,11 +33,7 @@ public sealed class TriageScopeTests
     public TestContext TestContext { get; set; } = null!;
 
     [TestCleanup]
-    public void Cleanup()
-    {
-        ETLProcessor.ProviderScope = null; // don't leak the global scope to other tests
-        ETLProcessor.ScopeFromUtc = ETLProcessor.ScopeToUtc = null;
-    }
+    public void Cleanup() => ETLProcessor.ActiveScope = null; // don't leak the global scope to other tests
 
     [TestMethod]
     [Timeout(2_400_000)]
@@ -53,19 +49,25 @@ public sealed class TriageScopeTests
         foreach (var kv in info.Providers.OrderByDescending(k => k.Value).Take(12))
             TestContext.WriteLine($"  {kv.Value,14:N0}  {kv.Key}");
 
-        // Build the scope: keep everything except the dropped providers (or an explicit allow-list).
-        HashSet<string> scope;
+        // Build the DecodeScope: an explicit allow-list (FINDNEEDLE_SCOPE), else exclude the dropped providers.
+        DecodeScope scope;
+        Func<string, bool> kept;
         var allow = Environment.GetEnvironmentVariable("FINDNEEDLE_SCOPE");
         if (!string.IsNullOrEmpty(allow))
-            scope = new(allow.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
+        {
+            var inc = new HashSet<string>(allow.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
+            scope = new DecodeScope { IncludeProviders = inc };
+            kept = p => inc.Contains(p);
+        }
         else
         {
-            var drop = (Environment.GetEnvironmentVariable("FINDNEEDLE_SCOPE_DROP") ?? "Windows Kernel,MSNT_SystemTrace")
-                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            scope = new(info.Providers.Keys.Where(p => !drop.Contains(p, StringComparer.OrdinalIgnoreCase)), StringComparer.OrdinalIgnoreCase);
+            var drop = new HashSet<string>((Environment.GetEnvironmentVariable("FINDNEEDLE_SCOPE_DROP") ?? "Windows Kernel,MSNT_SystemTrace")
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
+            scope = new DecodeScope { ExcludeProviders = drop };
+            kept = p => !drop.Contains(p);
         }
-        long scopedExpected = info.Providers.Where(kv => scope.Contains(kv.Key)).Sum(kv => (long)kv.Value);
-        TestContext.WriteLine($"Scope keeps {scope.Count} providers ≈ {scopedExpected:N0} events ({100.0 * scopedExpected / Math.Max(1, info.EventCount):F1}% of the file)");
+        long scopedExpected = info.Providers.Where(kv => kept(kv.Key)).Sum(kv => (long)kv.Value);
+        TestContext.WriteLine($"Scope ≈ {scopedExpected:N0} events ({100.0 * scopedExpected / Math.Max(1, info.EventCount):F1}% of the file)");
 
         var full = Load(etl, scope: null);
         var scoped = Load(etl, scope: scope);
@@ -77,11 +79,11 @@ public sealed class TriageScopeTests
         Assert.IsTrue(scoped.ms < full.ms, "scoped load should be faster");
     }
 
-    private (long ms, long rows) Load(string etl, HashSet<string> scope)
+    private (long ms, long rows) Load(string etl, DecodeScope? scope)
     {
         SqliteStorage.ParallelIngestEnabled = false; // serial — the recommended path for very large logs
         ETWTestUtils.UseTestTraceFmt();
-        ETLProcessor.ProviderScope = scope; // process-global (prototype); null = full load
+        ETLProcessor.ActiveScope = scope; // process-global (prototype); null = full load
         var loc = new FolderLocation { path = etl };
         loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new ETLProcessor() });
         var cacheDb = CachedStorage.GetCacheFilePath(loc.GetName(), ".db");

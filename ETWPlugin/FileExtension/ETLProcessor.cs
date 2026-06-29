@@ -30,21 +30,14 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     public string inputfile = "";
     private SearchProgressSink? _progressSink;
 
-    // ----- Triage scope (prototype) -----
-    // When set, the TraceEvent decode path only emits events whose provider is in this set (case-insensitive)
-    // and/or fall inside the [from,to] window — so a scoped "load only these providers / this time range"
-    // request from the triage panel ingests a fraction of a huge capture. Null/empty = load everything.
+    // ----- Triage scope -----
+    // The compiled `scope` rule (provider/time/level) the decode loop honors BEFORE wrapping each event, so a
+    // scoped "load only these providers / this window" ingests a fraction of a huge capture. Null = load all.
     //
-    // PROTOTYPE: this is process-global (static) because FolderLocation creates its own ETLProcessor per
-    // file during the scan, so a per-instance setting wouldn't reach the decoder. Production wiring would
-    // plumb the scope per-load through the location/search config instead of a static.
-    public static System.Collections.Generic.HashSet<string>? ProviderScope;
-    public static DateTime? ScopeFromUtc;
-    public static DateTime? ScopeToUtc;
-    /// <summary>Set the global provider allow-list for a scoped load (case-insensitive; null clears it).</summary>
-    public static void SetProviderScope(System.Collections.Generic.IEnumerable<string>? providers)
-        => ProviderScope = providers == null ? null
-            : new System.Collections.Generic.HashSet<string>(providers, StringComparer.OrdinalIgnoreCase);
+    // PROTOTYPE: process-global (static) because FolderLocation creates its own ETLProcessor per file during
+    // the scan, so a per-instance setting wouldn't reach the decoder. Production wiring would thread the
+    // scope per-load through the location/search config (see docs/scope-rule-design.md §8).
+    public static DecodeScope? ActiveScope;
 
     private int _badlyFormattedCount = 0;
 
@@ -568,10 +561,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 // ETLLogLine (the wrap + insert is the expensive part). This is what lets a "load only these
                 // providers / this time range" choice from the triage panel skip most of a huge capture
                 // (e.g. the ~90% kernel events you don't want) instead of ingesting everything.
-                if (ProviderScope != null && ProviderScope.Count > 0
-                    && !ProviderScope.Contains(e.ProviderName ?? string.Empty)) return;
-                if (ScopeFromUtc.HasValue && e.TimeStamp.ToUniversalTime() < ScopeFromUtc.Value) return;
-                if (ScopeToUtc.HasValue && e.TimeStamp.ToUniversalTime() > ScopeToUtc.Value) return;
+                if (ActiveScope != null && !ActiveScope.Keep(e.ProviderName, e.TimeStamp.ToUniversalTime(), -1)) return;
                 var line = new ETLLogLine(e);
                 var src = line.GetSource() ?? string.Empty;
                 providers[src] = providers.TryGetValue(src, out var c) ? c + 1 : 1;
