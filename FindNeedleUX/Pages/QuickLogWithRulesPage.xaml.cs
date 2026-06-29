@@ -32,7 +32,7 @@ public sealed partial class QuickLogWithRulesPage : Page
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
         var path = FindNeedleUX.Services.Win32FileDialog.OpenFile(hWnd, new (string, string)[]
         {
-            ("Log files", "*.txt;*.log;*.etl;*.evtx;*.zip"),
+            ("Log files", "*.txt;*.log;*.etl;*.evtx;*.zip;*.cab;*.dmp"),
             ("All files", "*.*"),
         });
         if (path != null)

@@ -1074,6 +1074,14 @@ public class MiddleLayerService
     /// </summary>
     public static (string headline, string detail, bool hardFailure, string? missingTmfs)? GetDecodeWarning()
     {
+        // A .dmp that couldn't yield ETW logs (no cdb, user-mode dump, or a debugger older than the dump's
+        // OS build) leaves a diagnostic on DumpEtwExtractor — surface it (it set null on success). Guard on a
+        // .dmp source so a stale message can't show for an ordinary open.
+        var dumpDiag = findneedle.Implementations.DumpEtwExtractor.LastDiagnostic;
+        if (!string.IsNullOrEmpty(dumpDiag)
+            && Locations.Any(l => (l.GetName() ?? "").EndsWith(".dmp", StringComparison.OrdinalIgnoreCase)))
+            return ("Couldn’t read ETW logs from this crash dump", dumpDiag, true, null);
+
         var stats = GetStats();
         if (stats?.componentReports == null) return null;
 

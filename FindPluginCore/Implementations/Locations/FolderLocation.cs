@@ -221,6 +221,14 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             return;
         }
 
+        // A crash dump (.dmp) is a container too: extract its in-memory ETW logger buffers to one .etl per
+        // logger (via cdb + !wmitrace) and run each back through the .etl processor. Same shape as archives.
+        if (DumpEtwExtractor.IsDump(ext))
+        {
+            ExtractAndProcessDump(file, cancellationToken);
+            return;
+        }
+
         ProcessPlainFile(file, ext, cancellationToken);
     }
 
@@ -268,6 +276,33 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 ExtractAndProcessArchive(inner, cancellationToken, depth + 1);
             else
                 ProcessPlainFile(inner, innerExt, cancellationToken);
+        }
+    }
+
+    /// <summary>Expand a crash dump's ETW logger buffers to per-logger .etl files (named after each logger)
+    /// in a throwaway temp dir, then process each through the normal .etl pipeline. Best-effort: a failure
+    /// (no cdb, user-mode dump, debugger-too-old) is logged via DumpEtwExtractor.LastDiagnostic and skipped.</summary>
+    private void ExtractAndProcessDump(string dump, System.Threading.CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested) return;
+        string temp;
+        try { temp = TempStorage.GetNewTempPath(Path.GetFileNameWithoutExtension(dump)); }
+        catch (Exception ex) { Logger.Instance.Log($"Could not create temp dir for {dump}: {ex.Message}"); return; }
+
+        if (!DumpEtwExtractor.TryExtract(dump, temp, cancellationToken))
+        {
+            Logger.Instance.Log($"Dump ETW extraction produced nothing for {dump}: {DumpEtwExtractor.LastDiagnostic}");
+            return;
+        }
+
+        foreach (var inner in FileIO.GetAllFiles(temp, GetAllFilesErrorHandler))
+        {
+            if (cancellationToken.IsCancellationRequested) return;
+            // A dump yields many heterogeneous loggers — some are WPP traces whose decode needs symbols/
+            // tracefmt and can throw ("FmtFile output was not there!"). Isolate each so one un-decodable
+            // logger doesn't abort the whole dump; the decodable loggers (kernel/manifest) still load.
+            try { ProcessPlainFile(inner, ResolveExtension(inner), cancellationToken); }
+            catch (Exception ex) { Logger.Instance.Log($"Skipping logger '{Path.GetFileName(inner)}' from {dump}: {ex.Message}"); }
         }
     }
 
