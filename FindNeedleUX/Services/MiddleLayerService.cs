@@ -171,6 +171,10 @@ public class MiddleLayerService
     // PreparePendingAutoRuleMetadata before UpdateSearchQuery, cleared right after). Only computed when
     // an enabled auto-rule actually needs it, so the common case pays nothing.
     private static HashSet<string> _pendingAutoRuleProviders;
+
+    /// <summary>A `scope` rules.json the triage panel generated for the next open (filters the load at decode
+    /// time). Added to the search's RulesConfigPaths in UpdateSearchQuery; cleared after the open. Null = none.</summary>
+    public static string? PendingScopeRulePath;
     private static int? _pendingAutoRuleBuild;
 
     // Cache of per-file ETL metadata keyed by "path|size|mtimeticks" so repeated searches of the same
@@ -326,6 +330,12 @@ public class MiddleLayerService
                 foreach (var p in WorkspaceRulePaths)
                     if (!query.RulesConfigPaths.Any(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase)))
                         query.RulesConfigPaths.Add(p);
+            // Triage: a `scope` rule the triage panel generated for this open (filters the load at decode
+            // time to the providers/window the user chose). Added like any rule path so it flows through the
+            // engine's scope resolution (NuSearchQuery.ResolveDecodeScope).
+            if (!string.IsNullOrEmpty(PendingScopeRulePath)
+                && !query.RulesConfigPaths.Any(x => string.Equals(x, PendingScopeRulePath, StringComparison.OrdinalIgnoreCase)))
+                query.RulesConfigPaths.Add(PendingScopeRulePath);
             var ctx = BuildAutoRuleContext(Locations);
             var autoPaths = FindPluginCore.Searching.AutoRules.AutoRulesStore
                 .ResolveForSearch(ctx, SkipAutoRulesForNextSearch);

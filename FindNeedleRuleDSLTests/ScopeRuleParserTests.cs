@@ -110,6 +110,23 @@ public class ScopeRuleParserTests
     }
 
     [TestMethod]
+    public void BuildScopeRuleSet_RoundTripsThroughJson_AndScopes()
+    {
+        // Triage panel: select providers A,B (include) -> generate rule set -> serialize -> reload -> compile.
+        var ruleSet = ScopeRuleParser.BuildScopeRuleSet(new[] { "A", "B" }, exclude: false);
+        var json = ScopeRuleParser.ToJson(ruleSet);
+        var reloaded = System.Text.Json.JsonSerializer.Deserialize<UnifiedRuleSet>(json);
+        Assert.IsNotNull(reloaded);
+        var scopeSections = reloaded!.Sections.Where(s => string.Equals(s.Purpose, "scope", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.AreEqual(0, ScopeRuleParser.Validate(scopeSections).Count, "generated scope must validate");
+        var scope = ScopeRuleParser.Build(scopeSections);
+        Assert.IsNotNull(scope);
+        Assert.IsTrue(scope!.Keep("A", Utc(9), -1));
+        Assert.IsTrue(scope.Keep("B", Utc(9), -1));
+        Assert.IsFalse(scope.Keep("C", Utc(9), -1), "unselected provider dropped");
+    }
+
+    [TestMethod]
     public void Validate_CleanScope_NoErrors()
     {
         var errors = ScopeRuleParser.Validate(new[] { ScopeSection(new[] { "Windows Kernel" }, mode: "exclude", from: "2025-07-26T08:00:00Z", levels: new[] { "Error", "Warning" }) });

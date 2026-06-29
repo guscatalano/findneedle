@@ -1410,23 +1410,97 @@ public sealed partial class MainWindow : Window
     /// search and open the viewer as soon as the first page is ready (it keeps filling in the
     /// background with a banner); otherwise run the full search behind the spinner, then open.
     /// </summary>
+    private bool _triageDialogOpen; // re-entrancy guard — a 2nd ContentDialog.ShowAsync while one is open failfasts
+
     private async System.Threading.Tasks.Task OpenWithOptionalStreamingAsync(string label)
     {
-        if (ResultsViewerSettings.StreamWhileLoading)
+        try
         {
-            ShowSpinner(true, label);
-            var handle = MiddleLayerService.RunSearchStreaming();
-            await WaitForFirstRowsAsync(handle);
-            ShowSpinner(false);
-            await OpenViewerAsync();
+            // Large-file triage: before committing to a multi-minute full load, offer to load only the
+            // providers the user wants (a `scope` rule → decode-time filter). Cancelling aborts the open.
+            if (!await MaybeOfferTriageAsync()) { ShowSpinner(false); return; }
+
+            if (ResultsViewerSettings.StreamWhileLoading)
+            {
+                ShowSpinner(true, label);
+                var handle = MiddleLayerService.RunSearchStreaming();
+                await WaitForFirstRowsAsync(handle);
+                ShowSpinner(false);
+                await OpenViewerAsync();
+            }
+            else
+            {
+                ShowSpinner(true, label, showCancel: true);
+                await RunSearchWithProgress();
+                ShowSpinner(false);
+                await OpenViewerAsync();
+            }
         }
-        else
+        finally { MiddleLayerService.PendingScopeRulePath = null; } // don't carry the scope to the next open
+    }
+
+    /// <summary>For a single large .etl, show a triage dialog (providers from a fast bounded scan) and, if the
+    /// user picks a subset, stage a `scope` rule so the load only ingests those providers. Returns false only
+    /// when the user cancels (abort the open). Defensive: guards re-entrancy and never throws into the caller.</summary>
+    private async System.Threading.Tasks.Task<bool> MaybeOfferTriageAsync()
+    {
+        MiddleLayerService.PendingScopeRulePath = null;
+        try
         {
-            ShowSpinner(true, label, showCancel: true);
-            await RunSearchWithProgress();
-            ShowSpinner(false);
-            await OpenViewerAsync();
+            var locs = MiddleLayerService.Locations;
+            if (_triageDialogOpen || locs == null || locs.Count != 1) return true;
+            var path = locs[0].GetName();
+            if (!FindNeedleUX.Services.TriageService.ShouldOfferTriage(path)) return true;
+
+            _triageDialogOpen = true;
+            try
+            {
+                var providers = await System.Threading.Tasks.Task.Run(() => FindNeedleUX.Services.TriageService.InspectProviders(path));
+                if (providers.Count <= 1) return true; // nothing meaningful to scope
+
+                var panel = new Microsoft.UI.Xaml.Controls.StackPanel { Spacing = 2 };
+                panel.Children.Add(new Microsoft.UI.Xaml.Controls.TextBlock
+                {
+                    Text = $"This is a large log ({new System.IO.FileInfo(path).Length / 1024 / 1024:N0} MB). " +
+                           "Uncheck providers you don't need — only the checked ones are loaded (much faster).",
+                    TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
+                    Margin = new Microsoft.UI.Xaml.Thickness(0, 0, 0, 8),
+                });
+                var boxes = new System.Collections.Generic.List<Microsoft.UI.Xaml.Controls.CheckBox>();
+                foreach (var p in providers)
+                {
+                    // Default: drop the high-volume kernel firehose, keep everything else.
+                    bool isKernel = p.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
+                                    || p.Equals("MSNT_SystemTrace", StringComparison.OrdinalIgnoreCase);
+                    var cb = new Microsoft.UI.Xaml.Controls.CheckBox { Content = p, IsChecked = !isKernel };
+                    boxes.Add(cb);
+                    panel.Children.Add(cb);
+                }
+                var dlg = new Microsoft.UI.Xaml.Controls.ContentDialog
+                {
+                    Title = "Choose what to load",
+                    Content = new Microsoft.UI.Xaml.Controls.ScrollViewer { Content = panel, MaxHeight = 380 },
+                    PrimaryButtonText = "Load selected",
+                    SecondaryButtonText = "Load everything",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = Microsoft.UI.Xaml.Controls.ContentDialogButton.Primary,
+                    XamlRoot = this.Content.XamlRoot,
+                };
+                var result = await dlg.ShowAsync();
+                if (result == Microsoft.UI.Xaml.Controls.ContentDialogResult.None) return false; // Cancel
+                if (result == Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary)
+                {
+                    var selected = boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
+                    // Only stage a scope when it's an actual subset (all/none selected = load everything).
+                    if (selected.Count > 0 && selected.Count < providers.Count)
+                        MiddleLayerService.PendingScopeRulePath = FindNeedleUX.Services.TriageService.WriteScopeRuleFile(selected);
+                }
+                // Secondary (Load everything) leaves PendingScopeRulePath null.
+                return true;
+            }
+            finally { _triageDialogOpen = false; }
         }
+        catch (Exception ex) { Logger.Instance.Log($"Triage offer skipped: {ex.Message}"); return true; }
     }
 
     /// <summary>Keep the loading screen up until a streaming search produces its FIRST rows (or

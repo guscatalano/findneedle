@@ -105,6 +105,40 @@ public static class ScopeRuleParser
         return scope.IsEmpty ? null : scope;
     }
 
+    /// <summary>Generate a `scope` rule set from a triage selection (the panel calls this, then writes it as a
+    /// *.rules.json and adds it to the search's RulesConfigPaths). Round-trips through Build/Validate.</summary>
+    public static UnifiedRuleSet BuildScopeRuleSet(
+        IEnumerable<string> providers, bool exclude = false,
+        DateTime? fromUtc = null, DateTime? toUtc = null, IEnumerable<string>? levels = null)
+    {
+        var section = new UnifiedRuleSection
+        {
+            Name = "triage scope",
+            Purpose = "scope",
+            Providers = providers?.ToList() ?? new List<string>(),
+            Rules = new List<UnifiedRule>
+            {
+                new UnifiedRule
+                {
+                    Name = "scope",
+                    Action = new UnifiedRuleAction
+                    {
+                        Type = "scope",
+                        ProviderMode = exclude ? "exclude" : "include",
+                        TimeFrom = fromUtc?.ToUniversalTime().ToString("o"),
+                        TimeTo = toUtc?.ToUniversalTime().ToString("o"),
+                        Levels = levels?.ToList(),
+                    },
+                },
+            },
+        };
+        return new UnifiedRuleSet { Title = "Triage scope", Sections = new List<UnifiedRuleSection> { section } };
+    }
+
+    /// <summary>Serialize a scope rule set to a *.rules.json the search engine can load.</summary>
+    public static string ToJson(UnifiedRuleSet ruleSet) =>
+        System.Text.Json.JsonSerializer.Serialize(ruleSet, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
     private static HashSet<T> Intersect<T>(HashSet<T> a, HashSet<T> b)
     {
         var r = new HashSet<T>(a, a.Comparer);
