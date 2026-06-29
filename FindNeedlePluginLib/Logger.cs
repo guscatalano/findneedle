@@ -13,7 +13,12 @@ public class Logger
     private readonly string logFilePath;
     public Action<string>? LogCallback { get; set; }
     private readonly List<string> _logCache = new();
-    public IReadOnlyList<string> LogCache => _logCache.AsReadOnly();
+    private readonly object _sync = new();
+    // Keep memory bounded over a long session AND keep the LogsPage load snappy.
+    private const int MaxCachedLines = 5000;
+    // Return a SNAPSHOT (copy taken under the lock), not a live view — consumers (e.g. LogsPage) iterate it
+    // while background threads keep logging, so a live AsReadOnly() wrapper threw "Collection was modified".
+    public IReadOnlyList<string> LogCache { get { lock (_sync) { return _logCache.ToArray(); } } }
 
     private Logger()
     {
@@ -37,12 +42,19 @@ public class Logger
     public void Log(string message)
     {
         var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}";
-        _logCache.Add(line);
-        try
+        Action<string>? cb;
+        // Log() is called from many threads (UI, background searches, the off-thread metadata warm). Serialize
+        // the cache mutation + file append so a concurrent reader/writer can't corrupt or throw.
+        lock (_sync)
         {
-            File.AppendAllText(logFilePath, line + Environment.NewLine);
+            _logCache.Add(line);
+            if (_logCache.Count > MaxCachedLines)
+                _logCache.RemoveRange(0, _logCache.Count - MaxCachedLines);
+            try { File.AppendAllText(logFilePath, line + Environment.NewLine); }
+            catch { /* Optionally handle file I/O errors */ }
+            cb = LogCallback;
         }
-        catch { /* Optionally handle file I/O errors */ }
-        LogCallback?.Invoke(line);
+        // Invoke the callback OUTSIDE the lock (it marshals to the UI thread; never hold the lock across it).
+        cb?.Invoke(line);
     }
 }
