@@ -1462,6 +1462,7 @@ public sealed partial class MainWindow : Window
                 // The provider scan (bounded, but seconds on a big/odd trace) runs off the UI thread — show a
                 // spinner meanwhile so the window isn't frozen with no feedback before the dialog appears.
                 ShowSpinner(true, "Inspecting log — reading providers…");
+                await System.Threading.Tasks.Task.Yield(); // let the spinner actually paint before the scan starts
                 var (providersWithCounts, sampled) = await System.Threading.Tasks.Task.Run(
                     () => FindNeedleUX.Services.TriageService.InspectProvidersWithCounts(path));
                 ShowSpinner(false);

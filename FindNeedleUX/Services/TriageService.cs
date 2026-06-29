@@ -45,7 +45,11 @@ public static class TriageService
     {
         try
         {
-            var (counts, capped, _) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(etlPath);
+            // Tight budget for the interactive picker: manifest/kernel traces dispatch fast so 120k events
+            // enumerate their providers in well under a second; the 1.5s wall-clock cap keeps a WPP/odd trace
+            // (whose events don't dispatch through these parsers) from grinding the whole file before the
+            // dialog appears. The spinner covers this short wait.
+            var (counts, capped, _) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(etlPath, maxEvents: 120000, maxMs: 1500);
             var list = counts
                 .OrderByDescending(kv => kv.Value)
                 .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
