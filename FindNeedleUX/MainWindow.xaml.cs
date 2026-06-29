@@ -1459,44 +1459,81 @@ public sealed partial class MainWindow : Window
             _triageDialogOpen = true;
             try
             {
-                var providers = await System.Threading.Tasks.Task.Run(() => FindNeedleUX.Services.TriageService.InspectProviders(path));
-                if (providers.Count <= 1) return true; // nothing meaningful to scope
+                var (providersWithCounts, sampled) = await System.Threading.Tasks.Task.Run(
+                    () => FindNeedleUX.Services.TriageService.InspectProvidersWithCounts(path));
+                if (providersWithCounts.Count <= 1) return true; // nothing meaningful to scope
 
-                var panel = new Microsoft.UI.Xaml.Controls.StackPanel { Spacing = 2 };
-                panel.Children.Add(new Microsoft.UI.Xaml.Controls.TextBlock
+                var header = new TextBlock
                 {
-                    Text = $"This is a large log ({new System.IO.FileInfo(path).Length / 1024 / 1024:N0} MB). " +
-                           "Uncheck providers you don't need — only the checked ones are loaded (much faster).",
-                    TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
-                    Margin = new Microsoft.UI.Xaml.Thickness(0, 0, 0, 8),
-                });
-                var boxes = new System.Collections.Generic.List<Microsoft.UI.Xaml.Controls.CheckBox>();
-                foreach (var p in providers)
+                    Text = $"This is a large log ({new System.IO.FileInfo(path).Length / 1024 / 1024:N0} MB) with " +
+                           $"{providersWithCounts.Count} providers. Uncheck what you don't need — only the checked " +
+                           "providers are loaded (much faster)." +
+                           (sampled ? " Event counts are from a quick sample of the file (relative sizes)." : ""),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8),
+                };
+                var search = new TextBox { PlaceholderText = "Filter providers…", Margin = new Thickness(0, 0, 0, 8) };
+
+                // One row per provider: a checkbox (name) + the event count (right-aligned), sorted by volume
+                // so the firehose providers are at the top. Kept in `rows` so the filter box can hide them.
+                var listPanel = new StackPanel { Spacing = 2 };
+                var boxes = new System.Collections.Generic.List<CheckBox>();
+                var rows = new System.Collections.Generic.List<(FrameworkElement row, string name)>();
+                foreach (var (name, count) in providersWithCounts)
                 {
                     // Default: drop the high-volume kernel firehose, keep everything else.
-                    bool isKernel = p.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
-                                    || p.Equals("MSNT_SystemTrace", StringComparison.OrdinalIgnoreCase);
-                    var cb = new Microsoft.UI.Xaml.Controls.CheckBox { Content = p, IsChecked = !isKernel };
+                    bool isKernel = name.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
+                                    || name.Equals("MSNT_SystemTrace", StringComparison.OrdinalIgnoreCase);
+                    var cb = new CheckBox { Content = name, IsChecked = !isKernel, MinWidth = 240 };
                     boxes.Add(cb);
-                    panel.Children.Add(cb);
+                    var countTb = new TextBlock
+                    {
+                        Text = count.ToString("N0"),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Margin = new Thickness(12, 0, 0, 0),
+                        Opacity = 0.6,
+                    };
+                    var grid = new Grid();
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    Grid.SetColumn(cb, 0);
+                    Grid.SetColumn(countTb, 1);
+                    grid.Children.Add(cb);
+                    grid.Children.Add(countTb);
+                    listPanel.Children.Add(grid);
+                    rows.Add((grid, name));
                 }
-                var dlg = new Microsoft.UI.Xaml.Controls.ContentDialog
+                search.TextChanged += (_, _) =>
+                {
+                    var q = search.Text?.Trim() ?? "";
+                    foreach (var (row, name) in rows)
+                        row.Visibility = (q.Length == 0 || name.Contains(q, StringComparison.OrdinalIgnoreCase))
+                            ? Visibility.Visible : Visibility.Collapsed;
+                };
+
+                var outer = new StackPanel { MinWidth = 420, MaxWidth = 540 };
+                outer.Children.Add(header);
+                outer.Children.Add(search);
+                outer.Children.Add(new ScrollViewer { Content = listPanel, MaxHeight = 360 });
+
+                var dlg = new ContentDialog
                 {
                     Title = "Choose what to load",
-                    Content = new Microsoft.UI.Xaml.Controls.ScrollViewer { Content = panel, MaxHeight = 380 },
+                    Content = outer,
                     PrimaryButtonText = "Load selected",
                     SecondaryButtonText = "Load everything",
                     CloseButtonText = "Cancel",
-                    DefaultButton = Microsoft.UI.Xaml.Controls.ContentDialogButton.Primary,
+                    DefaultButton = ContentDialogButton.Primary,
                     XamlRoot = this.Content.XamlRoot,
                 };
                 var result = await dlg.ShowAsync();
-                if (result == Microsoft.UI.Xaml.Controls.ContentDialogResult.None) return false; // Cancel
-                if (result == Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary)
+                if (result == ContentDialogResult.None) return false; // Cancel
+                if (result == ContentDialogResult.Primary)
                 {
                     var selected = boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
                     // Only stage a scope when it's an actual subset (all/none selected = load everything).
-                    if (selected.Count > 0 && selected.Count < providers.Count)
+                    if (selected.Count > 0 && selected.Count < providersWithCounts.Count)
                         MiddleLayerService.PendingScopeRulePath = FindNeedleUX.Services.TriageService.WriteScopeRuleFile(selected);
                 }
                 // Secondary (Load everything) leaves PendingScopeRulePath null.

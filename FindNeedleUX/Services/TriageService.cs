@@ -27,7 +27,7 @@ public static class TriageService
         catch { return false; }
     }
 
-    /// <summary>Bounded provider scan (sub-second; reads the first ~50k events) for the triage panel.</summary>
+    /// <summary>Bounded provider scan (sub-second) for the triage panel.</summary>
     public static List<string> InspectProviders(string etlPath)
     {
         try
@@ -36,6 +36,24 @@ public static class TriageService
             return providers.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
         }
         catch { return new List<string>(); }
+    }
+
+    /// <summary>Bounded provider scan returning each provider with its event count (descending), plus whether
+    /// the scan hit its cap (so the counts are a SAMPLE of a bigger file, not exact totals). For the triage
+    /// picker: shows which logger is the firehose and lets the user sort/filter by volume.</summary>
+    public static (List<(string provider, int count)> providers, bool sampled) InspectProvidersWithCounts(string etlPath)
+    {
+        try
+        {
+            var (counts, capped, _) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(etlPath);
+            var list = counts
+                .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(kv => (kv.Key, kv.Value))
+                .ToList();
+            return (list, capped);
+        }
+        catch { return (new List<(string, int)>(), false); }
     }
 
     /// <summary>

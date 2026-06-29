@@ -62,13 +62,23 @@ public class EtlInfoExtractor
     /// </summary>
     public static (HashSet<string> providers, int? build) QuickScan(string etlPath, int maxEvents = 200000)
     {
-        var providers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var (counts, _, build) = QuickScanCounts(etlPath, maxEvents);
+        return (new HashSet<string>(counts.Keys, StringComparer.OrdinalIgnoreCase), build);
+    }
+
+    /// <summary>Like <see cref="QuickScan"/> but also returns the per-provider event count seen in the
+    /// bounded scan, plus whether the scan hit its cap (<paramref name="maxEvents"/>) — i.e. the counts are a
+    /// SAMPLE of a larger file, not the full totals. Used by the triage picker to show relative provider
+    /// volume (which logger is the firehose) and to filter the list.</summary>
+    public static (Dictionary<string, int> providers, bool capped, int? build) QuickScanCounts(string etlPath, int maxEvents = 200000)
+    {
+        var providers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         int? build = null;
+        int n = 0;
         try
         {
-            if (string.IsNullOrEmpty(etlPath) || !File.Exists(etlPath)) return (providers, build);
+            if (string.IsNullOrEmpty(etlPath) || !File.Exists(etlPath)) return (providers, false, build);
             using var source = new ETWTraceEventSource(etlPath);
-            int n = 0;
             // Subscribe to Dynamic (manifest/TraceLogging/EventSource) + Kernel — the SAME parsers the real
             // load uses (ETLProcessor) — so the provider NAMES here match what the decode-time scope sees.
             // The raw AllEvents stream reports self-described/TraceLogging providers by GUID, which both
@@ -76,7 +86,7 @@ public class EtlInfoExtractor
             void Handle(Microsoft.Diagnostics.Tracing.TraceEvent e)
             {
                 var p = e.ProviderName;
-                if (!string.IsNullOrEmpty(p)) providers.Add(p);
+                if (!string.IsNullOrEmpty(p)) providers[p] = providers.TryGetValue(p, out var c) ? c + 1 : 1;
 
                 if (build == null && p != null
                     && p.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
@@ -93,7 +103,7 @@ public class EtlInfoExtractor
             source.Process();
         }
         catch { /* best-effort — partial metadata is fine for matching */ }
-        return (providers, build);
+        return (providers, n >= maxEvents, build);
     }
 
     /// <summary>
