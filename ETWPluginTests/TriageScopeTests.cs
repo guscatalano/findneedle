@@ -49,28 +49,32 @@ public sealed class TriageScopeTests
         foreach (var kv in info.Providers.OrderByDescending(k => k.Value).Take(12))
             TestContext.WriteLine($"  {kv.Value,14:N0}  {kv.Key}");
 
-        // Build the DecodeScope: an explicit allow-list (FINDNEEDLE_SCOPE), else exclude the dropped providers.
-        DecodeScope scope;
+        // Build a `scope` rule and drive it the SHIPPED way (rules file → NuSearchQuery → decode filter),
+        // not by poking DecodeScope.Current directly (NuSearchQuery would overwrite that from the rules).
+        // An explicit allow-list (FINDNEEDLE_SCOPE), else exclude the dropped providers.
+        string scopeJson;
         Func<string, bool> kept;
         var allow = Environment.GetEnvironmentVariable("FINDNEEDLE_SCOPE");
         if (!string.IsNullOrEmpty(allow))
         {
-            var inc = new HashSet<string>(allow.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
-            scope = new DecodeScope { IncludeProviders = inc };
-            kept = p => inc.Contains(p);
+            var inc = allow.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var incSet = new HashSet<string>(inc, StringComparer.OrdinalIgnoreCase);
+            scopeJson = ScopeRulesJson(inc, exclude: false);
+            kept = p => incSet.Contains(p);
         }
         else
         {
-            var drop = new HashSet<string>((Environment.GetEnvironmentVariable("FINDNEEDLE_SCOPE_DROP") ?? "Windows Kernel,MSNT_SystemTrace")
-                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
-            scope = new DecodeScope { ExcludeProviders = drop };
-            kept = p => !drop.Contains(p);
+            var drop = (Environment.GetEnvironmentVariable("FINDNEEDLE_SCOPE_DROP") ?? "Windows Kernel,MSNT_SystemTrace")
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var dropSet = new HashSet<string>(drop, StringComparer.OrdinalIgnoreCase);
+            scopeJson = ScopeRulesJson(drop, exclude: true);
+            kept = p => !dropSet.Contains(p);
         }
         long scopedExpected = info.Providers.Where(kv => kept(kv.Key)).Sum(kv => (long)kv.Value);
         TestContext.WriteLine($"Scope ≈ {scopedExpected:N0} events ({100.0 * scopedExpected / Math.Max(1, info.EventCount):F1}% of the file)");
 
-        var full = Load(etl, scope: null);
-        var scoped = Load(etl, scope: scope);
+        var full = Load(etl, rulesJson: null);
+        var scoped = Load(etl, rulesJson: scopeJson);
 
         TestContext.WriteLine($"FULL   load: {full.ms,8:N0} ms  ({full.rows:N0} rows)");
         TestContext.WriteLine($"SCOPED load: {scoped.ms,8:N0} ms  ({scoped.rows:N0} rows)  → {(double)full.ms / Math.Max(1, scoped.ms):F1}× faster, {100.0 * scoped.rows / Math.Max(1, full.rows):F1}% of the rows");
@@ -79,11 +83,19 @@ public sealed class TriageScopeTests
         Assert.IsTrue(scoped.ms < full.ms, "scoped load should be faster");
     }
 
-    private (long ms, long rows) Load(string etl, DecodeScope? scope)
+    private static string ScopeRulesJson(IEnumerable<string> providers, bool exclude)
+    {
+        var arr = string.Join(",", providers.Select(p => "\"" + p.Replace("\"", "\\\"") + "\""));
+        return "{ \"sections\": [ { \"name\": \"scope\", \"purpose\": \"scope\", \"providers\": [" + arr + "], " +
+               "\"rules\": [ { \"name\": \"scope\", \"action\": { \"type\": \"scope\"" +
+               (exclude ? ", \"providerMode\": \"exclude\"" : "") + " } } ] } ] }";
+    }
+
+    private (long ms, long rows) Load(string etl, string? rulesJson)
     {
         SqliteStorage.ParallelIngestEnabled = false; // serial — the recommended path for very large logs
+        DecodeScope.Current = null; // the rule path (NuSearchQuery.ResolveDecodeScope) sets this; don't pre-set
         ETWTestUtils.UseTestTraceFmt();
-        DecodeScope.Current = scope; // process-global (prototype); null = full load
         var loc = new FolderLocation { path = etl };
         loc.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new ETLProcessor() });
         var cacheDb = CachedStorage.GetCacheFilePath(loc.GetName(), ".db");
@@ -91,6 +103,12 @@ public sealed class TriageScopeTests
             try { if (File.Exists(p)) File.Delete(p); } catch { }
         var q = new NuSearchQuery { OverrideStorageType = StorageType.SqlLite, CacheReuseMode = CacheReuseMode.Never };
         q.Locations.Add(loc);
+        if (rulesJson != null)
+        {
+            var rulesPath = Path.Combine(Path.GetDirectoryName(etl)!, $"scope_{Guid.NewGuid():N}.rules.json");
+            File.WriteAllText(rulesPath, rulesJson);
+            q.RulesConfigPaths.Add(rulesPath);
+        }
         var sw = Stopwatch.StartNew();
         q.RunThrough();
         sw.Stop();
