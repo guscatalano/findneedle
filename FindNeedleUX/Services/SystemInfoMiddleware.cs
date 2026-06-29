@@ -257,12 +257,36 @@ public class SystemInfoMiddleware
     {
         try
         {
-            var os = Environment.OSVersion;
-            return $"{os.VersionString}";
+            // The friendly name + edition + the exact build come from the registry (the same place
+            // winver/CurrentVersion reads), not Environment.OSVersion — including BuildLabEx, the full
+            // "build.revision.arch.branch.date-time" string (e.g. 26100.1.amd64fre.ge_release.240331-1435).
+            string? productName = null, displayVer = null, currentBuild = null, buildLabEx = null;
+            int ubr = -1;
+            try
+            {
+                using var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+                if (k != null)
+                {
+                    productName = k.GetValue("ProductName") as string;
+                    displayVer = k.GetValue("DisplayVersion") as string;            // e.g. 24H2
+                    currentBuild = (k.GetValue("CurrentBuildNumber") ?? k.GetValue("CurrentBuild")) as string;
+                    buildLabEx = k.GetValue("BuildLabEx") as string;
+                    if (k.GetValue("UBR") is int u) ubr = u;                        // update build revision
+                }
+            }
+            catch { /* registry unreadable — fall back to OSVersion below */ }
+
+            var head = string.IsNullOrWhiteSpace(productName) ? "Windows" : productName.Trim();
+            if (!string.IsNullOrWhiteSpace(displayVer)) head += " " + displayVer;
+            var build = currentBuild ?? Environment.OSVersion.Version.Build.ToString();
+            if (ubr >= 0) build += "." + ubr;
+            var result = $"{head} — build {build}";
+            if (!string.IsNullOrWhiteSpace(buildLabEx)) result += $" — {buildLabEx}";
+            return result;
         }
         catch
         {
-            return "Unknown";
+            try { return Environment.OSVersion.VersionString; } catch { return "Unknown"; }
         }
     }
 
