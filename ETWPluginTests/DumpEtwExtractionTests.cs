@@ -50,14 +50,38 @@ public sealed class DumpEtwExtractionTests
             "expected at least one logger's buffers saved to .etl — needs a kernel/complete dump with live ETW " +
             "loggers. Tail of cdb output:\n" + Tail(res.CdbOutput));
 
-        // Decode the largest produced .etl through the real ETL pipeline and assert it yields events.
-        var biggest = res.EtlFiles.OrderByDescending(f => new FileInfo(f).Length).First();
-        var proc = new ETLProcessor();
-        proc.OpenFile(biggest);
-        proc.LoadInMemory();
-        int rows = proc.GetResults().Count;
-        TestContext.WriteLine($"decoded {Path.GetFileName(biggest)} ({new FileInfo(biggest).Length / 1024.0:N0} KB) → {rows:N0} rows");
-        Assert.IsTrue(rows > 0, "the saved logger buffers should decode to some events");
+        // Decode EVERY produced .etl through the real ETL pipeline (a logger's buffers may be a big but idle
+        // pre-allocated buffer, so "biggest" isn't "most events") and report per-file; assert the total > 0.
+        long totalRows = 0;
+        foreach (var etl in res.EtlFiles.OrderBy(f => f))
+        {
+            int rows = 0;
+            try
+            {
+                var proc = new ETLProcessor();
+                proc.OpenFile(etl);
+                proc.GetResultsWithCallback(b => System.Threading.Interlocked.Add(ref rows, b.Count)).Wait();
+            }
+            catch (Exception ex) { TestContext.WriteLine($"  {Path.GetFileName(etl)}: decode error {ex.GetType().Name}: {ex.Message}"); }
+            if (rows > 0)
+                TestContext.WriteLine($"  {Path.GetFileName(etl),-18} {new FileInfo(etl).Length / 1024.0,8:N0} KB → {rows:N0} rows");
+            totalRows += rows;
+        }
+        TestContext.WriteLine($"TOTAL decoded events across {res.EtlFiles.Count} logger .etl(s): {totalRows:N0}");
+
+        if (totalRows == 0 && res.LikelyToolVersionMismatch)
+        {
+            // The mechanism worked (loggers enumerated + buffers saved) but cdb's wmitrace extension is older
+            // than this OS build, so it misparses the buffer layout ("Unrecognized EtwpDebuggerData Version /
+            // Invalid State / Update your debugger"). Not a product bug — needs a matched/newer debugger.
+            Assert.Inconclusive(
+                $"Extraction works ({res.EtlFiles.Count} loggers enumerated + saved to .etl), but the installed " +
+                "wmitrace extension is older than this OS build and misparses the trace buffers (it reports " +
+                "'Unrecognized EtwpDebuggerData Version / Update your debugger'). Update Debugging Tools for " +
+                "Windows to a build >= the dump's OS to decode events. cdb tail:\n" + Tail(res.CdbOutput));
+            return;
+        }
+        Assert.IsTrue(totalRows > 0, "the saved logger buffers should decode to some events");
     }
 
     private static string Tail(string s) => s.Length <= 4000 ? s : s.Substring(s.Length - 4000);

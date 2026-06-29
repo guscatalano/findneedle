@@ -15,6 +15,15 @@ public sealed class DumpEtwExtractionResult
     public List<string> EtlFiles { get; } = new();
     /// <summary>Full cdb console output (the !wmitrace.strdump logger listing + logsave narration).</summary>
     public string CdbOutput { get; set; } = "";
+
+    /// <summary>True when cdb's wmitrace extension is OLDER than the target OS build, so it misparses the
+    /// trace-buffer layout ("Unrecognized EtwpDebuggerData Version" / "Invalid State" / "Update your
+    /// debugger"). Loggers still ENUMERATE (names parse), but buffers won't decode — the fix is a newer
+    /// Debugging Tools for Windows (>= the dump's OS build). Distinguishes "toolchain too old" from "broken".</summary>
+    public bool LikelyToolVersionMismatch =>
+        CdbOutput.Contains("Unrecognized EtwpDebuggerData Version", StringComparison.OrdinalIgnoreCase)
+        || CdbOutput.Contains("Update your debugger", StringComparison.OrdinalIgnoreCase)
+        || CdbOutput.Contains("Invalid State", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>
