@@ -344,8 +344,25 @@ public static class ResultsViewerSettings
     /// </summary>
     public static string SymbolPath
     {
-        get => Data.SymbolPath ?? "";
+        // Default (when never set) to the Microsoft public symbol server, so WPP traces from Microsoft
+        // binaries resolve their PDBs → TMFs without manual setup. Once the user edits it — including
+        // clearing it to "" — that explicit value is honored (Data.SymbolPath becomes non-null). First-time
+        // WPP decode may download PDBs from the server (slower), which is the cost of the default.
+        get => Data.SymbolPath ?? DefaultSymbolPath;
         set { Data.SymbolPath = value ?? ""; Save(); Changed?.Invoke(); }
+    }
+
+    /// <summary>The Microsoft public symbol server with a local cache, in <c>_NT_SYMBOL_PATH</c> syntax —
+    /// the default <see cref="SymbolPath"/> until the user overrides it.</summary>
+    public static string DefaultSymbolPath
+    {
+        get
+        {
+            var cache = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle", "symbols");
+            try { Directory.CreateDirectory(cache); } catch { /* best-effort */ }
+            return $"srv*{cache}*https://msdl.microsoft.com/download/symbols";
+        }
     }
 
     /// <summary>

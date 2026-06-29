@@ -643,6 +643,9 @@
                             <TextBox x:Name="SymbolPathBox" Width="560" HorizontalAlignment="Left"
                                      PlaceholderText="Symbol path, e.g. srv*C:\symcache*https://msdl.microsoft.com/download/symbols"
                                      LostFocus="SymbolPathBox_LostFocus" AutomationProperties.Name="Symbol path"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Defaults to the Microsoft public symbol server, so WPP traces from Microsoft binaries resolve automatically — the first decode may download PDBs (slower). Clear this box to disable, or set your own PDB folders / symbol server."/>
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="BuildTmfsButton" Content="Build TMFs from symbols" Click="BuildTmfs_Click"/>
                                 <TextBlock x:Name="BuildTmfsStatus" VerticalAlignment="Center" FontSize="12"
