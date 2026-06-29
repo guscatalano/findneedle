@@ -88,11 +88,9 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
             // Stream the file instead of File.ReadAllLines — ReadAllLines materialises every
             // line in a single string[] before we touch the first one, so a 500 MB log eats
             // ~1 GB of strings up front before we can even start parsing.
-            // Triage scope: plain text has no provider/level cheaply, so only the time window applies
-            // (and only to lines that actually parse a timestamp — un-timestamped lines are always kept).
-            var scope = DecodeScope.Current;
-            bool scopeTime = scope != null && (scope.FromUtc.HasValue || scope.ToUtc.HasValue);
-
+            // NOTE: the triage time-window scope is applied at EMIT (GetResults / GetResultsWithCallback),
+            // not here — Step1 runs LoadInMemory before the pipeline sets DecodeScope.Current, so _results
+            // is kept complete and the window is applied when rows are handed out. See ActiveTimeScope().
             using var sr = new StreamReader(_filePath, detectEncodingFromByteOrderMarks: true);
             var lineNumber = 0;
             string line;
@@ -102,14 +100,12 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
                 lineNumber++;
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                var result = new PlainTextSearchResult
+                _results.Add(new PlainTextSearchResult
                 {
                     LineNumber = lineNumber,
                     Text = line,
                     SourceFile = _filePath
-                };
-                if (scopeTime && !KeptByScope(result, scope)) continue;
-                _results.Add(result);
+                });
             }
 
             _hasLoaded = true;
@@ -120,10 +116,21 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
         }
     }
 
+    /// <summary>The active time-window scope, or null if there's nothing to filter on. Text has no
+    /// provider/level, so only a From/To window scopes a text load. Read at EMIT time, not load time:
+    /// Step1 calls LoadInMemory before the search pipeline publishes DecodeScope.Current (Step2), so
+    /// filtering during the cache-populating load would miss the scope entirely — we keep <c>_results</c>
+    /// complete and apply the window when rows are handed to a consumer.</summary>
+    private static DecodeScope? ActiveTimeScope()
+    {
+        var scope = DecodeScope.Current;
+        return scope != null && (scope.FromUtc.HasValue || scope.ToUtc.HasValue) ? scope : null;
+    }
+
     /// <summary>True if a line passes the scope's time window. A line with no parseable timestamp is always
     /// kept (we can't classify it, so we don't drop it). The parsed time is treated as local and compared in
     /// UTC against the scope's UTC bounds — text logs rarely carry a timezone, so this is a best-effort window.</summary>
-    private static bool KeptByScope(PlainTextSearchResult result, DecodeScope scope)
+    private static bool KeptByScope(ISearchResult result, DecodeScope scope)
     {
         var ts = result.GetLogTime();
         if (ts <= DateTime.MinValue) return true; // un-timestamped line — keep
@@ -143,7 +150,11 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
 
     public List<ISearchResult> GetResults()
     {
-        return _results;
+        var scope = ActiveTimeScope();
+        if (scope == null) return _results;
+        var filtered = new List<ISearchResult>(_results.Count);
+        foreach (var r in _results) if (KeptByScope(r, scope)) filtered.Add(r);
+        return filtered;
     }
 
     public async Task GetResultsWithCallback(Action<List<ISearchResult>> onBatch, CancellationToken cancellationToken = default, int batchSize = 1000)
@@ -156,10 +167,14 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
         // here, doubling I/O + parsing cost on every search.
         if (_hasLoaded)
         {
+            // Apply the triage time window here (emit time) — _results holds every line; out-of-window
+            // rows are simply not yielded to the consumer (so they're never stored/indexed).
+            var scope = ActiveTimeScope();
             var cached = new List<ISearchResult>(batchSize);
             for (int i = 0; i < _results.Count; i++)
             {
                 if (cancellationToken.IsCancellationRequested) break;
+                if (scope != null && !KeptByScope(_results[i], scope)) continue;
                 cached.Add(_results[i]);
                 if (cached.Count >= batchSize)
                 {
@@ -173,9 +188,9 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
         }
 
         // Cold path: nobody called LoadInMemory first. Stream the file (one pass, no
-        // ReadAllLines), populate _results, and yield batches as we go.
-        var scope = DecodeScope.Current;
-        bool scopeTime = scope != null && (scope.FromUtc.HasValue || scope.ToUtc.HasValue);
+        // ReadAllLines), populate _results, and yield batches as we go. _results is kept complete;
+        // the triage time window only gates what's emitted (stored), so it isn't lost from the cache.
+        var emitScope = ActiveTimeScope();
         var batch = new List<ISearchResult>(batchSize);
         using var sr = new StreamReader(_filePath, detectEncodingFromByteOrderMarks: true);
         var lineNumber = 0;
@@ -192,8 +207,8 @@ public class PlainTextProcessor : IFileExtensionProcessor, IPluginDescription
                 Text = line,
                 SourceFile = _filePath
             };
-            if (scopeTime && !KeptByScope(result, scope)) continue;
             _results.Add(result);
+            if (emitScope != null && !KeptByScope(result, emitScope)) continue;
             batch.Add(result);
 
             if (batch.Count >= batchSize)

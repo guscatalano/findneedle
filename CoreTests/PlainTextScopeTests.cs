@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using BasicTextPlugin;
+using findneedle.Implementations;
 using FindNeedlePluginLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -42,6 +43,27 @@ public class PlainTextScopeTests
         proc.OpenFile(f);
         proc.LoadInMemory();
         return proc.GetResults().Select(r => r.GetMessage()).ToList();
+    }
+
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Diag_ParsesBracketedTimestamp()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "FN_txtscope_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var f = Path.Combine(dir, "b.log");
+        File.WriteAllLines(f, new[] { "[2026-01-01 00:00:00] INFO: needle line 0", "[2026-02-01 00:00:00] INFO: needle line 1" });
+        try
+        {
+            DecodeScope.Current = null;
+            var p = new PlainTextProcessor();
+            p.OpenFile(f);
+            p.LoadInMemory();
+            var r = p.GetResults();
+            Assert.AreEqual(2, r.Count);
+            Assert.AreEqual(new DateTime(2026, 1, 1, 0, 0, 0), r[0].GetLogTime(), "bracketed timestamp must parse (else scope can't filter)");
+        }
+        finally { TryDelete(f); }
     }
 
     [TestMethod]
@@ -97,5 +119,51 @@ public class PlainTextScopeTests
     {
         DecodeScope.Current = null;
         try { Directory.Delete(Path.GetDirectoryName(f)!, true); } catch { /* best effort */ }
+    }
+
+    // Reproduce the full shipped path (rule file -> NuSearchQuery -> FolderLocation -> PlainTextProcessor)
+    // cheaply, so a regression in the wiring is caught without the multi-million-line perf fixture.
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void FullPipeline_TimeWindowRule_FiltersTextLoad()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "FN_txtscope_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "app.log");
+        File.WriteAllLines(log, new[]
+        {
+            "[2026-01-01 00:00:00] INFO: line jan",
+            "[2026-01-05 00:00:00] INFO: line jan2",
+            "[2026-02-01 00:00:00] INFO: line feb",
+            "[2026-02-20 00:00:00] INFO: line feb2",
+        });
+        var rules = Path.Combine(dir, "scope.rules.json");
+        File.WriteAllText(rules,
+            "{ \"sections\": [ { \"name\": \"scope\", \"purpose\": \"scope\", \"rules\": [ { \"name\": \"scope\", " +
+            "\"action\": { \"type\": \"scope\", \"timeTo\": \"2026-01-15T00:00:00Z\" } } ] } ] }");
+        try
+        {
+            FindPluginCore.Implementations.Storage.SqliteStorage.ParallelIngestEnabled = false;
+            var loc = new FolderLocation { path = log };
+            loc.SetExtensionProcessorList(new System.Collections.Generic.List<IFileExtensionProcessor> { new PlainTextProcessor() });
+            var cacheDb = FindNeedleCoreUtils.CachedStorage.GetCacheFilePath(loc.GetName(), ".db");
+            foreach (var p in new[] { cacheDb, cacheDb + "-wal", cacheDb + "-shm", cacheDb + "-journal" })
+                try { if (File.Exists(p)) File.Delete(p); } catch { }
+            var q = new FindPluginCore.Searching.NuSearchQuery
+            {
+                OverrideStorageType = FindPluginCore.PluginSubsystem.StorageType.SqlLite,
+                CacheReuseMode = FindPluginCore.Searching.CacheReuseMode.Never,
+            };
+            q.Locations.Add(loc);
+            q.RulesConfigPaths.Add(rules);
+            q.RunThrough();
+            long rows = ((FindPluginCore.Implementations.Storage.SqliteStorage)q.ResultStorage!).GetStatistics().filteredRecordCount;
+            q.DisposeStorage();
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+            // Only the two January lines are <= the 2026-01-15 window (the tz shift is hours, not weeks).
+            Assert.AreEqual(2, rows, "the time-window scope rule must filter the text load through the full pipeline");
+        }
+        finally { DecodeScope.Current = null; try { Directory.Delete(dir, true); } catch { } }
     }
 }
