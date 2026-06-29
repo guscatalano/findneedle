@@ -440,6 +440,9 @@ public sealed partial class MainWindow : Window
                 }
             }
 
+            // Large-file triage (same as the interactive open path): offer to load only chosen providers.
+            if (!await MaybeOfferTriageAsync()) { ShowSpinner(false); return; } // cancelled → abort the open
+
             ShowSpinner(true, "Opening file...", showCancel: true);
             await RunSearchWithProgress();
             ShowSpinner(false);
@@ -452,6 +455,7 @@ public sealed partial class MainWindow : Window
             Logger.Instance.Log($"CLI load failed: {ex.Message}");
             ShowSpinner(false);
         }
+        finally { MiddleLayerService.PendingScopeRulePath = null; } // don't carry the scope to the next open
     }
 
     /// <summary>The result viewer page. Only the native viewer remains.</summary>
