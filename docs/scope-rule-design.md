@@ -1,6 +1,10 @@
 # Design spec: `scope` rules — pre-decode load scoping for large captures
 
-Status: **prototype / proposed.** Author: perf work, June 2026.
+Status: **implemented / shipped.** Author: perf work, June 2026. Originally written as a proposal; the
+design below is now in the product. Where the shipped code differs from the original sketch (the compiled
+scope is `FindNeedlePluginLib.DecodeScope`, not a `ScopeRule` in RuleDSL; it is published through an ambient
+`DecodeScope.Current`; and it filters **ETL, EVTX, and plain text**, not ETL alone) the text has been
+updated and the deltas are called out inline.
 
 ## 1. Motivation
 
@@ -113,41 +117,51 @@ This is the guard that keeps "before everything" honest.
 
 ## 7. Evaluation
 
-A compiled `ScopeRule` is built once from the scope sections:
+A compiled scope (shipped as `FindNeedlePluginLib.DecodeScope`) is built once from the scope sections.
+`ScopeRuleParser.Build`/`Validate` (FindNeedleRuleDSL) compile + validate the sections into it:
 
 ```csharp
-sealed class ScopeRule {
-    HashSet<string>? IncludeProviders;     // null/empty = all
+sealed class DecodeScope {                  // FindNeedlePluginLib/DecodeScope.cs
+    HashSet<string>? IncludeProviders;      // null/empty = all
     HashSet<string>? ExcludeProviders;
     DateTime? FromUtc, ToUtc;
-    HashSet<int>? Levels;                  // (int)Level
-    bool Keep(string provider, DateTime tsUtc, int level); // O(1): hash lookups + compares
-    static ScopeRule? FromSections(IReadOnlyList<UnifiedRuleSection>);
-    static IReadOnlyList<string> Validate(IReadOnlyList<UnifiedRuleSection>); // errors, empty = ok
+    HashSet<int>? Levels;                   // (int)Level
+    // "unknown" args are NOT filtered, so one scope applies across formats that expose different fields:
+    //   null provider → skip provider lists; null tsUtc → skip time window; level < 0 → skip level set.
+    bool Keep(string? provider, DateTime? tsUtc, int level); // O(1): hash lookups + compares
 }
+// ScopeRuleParser.Build(sections) → DecodeScope;  ScopeRuleParser.Validate(sections) → errors (empty = ok)
 ```
 
 `Keep` must be **O(1)** (hash lookups + a couple of compares) — it runs per raw event (tens of millions),
 so it cannot route through the general `RuleEvaluationEngine` (regex per event would dominate the decode).
 
-Each format decoder consults the active scope in its decode loop **before** constructing the record:
+Each format decoder consults the ambient `DecodeScope.Current` in its decode loop **before** constructing
+the record, supplying only the dimensions it can get cheaply (a `null`/`-1` arg means "unknown", and an
+unknown dimension is not filtered):
 
-- `ETLProcessor.DecodeWithTraceEvent` → `if (scope != null && !scope.Keep(e.ProviderName, e.TimeStamp.ToUniversalTime(), (int)level)) return;` before `new ETLLogLine(e)`.
-- Text / tracefmt, EVTX, etc. → the same check mapped to each format's provider/time/level. (ETL first;
-  others follow — see §11.)
+- **ETL** — `ETLProcessor`'s decode `Handle`: `if (scope != null && !scope.Keep(e.ProviderName, e.TimeStamp.ToUniversalTime(), -1)) return;` before `new ETLLogLine(e)`.
+- **EVTX** — `FileEventLogQueryLocation.Search`/`SearchWithCallback`: `scope.Keep(eventdetail.ProviderName, eventdetail.TimeCreated?.ToUniversalTime(), -1)` before `new EventRecordResult(...)` (whose ctor calls the costly `FormatDescription()`).
+- **Plain text** — `PlainTextProcessor` (both load paths): time window only (`Keep(null, parsedTimeUtc, -1)`); text has no provider/level, and an un-timestamped line passes `null` time so it is always kept.
+
+Level is intentionally passed as `-1` (skipped) for ETL and EVTX: EVTX's `GetLevel` reads `LevelDisplayName`,
+which loads provider metadata and would defeat the pre-wrap savings. Level scoping remains future work (§11).
 
 ## 8. Plumbing (how the scope reaches the decoder)
 
-The scope comes from the search's loaded RuleDSL (`NuSearchQuery.LoadedRules` via `RulesConfigPaths`).
-`NuSearchQuery` builds the `ScopeRule` from the `scope` sections and publishes it to the decoders for the
-duration of the scan, then clears it.
+The scope comes from the search's loaded RuleDSL (`scope` sections resolved from `RulesConfigPaths`).
+`NuSearchQuery.Step2` calls `ResolveDecodeScope()` (which runs `ScopeRuleParser.Validate`/`Build` over the
+`purpose:"scope"` sections), publishes the resulting `DecodeScope` to the decoders for the duration of the
+scan, then clears it.
 
-- **Prototype:** a process-global `ETLProcessor.ActiveScope`, set at scan start and cleared at scan end.
-  This is required because `FolderLocation` creates its **own** `ETLProcessor` per file during the scan, so
-  a per-instance setting never reaches the decoder. (This exact mismatch silently no-op'd the first
-  prototype — see the perf memory.)
-- **Production:** thread the scope per-search through the location → processor factory so concurrent
-  searches don't share global state. The static is a documented prototype shortcut, not the end state.
+- **Shipped:** an ambient process-global `DecodeScope.Current`, set at scan start and cleared at scan end.
+  A process-global is required because `FolderLocation` creates its **own** decoder (e.g. `ETLProcessor`)
+  per file during the scan, so a per-instance setting never reaches the decoder. (This exact mismatch
+  silently no-op'd the first prototype — see the perf memory.) Because it is global, tests/callers must
+  drive scope through a scope `*.rules.json` in `RulesConfigPaths`, **not** by poking `DecodeScope.Current`
+  (Step2 overwrites it from the rules each run).
+- **Future:** thread the scope per-search through the location → processor factory so concurrent searches
+  don't share global state. The ambient static is a documented shortcut, not the end state.
 
 ## 9. Cache interaction
 
@@ -170,9 +184,11 @@ saved as a normal `*.rules.json` for reuse ("my standard kernel-free view").
 
 ## 11. Limitations & future work
 
-- **Per-format wiring.** ETL is first; the text/tracefmt, EVTX, CSV, etc. decoders each need the same
-  pre-record check, with provider/time/level mapped to that format. Formats without a provider concept
-  honor only the time/level parts.
+- **Per-format wiring.** Done for **ETL, EVTX, and plain text** (see §7). Remaining decoders (CSV, JSON,
+  pcap, …) each still need the same pre-record check, with provider/time/level mapped to that format.
+  Formats without a provider concept honor only the time parts (plain text already works this way — it
+  applies the time window only, and keeps un-timestamped lines). **Level** scoping is not wired for any
+  format yet (ETL/EVTX pass `-1` to avoid the metadata-load cost; plain-text level parsing is heuristic).
 - **The decode pass is the floor.** The file is still read/dispatched once to filter (TraceEvent dispatches
   every event); scope skips the wrap+insert, not the sequential read. That's why the 36 M scoped load is
   49 s, not ~5 s — ~13 s is the unavoidable decode-dispatch.
@@ -185,24 +201,36 @@ saved as a normal `*.rules.json` for reuse ("my standard kernel-free view").
 
 ## 12. Test plan
 
-- **Unit (CoreTests/FindNeedleRuleDSLTests):** `ScopeRule.Keep` truth table (include/exclude providers,
-  time window edges, levels); `ScopeRule.Validate` rejects a scope that tests `message`; `FromSections`
-  AND-combines multiple scope sections.
-- **Integration (ETWPluginTests, SkipCI):** `TriageScopeTests` — full vs scoped load on a real multi-provider
-  capture; assert scoped ingests fewer rows and is faster (the measured 8.4×). Already prototyped.
-- **Cache:** a scoped open and a full open of the same file keep independent caches (distinct keys) and both
-  warm-reuse.
+All implemented:
+- **Unit:** `CoreTests/DecodeScopeKeepTests` — `DecodeScope.Keep` truth table (include/exclude providers,
+  time-window edges inclusive, levels) **plus** the "unknown dimension is not filtered" contract (null
+  provider / null timestamp / level<0 each skip their dimension). `FindNeedleRuleDSLTests/ScopeRuleParserTests`
+  — `ScopeRuleParser.Validate` rejects a scope that tests `message`; `Build` AND-combines multiple scope
+  sections; round-trips `BuildScopeRuleSet`/`ToJson`.
+- **Per-format decode (fast):** `CoreTests/PlainTextScopeTests` (time window drops out-of-window lines,
+  keeps un-timestamped; a provider-only scope leaves text untouched); `EventLogPluginTests/EvtxScopeTests`
+  (provider + time filter at decode time on the committed Sysmon fixture).
+- **Integration (ETWPluginTests, SkipCI):** `ScopeRuleWiringTests` — a scope `*.rules.json` drives the ETL
+  decode filter end-to-end through `NuSearchQuery`; `TriageScopeTests` — full vs scoped load on a real
+  multi-provider capture, asserting scoped ingests fewer rows and is faster (measured 8.4×).
+- **Cache:** independent caches for scoped vs full (the `ScopeCacheSuffix` key); covered by the wiring tests.
 
 ## 13. Files touched
 
-- `FindNeedleRuleDSL/UnifiedRuleModel.cs` — add `timeFrom`/`timeTo`/`levels`/`providerMode` to
-  `UnifiedRuleAction`.
-- `FindNeedleRuleDSL/ScopeRule.cs` (new) — compiled scope + `FromSections` + `Validate` + `ToSection`.
-- The rule loader / `GetSectionsByPurpose` — recognize `action.type == "scope"`.
-- `ETWPlugin/FileExtension/ETLProcessor.cs` — decode-time `ActiveScope` check (replaces the prototype's
-  raw `ProviderScope`).
-- `FindPluginCore/Searching/NuSearchQuery.cs` — build the scope from loaded rules, publish/clear around the
-  scan, and add the scope to the cache key.
-- `FindNeedleUX/` (later) — the triage panel that emits a scope section.
+(As shipped — the compiled scope landed in `FindNeedlePluginLib.DecodeScope`, and the parser in
+`FindNeedleRuleDSL.ScopeRuleParser`, rather than a single `ScopeRule.cs`.)
+- `FindNeedlePluginLib/DecodeScope.cs` (new) — compiled O(1) scope + ambient `Current` + the cross-format
+  `Keep(string?, DateTime?, int)`.
+- `FindNeedleRuleDSL/UnifiedRuleModel.cs` — `Purpose` on `UnifiedRuleSection`; `TimeFrom`/`TimeTo`/`Levels`/
+  `ProviderMode` on `UnifiedRuleAction`.
+- `FindNeedleRuleDSL/ScopeRuleParser.cs` (new) — `Validate` + `Build` (sections → `DecodeScope`) +
+  `BuildScopeRuleSet`/`ToJson`. Recognized via the section's `purpose == "scope"`.
+- Decoders: `ETWPlugin/FileExtension/ETLProcessor.cs`, `EventLogPlugin/.../FileEventLogQueryLocation.cs`,
+  `BasicTextPlugin/PlainTextProcessor.cs` — decode-time `DecodeScope.Current` check before the wrap.
+- `FindPluginCore/Searching/NuSearchQuery.cs` — `ResolveDecodeScope` from loaded rules, publish/clear
+  `DecodeScope.Current` around the scan, and `ScopeCacheSuffix` on the cache key.
+- `FindNeedleUX/` — the triage panel that emits a scope section: `Services/TriageService.cs`,
+  `MiddleLayerService.PendingScopeRulePath`, and the dialog in `MainWindow` (both the interactive open and
+  the CLI/"open with" path).
 - Tests as in §12.
 ```
