@@ -197,6 +197,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
         LoadingOverlay.Visibility = Visibility.Visible;
+        // Clear any stale "No results" from a previous load/file — it's opaque and on top, so leaving it up
+        // would hide the loading spinner for the whole (possibly long) first-page wait on the new load.
+        if (EmptyOverlay != null) EmptyOverlay.Visibility = Visibility.Collapsed;
         FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.OpenViewer);
         FindNeedlePluginLib.FlowProgress.Updated -= OnFlowProgress;
         FindNeedlePluginLib.FlowProgress.Updated += OnFlowProgress;
@@ -324,6 +327,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // so the new content isn't hidden by them.
         ResetFiltersForNewFile();
         LoadingOverlay.Visibility = Visibility.Visible;
+        if (EmptyOverlay != null) EmptyOverlay.Visibility = Visibility.Collapsed; // don't let a stale "No results" cover the spinner
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
         ApplyPersistedLevelOverrides();
         SeedUmlRowTags();
@@ -397,7 +401,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void UpdateEmptyState()
     {
         if (EmptyOverlay == null) return; // during initial parse
-        bool loading = LoadingOverlay.Visibility == Visibility.Visible || ViewModel.IsStreaming;
+        // Never show "No results" while anything is still loading — the overlay is opaque and sits on top,
+        // so a transient zero count (e.g. a streaming/large load before the first page + count are bound)
+        // must not flash over the loading spinner. IsLoading covers the streaming window where the loading
+        // *overlay* has given way to the streaming banner but rows/counts aren't bound yet.
+        bool loading = LoadingOverlay.Visibility == Visibility.Visible || ViewModel.IsStreaming || ViewModel.IsLoading;
         if (loading || ViewModel.TotalFilteredCount > 0)
         {
             EmptyOverlay.Visibility = Visibility.Collapsed;
