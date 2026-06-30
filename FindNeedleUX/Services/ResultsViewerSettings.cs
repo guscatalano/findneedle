@@ -344,11 +344,11 @@ public static class ResultsViewerSettings
     /// </summary>
     public static string SymbolPath
     {
-        // Default (when never set) to the Microsoft public symbol server, so WPP traces from Microsoft
-        // binaries resolve their PDBs → TMFs without manual setup. Once the user edits it — including
-        // clearing it to "" — that explicit value is honored (Data.SymbolPath becomes non-null). First-time
-        // WPP decode may download PDBs from the server (slower), which is the cost of the default.
-        get => Data.SymbolPath ?? DefaultSymbolPath;
+        // Default (when unset OR empty) to the Microsoft public symbol server, so WPP traces from Microsoft
+        // binaries resolve their PDBs → TMFs without manual setup. (Empty also counts as "use the default" —
+        // older settings persisted "" before this default existed; to use a different source, set your own
+        // path here, which overrides.) First-time WPP decode may download PDBs from the server (slower).
+        get => string.IsNullOrWhiteSpace(Data.SymbolPath) ? DefaultSymbolPath : Data.SymbolPath;
         set { Data.SymbolPath = value ?? ""; Save(); Changed?.Invoke(); }
     }
 

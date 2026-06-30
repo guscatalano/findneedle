@@ -124,6 +124,28 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             AppendPaths(rlog, Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH"));
             rlog.AppendLine();
 
+            // ---- WHAT TRACEFMT ACTUALLY SEARCHED / LOADED ---- parsed from its own output, because
+            // tracefmt ALSO tries the TMF/PDB paths embedded in the trace (not just our env vars). The
+            // "WPPFMT : error : 0xN loading <file>" lines are the real "tried this exact file and failed".
+            var searched = new List<string>();
+            var failures = new List<string>();
+            foreach (var raw in (currentResult.ConsoleOutput ?? "").Split('\n'))
+            {
+                var t = raw.Trim();
+                if (t.Length == 0) continue;
+                if (t.StartsWith("Examining ", StringComparison.OrdinalIgnoreCase)
+                    || t.StartsWith("Searching for TMF", StringComparison.OrdinalIgnoreCase))
+                    searched.Add(t);
+                else if (t.IndexOf("WPPFMT", StringComparison.OrdinalIgnoreCase) >= 0
+                         && (t.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0
+                             || t.IndexOf("warning", StringComparison.OrdinalIgnoreCase) >= 0))
+                    failures.Add(t);
+            }
+            rlog.AppendLine("What tracefmt actually searched / loaded (from its output):");
+            if (searched.Count == 0) rlog.AppendLine("  (tracefmt reported no examine/search lines)");
+            else foreach (var s in searched) rlog.AppendLine("  " + s);
+            rlog.AppendLine();
+
             // ---- WHAT WORKED ----
             long total = currentResult.TotalEventsProcessed;
             long formatted = Math.Max(0, total - currentResult.TotalFormatsUnknown);
@@ -145,6 +167,14 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 foreach (var g in _missingTmfGuids)
                     rlog.AppendLine($"  {g}   →  expected file {g}.tmf");
                 rlog.AppendLine("  Fix: set a PDB folder + symbol path under Settings → Results viewer → Logs, then \"Build TMFs from symbols\" and reopen. (The symbol path defaults to the Microsoft symbol server.)");
+            }
+            // The exact files tracefmt tried to load and couldn't — the most actionable "what didn't work"
+            // (e.g. a private PDB at its original build path that isn't on disk / the symbol server).
+            if (failures.Count > 0)
+            {
+                rlog.AppendLine();
+                rlog.AppendLine("tracefmt load failures (the exact file it tried + the error):");
+                foreach (var f in failures) rlog.AppendLine("  " + f);
             }
             rlog.AppendLine();
             rlog.AppendLine("----- tracefmt output -----");
