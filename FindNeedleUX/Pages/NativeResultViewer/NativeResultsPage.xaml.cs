@@ -2317,6 +2317,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         => await FillKnownFieldAsync("Source", SourceFilterCombo, SourceFilterMultiList, SourceFilterMulti,
                                      ViewModel.SourceFilter, ViewModel.SourceFilterSet);
 
+    // Single-select known combos: fill on open (mirrors the multi-select flyout's Opening). Without this,
+    // a large set (above KnownPrecomputeRowCap, so the at-load precompute was skipped) opens to an EMPTY
+    // dropdown — the values only appeared after toggling "Show known" off/on or changing another field.
+    private async void ProviderFilterCombo_DropDownOpened(object sender, object e)
+        => await FillKnownFieldAsync("Provider", ProviderFilterCombo, ProviderFilterMultiList, ProviderFilterMulti,
+                                     ViewModel.ProviderFilter, ViewModel.ProviderFilterSet);
+    private async void TaskNameFilterCombo_DropDownOpened(object sender, object e)
+        => await FillKnownFieldAsync("TaskName", TaskNameFilterCombo, TaskNameFilterMultiList, TaskNameFilterMulti,
+                                     ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet);
+    private async void SourceFilterCombo_DropDownOpened(object sender, object e)
+        => await FillKnownFieldAsync("Source", SourceFilterCombo, SourceFilterMultiList, SourceFilterMulti,
+                                     ViewModel.SourceFilter, ViewModel.SourceFilterSet);
+
     /// <summary>After one known field changes, refresh the OTHER two so their values reflect the new
     /// filter (cross-filter narrowing). No-op when the "Known" dropdowns aren't showing.</summary>
     private async System.Threading.Tasks.Task RefreshOtherKnownFieldsAsync(string changedField)

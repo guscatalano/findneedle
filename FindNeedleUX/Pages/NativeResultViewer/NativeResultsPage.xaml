@@ -489,7 +489,7 @@
                                  Width="120" Height="28" FontSize="12"
                                  PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
                         <ComboBox x:Name="ProviderFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
-                                  DisplayMemberPath="Display"
+                                  DisplayMemberPath="Display" DropDownOpened="ProviderFilterCombo_DropDownOpened"
                                   PlaceholderText="Provider (known)…" SelectionChanged="ProviderFilterCombo_SelectionChanged"/>
                         <DropDownButton x:Name="ProviderFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
                                         Content="Provider: All">
@@ -510,7 +510,7 @@
                         <TextBox x:Name="TaskNameFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="TaskName…" TextChanged="TaskNameFilter_TextChanged"/>
                         <ComboBox x:Name="TaskNameFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
-                                  DisplayMemberPath="Display"
+                                  DisplayMemberPath="Display" DropDownOpened="TaskNameFilterCombo_DropDownOpened"
                                   PlaceholderText="TaskName (known)…" SelectionChanged="TaskNameFilterCombo_SelectionChanged"/>
                         <DropDownButton x:Name="TaskNameFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
                                         Content="TaskName: All">
@@ -535,7 +535,7 @@
                         <TextBox x:Name="SourceFilterBox" Width="140" Height="28" FontSize="12"
                                  PlaceholderText="Source…" TextChanged="SourceFilter_TextChanged"/>
                         <ComboBox x:Name="SourceFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
-                                  DisplayMemberPath="Display"
+                                  DisplayMemberPath="Display" DropDownOpened="SourceFilterCombo_DropDownOpened"
                                   PlaceholderText="Source (known)…" SelectionChanged="SourceFilterCombo_SelectionChanged"/>
                         <DropDownButton x:Name="SourceFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
                                         Content="Source: All">
