@@ -1471,52 +1471,103 @@ public sealed partial class MainWindow : Window
                 // spinner meanwhile so the window isn't frozen with no feedback before the dialog appears.
                 ShowSpinner(true, "Inspecting log — reading providers…");
                 await System.Threading.Tasks.Task.Yield(); // let the spinner actually paint before the scan starts
-                var (providersWithCounts, sampled) = await System.Threading.Tasks.Task.Run(
+                var initialScan = await System.Threading.Tasks.Task.Run(
                     () => FindNeedleUX.Services.TriageService.InspectProvidersWithCounts(path));
                 ShowSpinner(false);
+                var providersWithCounts = initialScan.providers;
+                var sampled = initialScan.sampled;
                 if (providersWithCounts.Count <= 1) return true; // nothing meaningful to scope
 
-                var header = new TextBlock
-                {
-                    Text = $"This is a large log ({new System.IO.FileInfo(path).Length / 1024 / 1024:N0} MB) with " +
-                           $"{providersWithCounts.Count} providers. Uncheck what you don't need — only the checked " +
-                           "providers are loaded (much faster)." +
-                           (sampled ? " Event counts are from a quick sample of the file (relative sizes)." : ""),
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 0, 0, 8),
-                };
+                var sizeMb = new System.IO.FileInfo(path).Length / 1024 / 1024;
+                var header = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
+                string HeaderText() =>
+                    $"This is a large log ({sizeMb:N0} MB) with {providersWithCounts.Count} providers. " +
+                    "Uncheck what you don't need — only the checked providers are loaded (much faster).";
+                header.Text = HeaderText();
+
                 var search = new TextBox { PlaceholderText = "Filter providers…", Margin = new Thickness(0, 0, 0, 8) };
+
+                // Honest "incomplete scan" warning + escape hatch. When the bounded scan times out, the list
+                // (and counts) may be MISSING rare providers — and since the scope is an include-list of the
+                // checked providers, an undiscovered one would be silently dropped from "Load selected". The
+                // button re-scans the whole file (no practical cap) so the user can get the full list.
+                var rescanBtn = new Button { Content = "Scan the whole file", Margin = new Thickness(0, 6, 0, 0) };
+                var warnText = new TextBlock
+                {
+                    Text = "Scan stopped early — this list may be missing rare providers, and their counts are partial. " +
+                           "Scan the whole file for the complete list before scoping.",
+                    TextWrapping = TextWrapping.Wrap,
+                };
+                var warnPanel = new StackPanel
+                {
+                    Margin = new Thickness(0, 0, 0, 8),
+                    Visibility = sampled ? Visibility.Visible : Visibility.Collapsed,
+                };
+                warnPanel.Children.Add(warnText);
+                warnPanel.Children.Add(rescanBtn);
 
                 // One row per provider: a checkbox (name) + the event count (right-aligned), sorted by volume
                 // so the firehose providers are at the top. Kept in `rows` so the filter box can hide them.
                 var listPanel = new StackPanel { Spacing = 2 };
                 var boxes = new System.Collections.Generic.List<CheckBox>();
                 var rows = new System.Collections.Generic.List<(FrameworkElement row, string name)>();
-                foreach (var (name, count) in providersWithCounts)
+                void PopulateRows()
                 {
-                    // Default: drop the high-volume kernel firehose, keep everything else.
-                    bool isKernel = name.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
-                                    || name.Equals("MSNT_SystemTrace", StringComparison.OrdinalIgnoreCase);
-                    var cb = new CheckBox { Content = name, IsChecked = !isKernel, MinWidth = 240 };
-                    boxes.Add(cb);
-                    var countTb = new TextBlock
+                    listPanel.Children.Clear();
+                    boxes.Clear();
+                    rows.Clear();
+                    foreach (var (name, count) in providersWithCounts)
                     {
-                        Text = count.ToString("N0"),
-                        VerticalAlignment = VerticalAlignment.Center,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Margin = new Thickness(12, 0, 0, 0),
-                        Opacity = 0.6,
-                    };
-                    var grid = new Grid();
-                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    Grid.SetColumn(cb, 0);
-                    Grid.SetColumn(countTb, 1);
-                    grid.Children.Add(cb);
-                    grid.Children.Add(countTb);
-                    listPanel.Children.Add(grid);
-                    rows.Add((grid, name));
+                        // Default: drop the high-volume kernel firehose, keep everything else.
+                        bool isKernel = name.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
+                                        || name.Equals("MSNT_SystemTrace", StringComparison.OrdinalIgnoreCase);
+                        var cb = new CheckBox { Content = name, IsChecked = !isKernel, MinWidth = 240 };
+                        boxes.Add(cb);
+                        var countTb = new TextBlock
+                        {
+                            Text = count.ToString("N0"),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            HorizontalAlignment = HorizontalAlignment.Right,
+                            Margin = new Thickness(12, 0, 0, 0),
+                            Opacity = 0.6,
+                        };
+                        var grid = new Grid();
+                        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                        Grid.SetColumn(cb, 0);
+                        Grid.SetColumn(countTb, 1);
+                        grid.Children.Add(cb);
+                        grid.Children.Add(countTb);
+                        listPanel.Children.Add(grid);
+                        rows.Add((grid, name));
+                    }
+                    // Re-apply the active filter to the rebuilt rows.
+                    var q = search.Text?.Trim() ?? "";
+                    if (q.Length > 0)
+                        foreach (var (row, name) in rows)
+                            row.Visibility = name.Contains(q, StringComparison.OrdinalIgnoreCase)
+                                ? Visibility.Visible : Visibility.Collapsed;
                 }
+                PopulateRows();
+
+                rescanBtn.Click += async (_, _) =>
+                {
+                    rescanBtn.IsEnabled = false;
+                    rescanBtn.Content = "Scanning the whole file…";
+                    var full = await System.Threading.Tasks.Task.Run(
+                        () => FindNeedleUX.Services.TriageService.InspectProvidersFull(path));
+                    providersWithCounts = full.providers;
+                    sampled = full.sampled;
+                    PopulateRows();
+                    header.Text = HeaderText();
+                    warnText.Text = sampled
+                        ? "Still incomplete after a full-file scan (very large file). The list below is the best available."
+                        : warnText.Text;
+                    warnPanel.Visibility = sampled ? Visibility.Visible : Visibility.Collapsed;
+                    rescanBtn.Content = "Scan the whole file";
+                    rescanBtn.IsEnabled = true;
+                };
+
                 search.TextChanged += (_, _) =>
                 {
                     var q = search.Text?.Trim() ?? "";
@@ -1527,6 +1578,7 @@ public sealed partial class MainWindow : Window
 
                 var outer = new StackPanel { MinWidth = 420, MaxWidth = 540 };
                 outer.Children.Add(header);
+                outer.Children.Add(warnPanel);
                 outer.Children.Add(search);
                 outer.Children.Add(new ScrollViewer { Content = listPanel, MaxHeight = 360 });
 

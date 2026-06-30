@@ -51,15 +51,30 @@ public static class TriageService
             // found by a full pass. Counting is on AllEvents (raw event walk, no formatting) so this stays
             // fast — a few seconds for tens of millions of events — and the spinner covers it. The 20s
             // wall-clock cap is only a safety net for a pathological file; if it trips, `sampled` is true.
-            var (counts, capped, _) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(etlPath, maxEvents: int.MaxValue, maxMs: 20000);
-            var list = counts
-                .OrderByDescending(kv => kv.Value)
-                .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(kv => (kv.Key, kv.Value))
-                .ToList();
-            return (list, capped);
+            return ScanProviders(etlPath, maxMs: 20000);
         }
         catch { return (new List<(string, int)>(), false); }
+    }
+
+    /// <summary>Exhaustive provider scan with no practical time cap (5-minute safety only). Offered from the
+    /// triage dialog when the quick scan timed out, so the user can get the COMPLETE provider list before
+    /// scoping — important because the scope is an include-list of checked providers, so a provider the scan
+    /// never discovered would be silently dropped from a "Load selected".</summary>
+    public static (List<(string provider, int count)> providers, bool sampled) InspectProvidersFull(string etlPath)
+    {
+        try { return ScanProviders(etlPath, maxMs: 300000); }
+        catch { return (new List<(string, int)>(), false); }
+    }
+
+    private static (List<(string provider, int count)> providers, bool sampled) ScanProviders(string etlPath, int maxMs)
+    {
+        var (counts, capped, _) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(etlPath, maxEvents: int.MaxValue, maxMs: maxMs);
+        var list = counts
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kv => (kv.Key, kv.Value))
+            .ToList();
+        return (list, capped);
     }
 
     /// <summary>
