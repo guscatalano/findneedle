@@ -96,10 +96,17 @@ public static class EtwNativeProviderScanner
             foreach (var name in ScanTraceLoggingProviderNames(pe))
             {
                 var g = GuidFromProviderName(name);
-                var src = ContainsBytes(bytes, g.ToByteArray())
-                    ? EtwProviderSource.TraceLoggingVerified
-                    : EtwProviderSource.TraceLoggingDerived;
-                Consider(new EtwProviderRef { Guid = g, Name = name, Source = src });
+                bool verified = ContainsBytes(bytes, g.ToByteArray());
+                // Unverified (name-derived) hits are the riskier ones: keep them only when the name is
+                // namespaced (Microsoft.Windows.X / Company-Component), which real providers almost always
+                // are — a bare single token that didn't verify is far more likely to be a stray string.
+                if (!verified && !(name.Contains('.') || name.Contains('-'))) continue;
+                Consider(new EtwProviderRef
+                {
+                    Guid = g,
+                    Name = name,
+                    Source = verified ? EtwProviderSource.TraceLoggingVerified : EtwProviderSource.TraceLoggingDerived,
+                });
             }
         }
         catch { /* skip */ }
@@ -256,8 +263,15 @@ public static class EtwNativeProviderScanner
                 if (nameEnd >= end || pe.Data[nameEnd] != 0) continue;
                 int nameLen = nameEnd - n;
                 if (nameLen < 3 || nameLen > 256) continue;
-                // The size field must account for at least the size word + name + NUL.
-                if (size < 2 + nameLen + 1) continue;
+
+                // The size field must account for EXACTLY the size word + name + NUL (+ optional, well-formed
+                // provider traits). This is the structural check that separates a real provider-metadata blob
+                // from a PE import hint/name table entry (WORD hint + NUL-terminated function name), which has
+                // the SAME shape — without it, imported APIs like GetDiskFreeSpaceExW were reported as bogus
+                // providers. An import hint is an arbitrary ordinal that won't equal nameLen+3.
+                int metaUsed = 2 + nameLen + 1;
+                if (size < metaUsed) continue;
+                if (size != metaUsed && !ValidProviderTraits(pe, i + metaUsed, i + size)) continue;
 
                 var name = Encoding.ASCII.GetString(pe.Data, n, nameLen);
                 if (!LooksLikeProviderName(name)) continue;
@@ -265,6 +279,21 @@ public static class EtwNativeProviderScanner
             }
         }
         return names;
+    }
+
+    // Provider traits tail: zero or more { UINT16 byteCount (incl. itself); BYTE type; BYTE value[...] }
+    // structures that must tile the region [start,end) exactly.
+    private static bool ValidProviderTraits(PeImage pe, int start, int end)
+    {
+        int p = start;
+        while (p < end)
+        {
+            if (p + 2 > end) return false;
+            int ts = pe.Data[p] | (pe.Data[p + 1] << 8);
+            if (ts < 3 || p + ts > end) return false;
+            p += ts;
+        }
+        return p == end;
     }
 
     private static bool LooksLikeProviderName(string s)
