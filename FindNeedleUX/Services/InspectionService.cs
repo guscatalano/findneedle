@@ -137,10 +137,13 @@ public static class InspectionService
         {
             Title = error == null ? "ETW Providers in Binary" : "ETW Provider Extraction Error",
             CloseButtonText = "OK",
-            MinWidth = 640,
+            MinWidth = 880,
             XamlRoot = window.Content.XamlRoot
         };
-        var content = new StackPanel { Spacing = 8 };
+        // A ContentDialog clamps its width to the ContentDialogMaxWidth resource (~548 by default), so
+        // MinWidth alone won't widen it — raise the cap on this instance.
+        dialog.Resources["ContentDialogMaxWidth"] = 1100d;
+        var content = new StackPanel { Spacing = 8, MinWidth = 840 };
         if (error != null)
         {
             content.Children.Add(new TextBlock { Text = $"Error extracting ETW providers: {error}", TextWrapping = TextWrapping.Wrap });
