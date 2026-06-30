@@ -1098,6 +1098,28 @@ public class MiddleLayerService
     /// it was a hard failure (nothing decoded). Returns null when nothing's wrong. Drives the viewer's
     /// "why is this empty?" banner.
     /// </summary>
+    /// <summary>Resolve-log file paths from the last search's per-file decode info (the WPP
+    /// "what it tried / what worked / what didn't" report). Empty when no WPP trace was decoded.</summary>
+    public static System.Collections.Generic.List<string> GetResolveLogPaths()
+    {
+        var result = new System.Collections.Generic.List<string>();
+        var stats = GetStats();
+        if (stats?.componentReports == null) return result;
+        foreach (var list in stats.componentReports.Values)
+            foreach (var report in list)
+            {
+                if (report?.summary != "DecodeByFile" || report.metric == null) continue;
+                foreach (var perFile in report.metric.Values)
+                {
+                    if (perFile is not IDictionary dict) continue;
+                    if (dict.Contains("resolveLog") && dict["resolveLog"] is string r
+                        && !string.IsNullOrEmpty(r) && File.Exists(r) && !result.Contains(r))
+                        result.Add(r);
+                }
+            }
+        return result;
+    }
+
     public static (string headline, string detail, bool hardFailure, string? missingTmfs)? GetDecodeWarning()
     {
         // A .dmp that couldn't yield ETW logs (no cdb, user-mode dump, or a debugger older than the dump's

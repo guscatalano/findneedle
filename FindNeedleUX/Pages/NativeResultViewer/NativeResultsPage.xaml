@@ -130,6 +130,9 @@
                                 ToolTipService.ToolTip="Decode whatever can be read, even if most events are unformatted garbage"/>
                         <Button x:Name="DecodeBannerCopy" Content="Copy" Click="DecodeBannerCopy_Click"
                                 ToolTipService.ToolTip="Copy the missing TMF GUIDs and error detail to clipboard"/>
+                        <Button x:Name="DecodeBannerResolve" Content="Symbol details" Click="DecodeBannerResolve_Click"
+                                Visibility="Collapsed"
+                                ToolTipService.ToolTip="Open the symbol-resolution log: which search paths were tried, what resolved, and which TMFs are missing"/>
                     </StackPanel>
                 </InfoBar.Content>
             </InfoBar>

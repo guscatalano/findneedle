@@ -475,8 +475,22 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         _decodeBannerCopyText = string.IsNullOrEmpty(warn.Value.missingTmfs)
             ? warn.Value.detail
             : $"Missing TMF GUIDs: {warn.Value.missingTmfs}\n\n{warn.Value.detail}";
+        // "Symbol details" opens the per-file resolution log (what was tried / resolved / missing).
+        _resolveLogPaths = MiddleLayerService.GetResolveLogPaths();
+        DecodeBannerResolve.Visibility = _resolveLogPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         DecodeBanner.Visibility = Visibility.Visible;
         DecodeBanner.IsOpen = true;
+    }
+
+    private System.Collections.Generic.List<string> _resolveLogPaths = new();
+
+    private void DecodeBannerResolve_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var p in _resolveLogPaths)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = p, UseShellExecute = true }); }
+            catch { /* no handler / file gone — ignore */ }
+        }
     }
 
     private void DecodeBannerCopy_Click(object sender, RoutedEventArgs e)
