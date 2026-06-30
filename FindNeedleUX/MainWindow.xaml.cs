@@ -1491,20 +1491,27 @@ public sealed partial class MainWindow : Window
                 // (and counts) may be MISSING rare providers — and since the scope is an include-list of the
                 // checked providers, an undiscovered one would be silently dropped from "Load selected". The
                 // button re-scans the whole file (no practical cap) so the user can get the full list.
-                var rescanBtn = new Button { Content = "Scan the whole file", Margin = new Thickness(0, 6, 0, 0) };
+                var rescanBtn = new Button { Content = "Scan the whole file" };
+                // Only offered if even the full-file scan times out: skip scoping entirely and load the
+                // whole file as-is. Hidden until then (a complete scan makes it unnecessary).
+                var loadAllBtn = new Button { Content = "Load the whole file anyway", Visibility = Visibility.Collapsed };
+                bool loadEverythingAnyway = false;
                 var warnText = new TextBlock
                 {
                     Text = "Scan stopped early — this list may be missing rare providers, and their counts are partial. " +
                            "Scan the whole file for the complete list before scoping.",
                     TextWrapping = TextWrapping.Wrap,
                 };
+                var warnButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 6, 0, 0) };
+                warnButtons.Children.Add(rescanBtn);
+                warnButtons.Children.Add(loadAllBtn);
                 var warnPanel = new StackPanel
                 {
                     Margin = new Thickness(0, 0, 0, 8),
                     Visibility = sampled ? Visibility.Visible : Visibility.Collapsed,
                 };
                 warnPanel.Children.Add(warnText);
-                warnPanel.Children.Add(rescanBtn);
+                warnPanel.Children.Add(warnButtons);
 
                 // One row per provider: a checkbox (name) + the event count (right-aligned), sorted by volume
                 // so the firehose providers are at the top. Kept in `rows` so the filter box can hide them.
@@ -1560,9 +1567,15 @@ public sealed partial class MainWindow : Window
                     sampled = full.sampled;
                     PopulateRows();
                     header.Text = HeaderText();
-                    warnText.Text = sampled
-                        ? "Still incomplete after a full-file scan (very large file). The list below is the best available."
-                        : warnText.Text;
+                    if (sampled)
+                    {
+                        // Even the full scan timed out (5 min). Stop offering "scan more" — just let the
+                        // user load the whole file as-is without a scope.
+                        warnText.Text = "Still incomplete after a full-file scan (very large file). The list below is " +
+                                        "the best available — or load the whole file as-is without scoping.";
+                        rescanBtn.Visibility = Visibility.Collapsed;
+                        loadAllBtn.Visibility = Visibility.Visible;
+                    }
                     warnPanel.Visibility = sampled ? Visibility.Visible : Visibility.Collapsed;
                     rescanBtn.Content = "Scan the whole file";
                     rescanBtn.IsEnabled = true;
@@ -1592,7 +1605,9 @@ public sealed partial class MainWindow : Window
                     DefaultButton = ContentDialogButton.Primary,
                     XamlRoot = this.Content.XamlRoot,
                 };
+                loadAllBtn.Click += (_, _) => { loadEverythingAnyway = true; dlg.Hide(); };
                 var result = await dlg.ShowAsync();
+                if (loadEverythingAnyway) return true; // load the whole file, no scope
                 if (result == ContentDialogResult.None) return false; // Cancel
                 if (result == ContentDialogResult.Primary)
                 {
