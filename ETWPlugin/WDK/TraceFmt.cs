@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 
 namespace findneedle.WDK;
