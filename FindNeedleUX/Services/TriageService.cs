@@ -45,11 +45,13 @@ public static class TriageService
     {
         try
         {
-            // Tight budget for the interactive picker: manifest/kernel traces dispatch fast so 120k events
-            // enumerate their providers in well under a second; the 1.5s wall-clock cap keeps a WPP/odd trace
-            // (whose events don't dispatch through these parsers) from grinding the whole file before the
-            // dialog appears. The spinner covers this short wait.
-            var (counts, capped, _) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(etlPath, maxEvents: 120000, maxMs: 1500);
+            // Read the WHOLE file so the picker enumerates EVERY provider — same as the Inspect report.
+            // A small event cap would only sample the start of the file, which on a large kernel-dominated
+            // capture is ~all one provider (so the picker showed just 1-2). A 1-event provider can only be
+            // found by a full pass. Counting is on AllEvents (raw event walk, no formatting) so this stays
+            // fast — a few seconds for tens of millions of events — and the spinner covers it. The 20s
+            // wall-clock cap is only a safety net for a pathological file; if it trips, `sampled` is true.
+            var (counts, capped, _) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(etlPath, maxEvents: int.MaxValue, maxMs: 20000);
             var list = counts
                 .OrderByDescending(kv => kv.Value)
                 .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)

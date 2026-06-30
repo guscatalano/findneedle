@@ -81,10 +81,13 @@ public class EtlInfoExtractor
         {
             if (string.IsNullOrEmpty(etlPath) || !File.Exists(etlPath)) return (providers, false, build);
             using var source = new ETWTraceEventSource(etlPath);
-            // Subscribe to Dynamic (manifest/TraceLogging/EventSource) + Kernel — the SAME parsers the real
-            // load uses (ETLProcessor) — so the provider NAMES here match what the decode-time scope sees.
-            // The raw AllEvents stream reports self-described/TraceLogging providers by GUID, which both
-            // looked like "doesn't know the provider" in the picker AND wouldn't match a scope rule at decode.
+            // Count on AllEvents — it fires once for EVERY dispatched event (kernel, manifest, TraceLogging,
+            // AND WPP/unparsed), so (a) we see every provider, not just the two firehoses that dominate the
+            // start of the file, and (b) the per-event cap trips even on a WPP trace (its events still
+            // dispatch through AllEvents), so the scan can't grind the whole file when maxEvents is small.
+            // We ALSO subscribe Dynamic.All + Kernel.All (as no-ops): that engages those parsers so AllEvents
+            // reports manifest/TraceLogging providers by NAME rather than by GUID (matching the decode-time
+            // scope and the Inspect() report). This mirrors Inspect()'s subscription set exactly.
             void Handle(Microsoft.Diagnostics.Tracing.TraceEvent e)
             {
                 var p = e.ProviderName;
@@ -100,11 +103,12 @@ public class EtlInfoExtractor
 
                 if (++n >= maxEvents) source.StopProcessing();
             }
-            source.Dynamic.All += Handle;
-            source.Kernel.All += Handle;
-            // Hard wall-clock cap: a WPP (or otherwise odd) trace may not dispatch through Dynamic/Kernel, so
-            // the per-event cap never trips and Process() would grind the WHOLE file (looks hung). Stop it
-            // after maxMs regardless — the partial counts are still a useful sample for the triage picker.
+            source.AllEvents += Handle;
+            source.Dynamic.All += _ => { };  // engage parsers so AllEvents resolves provider names
+            source.Kernel.All += _ => { };
+            // Hard wall-clock cap: still a safety net for a pathological file. With AllEvents the per-event
+            // cap already trips on any trace; this just bounds the rare case where the caller asks to read
+            // the whole (very large) file. The partial counts remain a useful sample for the triage picker.
             using var timer = new System.Threading.Timer(
                 _ => { timedOut = true; try { source.StopProcessing(); } catch { /* already stopped */ } },
                 null, maxMs, System.Threading.Timeout.Infinite);
