@@ -160,6 +160,7 @@ public static class InspectionService
                     Text = $"{p.Guid}  |  {nameStr}   [{p.SourceLabel}]",
                     FontFamily = new FontFamily("Consolas"),
                     Foreground = new SolidColorBrush(p.IsAuthoritative ? Colors.LightGreen : Colors.Goldenrod),
+                    IsTextSelectionEnabled = true,
                 });
             }
             if (providers.Any(p => p.Source == EtwProviderSource.Heuristic))
@@ -171,7 +172,16 @@ public static class InspectionService
                     Margin = new Thickness(0, 8, 0, 0),
                 });
         }
-        dialog.Content = content;
+        // The provider lines are long single-line monospace strings; scroll (both axes) instead of
+        // clipping them at the dialog edge.
+        dialog.Content = new ScrollViewer
+        {
+            Content = content,
+            MaxHeight = 520,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
         await dialog.ShowAsync();
     }
 
