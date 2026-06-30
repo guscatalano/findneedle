@@ -373,7 +373,6 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         // (and the .txt/.log passthrough) to GetResultsWithCallback / GetResults so rows flow to storage
         // in batches and the viewer can open partway, instead of materializing the whole list here. Only
         // the non-WPP fallback below is decoded eagerly.
-        RetainTracefmtArtifacts();
 
         // Fallback for non-WPP traces. tracefmt only formats WPP (driver/software) traces; for a modern
         // .etl (EventSource / manifest / kernel) it processes ~no events. Decode those directly with the
@@ -399,6 +398,11 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             _deferredFmtParse = true;
             if (_decodeMethod == "(pending)") _decodeMethod = "tracefmt (WPP)";
         }
+
+        // Retain the symbol-resolution log AFTER _decodeMethod is finalized. Its guard keys off the method
+        // (tracefmt-* only), and on the successful WPP path the method was still "(pending)" until just
+        // above — so calling it earlier silently skipped the log and the Stats-page button never appeared.
+        RetainTracefmtArtifacts();
 
         Logger.Instance.Log(
             $"Decode summary {inputfile}: method={_decodeMethod} deferredParse={_deferredFmtParse} " +
