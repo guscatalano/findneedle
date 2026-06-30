@@ -27,7 +27,12 @@ public class TraceFmtResult
         get; set;
     }
 
-
+    /// <summary>dbghelp's verbose symbol-search trace (the DBGHELP_LOG output), if captured — the
+    /// WinDbg "!sym noisy"-style per-path probing/result for the PDBs tracefmt tried to load.</summary>
+    public string? SymbolDiagnostics
+    {
+        get; set;
+    }
 
     public void ParseSummaryFile()
     {
@@ -159,6 +164,7 @@ public class TraceFmt
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
+            var dbg = EnableDbghelpLog(st, dir);
             var p = Process.Start(st);
             if (p == null) return null!;
             string o = p.StandardOutput.ReadToEnd();
@@ -168,6 +174,7 @@ public class TraceFmt
             var result = new TraceFmtResult
             {
                 ConsoleOutput = string.IsNullOrWhiteSpace(er) ? o : (o + Environment.NewLine + er),
+                SymbolDiagnostics = ReadDbghelpLog(dbg),
                 outputfile = Path.Combine(dir, "FmtFile.txt"),
                 summaryfile = Path.Combine(dir, "FmtSum.txt"),
             };
@@ -218,6 +225,7 @@ public class TraceFmt
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        var dbg = EnableDbghelpLog(st, temppath);
         Process? p = Process.Start(st);
         if(p == null)
         {
@@ -228,6 +236,7 @@ public class TraceFmt
         string consoleErr = p.StandardError.ReadToEnd();
         p.WaitForExit();
         result.ConsoleOutput = string.IsNullOrWhiteSpace(consoleErr) ? consoleOut : (consoleOut + Environment.NewLine + consoleErr);
+        result.SymbolDiagnostics = ReadDbghelpLog(dbg);
         progressSink?.NotifyProgress(80, "TraceFmt process finished");
         if(p.ExitCode != 0)
         {
@@ -247,5 +256,23 @@ public class TraceFmt
         result.ParseSummaryFile();
         progressSink?.NotifyProgress(100, "TraceFmt parsing complete");
         return result;
+    }
+
+    /// <summary>Point dbghelp at a log file (and turn its debug output on) for the tracefmt child, so we
+    /// capture the WinDbg "!sym noisy"-style per-path symbol search/result. Returns the log path to read
+    /// after the child exits. Requires UseShellExecute=false (so the child inherits this env).</summary>
+    private static string EnableDbghelpLog(ProcessStartInfo st, string dir)
+    {
+        var log = Path.Combine(dir, "dbghelp.log");
+        try { if (File.Exists(log)) File.Delete(log); } catch { /* stale; will be overwritten */ }
+        st.Environment["DBGHELP_LOG"] = log;     // dbghelp writes its symbol-search trace here
+        st.Environment["DBGHELP_DBGOUT"] = "1";  // verbose
+        return log;
+    }
+
+    private static string ReadDbghelpLog(string log)
+    {
+        try { return File.Exists(log) ? File.ReadAllText(log) : null; }
+        catch { return null; }
     }
 }

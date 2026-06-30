@@ -176,6 +176,13 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 rlog.AppendLine("tracefmt load failures (the exact file it tried + the error):");
                 foreach (var f in failures) rlog.AppendLine("  " + f);
             }
+            if (!string.IsNullOrWhiteSpace(currentResult.SymbolDiagnostics))
+            {
+                rlog.AppendLine();
+                rlog.AppendLine("----- detailed symbol diagnostics (dbghelp — like WinDbg !sym noisy) -----");
+                rlog.AppendLine("Every PDB tracefmt's dbghelp tried, the search path, and the result per session:");
+                rlog.AppendLine(currentResult.SymbolDiagnostics);
+            }
             rlog.AppendLine();
             rlog.AppendLine("----- tracefmt output -----");
             rlog.AppendLine(currentResult.ConsoleOutput ?? "(none)");
