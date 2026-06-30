@@ -94,12 +94,18 @@ public static class InspectionService
     {
         var warning = new ContentDialog
         {
-            Title = "Inspect Binary",
+            Title = "Inspect Binary (Experimental)",
             CloseButtonText = "Cancel",
             PrimaryButtonText = "Select File",
             XamlRoot = window.Content.XamlRoot
         };
         var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Inspect Binary is experimental and may not find all ETW providers.",
+            Foreground = new SolidColorBrush(Colors.OrangeRed),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
         stack.Children.Add(new TextBlock
         {
             Text = "Reads the ETW providers a native EXE/DLL declares — from its WEVT_TEMPLATE manifest "
@@ -164,63 +170,9 @@ public static class InspectionService
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 8, 0, 0),
                 });
-            var testButton = new Button { Content = "Test Collection", Margin = new Thickness(0, 12, 0, 0) };
-            testButton.Click += async (s, e) =>
-            {
-                dialog.Hide();
-                await TestEtwCollectionAsync(window, showSpinner, providers.Select(x => x.Name ?? x.Guid.ToString()).ToList());
-            };
-            content.Children.Add(testButton);
         }
         dialog.Content = content;
         await dialog.ShowAsync();
-    }
-
-    private static async Task TestEtwCollectionAsync(Window window, Action<bool, string> showSpinner, List<string> providers)
-    {
-        showSpinner(true, "Testing ETW collection...");
-        var found = new List<(string provider, int count)>();
-        foreach (var provider in providers)
-        {
-            try
-            {
-                var collector = new ETWPlugin.Locations.LiveCollector();
-                collector.Setup(new List<string> { provider }, TimeSpan.FromSeconds(2), 0);
-                collector.StartCollecting();
-                await Task.Delay(2200);
-                collector.StopCollecting();
-                found.Add((provider, collector.GetResultsInMemory().Count));
-            }
-            catch { found.Add((provider, 0)); }
-        }
-        showSpinner(false, null);
-
-        var dialog = new ContentDialog
-        {
-            Title = "Test Collection Results",
-            CloseButtonText = "OK",
-            PrimaryButtonText = "Copy List",
-            MinWidth = 600,
-            XamlRoot = window.Content.XamlRoot
-        };
-        var content = new StackPanel();
-        if (found.Count == 0)
-        {
-            content.Children.Add(new TextBlock { Text = "No providers were tested." });
-        }
-        else
-        {
-            content.Children.Add(Bold("Providers tested (event count may include false positives):"));
-            foreach (var p in found)
-                content.Children.Add(new TextBlock { Text = $"{p.provider} ({p.count})", FontFamily = new FontFamily("Consolas") });
-        }
-        dialog.Content = content;
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary && found.Count > 0)
-        {
-            var pkg = new DataPackage();
-            pkg.SetText(string.Join("\n", found.Select(x => x.provider)));
-            Clipboard.SetContent(pkg);
-        }
     }
 
     private static TextBlock Bold(string text) => new() { Text = text, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 8, 0, 0) };
