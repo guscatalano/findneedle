@@ -71,6 +71,24 @@ public sealed partial class SearchRulesPage : Page
         RemoveButton.IsEnabled = RuleFilesListBox.SelectedItem != null;
     }
 
+    private void OpenRuleFile_Click(object sender, RoutedEventArgs e)
+    {
+        var path = (sender as Button)?.Tag as string;
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try
+        {
+            if (!System.IO.File.Exists(path))
+            {
+                FindNeedlePluginLib.Logger.Instance.Log($"Open rule file: not found: {path}");
+                return;
+            }
+            // Open in the OS default handler for .json (editor). UseShellExecute is required to resolve
+            // the file association from a packaged/unpackaged WinUI app.
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"Open rule file failed for {path}: {ex.Message}"); }
+    }
+
     private void PurposeFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (PurposeFilterCombo.SelectedItem is ComboBoxItem selectedItem)

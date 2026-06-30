@@ -37,6 +37,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
 
                                     <StackPanel Grid.Column="0" Spacing="4">
@@ -44,7 +45,12 @@
                                         <TextBlock Text="{x:Bind FilePath}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     </StackPanel>
 
-                                    <SymbolIcon Grid.Column="1" Symbol="Accept" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind IsValid}"
+                                    <Button Grid.Column="1" Content="📄 Open" Click="OpenRuleFile_Click" Tag="{x:Bind FilePath}"
+                                            VerticalAlignment="Center" FontSize="12"
+                                            ToolTipService.ToolTip="Open this rules.json in the default editor"
+                                            AutomationProperties.Name="Open rule file"/>
+
+                                    <SymbolIcon Grid.Column="2" Symbol="Accept" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind IsValid}"
                                                 AutomationProperties.Name="Valid"/>
                                 </Grid>
                             </DataTemplate>
@@ -61,9 +67,11 @@
                         <ComboBox x:Name="PurposeFilterCombo" SelectionChanged="PurposeFilterCombo_SelectionChanged" Width="120"
                                   Header="Filter by purpose" AutomationProperties.Name="Filter sections by purpose">
                             <ComboBoxItem IsSelected="True" Tag="All">All Purposes</ComboBoxItem>
+                            <ComboBoxItem Tag="scope">Scope</ComboBoxItem>
                             <ComboBoxItem Tag="filter">Filter</ComboBoxItem>
                             <ComboBoxItem Tag="enrichment">Enrichment</ComboBoxItem>
                             <ComboBoxItem Tag="uml">UML</ComboBoxItem>
+                            <ComboBoxItem Tag="output">Output</ComboBoxItem>
                         </ComboBox>
                     </StackPanel>
 
