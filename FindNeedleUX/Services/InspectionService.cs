@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Pickers;
+using Windows.UI;
 using WinRT.Interop;
 
 namespace FindNeedleUX.Services;
@@ -136,13 +137,13 @@ public static class InspectionService
         {
             Title = error == null ? "ETW Providers in Binary" : "ETW Provider Extraction Error",
             CloseButtonText = "OK",
-            MinWidth = 600,
+            MinWidth = 640,
             XamlRoot = window.Content.XamlRoot
         };
-        var content = new StackPanel();
+        var content = new StackPanel { Spacing = 8 };
         if (error != null)
         {
-            content.Children.Add(new TextBlock { Text = $"Error extracting ETW providers: {error}" });
+            content.Children.Add(new TextBlock { Text = $"Error extracting ETW providers: {error}", TextWrapping = TextWrapping.Wrap });
         }
         else if (providers == null || providers.Count == 0)
         {
@@ -151,46 +152,114 @@ public static class InspectionService
         else
         {
             int authoritative = providers.Count(p => p.IsAuthoritative);
-            content.Children.Add(Bold($"ETW Providers found ({providers.Count} — {authoritative} authoritative):"));
-            foreach (var p in providers)
+            content.Children.Add(new TextBlock
             {
-                var nameStr = string.IsNullOrEmpty(p.Name) ? "(name not in binary)" : p.Name;
-                content.Children.Add(new TextBlock
-                {
-                    Text = $"{p.Guid}  |  {nameStr}   [{p.SourceLabel}]",
-                    FontFamily = new FontFamily("Consolas"),
-                    Foreground = new SolidColorBrush(p.IsAuthoritative ? Colors.LightGreen : Colors.Goldenrod),
-                    IsTextSelectionEnabled = true,
-                });
+                Text = $"{providers.Count} provider{(providers.Count == 1 ? "" : "s")} found · {authoritative} authoritative",
+                FontWeight = FontWeights.SemiBold,
+            });
+
+            // Group by confidence so the trustworthy results sit above the guesses, each under a header.
+            var auth = providers.Where(p => p.IsAuthoritative).ToList();
+            var weak = providers.Where(p => !p.IsAuthoritative).ToList();
+            if (auth.Count > 0 && weak.Count > 0)
+            {
+                content.Children.Add(ProviderGroup("Authoritative", auth));
+                content.Children.Add(ProviderGroup("Lower confidence", weak));
             }
+            else
+            {
+                foreach (var p in providers) content.Children.Add(ProviderRow(p));
+            }
+
             if (providers.Any(p => p.Source == EtwProviderSource.Heuristic))
                 content.Children.Add(new TextBlock
                 {
                     Text = "No manifest/TraceLogging metadata was found; results above are low-confidence guesses.",
                     Foreground = new SolidColorBrush(Colors.OrangeRed),
                     TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 8, 0, 0),
+                    Margin = new Thickness(0, 4, 0, 0),
                 });
         }
-        // The provider lines are long single-line monospace strings; scroll (both axes) instead of
-        // clipping them at the dialog edge.
-        dialog.Content = new ScrollViewer
-        {
-            Content = content,
-            MaxHeight = 520,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollMode = ScrollMode.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        };
+        dialog.Content = new ScrollViewer { Content = content, MaxHeight = 520, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         await dialog.ShowAsync();
     }
 
-    private static TextBlock Bold(string text) => new() { Text = text, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 8, 0, 0) };
-
-    private static void AppendList(StackPanel stack, string header, IList<string> items, int max)
+    // A labelled group of provider rows.
+    private static FrameworkElement ProviderGroup(string header, System.Collections.Generic.IEnumerable<EtwProviderRef> items)
     {
-        stack.Children.Add(Bold(header));
-        foreach (var p in items.Take(max)) stack.Children.Add(new TextBlock { Text = p });
-        if (items.Count > max) stack.Children.Add(new TextBlock { Text = $"...and {items.Count - max} more" });
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = header,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Colors.Gray),
+            Margin = new Thickness(0, 4, 0, 0),
+        });
+        foreach (var p in items) panel.Children.Add(ProviderRow(p));
+        return panel;
     }
+
+    // One provider: a confidence dot, the name (bold, wraps) over its GUID (monospace, selectable),
+    // and a source chip on the right. Wrapping the name/GUID avoids the old horizontal clipping.
+    private static FrameworkElement ProviderRow(EtwProviderRef p)
+    {
+        var color = ConfidenceColor(p.Source);
+        var grid = new Grid { ColumnSpacing = 10, Padding = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var dot = new Border
+        {
+            Width = 10, Height = 10, CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush(color),
+            VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 0, 0),
+        };
+        Grid.SetColumn(dot, 0);
+
+        var texts = new StackPanel { Spacing = 1 };
+        texts.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrEmpty(p.Name) ? "(name not in binary)" : p.Name,
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+        });
+        texts.Children.Add(new TextBlock
+        {
+            Text = p.Guid.ToString(),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Colors.Gray),
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+        });
+        Grid.SetColumn(texts, 1);
+
+        var chip = new Border
+        {
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 1, 6, 2),
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = new SolidColorBrush(Color.FromArgb(40, color.R, color.G, color.B)),
+            Child = new TextBlock { Text = p.SourceLabel, FontSize = 11, Foreground = new SolidColorBrush(color) },
+        };
+        Grid.SetColumn(chip, 2);
+
+        grid.Children.Add(dot);
+        grid.Children.Add(texts);
+        grid.Children.Add(chip);
+        return grid;
+    }
+
+    private static Color ConfidenceColor(EtwProviderSource s) => s switch
+    {
+        EtwProviderSource.Manifest => Colors.LightGreen,
+        EtwProviderSource.TraceLoggingVerified => Colors.MediumSeaGreen,
+        EtwProviderSource.TraceLoggingDerived => Colors.Goldenrod,
+        _ => Colors.OrangeRed,
+    };
+
+    private static TextBlock Bold(string text) => new() { Text = text, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 8, 0, 0) };
 }
