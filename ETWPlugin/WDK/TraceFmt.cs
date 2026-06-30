@@ -130,7 +130,7 @@ public class TraceFmt
     public static TraceFmtResult PreScan(string etl, string temppath, SearchProgressSink? progressSink = null, long sampleBytes = 8L * 1024 * 1024)
     {
         string traceFmtPath;
-        try { traceFmtPath = WDKFinder.GetTraceFmtPath(); } catch { return null!; }
+        try { traceFmtPath = GetRunnableTracefmt(); } catch { return null!; }
         if (string.IsNullOrEmpty(traceFmtPath) || !File.Exists(traceFmtPath) || !File.Exists(etl)) return null!;
 
         var dir = Path.Combine(temppath, "prescan");
@@ -194,7 +194,7 @@ public class TraceFmt
         string traceFmtPath = string.Empty;
         try
         {
-            traceFmtPath = WDKFinder.GetTraceFmtPath();
+            traceFmtPath = GetRunnableTracefmt();
         }
         catch (Exception ex)
         {
@@ -256,6 +256,52 @@ public class TraceFmt
         result.ParseSummaryFile();
         progressSink?.NotifyProgress(100, "TraceFmt parsing complete");
         return result;
+    }
+
+    private static string _runnableTracefmt;
+    private static readonly object _assembleLock = new();
+
+    /// <summary>tracefmt.exe co-located with a matched dbghelp + symsrv so the SYMBOL SERVER actually works.
+    /// The WDK bin tracefmt's own dir has dbghelp but NO symsrv (dbghelp loads symsrv from its own dir, so the
+    /// server can't load — "symsrv.dll load failure"). The WDK Debuggers\x64 ships the matched pair, so we
+    /// assemble (once, cached under app data) a dir = tracefmt.exe + the Debuggers dbghelp/symsrv/dbgcore.
+    /// All WDK components — nothing is redistributed. Falls back to the plain WDK tracefmt (local TMFs only,
+    /// no server) if the Debuggers pair isn't present or assembly fails.</summary>
+    private static string GetRunnableTracefmt()
+    {
+        var plain = WDKFinder.GetTraceFmtPath();
+        if (string.IsNullOrEmpty(plain) || !File.Exists(plain)) return plain; // not installed → caller handles
+        try
+        {
+            lock (_assembleLock)
+            {
+                if (_runnableTracefmt != null && File.Exists(_runnableTracefmt)
+                    && File.GetLastWriteTimeUtc(plain) <= File.GetLastWriteTimeUtc(_runnableTracefmt))
+                    return _runnableTracefmt;
+
+                var dbgr = WDKFinder.GetDebuggersX64Path();
+                if (string.IsNullOrEmpty(dbgr) || dbgr == WDKFinder.NOT_FOUND_STRING
+                    || !File.Exists(Path.Combine(dbgr, "symsrv.dll")) || !File.Exists(Path.Combine(dbgr, "dbghelp.dll")))
+                    return _runnableTracefmt = plain; // no WDK symsrv available → plain tracefmt (no server)
+
+                var cache = Path.Combine(FileIO.GetAppDataFindNeedlePluginFolder(), "tracefmt-engine");
+                Directory.CreateDirectory(cache);
+                var dest = Path.Combine(cache, "tracefmt.exe");
+                bool stale = !File.Exists(dest) || File.GetLastWriteTimeUtc(plain) > File.GetLastWriteTimeUtc(dest);
+                if (stale)
+                {
+                    File.Copy(plain, dest, true);
+                    foreach (var dll in new[] { "dbghelp.dll", "symsrv.dll", "dbgcore.dll" })
+                    {
+                        var s = Path.Combine(dbgr, dll);
+                        if (File.Exists(s)) File.Copy(s, Path.Combine(cache, dll), true);
+                    }
+                    Logger.Instance.Log($"Assembled tracefmt+symsrv engine at {cache} (WDK bin tracefmt + Debuggers dbghelp/symsrv)");
+                }
+                return _runnableTracefmt = dest;
+            }
+        }
+        catch (Exception ex) { Logger.Instance.Log($"tracefmt engine assemble failed, using plain tracefmt: {ex.Message}"); return plain; }
     }
 
     /// <summary>Point dbghelp at a log file (and turn its debug output on) for the tracefmt child, so we

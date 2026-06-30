@@ -142,6 +142,17 @@ public class WDKFinder
         }
     }
 
+    /// <summary>The WDK's Debuggers\x64 folder (&lt;KitsRoot10&gt;\Debuggers\x64). Unlike the WDK bin\x64
+    /// where tracefmt lives, this ships a matched dbghelp.dll + symsrv.dll — needed to make tracefmt's
+    /// symbol-server resolution work (its own dir has dbghelp but no symsrv). NOT_FOUND if unavailable.</summary>
+    public static string GetDebuggersX64Path()
+    {
+        if (TEST_MODE) return TEST_MODE_SUCCESS ? Path.Combine(TET_MODE_FAKE_ROOT_PATH, "Debuggers", "x64") : NOT_FOUND_STRING;
+        var root = GetPathOfWDKRoot();
+        if (string.IsNullOrEmpty(root) || root == NOT_FOUND_STRING) return NOT_FOUND_STRING;
+        return Path.Combine(root, "Debuggers", "x64");
+    }
+
     public static string GetTraceFmtPath()
     {
         var wdk = GetPathOfWDKEasy();
