@@ -292,12 +292,17 @@ public class TraceFmt
                 if (stale)
                 {
                     File.Copy(plain, dest, true);
-                    foreach (var dll in new[] { "dbghelp.dll", "symsrv.dll", "dbgcore.dll" })
+                    // tracefmt.exe's ONLY non-system import is dbghelp.dll (verified: its other imports —
+                    // tdh, winhttp, ws2_32, advapi32, version, ntdll, CRT — are all in System32). dbghelp in
+                    // turn loads symsrv/dbgcore/srcsrv from its own dir. So this is tracefmt's COMPLETE private
+                    // dependency closure, not a guess — it won't "break if MS adds a DLL" because tracefmt's
+                    // only private dep is the dbghelp family, which we copy whole from the WDK Debuggers.
+                    foreach (var dll in new[] { "dbghelp.dll", "symsrv.dll", "dbgcore.dll", "srcsrv.dll", "symsrvcache.dll" })
                     {
                         var s = Path.Combine(dbgr, dll);
                         if (File.Exists(s)) File.Copy(s, Path.Combine(cache, dll), true);
                     }
-                    Logger.Instance.Log($"Assembled tracefmt+symsrv engine at {cache} (WDK bin tracefmt + Debuggers dbghelp/symsrv)");
+                    Logger.Instance.Log($"Assembled tracefmt symbol engine at {cache} (WDK bin tracefmt + WDK Debuggers dbghelp family)");
                 }
                 return _runnableTracefmt = dest;
             }
