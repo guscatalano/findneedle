@@ -94,7 +94,7 @@ public static class InspectionService
     {
         var warning = new ContentDialog
         {
-            Title = "Inspect Binary (Experimental)",
+            Title = "Inspect Binary",
             CloseButtonText = "Cancel",
             PrimaryButtonText = "Select File",
             XamlRoot = window.Content.XamlRoot
@@ -102,8 +102,10 @@ public static class InspectionService
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
         {
-            Text = "Inspect Binary is experimental and may not find all ETW providers.",
-            Foreground = new SolidColorBrush(Colors.OrangeRed),
+            Text = "Reads the ETW providers a native EXE/DLL declares — from its WEVT_TEMPLATE manifest "
+                 + "resource (authoritative GUIDs) and its TraceLogging provider metadata (names, with the "
+                 + "GUID confirmed by the name→GUID hash). Each result is labelled with how it was found.",
+            TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
         stack.Children.Add(new TextBlock { Text = "Select a binary file to inspect for ETW providers." });
@@ -115,11 +117,11 @@ public static class InspectionService
         var path = Win32FileDialog.OpenFile(hWnd, new (string, string)[] { ("Binary files", "*.exe;*.dll"), ("All files", "*.*") });
         if (path == null) { showSpinner(false, null); return; }
 
-        List<(Guid guid, string? name)> providers = null!;
+        List<EtwProviderRef> providers = null!;
         string error = null!;
         await Task.Run(() =>
         {
-            try { providers = EtwNativeProviderScanner.ExtractNativeEtwProviders(path); }
+            try { providers = EtwNativeProviderScanner.Scan(path); }
             catch (Exception ex) { error = ex.Message; }
         });
         showSpinner(false, null);
@@ -142,17 +144,31 @@ public static class InspectionService
         }
         else
         {
-            content.Children.Add(Bold($"ETW Providers found ({providers.Count}):"));
+            int authoritative = providers.Count(p => p.IsAuthoritative);
+            content.Children.Add(Bold($"ETW Providers found ({providers.Count} — {authoritative} authoritative):"));
             foreach (var p in providers)
             {
-                var line = p.name != null ? $"{p.guid}  |  {p.name}" : p.guid.ToString();
-                content.Children.Add(new TextBlock { Text = line, FontFamily = new FontFamily("Consolas") });
+                var nameStr = string.IsNullOrEmpty(p.Name) ? "(name not in binary)" : p.Name;
+                content.Children.Add(new TextBlock
+                {
+                    Text = $"{p.Guid}  |  {nameStr}   [{p.SourceLabel}]",
+                    FontFamily = new FontFamily("Consolas"),
+                    Foreground = new SolidColorBrush(p.IsAuthoritative ? Colors.LightGreen : Colors.Goldenrod),
+                });
             }
+            if (providers.Any(p => p.Source == EtwProviderSource.Heuristic))
+                content.Children.Add(new TextBlock
+                {
+                    Text = "No manifest/TraceLogging metadata was found; results above are low-confidence guesses.",
+                    Foreground = new SolidColorBrush(Colors.OrangeRed),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 8, 0, 0),
+                });
             var testButton = new Button { Content = "Test Collection", Margin = new Thickness(0, 12, 0, 0) };
             testButton.Click += async (s, e) =>
             {
                 dialog.Hide();
-                await TestEtwCollectionAsync(window, showSpinner, providers.Select(x => x.name ?? x.guid.ToString()).ToList());
+                await TestEtwCollectionAsync(window, showSpinner, providers.Select(x => x.Name ?? x.Guid.ToString()).ToList());
             };
             content.Children.Add(testButton);
         }
