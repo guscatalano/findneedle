@@ -14,7 +14,7 @@ namespace FindNeedleUX.Services;
 public static class ResultsViewerSettings
 {
     private static readonly string DefaultSettingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "viewer-settings.json");
 
     // Mutable so tests can redirect persistence to a temp file via the seam below; production
@@ -359,7 +359,7 @@ public static class ResultsViewerSettings
         get
         {
             var cache = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle", "symbols");
+                FindNeedleCoreUtils.PackagedAppPaths.LocalAppData, "FindNeedle", "symbols");
             try { Directory.CreateDirectory(cache); } catch { /* best-effort */ }
             return $"srv*{cache}*https://msdl.microsoft.com/download/symbols";
         }

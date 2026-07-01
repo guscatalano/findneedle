@@ -14,7 +14,7 @@ namespace FindNeedleUX.Services;
 public static class OnlineSourceSettings
 {
     private static readonly string Path_ = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "online-sources.json");
 
     private static Data _data;

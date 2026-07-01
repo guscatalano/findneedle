@@ -13,7 +13,7 @@ namespace FindNeedleCoreUtils
     public static class CachedStorage
     {
         private static readonly string AppDataCacheDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            PackagedAppPaths.AppData,
             "FindNeedle", "Cache");
 
         static CachedStorage()

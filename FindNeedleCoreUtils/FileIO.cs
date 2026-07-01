@@ -9,7 +9,12 @@ public class FileIO
 {
     public static string GetAppDataFindNeedlePluginFolder()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        // Honor the new-user-preview override (PackagedAppPaths.DataHomeEnvVar) so the plugin cache
+        // (tracefmt output, AI rules, etc.) also lands in the throwaway profile, not the real AppData.
+        var overrideHome = Environment.GetEnvironmentVariable("FINDNEEDLE_DATA_HOME");
+        var appData = string.IsNullOrWhiteSpace(overrideHome)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+            : overrideHome;
         var folder = Path.Combine(appData, "FindNeedlePlugin");
         Directory.CreateDirectory(folder);
         return folder;

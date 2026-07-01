@@ -34,7 +34,7 @@ public sealed class LogCatalogEntry
 public static class LogCatalog
 {
     private static readonly string DefaultPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "log-catalog.json");
 
     private static string _path = DefaultPath;

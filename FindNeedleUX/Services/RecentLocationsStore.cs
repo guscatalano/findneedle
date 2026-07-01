@@ -17,7 +17,7 @@ public static class RecentLocationsStore
     private const int HardMax = 50;
 
     private static readonly string DefaultPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "recent-locations.json");
 
     private static string _path = DefaultPath;

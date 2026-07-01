@@ -16,7 +16,7 @@ namespace FindPluginCore.Searching.AutoRules;
 public static class AutoRulesStore
 {
     private static readonly string DefaultPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "auto-rules.json");
 
     private static string _path = DefaultPath;

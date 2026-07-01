@@ -30,7 +30,7 @@ public static class PerfLog
         try
         {
             var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
                 "FindNeedle");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "perf-log.txt");

@@ -9,14 +9,39 @@ namespace FindNeedleCoreUtils;
 /// </summary>
 public static class PackagedAppPaths
 {
+    /// <summary>Env var that, when set, relocates ALL of FindNeedle's per-user state (settings, cached
+    /// searches, saved locations, catalog, symbols, dependencies, plugin cache) under the given folder.
+    /// Used by the "Preview first-run (new user)" action to run a second instance against an empty,
+    /// throwaway profile without touching the real one. Honored by both data roots.</summary>
+    public const string DataHomeEnvVar = "FINDNEEDLE_DATA_HOME";
+
+    internal static string? DataHomeOverride
+    {
+        get
+        {
+            try
+            {
+                var v = Environment.GetEnvironmentVariable(DataHomeEnvVar);
+                return string.IsNullOrWhiteSpace(v) ? null : v;
+            }
+            catch { return null; }
+        }
+    }
+
     /// <summary>
     /// Gets the local application data directory.
     /// For both packaged and unpackaged apps, this returns the standard LocalAppData path.
     /// The file system virtualization layer will transparently redirect to the package-specific
     /// location (LocalCache\Local) for packaged apps.
+    /// Overridden wholesale by <see cref="DataHomeEnvVar"/> for the new-user-preview profile.
     /// </summary>
-    public static string LocalAppData => 
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+    public static string LocalAppData =>
+        DataHomeOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+    /// <summary>Roaming AppData root (where the cached-search DBs + plugin cache live), honoring the
+    /// new-user-preview override so those relocate into the throwaway profile too.</summary>
+    public static string AppData =>
+        DataHomeOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
     /// <summary>
     /// Gets the base directory for FindNeedle dependencies (Node/Mermaid, PlantUML/Java).
@@ -34,10 +59,10 @@ public static class PackagedAppPaths
         get
         {
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (IsPackagedApp && !string.IsNullOrEmpty(PackageFamilyName))
+            if (DataHomeOverride == null && IsPackagedApp && !string.IsNullOrEmpty(PackageFamilyName))
                 return Path.Combine(local, "Packages", PackageFamilyName!, "LocalCache", "Local",
                                     "FindNeedle", "Dependencies");
-            return Path.Combine(local, "FindNeedle", "Dependencies");
+            return Path.Combine(LocalAppData, "FindNeedle", "Dependencies");
         }
     }
 

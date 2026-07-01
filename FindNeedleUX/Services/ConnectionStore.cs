@@ -61,7 +61,7 @@ public sealed class SavedConnection
 public static class ConnectionStore
 {
     private static readonly string DefaultPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "connections.json");
 
     private static string _path = DefaultPath;

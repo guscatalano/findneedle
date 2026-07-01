@@ -1016,10 +1016,68 @@ public sealed partial class MainWindow : Window
             case "inspect_binary":
                 await InspectionService.InspectBinaryAsync(this, (show, text) => ShowSpinner(show, text));
                 break;
+            case "preview_new_user":
+                await LaunchNewUserPreviewAsync();
+                break;
             default:
                 Logger.Instance.Log($"Navigation error: unknown menu item {selectedFlyoutItem.Name}");
                 throw new Exception("bad code");
         }
+    }
+
+    /// <summary>
+    /// Launch a second instance of the app against a brand-new, empty profile so you can see the UX a
+    /// first-time user gets — no persisted settings, no cached searches, no saved locations/catalog. The
+    /// profile is a throwaway temp folder pointed at via FINDNEEDLE_DATA_HOME (honored by every data root),
+    /// and FINDNEEDLE_NO_SINGLE_INSTANCE keeps it from being redirected back into this instance. Your real
+    /// profile is never touched; delete the temp folder to clean up.
+    /// </summary>
+    private async System.Threading.Tasks.Task LaunchNewUserPreviewAsync()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe) || !System.IO.File.Exists(exe))
+            {
+                await ShowSimpleDialogAsync("Can't launch preview", "Couldn't resolve the app executable path.");
+                return;
+            }
+
+            var profile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FindNeedle-newuser",
+                                                  Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(profile);
+
+            var psi = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+            psi.Environment[FindNeedleCoreUtils.PackagedAppPaths.DataHomeEnvVar] = profile; // fresh, isolated profile
+            psi.Environment["FINDNEEDLE_NO_SINGLE_INSTANCE"] = "1";                          // run standalone
+            System.Diagnostics.Process.Start(psi);
+            Logger.Instance.Log($"Launched new-user preview with profile: {profile}");
+
+            await ShowSimpleDialogAsync("New-user preview launched",
+                "A fresh instance is opening with an empty profile — no settings, cached searches, or saved " +
+                "locations, exactly like a brand-new install. Your real profile is untouched.\n\n" +
+                "Throwaway profile folder (delete to clean up):\n" + profile);
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"New-user preview launch failed: {ex.Message}");
+            await ShowSimpleDialogAsync("Couldn't launch preview", ex.Message);
+        }
+    }
+
+    private async System.Threading.Tasks.Task ShowSimpleDialogAsync(string title, string message)
+    {
+        try
+        {
+            await new ContentDialog
+            {
+                Title = title,
+                Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true },
+                CloseButtonText = "OK",
+                XamlRoot = this.Content.XamlRoot,
+            }.ShowAsync();
+        }
+        catch { /* dialog couldn't show — already logged */ }
     }
 
     /// <summary>
