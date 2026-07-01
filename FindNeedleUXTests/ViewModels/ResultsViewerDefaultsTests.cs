@@ -41,7 +41,7 @@ public class ResultsViewerDefaultsTests
         Assert.AreEqual(CacheReuseMode.Prompt, ResultsViewerSettings.CacheReuseMode);
         Assert.AreEqual(IndexingMode.Background, ResultsViewerSettings.IndexingMode);
         Assert.AreEqual(SearchSubmitMode.Auto, ResultsViewerSettings.SearchSubmitMode);
-        Assert.AreEqual(FilterDock.Top, ResultsViewerSettings.FilterDock);
+        Assert.AreEqual(FilterDock.Left, ResultsViewerSettings.FilterDock);
         Assert.AreEqual("System", ResultsViewerSettings.TitleBarColorMode);
         Assert.IsTrue(ResultsViewerSettings.ShowStatusBar);
         Assert.AreEqual(8765, ResultsViewerSettings.McpServerPort);

@@ -212,7 +212,10 @@ public static class ResultsViewerSettings
 
     /// <summary>Where the result viewer's filter pane is docked (Top or Left). Broadcasts Changed so
     /// an open viewer re-lays-out live.</summary>
-    public const FilterDock DefaultFilterDock = FilterDock.Top;
+    // Default to a LEFT dock: for a first-time user a full row of filters across the top reads as
+    // overwhelming, whereas a left rail is calmer and leaves the results as the focus. Users who
+    // prefer the top layout can switch (and their choice persists).
+    public const FilterDock DefaultFilterDock = FilterDock.Left;
     public static FilterDock FilterDock
     {
         get

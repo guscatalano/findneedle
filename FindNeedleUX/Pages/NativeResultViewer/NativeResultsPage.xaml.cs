@@ -539,7 +539,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     }
 
     private bool _filtersExpanded = true;
-    private FilterDock _filterDock = FilterDock.Top;
+    private FilterDock _filterDock = ResultsViewerSettings.DefaultFilterDock;
 
     private void ApplyFiltersToggleState(bool expanded)
     {
