@@ -269,6 +269,12 @@
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock x:Name="FiltersToggleGlyph" Text="▾" FontSize="11"/>
                         <TextBlock Text="Filters"/>
+                        <!-- Active-filter count: so the user knows filters are hiding rows even when the
+                             pane is collapsed. -->
+                        <Border x:Name="FiltersActiveBadge" Visibility="Collapsed" CornerRadius="8" Padding="5,0"
+                                VerticalAlignment="Center" Background="{ThemeResource SystemAccentColorBrush}">
+                            <TextBlock x:Name="FiltersActiveBadgeText" FontSize="10" Foreground="White"/>
+                        </Border>
                     </StackPanel>
                 </ToggleButton>
 
@@ -477,8 +483,8 @@
                             <ToggleButton x:Name="ShowKnownToggle" Height="28" FontSize="12" Padding="8,0"
                                           Content="Known ▾" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
                                           ToolTipService.ToolTip="Pick from the values actually present (Provider / TaskName / Source) instead of typing."/>
-                            <Button Content="Clear filters" Click="ResetColumnFilters_Click" Height="28" FontSize="12"
-                                    ToolTipService.ToolTip="Clear all the per-field filters (Provider, TaskName, Message, Source, Level)"/>
+                            <Button Content="Clear fields" Click="ResetColumnFilters_Click" Height="28" FontSize="12"
+                                    ToolTipService.ToolTip="Clear only the per-field filters (Provider, TaskName, Message, Source, Level) — leaves the search box and time range."/>
                         </StackPanel>
                         <!-- Provider: text box OR known-value combo (one visible at a time). A persistent
                              field label (like SimpleEventViewer's sections) so it's clear which filter is
@@ -551,9 +557,11 @@
                                 </Flyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
-                        <TextBlock Text="Level" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                        <!-- The level filter is now driven by the clickable Level chips below; this combo is
+                             kept (hidden) only as the backing control the existing filter code writes to. -->
+                        <TextBlock Text="Level" Visibility="Collapsed" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
                                    Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <ComboBox x:Name="LevelFilterCombo" Width="170" Height="28" FontSize="12"
+                        <ComboBox x:Name="LevelFilterCombo" Visibility="Collapsed" Width="170" Height="28" FontSize="12"
                                   PlaceholderText="Level (all)"
                                   ItemsSource="{x:Bind ViewModel.Levels, Mode=OneWay}"
                                   SelectionChanged="LevelFilterCombo_SelectionChanged">
@@ -573,11 +581,12 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Level legend: per-level swatch + count. Display-only — level colors are edited only
-                     on the settings page (Settings → Appearance → Level colors), the single source of truth. -->
+                <!-- Level filter: click a chip to filter to that level (click again to clear). These chips
+                     ARE the level filter (the old separate combo is hidden). Colors are edited on the
+                     settings page (Settings → Appearance → Level colors), the single source of truth. -->
                 <Border Padding="12,6">
                     <StackPanel x:Name="LevelsRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="Levels:" VerticalAlignment="Center" FontSize="12"
+                        <TextBlock Text="Level:" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ItemsControl ItemsSource="{x:Bind ViewModel.Levels}">
                             <ItemsControl.ItemsPanel>
@@ -588,10 +597,9 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="local:LevelEntry">
-                                    <Border Padding="8,3" CornerRadius="4"
-                                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                                            ToolTipService.ToolTip="Edit level colors in Settings → Appearance → Level colors">
+                                    <ToggleButton IsChecked="{x:Bind IsSelected, Mode=OneWay}" Tag="{x:Bind Level}"
+                                                  Click="LevelChip_Click" Padding="8,3" MinHeight="0" MinWidth="0" FontSize="12"
+                                                  ToolTipService.ToolTip="Filter to this level (click again to clear)">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                             <Border Width="12" Height="12" CornerRadius="2" BorderThickness="1"
                                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -600,7 +608,7 @@
                                             <TextBlock Text="{x:Bind Count, Mode=OneWay}" FontSize="11"
                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         </StackPanel>
-                                    </Border>
+                                    </ToggleButton>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -609,8 +617,9 @@
                 <!-- Clear every filter at once (search box, per-column, time range, level). -->
                 <Border Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-                    <Button Content="Clear all filters" Click="ClearFiltersButton_Click"
+                    <Button Content="Clear all (incl. search &amp; time)" Click="ClearFiltersButton_Click"
                             Height="28" FontSize="12"
+                            ToolTipService.ToolTip="Clear everything: the search box, per-field filters, time range, and level."
                             AutomationProperties.Name="Clear all filters"/>
                 </Border>
             </StackPanel>

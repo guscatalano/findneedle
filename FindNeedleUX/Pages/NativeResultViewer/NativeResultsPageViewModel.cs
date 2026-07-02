@@ -1489,6 +1489,15 @@ public class LevelEntry : INotifyPropertyChanged
         set { if (_count != value) { _count = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Count))); } }
     }
 
+    // Whether this level is the currently-applied level filter — drives the legend chip's toggled state
+    // (the chips ARE the level filter now; there is no separate combo).
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set { if (_isSelected != value) { _isSelected = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected))); } }
+    }
+
     public event PropertyChangedEventHandler PropertyChanged;
 }
 

@@ -220,6 +220,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // bound page changes — the moment the first page lands, the spinner gives way to the grid.
         ViewModel.Results.CollectionChanged -= OnResultsCollectionChanged;
         ViewModel.Results.CollectionChanged += OnResultsCollectionChanged;
+        // Level chips are rebuilt on each load; re-sync their selected state to the current level filter.
+        ViewModel.Levels.CollectionChanged -= OnLevelsCollectionChanged;
+        ViewModel.Levels.CollectionChanged += OnLevelsCollectionChanged;
 
         // Apply persisted prefs BEFORE rendering so the first paint already has the user's choices.
         ApplyPersistedSettings();
@@ -402,8 +405,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// <summary>Show a centered empty-state over the grid when a finished load has zero rows, so the user
     /// sees *why* it's blank instead of an empty grid. Distinguishes "no rows at all" (empty source /
     /// nothing decoded) from "filters hid everything" (offers Clear filters). No-op while loading.</summary>
+    // Active-filter count on the Filters toggle, so the user sees rows are being hidden even with the
+    // pane collapsed. Counts search + each per-field/level/time filter and the known-value multi-selects.
+    private void UpdateFiltersBadge()
+    {
+        if (FiltersActiveBadge == null) return;
+        int n = 0;
+        if (!string.IsNullOrEmpty(ViewModel.SearchText)) n++;
+        if (!string.IsNullOrEmpty(ViewModel.ProviderFilter)) n++;
+        if (!string.IsNullOrEmpty(ViewModel.TaskNameFilter)) n++;
+        if (!string.IsNullOrEmpty(ViewModel.MessageFilter)) n++;
+        if (!string.IsNullOrEmpty(ViewModel.SourceFilter)) n++;
+        if (!string.IsNullOrEmpty(ViewModel.LevelFilter)) n++;
+        if (ViewModel.FromDate != null) n++;
+        if (ViewModel.ToDate != null) n++;
+        if (ViewModel.ProviderFilterSet?.Count > 0) n++;
+        if (ViewModel.TaskNameFilterSet?.Count > 0) n++;
+        if (ViewModel.SourceFilterSet?.Count > 0) n++;
+        FiltersActiveBadgeText.Text = n.ToString();
+        FiltersActiveBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void UpdateEmptyState()
     {
+        UpdateFiltersBadge();
         if (EmptyOverlay == null || LoadingOverlay == null) return; // during initial parse
 
         // One decision drives BOTH overlays so they can never disagree (the recurring "No results" /
@@ -2085,12 +2110,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void OnResultsCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         => DispatcherQueue.TryEnqueue(UpdateEmptyState);
 
+    private void OnLevelsCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        => DispatcherQueue.TryEnqueue(SyncLevelChips);
+
     private void OnViewModelPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalCount))
             DispatcherQueue.TryEnqueue(RefreshSearchSubmitMode);
         else if (e.PropertyName == nameof(NativeResultsPageViewModel.TotalFilteredCount))
             DispatcherQueue.TryEnqueue(UpdateEmptyState);
+        // Keep the clickable Level chips in sync whenever the level filter changes (chip click, Clear,
+        // MCP set_filter, etc.) — and refresh the collapsed-Filters badge.
+        else if (e.PropertyName == nameof(NativeResultsPageViewModel.LevelFilter))
+            DispatcherQueue.TryEnqueue(() => { SyncLevelChips(); UpdateFiltersBadge(); });
         // IsLoading drives the loading-spinner-vs-empty-state decision (UpdateEmptyState routes both via
         // ResultsOverlayPolicy), so the spinner appears the instant a load starts and the empty state can't
         // show mid-load — regardless of which entry point triggered the load.
@@ -2145,6 +2177,24 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void SourceFilter_TextChanged(object sender, TextChangedEventArgs e)   => ViewModel.SourceFilter   = SourceFilterBox.Text;
     private void LevelFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => ViewModel.LevelFilter = (LevelFilterCombo.SelectedItem as LevelEntry)?.Level ?? "";
+
+    // The Level legend chips ARE the level filter now: clicking a chip filters to that level; clicking the
+    // active chip clears it. Single-select (matches the underlying single-value LevelFilter).
+    private void LevelChip_Click(object sender, RoutedEventArgs e)
+    {
+        var level = (sender as ToggleButton)?.Tag as string ?? "";
+        bool clearing = string.Equals(ViewModel.LevelFilter, level, StringComparison.OrdinalIgnoreCase);
+        ViewModel.LevelFilter = clearing ? "" : level; // triggers OnViewModelPropertyChanged → SyncLevelChips
+        SyncLevelChips();
+    }
+
+    private void SyncLevelChips()
+    {
+        var current = ViewModel.LevelFilter;
+        foreach (var lv in ViewModel.Levels)
+            lv.IsSelected = !string.IsNullOrEmpty(current)
+                            && string.Equals(lv.Level, current, StringComparison.OrdinalIgnoreCase);
+    }
 
     // ---- "Show known" value dropdowns (Provider / TaskName / Source) ----
     // Each field has three controls: a free-text box, a single-select combo, and a multi-select
