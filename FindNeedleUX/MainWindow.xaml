@@ -53,10 +53,7 @@
                 <MenuFlyoutItem Text="System check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
                 <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
                 <MenuFlyoutItem Text="Search statistics (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
-            </MenuBarItem>
-
-            <MenuBarItem Title="Settings">
-                <MenuFlyoutItem Text="Preferences..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
+                <!-- Developer-only (hidden unless AppMode.IsDeveloper). -->
                 <MenuFlyoutSeparator x:Name="PreviewDevSeparator"/>
                 <MenuFlyoutItem Text="Preview first-run (new user)…" Click="MenuFlyoutItem_Click" Name="preview_new_user"
                                 ToolTipService.ToolTip="Launch a second instance with an empty, throwaway profile — see the app as a brand-new user would. Your real settings/caches are untouched."/>
@@ -81,6 +78,10 @@
             <Button x:Name="McpHelpButton" Click="McpHelpButton_Click" Padding="6,2" MinHeight="28"
                     ToolTipService.ToolTip="MCP server configuration &amp; how to connect">
                 <FontIcon Glyph="&#xE946;" FontSize="14"/>
+            </Button>
+            <Button x:Name="SettingsButton" Click="SettingsButton_Click" Padding="6,2" MinHeight="28"
+                    ToolTipService.ToolTip="Settings" AutomationProperties.Name="Settings">
+                <FontIcon Glyph="&#xE713;" FontSize="14"/>
             </Button>
         </StackPanel>
 

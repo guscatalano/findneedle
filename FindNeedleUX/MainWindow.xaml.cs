@@ -210,6 +210,9 @@ public sealed partial class MainWindow : Window
         RefreshMcpDot();
     }
 
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage));
+
     private void McpHelpButton_Click(object sender, RoutedEventArgs e)
     {
         bool running = FindNeedleUX.Services.Mcp.McpViewerBridge.Instance.ServerPort > 0;
