@@ -17,7 +17,13 @@ public sealed partial class RunSearchPage : Page
     {
         busybar.ShowPaused = enable;
         busybar2.ShowPaused = enable;
-        this.IsEnabled = enable;
+        // Disable ONLY the input controls while running — never the whole Page. A disabled WinUI
+        // ancestor disables every descendant regardless of its own IsEnabled, which previously made
+        // the Cancel button (and any escape) unclickable for the entire run. (A StackPanel has no
+        // IsEnabled, so disable its child controls directly.)
+        foreach (var child in DepthInputs.Children)
+            if (child is Control c) c.IsEnabled = enable;
+        RunButton.IsEnabled = enable;
         CancelButton.IsEnabled = !enable;
         if (!enable)
         {
@@ -26,6 +32,9 @@ public sealed partial class RunSearchPage : Page
             MainWindowActions.EnableNavBar();
         }
     }
+
+    private void AddSource_Click(object sender, RoutedEventArgs e)
+        => MainWindowActions.NavigateToSearchLocations();
 
     private void GetNumberProgress(int count)
     {
@@ -45,6 +54,14 @@ public sealed partial class RunSearchPage : Page
 
     private async void Button_Click(object sender, RoutedEventArgs e)
     {
+        // Don't run over nothing — a fresh profile has no sources. Guide the user instead of
+        // producing a confusing "No results".
+        if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
+        {
+            NoSourcesBar.IsOpen = true;
+            return;
+        }
+        NoSourcesBar.IsOpen = false;
         SetControlsTo(false);
         MiddleLayerService.GetProgressEventSink().RegisterForNumericProgress(GetNumberProgress);
         MiddleLayerService.GetProgressEventSink().RegisterForTextProgress(GetTextProgress);

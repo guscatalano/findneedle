@@ -477,6 +477,12 @@ public sealed partial class MainWindow : Window
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage)));
     }
 
+    public void NavigateToSearchLocations()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)));
+    }
+
 
     /// <summary>
     /// Show / hide a non-cancellable spinner used to give immediate feedback when switching to a
@@ -1538,9 +1544,15 @@ public sealed partial class MainWindow : Window
 
                 var sizeMb = new System.IO.FileInfo(path).Length / 1024 / 1024;
                 var header = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
-                string HeaderText() =>
-                    $"This is a large log ({sizeMb:N0} MB) with {providersWithCounts.Count} providers. " +
-                    "Uncheck what you don't need — only the checked providers are loaded (much faster).";
+                string HeaderText()
+                {
+                    bool hasKernel = providersWithCounts.Any(p =>
+                        p.provider.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
+                        || p.provider.Equals("MSNT_SystemTrace", StringComparison.OrdinalIgnoreCase));
+                    return $"This is a large log ({sizeMb:N0} MB) with {providersWithCounts.Count} providers. " +
+                           "Uncheck what you don't need — only the checked providers are loaded (much faster)." +
+                           (hasKernel ? " The high-volume Windows Kernel provider is unchecked by default — check it if you need kernel events." : "");
+                }
                 header.Text = HeaderText();
 
                 var search = new TextBox { PlaceholderText = "Filter providers…", Margin = new Thickness(0, 0, 0, 8) };
@@ -1576,6 +1588,11 @@ public sealed partial class MainWindow : Window
                 var listPanel = new StackPanel { Spacing = 2 };
                 var boxes = new System.Collections.Generic.List<CheckBox>();
                 var rows = new System.Collections.Generic.List<(FrameworkElement row, string name)>();
+                ContentDialog? dlg = null;
+                // "Load selected" is meaningless with nothing checked — and an empty selection must NOT be
+                // treated as "load everything" (that silently loads the whole huge file). Keep the primary
+                // button disabled until at least one provider is checked.
+                void UpdatePrimary() { if (dlg != null) dlg.IsPrimaryButtonEnabled = boxes.Any(b => b.IsChecked == true); }
                 void PopulateRows()
                 {
                     listPanel.Children.Clear();
@@ -1587,6 +1604,8 @@ public sealed partial class MainWindow : Window
                         bool isKernel = name.Equals("Windows Kernel", StringComparison.OrdinalIgnoreCase)
                                         || name.Equals("MSNT_SystemTrace", StringComparison.OrdinalIgnoreCase);
                         var cb = new CheckBox { Content = name, IsChecked = !isKernel, MinWidth = 240 };
+                        cb.Checked += (_, _) => UpdatePrimary();
+                        cb.Unchecked += (_, _) => UpdatePrimary();
                         boxes.Add(cb);
                         var countTb = new TextBlock
                         {
@@ -1612,6 +1631,7 @@ public sealed partial class MainWindow : Window
                         foreach (var (row, name) in rows)
                             row.Visibility = name.Contains(q, StringComparison.OrdinalIgnoreCase)
                                 ? Visibility.Visible : Visibility.Collapsed;
+                    UpdatePrimary();
                 }
                 PopulateRows();
 
@@ -1647,13 +1667,40 @@ public sealed partial class MainWindow : Window
                             ? Visibility.Visible : Visibility.Collapsed;
                 };
 
+                // Bulk toggles (scoped to the rows currently visible under the filter) so picking a couple
+                // of loggers out of dozens isn't dozens of clicks.
+                void SetVisibleChecked(bool val)
+                {
+                    for (int i = 0; i < rows.Count && i < boxes.Count; i++)
+                        if (rows[i].row.Visibility == Visibility.Visible) boxes[i].IsChecked = val;
+                    UpdatePrimary();
+                }
+                var checkAllBtn = new Button { Content = "Check all" };
+                var uncheckAllBtn = new Button { Content = "Uncheck all" };
+                checkAllBtn.Click += (_, _) => SetVisibleChecked(true);
+                uncheckAllBtn.Click += (_, _) => SetVisibleChecked(false);
+                var bulkRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+                bulkRow.Children.Add(checkAllBtn);
+                bulkRow.Children.Add(uncheckAllBtn);
+
+                // Labelled column header so the right-hand numbers read as event counts.
+                var countHeader = new Grid { Margin = new Thickness(0, 0, 0, 2) };
+                countHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                countHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var provHdr = new TextBlock { Text = "Provider", FontSize = 12, Opacity = 0.6 };
+                var evtHdr = new TextBlock { Text = "Events", FontSize = 12, Opacity = 0.6, HorizontalAlignment = HorizontalAlignment.Right };
+                Grid.SetColumn(provHdr, 0); Grid.SetColumn(evtHdr, 1);
+                countHeader.Children.Add(provHdr); countHeader.Children.Add(evtHdr);
+
                 var outer = new StackPanel { MinWidth = 420, MaxWidth = 540 };
                 outer.Children.Add(header);
                 outer.Children.Add(warnPanel);
                 outer.Children.Add(search);
+                outer.Children.Add(bulkRow);
+                outer.Children.Add(countHeader);
                 outer.Children.Add(new ScrollViewer { Content = listPanel, MaxHeight = 360 });
 
-                var dlg = new ContentDialog
+                dlg = new ContentDialog
                 {
                     Title = "Choose what to load",
                     Content = outer,
@@ -1663,6 +1710,7 @@ public sealed partial class MainWindow : Window
                     DefaultButton = ContentDialogButton.Primary,
                     XamlRoot = this.Content.XamlRoot,
                 };
+                UpdatePrimary(); // reflect initial checkbox state (kernel starts unchecked)
                 loadAllBtn.Click += (_, _) => { loadEverythingAnyway = true; dlg.Hide(); };
                 var result = await dlg.ShowAsync();
                 if (loadEverythingAnyway) return true; // load the whole file, no scope

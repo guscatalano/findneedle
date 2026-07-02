@@ -55,6 +55,14 @@ public class MainWindowActions
             mw.HideNavigationSpinner();
     }
 
+    /// <summary>Switch to the Sources (Search Locations) page — used by the "Add source" affordance
+    /// when a run is attempted with no sources loaded.</summary>
+    public static void NavigateToSearchLocations()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.NavigateToSearchLocations();
+    }
+
     /// <summary>Switch to the result-viewer settings page (used by the "fix WPP symbols" banner action).</summary>
     public static void NavigateToResultsViewerSettings()
     {
