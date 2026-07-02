@@ -40,7 +40,12 @@ public sealed partial class LogsPage : Page
         Logger.Instance.LogCallback = AddLogLine;
         DebugToggleSwitch.IsOn = GlobalSettings.Debug;
         UpdateDebugStatusText();
+        LogLines.CollectionChanged += (_, _) => UpdateEmptyState();
+        UpdateEmptyState();
     }
+
+    private void UpdateEmptyState()
+        => EmptyLogsText.Visibility = LogLines.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     public void AddLogLine(string line)
     {

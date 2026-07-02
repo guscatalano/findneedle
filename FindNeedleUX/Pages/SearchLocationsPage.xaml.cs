@@ -29,8 +29,14 @@ public sealed partial class SearchLocationsPage : Page
         CheckOtherDLLs.AreWeInstalledOk();
         // Bind the repeater once; the VM refreshes its collection in place.
         VariedImageSizeRepeater.ItemsSource = _viewModel.Locations;
-        Loaded += (_, _) => { OpenPendingOnlineDialog(); RenderRecent(); };
+        if (_viewModel.Locations is System.Collections.Specialized.INotifyCollectionChanged incc)
+            incc.CollectionChanged += (_, _) => UpdateSourcesEmptyState();
+        Loaded += (_, _) => { OpenPendingOnlineDialog(); RenderRecent(); UpdateSourcesEmptyState(); };
     }
+
+    private void UpdateSourcesEmptyState()
+        => EmptySourcesText.Visibility = (_viewModel.Locations?.Count ?? 0) == 0
+            ? Visibility.Visible : Visibility.Collapsed;
 
     private bool _suppressRecentMax;
 

@@ -102,6 +102,10 @@
 
             <StackPanel Spacing="8">
                 <TextBlock Text="Configured sources" FontWeight="SemiBold"/>
+                <TextBlock x:Name="EmptySourcesText" Visibility="Collapsed"
+                           FontSize="12" TextWrapping="Wrap"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="No sources added yet — use New above to add a folder, file, or live Event Log."/>
                 <ItemsRepeaterScrollHost>
                     <ScrollViewer>
                         <ItemsRepeater x:Name="VariedImageSizeRepeater"

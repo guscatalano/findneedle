@@ -28,7 +28,12 @@ public sealed partial class SearchRulesPage : Page
             TestFilePathInput.Visibility = Visibility.Collapsed;
             TestLoadButton.Visibility = Visibility.Collapsed;
         }
+        RuleFiles.CollectionChanged += (_, _) => UpdateRuleFilesEmptyState();
+        UpdateRuleFilesEmptyState();
     }
+
+    private void UpdateRuleFilesEmptyState()
+        => EmptyRuleFilesText.Visibility = RuleFiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>
     /// Public test hook: lets UI automation add a rule file by path without

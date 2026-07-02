@@ -56,6 +56,9 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <TextBlock x:Name="EmptyRuleFilesText" Visibility="Collapsed" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="No rule files yet. Rules are optional — you can search without them. Use Browse… to add a .rules.json (rules auto-tag, filter, scope, and enrich your results)."/>
                 </StackPanel>
             </Border>
 
