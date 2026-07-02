@@ -54,23 +54,24 @@ public sealed partial class SearchLocationsPage : Page
 
         foreach (var path in recents)
         {
+            var p = path;
             var row = new Grid { ColumnSpacing = 8 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            var add = new Button
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-            };
+            // A checkbox that reflects whether this recent is currently a loaded source, so it's obvious
+            // it got added (and can be un-added). GetName() on a folder/file location is its path.
+            bool added = _viewModel.Locations.Any(l => string.Equals(l.Name, p, StringComparison.OrdinalIgnoreCase));
             var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            content.Children.Add(new SymbolIcon { Symbol = System.IO.Path.HasExtension(path) ? Symbol.Document : Symbol.Folder });
-            content.Children.Add(new TextBlock { Text = path, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
-            add.Content = content;
-            ToolTipService.SetToolTip(add, $"Add {path}");
-            var p = path;
-            add.Click += (_, _) => { _viewModel.AddLocation(p); RenderRecent(); };
-            Grid.SetColumn(add, 0); row.Children.Add(add);
+            content.Children.Add(new SymbolIcon { Symbol = System.IO.Path.HasExtension(p) ? Symbol.Document : Symbol.Folder });
+            content.Children.Add(new TextBlock { Text = p, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+            // IsChecked is set BEFORE the handlers are attached, so restoring state on re-render doesn't
+            // re-fire add/remove.
+            var cb = new CheckBox { Content = content, IsChecked = added, HorizontalAlignment = HorizontalAlignment.Stretch };
+            ToolTipService.SetToolTip(cb, added ? $"Added — uncheck to remove {p}" : $"Add {p}");
+            cb.Checked += (_, _) => { _viewModel.AddLocation(p); RenderRecent(); };
+            cb.Unchecked += (_, _) => { _viewModel.RemoveLocation(p); RenderRecent(); };
+            Grid.SetColumn(cb, 0); row.Children.Add(cb);
 
             var remove = new Button { Content = "✕", Padding = new Thickness(8, 4, 8, 4) };
             ToolTipService.SetToolTip(remove, "Remove from recents");
