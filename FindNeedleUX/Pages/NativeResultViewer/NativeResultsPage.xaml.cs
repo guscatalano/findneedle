@@ -2136,6 +2136,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             {
                 UpdateEmptyState(); // streaming start → spinner; streaming end → re-evaluate
                 if (ViewModel.IsStreaming) return;
+                // Streaming skipped the at-load empty-column sample; now the data's in, collapse the
+                // columns that are still empty (e.g. the ETW columns on a plain-text log).
+                _ = ViewModel.AutoHideEmptyColumnsAsync();
                 UpdateDecodeBanner(); UpdateRuleFilterToggleState(); UpdateSourcesButtonState();
                 // Streaming finished — refresh the precomputed known-value dropdowns against the full set
                 // (the precompute at first-page may have run against a partial stream). Same row cap: skip

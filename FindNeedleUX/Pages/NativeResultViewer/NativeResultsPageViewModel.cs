@@ -930,12 +930,24 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         if (sample == null || sample.Count == 0) return;
 
+        // Every hideable column (Index/Time/Level/Message stay — they're always meaningful). The ETW
+        // columns dominate the ~19-column wall on a plain-text log; sampling them lets those collapse.
         var getters = new Dictionary<string, Func<LogLine, string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["Provider"] = l => l.Provider,
             ["TaskName"] = l => l.TaskName,
             ["Source"]   = l => l.Source,
-            ["Message"]  = l => l.Message,
+            ["ProcessId"] = l => l.ProcessId,
+            ["ProcessName"] = l => l.ProcessName,
+            ["ThreadId"] = l => l.ThreadId,
+            ["ActivityId"] = l => l.ActivityId,
+            ["EventId"] = l => l.EventId,
+            ["OpCode"] = l => l.OpCode,
+            ["Keywords"] = l => l.Keywords,
+            ["RelatedActivityId"] = l => l.RelatedActivityId,
+            ["Channel"] = l => l.Channel,
+            ["ProviderGuid"] = l => l.ProviderGuid,
+            ["RecordId"] = l => l.RecordId,
         };
 
         int sampleSize = Math.Min(sample.Count, 1000);
@@ -949,6 +961,22 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             }
             if (allEmpty) col.IsVisible = false;
         }
+    }
+
+    /// <summary>Post-load auto-hide for the streaming path: the at-load sample is skipped while a search is
+    /// still streaming (not all rows are in yet), so once it completes, fetch a fresh sample and collapse
+    /// the columns that are still empty. Fetch runs off the UI thread; the visibility update resumes on the
+    /// caller's context.</summary>
+    public async System.Threading.Tasks.Task AutoHideEmptyColumnsAsync()
+    {
+        var src = _source;
+        if (src == null) return;
+        try
+        {
+            var sample = await System.Threading.Tasks.Task.Run(() => src.GetPage(FilterSpec.Empty, SortSpec.None, 0, 1000));
+            AutoHideEmptyColumnsFromSample(sample);
+        }
+        catch { /* best-effort UX nicety */ }
     }
 
     // ----- Filtering -----
