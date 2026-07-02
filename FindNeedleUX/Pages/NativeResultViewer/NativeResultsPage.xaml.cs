@@ -430,6 +430,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void UpdateEmptyState()
     {
         UpdateFiltersBadge();
+        ScheduleTimeStrip(); // debounced recompute of the time-density strip
         if (EmptyOverlay == null || LoadingOverlay == null) return; // during initial parse
 
         // One decision drives BOTH overlays so they can never disagree (the recurring "No results" /
@@ -2523,6 +2524,114 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (CustomTimeToggle != null) CustomTimeToggle.IsChecked = false;
         if (CustomTimePanel != null) CustomTimePanel.Visibility = Visibility.Collapsed;
         _suppressTimePreset = false;
+    }
+
+    // ----- Time-density strip (event volume over the filtered time range; click a bar to zoom) -----
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer _stripTimer;
+    private List<(DateTime lo, DateTime hi, long count)> _stripBuckets;
+
+    /// <summary>Debounced recompute — called from UpdateEmptyState on every load/filter change.</summary>
+    private void ScheduleTimeStrip()
+    {
+        if (TimeStripHost == null) return;
+        if (_stripTimer == null)
+        {
+            _stripTimer = DispatcherQueue.CreateTimer();
+            _stripTimer.Interval = TimeSpan.FromMilliseconds(350);
+            _stripTimer.IsRepeating = false;
+            _stripTimer.Tick += (_, _) => { _ = RefreshTimeStripAsync(); };
+        }
+        _stripTimer.Stop();
+        _stripTimer.Start();
+    }
+
+    private async System.Threading.Tasks.Task RefreshTimeStripAsync()
+    {
+        if (TimeStripHost == null) return;
+        if (ViewModel.IsLoading || ViewModel.IsStreaming) return; // recompute once the load settles
+        List<(DateTime lo, DateTime hi, long count)> buckets = null;
+        try { buckets = await System.Threading.Tasks.Task.Run(() => ComputeTimeBuckets(48)); }
+        catch { /* best-effort UX nicety */ }
+        _stripBuckets = buckets;
+        if (buckets == null || buckets.Count < 2) { TimeStripHost.Visibility = Visibility.Collapsed; return; }
+        TimeStripHost.Visibility = Visibility.Visible;
+        DrawTimeStrip();
+    }
+
+    private List<(DateTime lo, DateTime hi, long count)> ComputeTimeBuckets(int buckets)
+    {
+        var (min, max) = ViewModel.GetFilteredTimeRange();
+        if (min == null || max == null) return null;
+        var start = min.Value; var span = max.Value - start;
+        if (span <= TimeSpan.Zero) return null;
+        var width = TimeSpan.FromTicks(Math.Max(1, span.Ticks / buckets));
+        var list = new List<(DateTime, DateTime, long)>(buckets);
+        for (int i = 0; i < buckets; i++)
+        {
+            var lo = start + TimeSpan.FromTicks(width.Ticks * i);
+            var hi = i == buckets - 1 ? max.Value : lo + width;
+            list.Add((lo, hi, ViewModel.CountInTimeRange(lo, hi)));
+        }
+        return list;
+    }
+
+    private void DrawTimeStrip()
+    {
+        if (_stripBuckets == null || TimeStripCanvas == null) return;
+        TimeStripCanvas.Children.Clear();
+        double w = TimeStripCanvas.ActualWidth, h = TimeStripCanvas.ActualHeight;
+        if (w < 10 || h < 6) return;
+        long maxC = 1; foreach (var b in _stripBuckets) if (b.count > maxC) maxC = b.count;
+        int n = _stripBuckets.Count;
+        double bw = w / n;
+        var brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(global::Windows.UI.Color.FromArgb(255, 0, 103, 192));
+        for (int i = 0; i < n; i++)
+        {
+            var b = _stripBuckets[i];
+            double bh = b.count <= 0 ? 0 : Math.Max(2.0, (h - 4) * ((double)b.count / maxC));
+            var r = new Microsoft.UI.Xaml.Shapes.Rectangle { Width = Math.Max(1.0, bw - 1), Height = bh, Fill = brush, Tag = i };
+            Microsoft.UI.Xaml.Controls.Canvas.SetLeft(r, i * bw);
+            Microsoft.UI.Xaml.Controls.Canvas.SetTop(r, h - bh);
+            ToolTipService.SetToolTip(r, $"{b.lo:HH:mm:ss} – {b.hi:HH:mm:ss}\n{b.count:N0} events");
+            r.PointerPressed += TimeStripBar_PointerPressed;
+            TimeStripCanvas.Children.Add(r);
+        }
+    }
+
+    private void TimeStripCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawTimeStrip();
+
+    private void TimeStripBar_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is Microsoft.UI.Xaml.Shapes.Rectangle r && r.Tag is int i
+            && _stripBuckets != null && i >= 0 && i < _stripBuckets.Count)
+        {
+            var b = _stripBuckets[i];
+            ApplyTimeWindowFromStrip(b.lo, b.hi);
+        }
+    }
+
+    /// <summary>Click-to-zoom: set the From/To window to a bucket and reflect it in the time UI.</summary>
+    private void ApplyTimeWindowFromStrip(DateTime from, DateTime to)
+    {
+        _suppressTimePreset = true;
+        foreach (var c in PresetChips()) c.IsChecked = false;
+        _suppressTimePreset = false;
+        if (CustomTimeToggle != null) CustomTimeToggle.IsChecked = true;
+        if (CustomTimePanel != null) CustomTimePanel.Visibility = Visibility.Visible;
+        _suppressTimeBounds = true;
+        try
+        {
+            if (FromDatePicker != null) FromDatePicker.Date = new DateTimeOffset(from);
+            if (FromTimePicker != null) FromTimePicker.SelectedTime = from.TimeOfDay;
+            if (ToDatePicker != null) ToDatePicker.Date = new DateTimeOffset(to);
+            if (ToTimePicker != null) ToTimePicker.SelectedTime = to.TimeOfDay;
+            UpdateTimeButtonLabel(FromTimeButton, FromTimePicker);
+            UpdateTimeButtonLabel(ToTimeButton, ToTimePicker);
+        }
+        catch { /* picker display is best-effort; the VM dates below are the real filter */ }
+        _suppressTimeBounds = false;
+        ViewModel.FromDate = from;
+        ViewModel.ToDate = to;
     }
 
     private void ClearCustomTimePickersSilently()

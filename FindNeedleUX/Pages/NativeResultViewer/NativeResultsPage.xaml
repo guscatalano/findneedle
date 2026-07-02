@@ -20,6 +20,12 @@
             <Setter Property="VerticalAlignment" Value="Top"/>
         </Style>
 
+        <!-- Like GridCellText but reveals the cell's full text on hover — for columns whose content gets
+             clipped at the cell edge (Message). So the compact row height stays, but nothing is hidden. -->
+        <Style x:Key="GridCellTextTip" TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
+            <Setter Property="ToolTipService.ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        </Style>
+
         <!-- Row details panel -->
         <DataTemplate x:Key="RowDetailsTemplate">
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -628,6 +634,22 @@
 
                 <!-- DataGrid + overlays -->
                 <Grid Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <!-- Time-density strip: event volume over the filtered set's time range. Click a bar
+                         to zoom the time window to it. Hidden when there's no usable time range. -->
+                    <Border x:Name="TimeStripHost" Grid.Row="0" Visibility="Collapsed" Height="46"
+                            BorderThickness="0,0,0,1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}">
+                        <Grid>
+                            <Canvas x:Name="TimeStripCanvas" SizeChanged="TimeStripCanvas_SizeChanged"/>
+                            <TextBlock FontSize="10" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0"
+                                       Text="events over time - click a bar to zoom" IsHitTestVisible="False"/>
+                        </Grid>
+                    </Border>
             <!-- RowHeight + explicit column widths matter a lot for scroll perf:
                  with both unset, DataGrid measures every visible cell on every scroll frame
                  (because Message text length varies). Fixing the row height makes the row
@@ -643,7 +665,7 @@
                 Long Message text is clipped at the cell edge — the row-details panel and
                 the "More" dialog still show it in full.
             -->
-            <ctWinUI:DataGrid x:Name="ResultsGrid"
+            <ctWinUI:DataGrid x:Name="ResultsGrid" Grid.Row="1"
                               AutoGenerateColumns="False"
                               CanUserReorderColumns="True"
                               CanUserResizeColumns="True"
@@ -669,7 +691,7 @@
                     <ctWinUI:DataGridTextColumn Header="Time"     Binding="{Binding LogTime, Converter={StaticResource TimeFmt}}" Width="160" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="Provider" Binding="{Binding Provider}" Width="120" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="TaskName" Binding="{Binding TaskName}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
-                    <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800" ElementStyle="{StaticResource GridCellTextTip}"/>
                     <ctWinUI:DataGridTextColumn Header="Source"   Binding="{Binding Source, Converter={StaticResource SourceTrim}}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="Level"    Binding="{Binding Level}"    Width="90"  ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="ProcessId"  Binding="{Binding ProcessId}"  Width="80"  ElementStyle="{StaticResource GridCellText}"/>
@@ -688,7 +710,7 @@
             </ctWinUI:DataGrid>
 
             <!-- Loading overlay -->
-            <Border x:Name="LoadingOverlay" Visibility="Collapsed"
+            <Border x:Name="LoadingOverlay" Grid.Row="1" Visibility="Collapsed"
                     Background="#80000000"
                     AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
@@ -700,7 +722,7 @@
 
             <!-- Empty-state overlay: shown when a finished load has zero rows, so the grid never just
                  sits blank. Adapts: "no rows at all" vs "filters hid everything" (offers Clear filters). -->
-            <Border x:Name="EmptyOverlay" Visibility="Collapsed"
+            <Border x:Name="EmptyOverlay" Grid.Row="1" Visibility="Collapsed"
                     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
                     AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="440">
