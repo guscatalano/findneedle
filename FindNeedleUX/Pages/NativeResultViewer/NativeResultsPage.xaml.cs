@@ -433,11 +433,24 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // exist. (TotalCount is set before TotalFilteredCount during load, so inferring it from
         // TotalCount>0 would wrongly flash the filter message on an unfiltered, still-loading view.)
         bool filtersHidAll = ViewModel.HasActiveFilter() && ViewModel.TotalCount > 0;
+        // Fresh / nothing loaded: no filter is hiding anything AND no source has been loaded — a brand-new
+        // viewer, not a search that ran and found nothing. Give a forward action instead of implying a
+        // search "returned no rows".
+        bool nothingLoaded = !filtersHidAll
+                             && ViewModel.TotalCount == 0
+                             && (MiddleLayerService.Locations?.Count ?? 0) == 0;
         EmptyOverlayClearFilters.Visibility = filtersHidAll ? Visibility.Visible : Visibility.Collapsed;
+        if (EmptyOverlayActions != null)
+            EmptyOverlayActions.Visibility = nothingLoaded ? Visibility.Visible : Visibility.Collapsed;
         if (filtersHidAll)
         {
             EmptyOverlayTitle.Text = "No matching rows";
             EmptyOverlayText.Text = $"All {ViewModel.TotalCount:N0} loaded rows are hidden by the current filters.";
+        }
+        else if (nothingLoaded)
+        {
+            EmptyOverlayTitle.Text = "No log loaded yet";
+            EmptyOverlayText.Text = "Open a log file or add a source to start searching.";
         }
         else
         {
@@ -2490,6 +2503,12 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         LevelFilterCombo.SelectedItem = null;
         ViewModel.LevelFilter = "";
     }
+
+    private void EmptyOverlayOpenLog_Click(object sender, RoutedEventArgs e)
+        => FindNeedleUX.Services.MainWindowActions.OpenLogFile();
+
+    private void EmptyOverlayAddSource_Click(object sender, RoutedEventArgs e)
+        => FindNeedleUX.Services.MainWindowActions.NavigateToSearchLocations();
 
     private void ClearFiltersButton_Click(object sender, RoutedEventArgs e)
     {

@@ -149,7 +149,7 @@
                 <ColumnDefinition Width="Auto"/>  <!-- action buttons, pinned right -->
             </Grid.ColumnDefinitions>
             <TextBox x:Name="SearchBox" Grid.Column="0" Height="32" HorizontalAlignment="Stretch" Margin="0,0,8,0"
-                         PlaceholderText="Search… or query: msg ~ error AND level == Warning"
+                         PlaceholderText="Search all columns…  (advanced query: press ?)"
                          TextChanged="SearchBox_TextChanged"
                          KeyDown="SearchBox_KeyDown"
                          GotFocus="SearchBox_GotFocus"
@@ -704,6 +704,12 @@
                                Text="This search returned no rows."/>
                     <Button x:Name="EmptyOverlayClearFilters" Content="Clear filters" HorizontalAlignment="Center"
                             Margin="0,4,0,0" Visibility="Collapsed" Click="ClearFiltersButton_Click"/>
+                    <!-- Shown only in the fresh "nothing loaded yet" state, so the grid isn't a dead end. -->
+                    <StackPanel x:Name="EmptyOverlayActions" Orientation="Horizontal" Spacing="8"
+                                HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed">
+                        <Button Content="Open log file" Click="EmptyOverlayOpenLog_Click" Style="{ThemeResource AccentButtonStyle}"/>
+                        <Button Content="Add source" Click="EmptyOverlayAddSource_Click"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

@@ -63,6 +63,13 @@ public class MainWindowActions
             mw.NavigateToSearchLocations();
     }
 
+    /// <summary>Open a single log file via the file picker (the "Open log file" empty-state action).</summary>
+    public static void OpenLogFile()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.QuickFileOpen();
+    }
+
     /// <summary>Switch to the result-viewer settings page (used by the "fix WPP symbols" banner action).</summary>
     public static void NavigateToResultsViewerSettings()
     {

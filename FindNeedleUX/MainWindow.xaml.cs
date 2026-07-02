@@ -634,6 +634,10 @@ public sealed partial class MainWindow : Window
                     hasResults = MiddleLayerService.LastRunSummary != null
                         && !MiddleLayerService.LastRunSummary.StartsWith("0 ", StringComparison.Ordinal);
                 }
+                // Nothing has run yet (fresh profile) → suppress the segment entirely rather than show a
+                // meaningless "Last run: —" that opens an empty viewer. Mirrors how filters/outputfiles
+                // return null at zero.
+                if (string.IsNullOrWhiteSpace(lastRun)) return null;
                 var color = hasResults ? Color.FromArgb(255, 46, 160, 67) : (Color?)null;
                 return MakeStatusSegment(Symbol.Clock, "Last run", lastRun, "Open the results viewer", color,
                     () => NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage)));
