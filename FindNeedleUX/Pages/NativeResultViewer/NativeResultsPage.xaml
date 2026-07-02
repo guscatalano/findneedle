@@ -481,7 +481,7 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <!-- Toggle: free-text boxes vs "known value" dropdowns for Provider/TaskName/Source. -->
                             <ToggleButton x:Name="ShowKnownToggle" Height="28" FontSize="12" Padding="8,0"
-                                          Content="Known ▾" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
+                                          Content="Pick from values" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
                                           ToolTipService.ToolTip="Pick from the values actually present (Provider / TaskName / Source) instead of typing."/>
                             <Button Content="Clear fields" Click="ResetColumnFilters_Click" Height="28" FontSize="12"
                                     ToolTipService.ToolTip="Clear only the per-field filters (Provider, TaskName, Message, Source, Level) — leaves the search box and time range."/>

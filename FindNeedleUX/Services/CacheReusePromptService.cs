@@ -60,7 +60,7 @@ public static class CacheReusePromptService
         var body = new StackPanel { Spacing = 8 };
         body.Children.Add(new TextBlock
         {
-            Text = "A previous scan of this file is cached. Reusing it will skip the search and open the viewer immediately.",
+            Text = "You've searched this file before. Opening the previous results skips the search and shows them right away; rescanning re-reads the file so it's fully up to date.",
             TextWrapping = TextWrapping.Wrap,
         });
 
@@ -75,10 +75,10 @@ public static class CacheReusePromptService
 
         return new ContentDialog
         {
-            Title = "Use cached results?",
+            Title = "Open previous results?",
             Content = body,
-            PrimaryButtonText = "Use cache",
-            SecondaryButtonText = "Rescan",
+            PrimaryButtonText = "Open previous (fast)",
+            SecondaryButtonText = "Rescan now (up to date)",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = xamlRoot,
         };

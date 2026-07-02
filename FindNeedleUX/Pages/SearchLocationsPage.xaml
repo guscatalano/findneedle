@@ -35,7 +35,7 @@
         <StackPanel Spacing="24">
             <StackPanel Spacing="8">
                 <TextBlock Text="Sources" FontSize="24" FontWeight="Bold"/>
-                <TextBlock Text="The folders, files, and logs this search will read" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Text="The sources in your workspace — the folders, files, and logs this search looks through" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">

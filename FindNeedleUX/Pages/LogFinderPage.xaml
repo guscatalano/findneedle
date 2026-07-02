@@ -18,7 +18,7 @@
         <StackPanel Grid.Row="0" Spacing="2">
             <TextBlock Text="Log Finder" FontSize="26" FontWeight="SemiBold"/>
             <TextBlock FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
-                       Text="A catalog of apps/components and where their logs live. Click Open to load them and view results. Built-ins cover common Windows locations; add your own below."/>
+                       Text="A catalog of known Windows log locations — a library, separate from your workspace's Sources. Open one to search it (built-ins cover common Windows locations; add your own below)."/>
         </StackPanel>
 
         <Grid Grid.Row="1" ColumnSpacing="8">

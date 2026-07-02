@@ -70,16 +70,19 @@
                           ToolTipService.ToolTip="In-app MCP server — lets an AI agent read &amp; drive the result viewer">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Ellipse x:Name="McpStatusDot" Width="9" Height="9" Fill="Gray"/>
-                    <TextBlock Text="MCP" FontSize="13"/>
+                    <TextBlock Text="AI agent (MCP)" FontSize="13"/>
                 </StackPanel>
             </ToggleButton>
             <Button x:Name="McpHelpButton" Click="McpHelpButton_Click" Padding="6,2" MinHeight="28"
                     ToolTipService.ToolTip="MCP server configuration &amp; how to connect">
                 <FontIcon Glyph="&#xE946;" FontSize="14"/>
             </Button>
-            <Button x:Name="SettingsButton" Click="SettingsButton_Click" Padding="6,2" MinHeight="28"
+            <Button x:Name="SettingsButton" Click="SettingsButton_Click" Padding="8,2" MinHeight="28"
                     ToolTipService.ToolTip="Settings" AutomationProperties.Name="Settings">
-                <FontIcon Glyph="&#xE713;" FontSize="14"/>
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE713;" FontSize="14"/>
+                    <TextBlock Text="Settings" FontSize="13"/>
+                </StackPanel>
             </Button>
         </StackPanel>
 
