@@ -17,7 +17,7 @@
         </Grid.RowDefinitions>
 
         <MenuBar Grid.Row="0">
-            <MenuBarItem x:Name="QuickMenu" Title="Quick">
+            <MenuBarItem x:Name="QuickMenu" Title="Start">
                 <!-- Items are built in code (BuildQuickMenu): Welcome + the welcome-page quick actions. -->
             </MenuBarItem>
             <MenuBarItem Title="Workspace">
@@ -40,9 +40,12 @@
                 <MenuFlyoutItem x:Name="RemapCsvMenuItem" Text="Remap CSV columns…" Click="RemapCsvMenuItem_Click" Visibility="Collapsed"/>
             </MenuBarItem>
 
-            <MenuBarItem Title="Inspect">
+            <MenuBarItem Title="Tools">
                 <MenuFlyoutItem Text="Inspect ETL" Click="MenuFlyoutItem_Click" Name="inspect_etl"/>
                 <MenuFlyoutItem Text="Inspect Binary" Click="MenuFlyoutItem_Click" Name="inspect_binary"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
+                <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
             </MenuBarItem>
 
             <!-- One home for troubleshooting views (was scattered across Settings + Run &amp; Results). -->
@@ -54,13 +57,14 @@
 
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="Preferences..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
-                <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
-                <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
-                <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="About" Click="MenuFlyoutItem_Click" Name="about"/>
                 <MenuFlyoutSeparator x:Name="PreviewDevSeparator"/>
                 <MenuFlyoutItem Text="Preview first-run (new user)…" Click="MenuFlyoutItem_Click" Name="preview_new_user"
                                 ToolTipService.ToolTip="Launch a second instance with an empty, throwaway profile — see the app as a brand-new user would. Your real settings/caches are untouched."/>
+            </MenuBarItem>
+
+            <MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="Documentation" Click="MenuFlyoutItem_Click" Name="documentation"/>
+                <MenuFlyoutItem Text="About" Click="MenuFlyoutItem_Click" Name="about"/>
             </MenuBarItem>
         </MenuBar>
 

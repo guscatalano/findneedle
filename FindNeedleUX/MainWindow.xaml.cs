@@ -994,6 +994,11 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: AboutPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.AboutPage));
                 break;
+            case "documentation":
+                Logger.Instance.Log("Opened documentation");
+                try { await global::Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/guscatalano/findneedle")); }
+                catch (Exception ex) { Logger.Instance.Log($"Open docs failed: {ex.Message}"); }
+                break;
             case "settings_resultviewer":
                 Logger.Instance.Log("Navigated: ResultsViewerSettingsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage));
