@@ -1116,6 +1116,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             _suppressKnownCombo = false;
             ApplyKnownFilterVisibility(ResultsViewerSettings.ShowKnownValues);
         }
+        if (TimeStripToggle != null) TimeStripToggle.IsChecked = ResultsViewerSettings.ShowTimeStrip;
         ApplyToolbarVisibility();
     }
 
@@ -2528,7 +2529,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     // ----- Time-density strip (event volume over the filtered time range; click a bar to zoom) -----
     private Microsoft.UI.Dispatching.DispatcherQueueTimer _stripTimer;
-    private List<(DateTime lo, DateTime hi, long count)> _stripBuckets;
+    private sealed class StripBucket { public DateTime Lo; public DateTime Hi; public long Total; public Dictionary<string, int> Levels; }
+    private List<StripBucket> _stripBuckets;
 
     /// <summary>Debounced recompute — called from UpdateEmptyState on every load/filter change.</summary>
     private void ScheduleTimeStrip()
@@ -2548,32 +2550,45 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private async System.Threading.Tasks.Task RefreshTimeStripAsync()
     {
         if (TimeStripHost == null) return;
+        if (!ResultsViewerSettings.ShowTimeStrip) { TimeStripHost.Visibility = Visibility.Collapsed; return; }
         if (ViewModel.IsLoading || ViewModel.IsStreaming) return; // recompute once the load settles
-        List<(DateTime lo, DateTime hi, long count)> buckets = null;
+        List<StripBucket> buckets = null;
         try { buckets = await System.Threading.Tasks.Task.Run(() => ComputeTimeBuckets(48)); }
         catch { /* best-effort UX nicety */ }
         _stripBuckets = buckets;
         if (buckets == null || buckets.Count < 2) { TimeStripHost.Visibility = Visibility.Collapsed; return; }
         TimeStripHost.Visibility = Visibility.Visible;
+        // "Full range" (zoom-out) is only meaningful when a time window is currently applied.
+        if (TimeStripResetButton != null)
+            TimeStripResetButton.Visibility = (ViewModel.FromDate != null || ViewModel.ToDate != null)
+                ? Visibility.Visible : Visibility.Collapsed;
         DrawTimeStrip();
     }
 
-    private List<(DateTime lo, DateTime hi, long count)> ComputeTimeBuckets(int buckets)
+    private List<StripBucket> ComputeTimeBuckets(int buckets)
     {
         var (min, max) = ViewModel.GetFilteredTimeRange();
         if (min == null || max == null) return null;
         var start = min.Value; var span = max.Value - start;
         if (span <= TimeSpan.Zero) return null;
         var width = TimeSpan.FromTicks(Math.Max(1, span.Ticks / buckets));
-        var list = new List<(DateTime, DateTime, long)>(buckets);
+        var list = new List<StripBucket>(buckets);
         for (int i = 0; i < buckets; i++)
         {
             var lo = start + TimeSpan.FromTicks(width.Ticks * i);
             var hi = i == buckets - 1 ? max.Value : lo + width;
-            list.Add((lo, hi, ViewModel.CountInTimeRange(lo, hi)));
+            var levels = ViewModel.GetLevelCountsInTimeRange(lo, hi);
+            long total = 0; foreach (var v in levels.Values) total += v;
+            list.Add(new StripBucket { Lo = lo, Hi = hi, Total = total, Levels = levels });
         }
         return list;
     }
+
+    // Stacked severity order (bottom → top): Critical, Error, Warning, Info, Verbose, Debug, then anything else.
+    private static readonly Dictionary<string, int> _levelRank = new(StringComparer.OrdinalIgnoreCase)
+    { {"Critical",0},{"Error",1},{"Warning",2},{"Info",3},{"Information",3},{"Verbose",4},{"Debug",5} };
+    private static IEnumerable<string> OrderedLevels(Dictionary<string, int> levels)
+        => levels.Keys.OrderBy(k => _levelRank.TryGetValue(k, out var r) ? r : 99).ThenBy(k => k, StringComparer.OrdinalIgnoreCase);
 
     private void DrawTimeStrip()
     {
@@ -2581,21 +2596,66 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         TimeStripCanvas.Children.Clear();
         double w = TimeStripCanvas.ActualWidth, h = TimeStripCanvas.ActualHeight;
         if (w < 10 || h < 6) return;
-        long maxC = 1; foreach (var b in _stripBuckets) if (b.count > maxC) maxC = b.count;
+        long maxC = 1; foreach (var b in _stripBuckets) if (b.Total > maxC) maxC = b.Total;
         int n = _stripBuckets.Count;
         double bw = w / n;
-        var brush = new Microsoft.UI.Xaml.Media.SolidColorBrush(global::Windows.UI.Color.FromArgb(255, 0, 103, 192));
+        // Colour each level's segment with the SAME colour as the Level chips (the theme's level colours).
+        var colorMap = new Dictionary<string, global::Windows.UI.Color>(StringComparer.OrdinalIgnoreCase);
+        foreach (var lv in ViewModel.Levels) colorMap[lv.Level] = ParseHexColor(lv.HexColor);
+        var fallback = global::Windows.UI.Color.FromArgb(255, 120, 120, 130);
         for (int i = 0; i < n; i++)
         {
             var b = _stripBuckets[i];
-            double bh = b.count <= 0 ? 0 : Math.Max(2.0, (h - 4) * ((double)b.count / maxC));
-            var r = new Microsoft.UI.Xaml.Shapes.Rectangle { Width = Math.Max(1.0, bw - 1), Height = bh, Fill = brush, Tag = i };
-            Microsoft.UI.Xaml.Controls.Canvas.SetLeft(r, i * bw);
-            Microsoft.UI.Xaml.Controls.Canvas.SetTop(r, h - bh);
-            ToolTipService.SetToolTip(r, $"{b.lo:HH:mm:ss} – {b.hi:HH:mm:ss}\n{b.count:N0} events");
-            r.PointerPressed += TimeStripBar_PointerPressed;
-            TimeStripCanvas.Children.Add(r);
+            if (b.Total <= 0) continue;
+            double barH = Math.Max(2.0, (h - 4) * ((double)b.Total / maxC));
+            double x = i * bw;
+            double drawn = 0;
+            foreach (var level in OrderedLevels(b.Levels))
+            {
+                int c = b.Levels[level];
+                if (c <= 0) continue;
+                double segH = barH * ((double)c / b.Total);
+                var col = colorMap.TryGetValue(level, out var cc) && cc.A > 0 ? cc : fallback;
+                var seg = new Microsoft.UI.Xaml.Shapes.Rectangle
+                {
+                    Width = Math.Max(1.0, bw - 1),
+                    Height = segH,
+                    Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(col),
+                    Tag = i,
+                };
+                Microsoft.UI.Xaml.Controls.Canvas.SetLeft(seg, x);
+                Microsoft.UI.Xaml.Controls.Canvas.SetTop(seg, h - drawn - segH);
+                ToolTipService.SetToolTip(seg, StripTooltip(b));
+                seg.PointerPressed += TimeStripBar_PointerPressed;
+                TimeStripCanvas.Children.Add(seg);
+                drawn += segH;
+            }
         }
+    }
+
+    private static string StripTooltip(StripBucket b)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"{b.Lo:HH:mm:ss} – {b.Hi:HH:mm:ss}\n{b.Total:N0} events");
+        foreach (var lvl in OrderedLevels(b.Levels))
+            if (b.Levels[lvl] > 0) sb.Append($"\n  {lvl}: {b.Levels[lvl]:N0}");
+        return sb.ToString();
+    }
+
+    private static global::Windows.UI.Color ParseHexColor(string hex)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(hex) || hex.Equals("Transparent", StringComparison.OrdinalIgnoreCase))
+                return global::Windows.UI.Color.FromArgb(255, 120, 120, 130);
+            var s = hex.Trim().TrimStart('#');
+            byte a = 255, r, g, b;
+            if (s.Length == 8) { a = Convert.ToByte(s.Substring(0, 2), 16); r = Convert.ToByte(s.Substring(2, 2), 16); g = Convert.ToByte(s.Substring(4, 2), 16); b = Convert.ToByte(s.Substring(6, 2), 16); }
+            else if (s.Length == 6) { r = Convert.ToByte(s.Substring(0, 2), 16); g = Convert.ToByte(s.Substring(2, 2), 16); b = Convert.ToByte(s.Substring(4, 2), 16); }
+            else return global::Windows.UI.Color.FromArgb(255, 120, 120, 130);
+            return global::Windows.UI.Color.FromArgb(a, r, g, b);
+        }
+        catch { return global::Windows.UI.Color.FromArgb(255, 120, 120, 130); }
     }
 
     private void TimeStripCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawTimeStrip();
@@ -2606,8 +2666,32 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             && _stripBuckets != null && i >= 0 && i < _stripBuckets.Count)
         {
             var b = _stripBuckets[i];
-            ApplyTimeWindowFromStrip(b.lo, b.hi);
+            ApplyTimeWindowFromStrip(b.Lo, b.Hi);
         }
+    }
+
+    // Zoom out: clear the time window (back to the whole log).
+    private void TimeStripReset_Click(object sender, RoutedEventArgs e)
+    {
+        if (TimePresetAll != null) SelectOnlyPreset(TimePresetAll);
+        ClearCustomTimePickersSilently();
+        ViewModel.FromDate = null;
+        ViewModel.ToDate = null;
+    }
+
+    private void TimeStripHide_Click(object sender, RoutedEventArgs e)
+    {
+        ResultsViewerSettings.ShowTimeStrip = false;
+        if (TimeStripHost != null) TimeStripHost.Visibility = Visibility.Collapsed;
+        if (TimeStripToggle != null) TimeStripToggle.IsChecked = false;
+    }
+
+    private void TimeStripToggle_Click(object sender, RoutedEventArgs e)
+    {
+        bool on = TimeStripToggle?.IsChecked ?? true;
+        ResultsViewerSettings.ShowTimeStrip = on;
+        if (on) ScheduleTimeStrip();
+        else if (TimeStripHost != null) TimeStripHost.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>Click-to-zoom: set the From/To window to a bucket and reflect it in the time UI.</summary>

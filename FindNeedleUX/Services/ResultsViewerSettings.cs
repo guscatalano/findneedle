@@ -265,6 +265,14 @@ public static class ResultsViewerSettings
         set { Data.ShowStatusBar = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>Whether the results viewer shows the time-density strip above the grid.</summary>
+    public const bool DefaultShowTimeStrip = true;
+    public static bool ShowTimeStrip
+    {
+        get => Data.ShowTimeStrip ?? DefaultShowTimeStrip;
+        set { Data.ShowTimeStrip = value; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>
     /// Whether the in-app MCP server is enabled. When on, the app hosts a localhost-only HTTP MCP
     /// endpoint that lets an agent read and drive the live result viewer. Off by default (it exposes
@@ -806,6 +814,7 @@ public static class ResultsViewerSettings
         public bool? ScrollToTopOnPageChange { get; set; }
         public bool? ShowWelcomeIntro { get; set; }
         public bool? ShowStatusBar { get; set; }
+        public bool? ShowTimeStrip { get; set; }
         public bool? McpServerEnabled { get; set; }
         public int? McpServerPort { get; set; }
         public bool? FileOpenWithEnabled { get; set; }

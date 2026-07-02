@@ -302,6 +302,8 @@
                                 <RadioMenuFlyoutItem x:Name="DockTopItem"  Text="Filters on top"  GroupName="filterDock" Click="FilterDockTop_Click"/>
                                 <RadioMenuFlyoutItem x:Name="DockLeftItem" Text="Filters on left" GroupName="filterDock" Click="FilterDockLeft_Click"/>
                             </MenuFlyoutSubItem>
+                            <MenuFlyoutSeparator/>
+                            <ToggleMenuFlyoutItem x:Name="TimeStripToggle" Text="Time strip (activity over time)" Click="TimeStripToggle_Click"/>
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
@@ -645,9 +647,18 @@
                             Background="{ThemeResource LayerFillColorDefaultBrush}">
                         <Grid>
                             <Canvas x:Name="TimeStripCanvas" SizeChanged="TimeStripCanvas_SizeChanged"/>
-                            <TextBlock FontSize="10" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0"
-                                       Text="events over time - click a bar to zoom" IsHitTestVisible="False"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right"
+                                        VerticalAlignment="Top" Margin="0,1,4,0">
+                                <TextBlock Text="events over time" FontSize="10" VerticalAlignment="Center"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                <Button x:Name="TimeStripResetButton" Content="Full range" FontSize="10"
+                                        Padding="6,0" MinHeight="0" Height="18" Visibility="Collapsed"
+                                        Click="TimeStripReset_Click"
+                                        ToolTipService.ToolTip="Clear the time window (zoom back out to the whole log)"/>
+                                <Button Content="✕" FontSize="10" Padding="6,0" MinHeight="0" Height="18"
+                                        Click="TimeStripHide_Click" AutomationProperties.Name="Hide time strip"
+                                        ToolTipService.ToolTip="Hide the time strip (bring it back from View ▾)"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
             <!-- RowHeight + explicit column widths matter a lot for scroll perf:

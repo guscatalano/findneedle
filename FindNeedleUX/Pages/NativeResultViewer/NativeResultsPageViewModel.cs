@@ -1373,6 +1373,15 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public Dictionary<string, int> GetFilteredLevelCounts()
         => _source == null ? new Dictionary<string, int>() : new Dictionary<string, int>(_source.GetLevelCounts(BuildFilterSpec()));
 
+    /// <summary>Per-level counts within a time window (current filters, but with the time bound overridden
+    /// to [from,to]) — feeds the time-density strip's colored stacked bars.</summary>
+    public Dictionary<string, int> GetLevelCountsInTimeRange(DateTime from, DateTime to)
+    {
+        if (_source == null) return new Dictionary<string, int>();
+        var spec = BuildFilterSpec() with { FromTime = from, ToTime = to };
+        return new Dictionary<string, int>(_source.GetLevelCounts(spec));
+    }
+
     /// <summary>Exact distinct Source values (file/origin) with row counts — cheap (GROUP BY / tally),
     /// bounded by the number of loaded sources, not the row count. Used by the Sources dialog's
     /// by-type toggles instead of the O(rows) facet scan.</summary>
