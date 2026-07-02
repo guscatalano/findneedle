@@ -162,6 +162,16 @@ public sealed class SqlitePagedSource : IPagedLogSource
             levelInt = Enum.TryParse<Level>(f.Level, ignoreCase: true, out var parsed) ? (int)parsed : -1;
         }
 
+        // Multi-select level set → the underlying enum ints. An unparseable name maps to -1 (matches no
+        // enum member), which is harmless inside an IN-set. Null when unused.
+        List<int> levelSet = null;
+        if (f.LevelSet != null && f.LevelSet.Count > 0)
+        {
+            levelSet = new List<int>(f.LevelSet.Count);
+            foreach (var name in f.LevelSet)
+                levelSet.Add(Enum.TryParse<Level>(name, ignoreCase: true, out var p) ? (int)p : -1);
+        }
+
         return new SqliteStorage.FilterInput
         {
             Search = f.Search,
@@ -174,6 +184,7 @@ public sealed class SqlitePagedSource : IPagedLogSource
             SourceSet = f.SourceSet,
             Query = f.Query,
             LevelInt = levelInt,
+            LevelSet = levelSet,
             // The viewer's time-range filter compares against LogTime stored as ISO 8601 round-trip
             // ("o") strings. ISO strings sort lexically same as chronologically, so >= / <= work.
             LogTimeFrom = f.FromTime?.ToString("o"),

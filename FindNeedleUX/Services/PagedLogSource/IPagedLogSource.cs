@@ -27,6 +27,10 @@ public sealed record FilterSpec(
     public IReadOnlyList<string> TaskNameSet { get; init; }
     public IReadOnlyList<string> SourceSet { get; init; }
 
+    /// <summary>Multi-select OR-set for Level (e.g. Error + Warning). When non-empty, the row's level must
+    /// be one of these (case-insensitive); takes precedence over the single <see cref="Level"/> field.</summary>
+    public IReadOnlyList<string> LevelSet { get; init; }
+
     /// <summary>Parsed structured query (from the search box's query language), applied as an extra AND
     /// across both backends. Null when the search is a plain substring (the <see cref="Search"/> path).</summary>
     public FindPluginCore.Searching.Query.QueryNode Query { get; init; }
@@ -44,6 +48,7 @@ public sealed record FilterSpec(
         string.IsNullOrEmpty(Level) &&
         FromTime is null && ToTime is null &&
         !HasItems(ProviderSet) && !HasItems(TaskNameSet) && !HasItems(SourceSet) &&
+        !HasItems(LevelSet) &&
         Query is null;
 }
 

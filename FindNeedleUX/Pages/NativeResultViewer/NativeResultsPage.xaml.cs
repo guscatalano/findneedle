@@ -417,6 +417,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (!string.IsNullOrEmpty(ViewModel.MessageFilter)) n++;
         if (!string.IsNullOrEmpty(ViewModel.SourceFilter)) n++;
         if (!string.IsNullOrEmpty(ViewModel.LevelFilter)) n++;
+        if (ViewModel.LevelFilterSet?.Count > 0) n++;
         if (ViewModel.FromDate != null) n++;
         if (ViewModel.ToDate != null) n++;
         if (ViewModel.ProviderFilterSet?.Count > 0) n++;
@@ -2186,17 +2187,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void LevelChip_Click(object sender, RoutedEventArgs e)
     {
         var level = (sender as ToggleButton)?.Tag as string ?? "";
-        bool clearing = string.Equals(ViewModel.LevelFilter, level, StringComparison.OrdinalIgnoreCase);
-        ViewModel.LevelFilter = clearing ? "" : level; // triggers OnViewModelPropertyChanged → SyncLevelChips
+        if (string.IsNullOrEmpty(level)) return;
+        // Multi-select: toggle this level in/out of the level OR-set (e.g. Error + Warning together).
+        var next = new System.Collections.Generic.List<string>(
+            ViewModel.LevelFilterSet ?? System.Array.Empty<string>());
+        if (next.RemoveAll(x => string.Equals(x, level, StringComparison.OrdinalIgnoreCase)) == 0)
+            next.Add(level); // wasn't selected → add it
+        ViewModel.SetKnownFilterSet("Level", next);
         SyncLevelChips();
+        UpdateFiltersBadge();
     }
 
     private void SyncLevelChips()
     {
-        var current = ViewModel.LevelFilter;
+        var set = ViewModel.LevelFilterSet;
         foreach (var lv in ViewModel.Levels)
-            lv.IsSelected = !string.IsNullOrEmpty(current)
-                            && string.Equals(lv.Level, current, StringComparison.OrdinalIgnoreCase);
+            lv.IsSelected = set != null
+                && set.Any(x => string.Equals(x, lv.Level, StringComparison.OrdinalIgnoreCase));
     }
 
     // ---- "Show known" value dropdowns (Provider / TaskName / Source) ----
@@ -2555,6 +2562,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
         LevelFilterCombo.SelectedItem = null;
         ViewModel.LevelFilter = "";
+        ViewModel.SetKnownFilterSet("Level", null);
+        SyncLevelChips();
     }
 
     private void EmptyOverlayOpenLog_Click(object sender, RoutedEventArgs e)
@@ -2570,6 +2579,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         LevelFilterCombo.SelectedItem = null;
         ResetTimeFilterUiToAll();
         ViewModel.ClearFilters();
+        SyncLevelChips();
     }
 
     private void ExportCsv_Click(object sender, RoutedEventArgs e)

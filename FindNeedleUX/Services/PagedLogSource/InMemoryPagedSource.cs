@@ -160,6 +160,7 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         var providerSet = ToLookup(f.ProviderSet);
         var taskNameSet = ToLookup(f.TaskNameSet);
         var sourceSet = ToLookup(f.SourceSet);
+        var levelSet = ToLookup(f.LevelSet);
         bool indexCouldMatchSearch = search != null && search.Length > 0 && IsAllAsciiDigit(search);
 
         var matches = new List<LogLine>(Math.Min(_all.Count, 4096));
@@ -169,7 +170,9 @@ public sealed class InMemoryPagedSource : IPagedLogSource
 
             if (from.HasValue && line.LogTime < from.Value) continue;
             if (to.HasValue && line.LogTime > to.Value) continue;
-            if (level != null && !string.Equals(line.Level, level, StringComparison.OrdinalIgnoreCase)) continue;
+            // A level set (multi-select) takes precedence over the single level field.
+            if (levelSet != null) { if (!levelSet.Contains(line.Level ?? "")) continue; }
+            else if (level != null && !string.Equals(line.Level, level, StringComparison.OrdinalIgnoreCase)) continue;
             // A set (multi-select) takes precedence over the substring field for that column.
             if (providerSet != null) { if (!providerSet.Contains(line.Provider ?? "")) continue; }
             else if (provider != null && !ContainsIgnoreCase(line.Provider, provider)) continue;

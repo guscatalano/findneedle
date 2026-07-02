@@ -1537,6 +1537,7 @@ namespace FindPluginCore.Implementations.Storage
             public IReadOnlyList<string> SourceSet;
             public FindPluginCore.Searching.Query.QueryNode Query; // structured search-box query (optional)
             public int? LevelInt;     // (int)Level enum, mapped by caller
+            public IReadOnlyList<int> LevelSet; // multi-select OR-set of (int)Level; precedence over LevelInt
             public string LogTimeFrom; // ISO 8601 round-trip string ("o")
             public string LogTimeTo;
         }
@@ -1867,7 +1868,19 @@ namespace FindPluginCore.Implementations.Storage
                 AddInSet("TaskName",      f.TaskNameSet);
                 AddInSet("ResultSource",  f.SourceSet);
 
-                if (f.LevelInt.HasValue)
+                // A level OR-set (multi-select) takes precedence over the single level.
+                if (f.LevelSet != null && f.LevelSet.Count > 0)
+                {
+                    var names = new List<string>(f.LevelSet.Count);
+                    foreach (var v in f.LevelSet)
+                    {
+                        var name = "@p" + (idx++);
+                        names.Add(name);
+                        ps.Add(new KeyValuePair<string, object>(name, v));
+                    }
+                    conditions.Add($"Level IN ({string.Join(", ", names)})");
+                }
+                else if (f.LevelInt.HasValue)
                 {
                     var name = "@p" + (idx++);
                     conditions.Add($"Level = {name}");

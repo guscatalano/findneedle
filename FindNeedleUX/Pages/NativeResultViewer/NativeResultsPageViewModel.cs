@@ -257,9 +257,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private IReadOnlyList<string> _providerFilterSet;
     private IReadOnlyList<string> _taskNameFilterSet;
     private IReadOnlyList<string> _sourceFilterSet;
+    private IReadOnlyList<string> _levelFilterSet;
     public IReadOnlyList<string> ProviderFilterSet => _providerFilterSet;
     public IReadOnlyList<string> TaskNameFilterSet => _taskNameFilterSet;
     public IReadOnlyList<string> SourceFilterSet => _sourceFilterSet;
+    public IReadOnlyList<string> LevelFilterSet => _levelFilterSet;
 
     /// <summary>Set the multi-select OR-set for one of Provider / TaskName / Source and re-filter.
     /// An empty/null list clears it (the column falls back to its substring filter).</summary>
@@ -271,6 +273,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             case "Provider": _providerFilterSet = v; break;
             case "TaskName": _taskNameFilterSet = v; break;
             case "Source":   _sourceFilterSet = v; break;
+            case "Level":    _levelFilterSet = v; break;
             default: return;
         }
         _currentPage = 1;
@@ -755,7 +758,8 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         !string.IsNullOrEmpty(_taskNameFilter) || !string.IsNullOrEmpty(_messageFilter) ||
         !string.IsNullOrEmpty(_sourceFilter) || !string.IsNullOrEmpty(_levelFilter) ||
         _fromDate.HasValue || _toDate.HasValue ||
-        _providerFilterSet != null || _taskNameFilterSet != null || _sourceFilterSet != null;
+        _providerFilterSet != null || _taskNameFilterSet != null || _sourceFilterSet != null ||
+        _levelFilterSet != null;
 
     // Shown while streaming with a filter active: the live re-filter is paused (so the app isn't
     // constantly re-searching the growing table); the user clicks Refresh to fold in new matches.
@@ -1041,7 +1045,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         _levelFilter = "";
         _fromDate = null;
         _toDate = null;
-        _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = null;
+        _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = _levelFilterSet = null;
         MiddleLayerService.OutputTimeFrom = MiddleLayerService.OutputTimeTo = null;
         _currentPage = 1;
         HasPendingRows = false;
@@ -1192,6 +1196,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ProviderSet = _providerFilterSet,
         TaskNameSet = _taskNameFilterSet,
         SourceSet = _sourceFilterSet,
+        LevelSet = _levelFilterSet,
         Query = _parsedQuery,
     };
 
@@ -1202,7 +1207,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         FromDate = null;
         ToDate = null;
         // Clear multi-select sets without an extra reload each (the property sets above already reload).
-        _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = null;
+        _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = _levelFilterSet = null;
     }
 
     // ----- Headless drive hooks (used by the MCP viewer bridge) -----

@@ -80,6 +80,19 @@ public class FilterSpecTests
         Assert.AreEqual(0, Count(Sample(), F with { Level = "Err" }), "level is exact, not substring");
     }
 
+    // ---- multi-select level OR-set (Error + Warning together) ----
+    [TestMethod]
+    public void LevelSet_IsOrSet_CaseInsensitive_AndTakesPrecedence()
+    {
+        // 2 Error + 1 Warning = 3.
+        Assert.AreEqual(3, Count(Sample(), F with { LevelSet = new[] { "Error", "Warning" } }));
+        Assert.AreEqual(2, Count(Sample(), F with { LevelSet = new[] { "error" } }), "case-insensitive");
+        Assert.AreEqual(4, Count(Sample(), F with { LevelSet = new[] { "Error", "Info" } }), "2 Error + 2 Info");
+        // The set takes precedence over the single Level field.
+        Assert.AreEqual(2, Count(Sample(), F with { Level = "Info", LevelSet = new[] { "Error" } }),
+            "LevelSet wins over Level → the 2 Error rows, not Info");
+    }
+
     // ---- time range (inclusive both ends) ----
     [TestMethod]
     public void TimeRange_InclusiveBounds()
