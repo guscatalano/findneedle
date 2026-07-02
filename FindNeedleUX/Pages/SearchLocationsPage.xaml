@@ -56,11 +56,11 @@
 
                             <TextBlock Text="Online sources" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="☁ Add Kusto" Click="Button_AddKusto" Width="120"
+                                <Button x:Name="KustoButton" Content="☁ Add Kusto" Click="Button_AddKusto" MinWidth="120"
                                         AutomationProperties.Name="Add Kusto cluster location"/>
-                                <Button Content="☁ Add ADO" Click="Button_AddAdo" Width="120"
+                                <Button x:Name="AdoButton" Content="☁ Add Azure DevOps" Click="Button_AddAdo" MinWidth="120"
                                         AutomationProperties.Name="Add Azure DevOps location"/>
-                                <Button Content="☁ Add GitHub" Click="Button_AddGithub" Width="120"
+                                <Button x:Name="GithubButton" Content="☁ Add GitHub" Click="Button_AddGithub" MinWidth="120"
                                         AutomationProperties.Name="Add GitHub issues location"/>
                             </StackPanel>
 

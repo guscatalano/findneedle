@@ -25,12 +25,13 @@ public sealed partial class SystemInfoPage : Page
             HealthList.Children.Add(Row(item));
     }
 
-    private static FrameworkElement Row(SystemInfoMiddleware.HealthItem item)
+    private FrameworkElement Row(SystemInfoMiddleware.HealthItem item)
     {
         var grid = new Grid { Padding = new Thickness(8, 6, 8, 6), ColumnSpacing = 10 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // fix action
 
         // glyph: ✓ ok, ✗ missing, • informational
         var (glyph, brushKey) = item.Ok switch
@@ -66,7 +67,37 @@ public sealed partial class SystemInfoPage : Page
         Grid.SetColumn(detail, 2);
         grid.Children.Add(detail);
 
+        // Remediation: for a failing check with an in-app fix, offer a button that jumps to the page
+        // that fixes it — so the user can act from where the problem is reported.
+        var remedy = Remedy(item);
+        if (remedy != null)
+        {
+            var fix = new Button
+            {
+                Content = remedy.Value.label,
+                VerticalAlignment = VerticalAlignment.Center,
+                Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+            };
+            var page = remedy.Value.page;
+            fix.Click += (_, _) => this.Frame?.Navigate(page);
+            Grid.SetColumn(fix, 3);
+            grid.Children.Add(fix);
+        }
+
         return grid;
+    }
+
+    /// <summary>The in-app fix for a failing check, or null if there isn't one (e.g. cdb — the detail
+    /// text explains the external install).</summary>
+    private static (string label, System.Type page)? Remedy(SystemInfoMiddleware.HealthItem item)
+    {
+        if (item.Ok != false) return null;
+        var n = item.Name.ToLowerInvariant();
+        if (n.Contains("uml") || n.Contains("diagram"))
+            return ("Install…", typeof(DiagramToolsPage));
+        if (n.Contains("tracefmt") || n.Contains("wdk") || n.Contains("symbol"))
+            return ("Decoding settings…", typeof(ResultsViewerSettingsPage));
+        return null;
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => Render();

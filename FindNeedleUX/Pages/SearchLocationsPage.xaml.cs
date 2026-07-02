@@ -31,8 +31,20 @@ public sealed partial class SearchLocationsPage : Page
         VariedImageSizeRepeater.ItemsSource = _viewModel.Locations;
         if (_viewModel.Locations is System.Collections.Specialized.INotifyCollectionChanged incc)
             incc.CollectionChanged += (_, _) => UpdateSourcesEmptyState();
-        Loaded += (_, _) => { OpenPendingOnlineDialog(); RenderRecent(); UpdateSourcesEmptyState(); };
+        Loaded += (_, _) => { OpenPendingOnlineDialog(); RenderRecent(); UpdateSourcesEmptyState(); RefreshOnlineButtons(); };
     }
+
+    /// <summary>Online-source buttons read "Set up X…" until a connection of that kind exists (so they don't
+    /// promise to add a source they can't), then "Add X". Clicking a "Set up" one goes straight to Connections.</summary>
+    private void RefreshOnlineButtons()
+    {
+        if (KustoButton == null) return;
+        KustoButton.Content  = ConnectionStore.GetAll("kusto").Count  == 0 ? "☁ Set up Kusto…"        : "☁ Add Kusto";
+        AdoButton.Content    = ConnectionStore.GetAll("ado").Count    == 0 ? "☁ Set up Azure DevOps…" : "☁ Add Azure DevOps";
+        GithubButton.Content = ConnectionStore.GetAll("github").Count == 0 ? "☁ Set up GitHub…"       : "☁ Add GitHub";
+    }
+
+    private void GoSetUpConnection(string kind) => this.Frame?.Navigate(typeof(ConnectionsPage), kind);
 
     private void UpdateSourcesEmptyState()
         => EmptySourcesText.Visibility = (_viewModel.Locations?.Count ?? 0) == 0
@@ -229,12 +241,14 @@ public sealed partial class SearchLocationsPage : Page
 
     private async void Button_AddKusto(object sender, RoutedEventArgs e)
     {
+        if (ConnectionStore.GetAll("kusto").Count == 0) { GoSetUpConnection("kusto"); return; }
         var loc = await ShowKustoDialogAsync(null);
         if (loc != null) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
     }
 
     private async void Button_AddAdo(object sender, RoutedEventArgs e)
     {
+        if (ConnectionStore.GetAll("ado").Count == 0) { GoSetUpConnection("ado"); return; }
         var loc = await ShowAdoDialogAsync(null);
         if (loc == null) return;
         // Do the interactive Azure AD sign-in now (while adding) rather than surprising the user with a
@@ -297,6 +311,7 @@ public sealed partial class SearchLocationsPage : Page
 
     private async void Button_AddGithub(object sender, RoutedEventArgs e)
     {
+        if (ConnectionStore.GetAll("github").Count == 0) { GoSetUpConnection("github"); return; }
         var loc = await ShowGithubDialogAsync(null);
         if (loc == null) return;
         if (await AddIfReachableAsync("GitHub", () => loc.TestConnection())) { MiddleLayerService.AddLocation(loc); _viewModel.Refresh(); }
