@@ -34,8 +34,8 @@
     <ScrollViewer Padding="24">
         <StackPanel Spacing="24">
             <StackPanel Spacing="8">
-                <TextBlock Text="📁 Search Locations" FontSize="24" FontWeight="Bold"/>
-                <TextBlock Text="Configure data sources for your search pipeline" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Text="Sources" FontSize="24" FontWeight="Bold"/>
+                <TextBlock Text="The folders, files, and logs this search will read" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
@@ -83,7 +83,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Recently used file/folder locations" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="0" Text="Recently used files &amp; folders" VerticalAlignment="Center"
                                            FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <TextBlock Grid.Column="1" Text="Keep" VerticalAlignment="Center" FontSize="12"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -101,7 +101,7 @@
             </Border>
 
             <StackPanel Spacing="8">
-                <TextBlock Text="Configured Locations" FontWeight="SemiBold"/>
+                <TextBlock Text="Configured sources" FontWeight="SemiBold"/>
                 <ItemsRepeaterScrollHost>
                     <ScrollViewer>
                         <ItemsRepeater x:Name="VariedImageSizeRepeater"

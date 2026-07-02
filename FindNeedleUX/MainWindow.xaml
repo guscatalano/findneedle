@@ -28,7 +28,7 @@
                 <MenuFlyoutItem Text="Clear workspace" Click="MenuFlyoutItem_Click" Name="ClearWorkspace"/>
             </MenuBarItem>
             <MenuBarItem Title="Configure">
-                <MenuFlyoutItem Text="Locations" Click="MenuFlyoutItem_Click" Name="search_location"/>
+                <MenuFlyoutItem Text="Sources" Click="MenuFlyoutItem_Click" Name="search_location"/>
                 <MenuFlyoutItem Text="Log Finder" Click="MenuFlyoutItem_Click" Name="log_finder"/>
                 <MenuFlyoutItem Text="Connections" Click="MenuFlyoutItem_Click" Name="connections"/>
                 <MenuFlyoutItem Text="Rules" Click="MenuFlyoutItem_Click" Name="rules"/>

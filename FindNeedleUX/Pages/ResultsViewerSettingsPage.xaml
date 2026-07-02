@@ -408,7 +408,7 @@
                             <CheckBox x:Name="ShowStatusBarCheck" Content="Show the status bar"
                                       Checked="ShowStatusBarCheck_Changed" Unchecked="ShowStatusBarCheck_Changed"/>
                             <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="The bar at the top with Locations / Rules / Last run / Run → View Results. Closing it with the × turns this off."/>
+                                       Text="The bar at the top with Sources / Rules / Last run / Run → View Results. Closing it with the × turns this off."/>
                         </StackPanel>
                     </Border>
 

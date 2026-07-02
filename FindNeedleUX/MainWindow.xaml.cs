@@ -597,9 +597,9 @@ public sealed partial class MainWindow : Window
             {
                 var locs = MiddleLayerService.Locations ?? new List<ISearchLocation>();
                 var tip = locs.Count > 0
-                    ? string.Join("\n", locs.Select(l => { try { return l.GetName(); } catch { return "(location)"; } }))
-                    : "No locations added";
-                return MakeStatusSegment(Symbol.Folder, "Locations", locs.Count.ToString(), tip, null,
+                    ? string.Join("\n", locs.Select(l => { try { return l.GetName(); } catch { return "(source)"; } }))
+                    : "No sources added";
+                return MakeStatusSegment(Symbol.Folder, "Sources", locs.Count.ToString(), tip, null,
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)));
             }
             case "filters":

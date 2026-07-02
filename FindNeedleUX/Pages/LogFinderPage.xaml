@@ -29,7 +29,7 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" HorizontalAlignment="Left" Click="Button_AddEntry">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                    <FontIcon Glyph="&#xE710;" FontSize="14"/><TextBlock Text="Add app / location"/>
+                    <FontIcon Glyph="&#xE710;" FontSize="14"/><TextBlock Text="Add app or source"/>
                 </StackPanel>
             </Button>
             <CheckBox Grid.Column="2" x:Name="ShowHiddenCheck" Content="Show hidden built-ins"

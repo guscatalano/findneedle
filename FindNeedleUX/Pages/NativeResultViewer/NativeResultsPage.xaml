@@ -253,8 +253,8 @@
                 </DropDownButton>
                 <Button x:Name="SourcesButton" Click="ShowLoadedSources_Click" Height="32"
                         AutomationProperties.AutomationId="SourcesButton"
-                        AutomationProperties.Name="Show loaded locations and rules"
-                        ToolTipService.ToolTip="See which locations and rule files this search loaded">
+                        AutomationProperties.Name="Show loaded sources and rules"
+                        ToolTipService.ToolTip="See which sources and rule files this search loaded">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock x:Name="SourcesWarnGlyph" Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets"
                                    FontSize="12" VerticalAlignment="Center" Visibility="Collapsed"
