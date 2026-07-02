@@ -315,7 +315,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
                 OpenWithCheck.IsEnabled = false;
                 ContextMenuCheck.IsEnabled = false;
                 FileIntegrationNote.Text = "This Store-installed copy registers \"Open with\" via its package. "
-                    + "Use \"Manage defaults in Windows…\" to choose Find Needle per file type.";
+                    + "Use \"Manage defaults in Windows…\" to choose FindNeedle per file type.";
             }
 
             // --- WPP / tracefmt TMF path ---

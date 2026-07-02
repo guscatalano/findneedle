@@ -62,7 +62,7 @@ public static class FileIntegration
         if (string.IsNullOrEmpty(exe)) return;
         using (var prog = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{ProgId}"))
         {
-            prog.SetValue("", "Find Needle log");
+            prog.SetValue("", "FindNeedle log");
             using (var icon = prog.CreateSubKey("DefaultIcon")) icon.SetValue("", $"\"{exe}\",0");
             using (var cmd = prog.CreateSubKey(@"shell\open\command")) cmd.SetValue("", $"\"{exe}\" \"%1\"");
         }
@@ -94,7 +94,7 @@ public static class FileIntegration
         {
             using var shell = Registry.CurrentUser.CreateSubKey(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{Verb}");
-            shell.SetValue("MUIVerb", "Open in Find Needle");
+            shell.SetValue("MUIVerb", "Open in FindNeedle");
             shell.SetValue("Icon", $"\"{exe}\",0");
             using var cmd = shell.CreateSubKey("command");
             cmd.SetValue("", $"\"{exe}\" \"%1\"");

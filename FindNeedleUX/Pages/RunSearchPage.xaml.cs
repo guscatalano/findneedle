@@ -86,7 +86,6 @@ public sealed partial class RunSearchPage : Page
 
     private void ShallowSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = true;
     private void NormalSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = false;
-    private void DeepSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = false;
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {

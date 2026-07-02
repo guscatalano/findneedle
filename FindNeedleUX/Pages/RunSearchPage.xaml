@@ -27,11 +27,10 @@
 
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Search Depth" FontWeight="SemiBold"/>
+                    <TextBlock Text="Search depth" FontWeight="SemiBold"/>
                     <StackPanel x:Name="DepthInputs" Orientation="Horizontal" Spacing="8">
-                        <RadioButton Content="🔍 Shallow (fast)" GroupName="SearchDepth" Click="ShallowSearch_Click"/>
-                        <RadioButton Content="🔍 Normal (default)" GroupName="SearchDepth" IsChecked="True" Click="NormalSearch_Click"/>
-                        <RadioButton Content="🔍 Deep (thorough)" GroupName="SearchDepth" Click="DeepSearch_Click"/>
+                        <RadioButton Content="Full — search every line (default)" GroupName="SearchDepth" IsChecked="True" Click="NormalSearch_Click"/>
+                        <RadioButton Content="Quick — headers / first lines only (faster)" GroupName="SearchDepth" Click="ShallowSearch_Click"/>
                     </StackPanel>
                 </StackPanel>
             </Border>

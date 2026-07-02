@@ -21,6 +21,13 @@ public sealed partial class SearchRulesPage : Page
     {
         this.InitializeComponent();
         _viewModel.LoadRulesFromQuery();
+        // The "test file path" box + Load button back an automation hook (AddRuleFileByPath); they
+        // duplicate Browse and only confuse a normal user, so show them in developer mode only.
+        if (!FindNeedleUX.Services.AppMode.IsDeveloper)
+        {
+            TestFilePathInput.Visibility = Visibility.Collapsed;
+            TestLoadButton.Visibility = Visibility.Collapsed;
+        }
     }
 
     /// <summary>

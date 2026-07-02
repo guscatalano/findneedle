@@ -688,17 +688,17 @@
                             <TextBlock Text="File associations" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="When installed from the Microsoft Store, Find Needle can open these file types straight from Explorer's right-click &quot;Open with&quot; menu. Windows lets you choose which app is the default for each type."/>
+                                       Text="When installed from the Microsoft Store, FindNeedle can open these file types straight from Explorer's right-click &quot;Open with&quot; menu. Windows lets you choose which app is the default for each type."/>
                             <TextBlock Text="Supported file types" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock x:Name="FileAssocList" FontFamily="Consolas" FontSize="13"
                                        IsTextSelectionEnabled="True"/>
 
                             <CheckBox x:Name="OpenWithCheck" Margin="0,4,0,0"
-                                      Content="Show Find Needle in Explorer's &quot;Open with&quot; menu"
+                                      Content="Show FindNeedle in Explorer's &quot;Open with&quot; menu"
                                       Checked="OpenWithCheck_Changed" Unchecked="OpenWithCheck_Changed"/>
                             <CheckBox x:Name="ContextMenuCheck"
-                                      Content="Add a right-click &quot;Open in Find Needle&quot; entry"
+                                      Content="Add a right-click &quot;Open in FindNeedle&quot; entry"
                                       Checked="ContextMenuCheck_Changed" Unchecked="ContextMenuCheck_Changed"/>
                             <TextBlock x:Name="FileIntegrationNote" FontSize="11" TextWrapping="Wrap"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"

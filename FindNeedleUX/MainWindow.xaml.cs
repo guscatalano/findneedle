@@ -47,6 +47,12 @@ public sealed partial class MainWindow : Window
         this.InitializeComponent();
         WindowUtil.TrackWindow(this);
         SetWindowIcon("Assets\\appicon.ico");
+        // Hide developer-only affordances from a normal (shipped) run — see AppMode.
+        if (!FindNeedleUX.Services.AppMode.IsDeveloper)
+        {
+            if (preview_new_user != null) preview_new_user.Visibility = Visibility.Collapsed;
+            if (PreviewDevSeparator != null) PreviewDevSeparator.Visibility = Visibility.Collapsed;
+        }
         contentFrame.Navigated += (s, e) => { RefreshStatusStrip(); BuildQuickMenu(); };
         MiddleLayerService.StateChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         // Unified "Step X of N · phase · detail" status: whenever the spinner is up (search or viewer
@@ -1441,7 +1447,7 @@ public sealed partial class MainWindow : Window
             e.AcceptedOperation = global::Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
             try
             {
-                e.DragUIOverride.Caption = "Open in Find Needle";
+                e.DragUIOverride.Caption = "Open in FindNeedle";
                 e.DragUIOverride.IsCaptionVisible = true;
                 e.DragUIOverride.IsGlyphVisible = true;
             }

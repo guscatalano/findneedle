@@ -7,7 +7,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local1="using:FindNeedleUX.ViewObjects"
     mc:Ignorable="d"
-    Title="Find Needle">
+    Title="FindNeedle">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -55,7 +55,7 @@
                 <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
                 <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
                 <MenuFlyoutItem Text="About" Click="MenuFlyoutItem_Click" Name="about"/>
-                <MenuFlyoutSeparator/>
+                <MenuFlyoutSeparator x:Name="PreviewDevSeparator"/>
                 <MenuFlyoutItem Text="Preview first-run (new user)…" Click="MenuFlyoutItem_Click" Name="preview_new_user"
                                 ToolTipService.ToolTip="Launch a second instance with an empty, throwaway profile — see the app as a brand-new user would. Your real settings/caches are untouched."/>
             </MenuBarItem>
