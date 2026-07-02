@@ -37,8 +37,6 @@
                 <MenuFlyoutItem Text="Run Search" Click="MenuFlyoutItem_Click" Name="results_get"/>
                 <MenuFlyoutItem Text="Results" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
                 <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
-                <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="Statistics &amp; timing (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
                 <MenuFlyoutItem x:Name="RemapCsvMenuItem" Text="Remap CSV columns…" Click="RemapCsvMenuItem_Click" Visibility="Collapsed"/>
             </MenuBarItem>
 
@@ -47,13 +45,18 @@
                 <MenuFlyoutItem Text="Inspect Binary" Click="MenuFlyoutItem_Click" Name="inspect_binary"/>
             </MenuBarItem>
 
+            <!-- One home for troubleshooting views (was scattered across Settings + Run &amp; Results). -->
+            <MenuBarItem Title="Diagnostics">
+                <MenuFlyoutItem Text="System check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
+                <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
+                <MenuFlyoutItem Text="Search statistics (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
+            </MenuBarItem>
+
             <MenuBarItem Title="Settings">
                 <MenuFlyoutItem Text="Preferences..." Click="MenuFlyoutItem_Click" Name="settings_resultviewer"/>
                 <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
                 <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
                 <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="System Check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
-                <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
                 <MenuFlyoutItem Text="About" Click="MenuFlyoutItem_Click" Name="about"/>
                 <MenuFlyoutSeparator x:Name="PreviewDevSeparator"/>
                 <MenuFlyoutItem Text="Preview first-run (new user)…" Click="MenuFlyoutItem_Click" Name="preview_new_user"
