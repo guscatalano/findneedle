@@ -1,9 +1,14 @@
 # FindNeedle — User Personas & Top 10 Use Cases
 
-> Working draft (v1), authored from the current behavior of the app. The intent is to anchor UX
+> Working draft (v1.1), authored from the current behavior of the app. The intent is to anchor UX
 > decisions in *who* uses FindNeedle and *what job they are hiring it to do*, so flows can be
 > designed and prioritized against real goals rather than screens. Treat the personas as composites,
 > not real people; refine them with real user input as it arrives.
+>
+> **v1.1:** use-case flows were sanity-checked against the code. Confirmed: drag-drop open, ZIP/CAB
+> auto-expand (recursive), triage/scope, WPP decode + symbol log, structured query + multi-select
+> filters, dump ETW extraction, UML rules, MCP. Corrected: **UC5** — the time histogram is MCP-only,
+> there is no histogram chart in the viewer, and the only "Timeline" is a demo under Diagram Tools.
 
 ## What FindNeedle is (one paragraph)
 
@@ -193,11 +198,16 @@ in `ux-analysis.md` where relevant).
 - **Personas.** P2 Marcus, P5 Dana, P6 Raj.
 - **Job.** "Put everything on one timeline and zoom to the incident window."
 - **Trigger.** Multiple sources loaded (logs + event logs + capture).
-- **Flow.** Load sources → run → sort by Time → set a From/To window (or a relative preset) → optionally
-  a histogram/time view → read the interleaved, time-ordered events → narrow with level/provider chips.
+- **Flow.** Load sources → run → sort by **Time** → set a From/To window (or a relative preset:
+  15m / 1h / 6h / 24h / 7d / All) → read the interleaved, time-ordered events → narrow with
+  level/provider chips.
 - **Success.** A single, correctly time-ordered view across heterogeneous sources; fast windowing.
-- **Friction today.** Time-zone/format normalization across formats is the hard part; the viewer's time
-  presets/custom range exist; cross-source time normalization is a known area to validate.
+- **Friction today.** *(verified against code)* The human viewer has time **sort + From/To window +
+  relative presets**, but a time **histogram exists only via the MCP API** (`GetHistogramAsync`) — there
+  is **no density/histogram chart in the viewer**, and the only "Timeline" UI is a *demo* under
+  Tools → Diagram Tools, not wired into result correlation. So a **visible time-density strip with
+  click-to-zoom is a clear gap** (the data already exists). Cross-source time-zone/format normalization
+  is the other hard part and needs validation.
 
 ### UC6 — Filter, facet, and drill into the results
 - **Personas.** All (the flow everyone spends the most time in).
