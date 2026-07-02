@@ -37,42 +37,39 @@
                  (× sets ResultsViewerSettings.ShowWelcomeIntro=false; a Preferences toggle restores it). -->
             <InfoBar x:Name="IntroBanner" IsOpen="True" IsClosable="True" Severity="Informational"
                      CloseButtonClick="IntroBanner_CloseButtonClick"
-                     Title="New here?">
+                     Title="Getting started">
                 <InfoBar.Content>
-                    <!-- Two columns: getting-started on the left, key features on the right — keeps the
-                         banner short so the quick actions stay visible. -->
-                    <Grid ColumnSpacing="24" Margin="0,4,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" Spacing="8">
-                            <TextBlock TextWrapping="Wrap"
-                                       Text="Pick a Quick Action below to open logs, or use Configure ▸ Locations / Connections / Rules to build a custom search pipeline. Then run it from Run &amp; Results (or the Run → View Results button in the status bar)."/>
-                            <HyperlinkButton Content="View documentation" NavigateUri="https://github.com/guscatalano/findneedle" Padding="0"/>
-                        </StackPanel>
-
-                        <StackPanel Grid.Column="1" Spacing="6">
-                            <TextBlock Text="Key features" FontWeight="SemiBold"/>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="Data sources: folders, files, event logs, ETW, online sources" TextWrapping="Wrap"/>
+                    <!-- Lead with one plain "start here" line; everything else (pipeline steps, features,
+                         jargon) is tucked behind a collapsed expander so the banner stays short and the
+                         Quick Actions below are the obvious next step. -->
+                    <StackPanel Spacing="8" Margin="0,4,0,12">
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Pick a Quick Action below to open a log — results appear right away."/>
+                        <Expander HorizontalAlignment="Left" Header="Building a custom pipeline? What else can it do?">
+                            <StackPanel Spacing="8" Margin="0,4,0,0" MaxWidth="520">
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="For a multi-source search, use Configure ▸ Sources / Connections / Rules to build a pipeline, then run it from Run &amp; Results (or the Run → View Results button in the status bar)."/>
+                                <TextBlock Text="What it does" FontWeight="SemiBold"/>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <SymbolIcon Symbol="Folder" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                    <TextBlock Text="Sources: folders, files, event logs, ETW, online sources" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                    <TextBlock Text="RuleDSL filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                    <TextBlock Text="Fast viewer with paging, tagging, and column controls" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
+                                    <TextBlock Text="PlantUML / Mermaid diagrams from logs" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <HyperlinkButton Content="View documentation" NavigateUri="https://github.com/guscatalano/findneedle" Padding="0"/>
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <SymbolIcon Symbol="Filter" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="RuleDSL filtering, enrichment, and UML generation" TextWrapping="Wrap"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <SymbolIcon Symbol="List" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="Fast viewer with paging, tagging, and column controls" TextWrapping="Wrap"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <SymbolIcon Symbol="Pictures" Foreground="{ThemeResource SystemAccentColorBrush}" AutomationProperties.AccessibilityView="Raw"/>
-                                <TextBlock Text="PlantUML / Mermaid diagrams from logs" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Grid>
+                        </Expander>
+                    </StackPanel>
                 </InfoBar.Content>
             </InfoBar>
 
