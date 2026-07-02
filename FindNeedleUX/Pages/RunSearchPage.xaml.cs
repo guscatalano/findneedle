@@ -11,6 +11,35 @@ public sealed partial class RunSearchPage : Page
     public RunSearchPage()
     {
         this.InitializeComponent();
+        Loaded += (_, _) => UpdatePreRunSummary();
+    }
+
+    /// <summary>Show what a run will search BEFORE running it (sources + depth), so the summary box isn't
+    /// blank until after a run and the user can confirm what they're about to do.</summary>
+    private void UpdatePreRunSummary()
+    {
+        if (summary == null) return;
+        var locs = MiddleLayerService.Locations;
+        int count = locs?.Count ?? 0;
+        if (count == 0)
+        {
+            summary.Text = "No sources yet — add at least one under Configure ▸ Sources before running.";
+            return;
+        }
+        var names = new System.Text.StringBuilder();
+        int shown = 0;
+        foreach (var l in locs)
+        {
+            if (shown >= 4) break;
+            string n;
+            try { n = System.IO.Path.GetFileName(l.GetName()); } catch { n = "(source)"; }
+            if (shown > 0) names.Append(", ");
+            names.Append(n);
+            shown++;
+        }
+        if (count > 4) names.Append($", +{count - 4} more");
+        var depth = _shallowSearch ? "Quick (headers / first lines)" : "Full (every line)";
+        summary.Text = $"Will search: {count} source{(count == 1 ? "" : "s")} — {names}\nDepth: {depth}";
     }
 
     private void SetControlsTo(bool enable)
@@ -84,8 +113,8 @@ public sealed partial class RunSearchPage : Page
 
     private bool _shallowSearch;
 
-    private void ShallowSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = true;
-    private void NormalSearch_Click(object sender, RoutedEventArgs e) => _shallowSearch = false;
+    private void ShallowSearch_Click(object sender, RoutedEventArgs e) { _shallowSearch = true; UpdatePreRunSummary(); }
+    private void NormalSearch_Click(object sender, RoutedEventArgs e) { _shallowSearch = false; UpdatePreRunSummary(); }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {

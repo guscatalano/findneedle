@@ -52,6 +52,27 @@ public sealed partial class SearchRulesPage : Page
         }
     }
 
+    /// <summary>Load a shipped example rule so a newcomer can see a working one immediately (guaranteed
+    /// valid, unlike a hand-authored template). Prefers a small filter example; falls back to any shipped rule.</summary>
+    private void AddSampleRule_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(System.AppContext.BaseDirectory, "CommonRules");
+            var sample = System.IO.Path.Combine(dir, "crash-filter.rules.json");
+            if (!System.IO.File.Exists(sample) && System.IO.Directory.Exists(dir))
+            {
+                sample = null;
+                foreach (var f in System.IO.Directory.EnumerateFiles(dir, "*.rules.json")) { sample = f; break; }
+            }
+            if (!string.IsNullOrEmpty(sample) && System.IO.File.Exists(sample))
+                _viewModel.LoadRuleFile(sample);
+            else
+                FindNeedlePluginLib.Logger.Instance.Log("Add sample rule: no CommonRules examples found next to the app.");
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"Add sample rule failed: {ex.Message}"); }
+    }
+
     private void TestFilePathInput_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         if (e.Key == global::Windows.System.VirtualKey.Enter)

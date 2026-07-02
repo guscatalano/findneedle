@@ -12,7 +12,9 @@ namespace FindNeedleUX.Pages;
 /// </summary>
 public sealed partial class RulesPage : Page
 {
-    private string _initialTag = "active";
+    // Default to a config tab ("Rule files"), not the runtime "Active" status tab which is empty until a
+    // search has run. A nav param (from a specific menu item) still overrides this.
+    private string _initialTag = "files";
 
     public RulesPage()
     {

@@ -9,18 +9,22 @@
         <StackPanel Spacing="24">
             <!-- Title -->
             <StackPanel Spacing="8">
-                <TextBlock Text="⚙️ RuleDSL Configuration" FontSize="24" FontWeight="Bold"/>
-                <TextBlock Text="Manage rule files and pipeline sections" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Text="Rules" FontSize="24" FontWeight="Bold"/>
+                <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="Rules automatically tag, filter, scope, and enrich your search results — they're optional. Add a sample below to see how one works, or Browse for your own."/>
             </StackPanel>
 
             <!-- Rule Files Section -->
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="📁 Rule Files" FontWeight="SemiBold"/>
-                    
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Rule files" FontWeight="SemiBold"/>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <Button x:Name="BrowseButton" Content="📂 Browse..." Click="BrowseButton_Click"
                                 AutomationProperties.Name="Browse for rule file"/>
+                        <Button x:Name="AddSampleButton" Content="✨ Add a sample rule" Click="AddSampleRule_Click"
+                                AutomationProperties.Name="Add a sample rule"/>
+                        <HyperlinkButton Content="Learn more" NavigateUri="https://github.com/guscatalano/findneedle/blob/master/FindNeedleRuleDSL/README.md"/>
                         <Button x:Name="RemoveButton" Content="🗑️ Remove Selected" Click="RemoveButton_Click" IsEnabled="False"
                                 AutomationProperties.Name="Remove selected rule file"/>
                         <TextBox x:Name="TestFilePathInput" Width="200" Height="32" Header="Test file path" PlaceholderText="Enter file path" KeyDown="TestFilePathInput_KeyDown"
