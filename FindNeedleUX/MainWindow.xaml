@@ -10,6 +10,10 @@
     Title="FindNeedle">
 
     <Grid>
+        <Grid.KeyboardAccelerators>
+            <!-- Ctrl+K: open the command palette from anywhere in the window. -->
+            <KeyboardAccelerator Modifiers="Control" Key="K" Invoked="CommandPaletteAccelerator_Invoked"/>
+        </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -181,6 +185,57 @@
                     <TextBlock Text="Folders, .etl, .evtx, .log, .txt, .zip and more"
                                FontSize="13" Foreground="#CCFFFFFF" HorizontalAlignment="Center"/>
                 </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Command palette (Ctrl+K): keyboard-first jump to any page/action. Overlays the whole window
+             (RowSpan=3). Click the dimmed backdrop or press Esc to dismiss. -->
+        <Grid x:Name="CommandPalettePanel" Grid.RowSpan="3" Visibility="Collapsed"
+              Background="#66000000" Tapped="CommandPalettePanel_Tapped">
+            <Border Width="640" MaxHeight="480" VerticalAlignment="Top" HorizontalAlignment="Center"
+                    Margin="0,88,0,0" Padding="0" CornerRadius="8" Translation="0,0,48"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <Border.Shadow><ThemeShadow/></Border.Shadow>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBox x:Name="CommandPaletteSearch" Grid.Row="0" Margin="12,12,12,8"
+                             AutomationProperties.Name="Command palette search"
+                             PlaceholderText="Type a command or page…"
+                             TextChanged="CommandPaletteSearch_TextChanged"
+                             KeyDown="CommandPaletteSearch_KeyDown"/>
+                    <ListView x:Name="CommandPaletteList" Grid.Row="1" Margin="4,0,4,4" MaxHeight="360"
+                              SelectionMode="Single" IsItemClickEnabled="True"
+                              ItemClick="CommandPaletteList_ItemClick">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="MinHeight" Value="0"/>
+                                <Setter Property="Padding" Value="8,2"/>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Padding="4,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Label}" FontSize="14" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Category}" FontSize="12"
+                                               VerticalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock Grid.Row="2" Margin="12,4,12,10" FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="↑↓ to move · Enter to run · Esc to close"/>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

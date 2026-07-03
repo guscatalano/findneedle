@@ -921,7 +921,15 @@ public sealed partial class MainWindow : Window
     private async void MenuFlyoutItem_Click(object sender, RoutedEventArgs e)
     {
         var selectedFlyoutItem = sender as MenuFlyoutItem;
-        switch (selectedFlyoutItem.Name.ToLower())
+        await ExecuteMenuActionAsync(selectedFlyoutItem.Name.ToLower());
+    }
+
+    /// <summary>Run a menu/navigation action by its item name (the same keys the MenuBar items use).
+    /// Extracted so the command palette (Ctrl+K) can invoke every menu action without duplicating the
+    /// navigation logic.</summary>
+    public async System.Threading.Tasks.Task ExecuteMenuActionAsync(string name)
+    {
+        switch (name)
         {
             case "newworkspace":
                 MiddleLayerService.NewWorkspace();
@@ -1044,9 +1052,130 @@ public sealed partial class MainWindow : Window
                 await LaunchNewUserPreviewAsync();
                 break;
             default:
-                Logger.Instance.Log($"Navigation error: unknown menu item {selectedFlyoutItem.Name}");
+                Logger.Instance.Log($"Navigation error: unknown menu item {name}");
                 throw new Exception("bad code");
         }
+    }
+
+    // ----- Command palette (Ctrl+K) -----
+
+    private List<FindNeedleUX.Services.PaletteCommand> _paletteCommands;
+
+    /// <summary>The full command catalog. Most entries reuse <see cref="ExecuteMenuActionAsync"/> so there's
+    /// a single source of truth for navigation; Welcome navigates directly (it isn't a menu item).</summary>
+    private List<FindNeedleUX.Services.PaletteCommand> BuildPaletteCommands()
+    {
+        Func<string, Func<System.Threading.Tasks.Task>> menu = n => () => ExecuteMenuActionAsync(n);
+        FindNeedleUX.Services.PaletteCommand Cmd(string label, string cat, string kw, Func<System.Threading.Tasks.Task> run)
+            => new() { Label = label, Category = cat, Keywords = kw, Run = run };
+
+        return new()
+        {
+            Cmd("Run Search", "Run & Results", "execute start go scan", menu("results_get")),
+            Cmd("Results (viewer)", "Run & Results", "view grid logs native", menu("results_viewnative")),
+            Cmd("Processor Output", "Run & Results", "generated output uml", menu("results_processoroutput")),
+            Cmd("Sources", "Configure", "locations add files folder data input", menu("search_location")),
+            Cmd("Log Finder", "Configure", "catalog predefined well-known", menu("log_finder")),
+            Cmd("Connections", "Configure", "kusto ado github online remote", menu("connections")),
+            Cmd("Rules", "Configure", "ruledsl filter enrichment field extraction", menu("rules")),
+            Cmd("Auto-add rules", "Configure", "automatic suggest", menu("auto_rules")),
+            Cmd("Active rules", "Configure", "processors stats matched timing", menu("search_processors")),
+            Cmd("New workspace", "Workspace", "reset fresh", menu("newworkspace")),
+            Cmd("Open workspace…", "Workspace", "load", menu("openworkspace")),
+            Cmd("Save workspace", "Workspace", "store persist", menu("saveworkspace")),
+            Cmd("Clear workspace", "Workspace", "empty remove", menu("clearworkspace")),
+            Cmd("Open log file…", "Open", "single pick browse", menu("openlogfile")),
+            Cmd("Open log folder…", "Open", "directory", menu("openlogfolder")),
+            Cmd("Open log with rules…", "Open", "quicklog", menu("openlogwithrules")),
+            Cmd("Cached searches", "Open", "recent history reopen", menu("cached_searches")),
+            Cmd("Inspect ETL", "Tools", "providers triage etl", menu("inspect_etl")),
+            Cmd("Inspect Binary", "Tools", "pe tracelogging providers dll exe", menu("inspect_binary")),
+            Cmd("Diagram Tools", "Tools", "uml plantuml mermaid sequence", menu("diagramtools")),
+            Cmd("Plugins", "Tools", "extensions", menu("search_plugins")),
+            Cmd("System check", "Diagnostics", "health wdk symbols tracefmt", menu("systeminfo")),
+            Cmd("Logs", "Diagnostics", "app log troubleshoot", menu("logs")),
+            Cmd("Search statistics", "Diagnostics", "perf timing why slow performance", menu("results_statistics")),
+            Cmd("Settings", "App", "preferences options theme viewer colors", menu("settings_resultviewer")),
+            Cmd("Documentation", "Help", "docs github help", menu("documentation")),
+            Cmd("About", "Help", "version info", menu("about")),
+            Cmd("Welcome", "App", "home start intro", () => { contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage)); return System.Threading.Tasks.Task.CompletedTask; }),
+        };
+    }
+
+    private void CommandPaletteAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (CommandPalettePanel.Visibility == Visibility.Visible) CloseCommandPalette();
+        else OpenCommandPalette();
+    }
+
+    private void OpenCommandPalette()
+    {
+        _paletteCommands ??= BuildPaletteCommands();
+        CommandPaletteSearch.Text = "";
+        FilterPalette("");
+        CommandPalettePanel.Visibility = Visibility.Visible;
+        CommandPaletteSearch.Focus(FocusState.Programmatic);
+    }
+
+    private void CloseCommandPalette() => CommandPalettePanel.Visibility = Visibility.Collapsed;
+
+    /// <summary>Narrow the list to commands whose label/category/keywords contain every typed token. Ranks
+    /// label-prefix matches first so typing "run" surfaces "Run Search" at the top.</summary>
+    private void FilterPalette(string query)
+    {
+        var q = (query ?? "").Trim().ToLowerInvariant();
+        var tokens = q.Length == 0 ? Array.Empty<string>() : q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var matched = _paletteCommands
+            .Where(c => tokens.All(t => c.Haystack.Contains(t)))
+            .OrderByDescending(c => q.Length > 0 && c.Label.ToLowerInvariant().StartsWith(q))
+            .ThenBy(c => c.Category)
+            .ThenBy(c => c.Label)
+            .ToList();
+        CommandPaletteList.ItemsSource = matched;
+        if (matched.Count > 0) CommandPaletteList.SelectedIndex = 0;
+    }
+
+    private void CommandPaletteSearch_TextChanged(object sender, TextChangedEventArgs e)
+        => FilterPalette(CommandPaletteSearch.Text);
+
+    private void CommandPaletteSearch_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        int count = CommandPaletteList.Items.Count;
+        switch (e.Key)
+        {
+            case global::Windows.System.VirtualKey.Escape:
+                CloseCommandPalette(); e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Down:
+                if (count > 0) CommandPaletteList.SelectedIndex = (CommandPaletteList.SelectedIndex + 1) % count;
+                e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Up:
+                if (count > 0) CommandPaletteList.SelectedIndex = (CommandPaletteList.SelectedIndex - 1 + count) % count;
+                e.Handled = true; break;
+            case global::Windows.System.VirtualKey.Enter:
+                if (CommandPaletteList.SelectedItem is FindNeedleUX.Services.PaletteCommand cmd)
+                    _ = ExecutePaletteCommand(cmd);
+                e.Handled = true; break;
+        }
+    }
+
+    private void CommandPaletteList_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is FindNeedleUX.Services.PaletteCommand cmd) _ = ExecutePaletteCommand(cmd);
+    }
+
+    /// <summary>Close the palette when the dimmed backdrop (not the card) is clicked.</summary>
+    private void CommandPalettePanel_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, CommandPalettePanel)) CloseCommandPalette();
+    }
+
+    private async System.Threading.Tasks.Task ExecutePaletteCommand(FindNeedleUX.Services.PaletteCommand cmd)
+    {
+        CloseCommandPalette();
+        try { await cmd.Run(); }
+        catch (Exception ex) { Logger.Instance.Log($"Command palette action '{cmd.Label}' failed: {ex.Message}"); }
     }
 
     /// <summary>
