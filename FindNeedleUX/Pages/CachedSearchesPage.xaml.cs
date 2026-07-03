@@ -140,11 +140,25 @@ public sealed partial class CachedSearchesPage : Page
         Refilter();
     }
 
-    private void Open_Click(object sender, RoutedEventArgs e)
+    // Primary (view-only): open the cached results without touching the current workspace's Sources.
+    private void OpenSplit_Click(SplitButton sender, SplitButtonClickEventArgs args)
     {
-        if ((sender as FrameworkElement)?.Tag is not CachedSearchItem item) return;
+        if (sender.Tag is CachedSearchItem item) OpenCache(item, addSources: false);
+    }
+
+    // Secondary (explicit): also add this search's source to the workspace, so it can be re-run/modified.
+    private void OpenAndAddSources_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is CachedSearchItem item) OpenCache(item, addSources: true);
+    }
+
+    private void OpenCache(CachedSearchItem item, bool addSources)
+    {
         try
         {
+            // Only a named cache has a real recorded source path; unnamed caches have a placeholder.
+            if (addSources && item.Named && !string.IsNullOrEmpty(item.SourcePath))
+                MiddleLayerService.AddFolderLocation(item.SourcePath); // handles a single file or a folder
             MiddleLayerService.OpenCachedResult(item.DbPath);
             this.Frame?.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
         }

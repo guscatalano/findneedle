@@ -68,7 +68,17 @@
                                 </StackPanel>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <Button Content="Open" Click="Open_Click" Tag="{Binding}"/>
+                                <!-- Primary action is view-only (doesn't touch the current workspace's
+                                     Sources); the chevron offers the explicit "also add its source" path. -->
+                                <SplitButton Content="Open" Click="OpenSplit_Click" Tag="{Binding}"
+                                             ToolTipService.ToolTip="View these results (doesn't change your current Sources)">
+                                    <SplitButton.Flyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Open + add to Sources" Click="OpenAndAddSources_Click" Tag="{Binding}"
+                                                            ToolTipService.ToolTip="Also add this search's source to your workspace so you can re-run or modify it."/>
+                                        </MenuFlyout>
+                                    </SplitButton.Flyout>
+                                </SplitButton>
                                 <Button Content="Delete" Click="Delete_Click" Tag="{Binding}"
                                         IsEnabled="{Binding CanDelete}"
                                         ToolTipService.ToolTip="The cache that's currently open can't be deleted"/>
