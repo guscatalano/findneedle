@@ -1,21 +1,25 @@
 # FindNeedle — User Personas & Use Cases
 
-> **v1.3 (this revision).** P1 is now **grounded in a real interview** with the one confirmed user (see
-> P1's ✅ block + the [Changelog](#changelog)) — its defining job, quote, frequency, and use-case ordering
-> are their words, and its validation row flipped to **confirmed (n=1)**. This reweighted the matrix
-> (**UC7 rose to #2; UC3 fell to last**). v1.2 (the prior pass) did the structural sharpening: **6 personas → 4**
+> **v1.4 (this revision).** Adds two forward-looking persona *bets* on the RuleDSL→UML authoring spectrum
+> (**P5 Beginner**, **P6 AI-Driven**) and names the **[linchpin](#the-linchpin-why-this-matters-more-than-any-single-persona)** —
+> AI-authored rules + auto-diagram — that serves both *and* fixes the confirmed user's gap.
+> **v1.3** grounded **P1** in a real interview with the one confirmed user (see P1's ✅ block + the
+> [Changelog](#changelog)) — its defining job, quote, frequency, and use-case ordering are their words,
+> and its validation row flipped to **confirmed (n=1)**, reweighting the matrix (**UC7 rose to #2; UC3 fell
+> to last**). v1.2 did the structural sharpening: **6 personas → 4**
 > (the thin/overlapping ones were folded, not deleted — see the [mapping](#persona-mapping-v11--v12)),
 > plus four things v1.1 lacked — **non-goals / anti-personas**, a **frequency-weighted matrix** so
 > priority is *derived* rather than asserted, **measurable success** per use case wired to the app's
 > own instrumentation (`UxMonitor` + `PerfLog`), and a **validation plan** (what signal would confirm or
 > kill each persona).
 >
-> **Honesty note (important):** **P1 is now grounded** in a real interview with the one confirmed user
-> (the author) — see its ✅ block. **P2–P4 remain builder-authored composites** — plausible but unverified.
-> v1.1 code-verified the *flows*; it did not verify the *people*, and for 3 of 4 personas that's still
-> true. Treat P2–P4 as falsifiable hypotheses; the [validation section](#validation-plan--what-would-confirm-or-kill-a-persona)
-> is how we'd confirm or kill them. And note: even the one confirmed user says the tool *"doesn't make my
-> job easier yet"* — grounding a persona is not the same as satisfying it.
+> **Honesty note (important):** **P1 is grounded** in a real interview with the confirmed user (the
+> author); **P2 is corroborated** by that same user's real experience (*"we get a bundle of logs and don't
+> know where the issue is"*). **P3–P4 remain builder-authored composites**, and **P5–P6 are forward-looking
+> bets** — all unverified. v1.1 verified the *flows*, not the *people*. Treat P3–P6 as falsifiable
+> hypotheses; the [validation section](#validation-plan--what-would-confirm-or-kill-a-persona) is how we'd
+> confirm or kill them. And note: even the confirmed user says the tool *"doesn't make my job easier yet"* —
+> grounding a persona is not the same as satisfying it.
 
 ## What FindNeedle is (one paragraph)
 
@@ -66,7 +70,7 @@ v1.1 were folded into them (their unique needs preserved — see mapping). IDs P
 | # | Persona | Drives which default-UX decision | Tech level | Core job | Frequency |
 |---|---------|----------------------------------|-----------|----------|-----------|
 | **P1** | **Priya Nair — the Trace Expert** ✅ *grounded (n=1)* | **Reconstruct causal sequences, kill the tedium**: extract interaction events via rules → auto-draw the UML sequence/causality diagram (symbols are plumbing) | Expert (ETW/WPP/kernel, scale) | Reconstruct *how* an error happened — the ordered, cross-actor sequence — without hand-tracing it | Occasional (also the author) |
-| **P2** | **Marcus Bell — the Support Triager** *(incl. forensic variant, was P6 Raj)* | **Recipe-reuse & one-search-across-formats**: bundle in, find the error, save the recipe | High (Windows internals/forensics, not kernel) | Triage a customer/incident bundle, find the failure, attach evidence | Many times/day |
+| **P2** | **Marcus Bell — the Support Triager** ◐ *corroborated* | **Localize the failure across a bundle**: one search across every format to find *where/when* it went wrong; save the recipe | High (Windows internals/forensics, not kernel) | Given a bundle he didn't write, find *where* the issue is (localization); attach evidence | Often (*"a lot of the time"*) |
 | **P3** | **Elena Rossi — the Automator** | **Machine-drivable & reproducible**: everything the UI does must be scriptable (RuleDSL + MCP) | High (automation, scripting) | Encode analysis as versioned rules; run headless per failure; let an agent do the first pass | Daily, mostly headless |
 | **P4** | **Sam Okafor — the Casual Dev** | **Zero-setup quick path**: open → red line → done, no pipeline, no jargon | Medium (app logs, some ETW) | Open today's log, jump to the error, read context, move on | A few times/week |
 
@@ -115,7 +119,12 @@ v1.1 were folded into them (their unique needs preserved — see mapping). IDs P
     surfaced *sequence reconstruction*, not firehose-mining, as the daily reality — keep scale as a
     secondary, unconfirmed mode, not a confirmed job.
 
-### P2 — Marcus Bell · the Support Triager *(absorbs P6 Raj's forensic variant)*
+### P2 — Marcus Bell · the Support Triager  ◐ *corroborated (the author's real experience)* *(absorbs P6 Raj's forensic variant)*
+
+> **Partly grounded.** The confirmed user corroborated this from real work: *"a lot of the time we get a
+> bundle of logs, and we don't know where in the logs the issue happened."* That names P2's true job
+> precisely — **localization**: find *where / when* the failure is in a pile you didn't write and can't
+> eyeball (the literal "find the needle"). Not a full interview → ◐, not ✅.
 
 - **Context.** Receives customer log bundles (ZIP/CAB with `CBS.log`, `DISM.log`, Panther `setupact.log`,
   Windows Update/Defender logs, exported `.evtx`). Under SLA; dozens of cases a day; rarely has the
@@ -124,9 +133,10 @@ v1.1 were folded into them (their unique needs preserved — see mapping). IDs P
   defensible, time-ordered evidence view.
 - **Technical level.** High on Windows servicing/setup/eventing/forensics; not a kernel or ETW-internals
   person.
-- **What he's trying to accomplish.** Find the failing operation and its root error across a pile of
-  differently-formatted logs, then attach the evidence (filtered view / export), and make the *next*
-  identical case one click via a saved recipe.
+- **What he's trying to accomplish.** **Localize the failure in a bundle he didn't write** — *"we don't
+  know where in the logs the issue happened"* — with one search across every differently-formatted file,
+  then attach the evidence (filtered view / export), and make the *next* identical case one click via a
+  saved recipe.
 - **Why the forensic variant folds here (not its own persona):** the flow is the same — *many mixed
   artifacts in, one time-ordered search, export the evidence*. Its only genuinely unique needs are packet
   captures and dump-ETW extraction, which live as **edge use cases** (UC8 + packet ingest), not a whole
@@ -186,6 +196,58 @@ v1.1 were folded into them (their unique needs preserved — see mapping). IDs P
 | P4 Sam (Casual dev) | **P4** | Kept unchanged. |
 | **P5 Dana (Perf/scale)** | folded → **P1** "scale mode" | Inspect-before-load, per-provider volume, decode-time scoping → P1's second job. Nothing lost; it drives the *same* density/transparency decisions. |
 | **P6 Raj (IR/security)** | folded → **P2** "forensic variant" | Cross-artifact timeline + evidence export → P2's flow. Packets + dump-ETW extraction survive as **edge use cases** (UC8 + packet ingest), not a persona. |
+
+---
+
+## Emerging personas — the RuleDSL→UML authoring spectrum *(bets, lower confidence than P1–P4)*
+
+The confirmed user (P1) surfaced that the tool's core value — the **UC7 → UC9 loop** (author rules →
+auto-diagram the sequence) — is really an *authoring-ability spectrum*. Two more personas sit on it. They
+are **product-direction hypotheses**, flagged "likely / maybe" by P1 himself — not validated, and
+deliberately kept **out of the weighted matrix** until they are.
+
+**The spectrum — how each persona gets rules authored for the sequence/diagram:**
+
+| Can't author | Authors by hand (tedious) | Delegates to AI | Scripts deterministically |
+|---|---|---|---|
+| **P5 Beginner** | **P1 Trace Expert** *(confirmed)* | **P6 AI-Driven Analyst** | **P3 Automator** |
+| the value with *zero* DSL — presets / templates / AI does it | make manual authoring *fast* (templates, live preview, diagram-from-selection) | an agent reads the log, writes the rules, generates the UML; they *review* | versioned `.rules.json` + MCP, repeatable in CI |
+
+### P5 — the Beginner *(bet)*
+- **Who.** Someone reading a log who does **not** know how to write RuleDSL (may not know it exists).
+  Overlaps P4 Sam, but the distinguishing need differs: P4 just wants the red line; **P5 wants the
+  *analysis* — the sequence, the "how did this happen" — but is blocked by the authoring wall.**
+- **Distinct decision it drives.** Deliver the UC7→UC9 value **without authoring** — starter/preset rule
+  packs, "diagram this selection," or AI generation — so the payoff isn't gated behind learning a DSL.
+- **Success.** Opens a log, picks a preset or asks the AI, gets a useful sequence/tagged view without JSON.
+- **Killing signal.** If beginners never progress past plain search (P4 behavior) even when presets/AI
+  exist → P5 is really just P4; re-merge.
+
+### P6 — the AI-Driven Analyst *(bet; the aspirational end-state)*
+- **Who.** Someone who lets **AI drive the RuleDSL end-to-end** — go through the log, write the extraction/
+  sequence rules, generate the UMLs — then *reviews / steers* rather than authors. Distinct from P3 Elena
+  (who writes and versions rules deterministically for a pipeline): **P6 delegates the authoring itself.**
+- **Distinct decision it drives.** The MCP surface + the app must let an agent not just *run* rules but
+  *compose* them from the log and produce diagrams, with the human reviewing/correcting — an
+  author-by-conversation loop, not a run-preset loop.
+- **Success.** "Here's a trace — find the failure sequence and diagram it": the agent proposes rules + a
+  UML; the human accepts/edits.
+- **Killing signal.** If AI-authored rules are consistently wrong/untrusted and users revert to hand-
+  authoring → P6 collapses back into P1.
+
+### The linchpin (why this matters more than any single persona)
+
+**One capability — "AI reads the log, writes the RuleDSL, and generates the UML" — serves all three
+authoring-spectrum personas at once:**
+- it gives **P5 (Beginner)** the value with zero DSL,
+- it **removes P1's tedium** — the confirmed gap, *"it doesn't make my job easier yet"* — and
+- it **is** the defining capability of **P6 (AI-Driven)**.
+
+That's a **3-persona unlock that also fixes the one confirmed user's #1 complaint**, which makes
+AI-assisted rule authoring + auto-diagram the **single highest-leverage bet in the product** — above
+symbol-decode polish or accessibility. It elevates **UC7 + UC9 + UC10 (MCP)** together: the agent (UC10)
+authors the rules (UC7) that draw the diagram (UC9). Before betting the roadmap on it, note the shared
+**killing signal**: if AI-authored rules can't be *trusted*, all three personas revert to hand-work.
 
 ---
 
@@ -368,6 +430,10 @@ and fewer people; P4 is many people but infrequent + shallow.
 - **UC3 (WPP symbols) falls to *last* (30).** The interview reclassified it from P1's headline to
   *plumbing*. Still quality-critical (next section), just not a priority-by-frequency.
 
+> **Emerging personas (P5/P6) are deliberately *not* in this table.** Weighting unvalidated bets would
+> launder guesses into numbers. If validated, they push **UC7, UC9, and UC10 up together** (the AI-authoring
+> loop) — see [Emerging personas](#emerging-personas--the-ruledsluml-authoring-spectrum-bets-lower-confidence-than-p1p4).
+
 ### Two axes: frequency vs differentiation
 
 Frequency-weighted score answers "what do we polish for the common path." It is **not** the only axis.
@@ -400,9 +466,11 @@ log, never content, never network), plus qualitative checks.
 | Persona | Confirming signal | Killing / "we're wrong" signal |
 |---------|-------------------|-------------------------------|
 | **P1 Trace Expert** | ✅ **Confirmed (n=1: the author, occasional).** Real job verified by interview: reconstruct causal sequences via the RuleDSL→UML loop. *Still open:* whether anyone else runs it, whether it's daily for anyone, whether the scale/scoping mode is real. | The user keeps hand-tracing sequences because the UC7→UC9 loop "doesn't make the job easier" → if that isn't fixed, even the one confirmed user churns back to notepad + manual notes |
-| **P2 Triager** | Frequent ZIP/CAB/folder-bundle opens; workspaces saved & reopened (UC12) | Bundles rare; nobody saves recipes → we built for a workflow no one runs |
+| **P2 Triager** | ◐ **Corroborated** by the confirmed user (*"we get bundles, don't know where the issue is"*) — the *localization* job is real. *Still open:* the recipe-reuse half (does anyone save/reopen workspaces?) | Bundles turn out rare, or nobody saves recipes → the reuse half serves no one |
 | **P3 Automator** | MCP server enabled; rules authored/imported; CLI runs | MCP toggled ~never; rule files stay empty → automation is a story, not a user |
 | **P4 Casual Dev** | Large share of sessions = single small `.log`/`.txt`, no rules, quick filter, close | If this never happens, the "calm default" investment is mis-aimed (but keep P4 as a design counterweight regardless) |
+| **P5 Beginner** *(bet)* | Users adopt preset/AI rule packs and reach a diagram without writing DSL | Beginners never go past plain search even when easy on-ramps exist → P5 = P4 |
+| **P6 AI-Driven** *(bet)* | Agents author rules + diagrams users accept; "compose rules from this log" over MCP gets used | AI-authored rules are untrusted/wrong; users revert to hand-authoring → P6 = P1 |
 | **Anti-persona check** | Packet/dump opens near-zero → confirms folding Raj was right; no one asks for live dashboards → confirms the non-goal | Steady packet/dump/forensic demand → *reinstate a forensic persona*; repeated "live alerting" asks → revisit the SIEM non-goal |
 
 **Concrete next step to make this real (small, respects non-goals):** add an opt-in local
@@ -427,7 +495,22 @@ by it, not by the author.
 
 ## Changelog
 
-### v1.3 (this revision) — grounded P1 in a real interview (n=1)
+### v1.4 (this revision) — authoring-spectrum bets (P5/P6) + P2 corroborated
+- Added two forward-looking persona *bets* from the confirmed user: **P5 Beginner** (reads logs, can't
+  write RuleDSL, wants the analysis anyway) and **P6 AI-Driven Analyst** (delegates RuleDSL authoring +
+  UML generation to an AI, then reviews). Kept **out of the weighted matrix** (lower confidence than
+  P1–P4); marked hypotheses.
+- Reframed the core value as an **authoring-ability spectrum** on UC7→UC9: can't author (P5) → author by
+  hand/tedious (P1) → delegate to AI (P6) → script deterministically (P3).
+- **Named the linchpin:** "AI reads the log → writes the RuleDSL → generates the UML" serves P5, fixes
+  P1's confirmed gap, and defines P6 — a 3-persona unlock; the single highest-leverage bet (elevates
+  UC7 + UC9 + UC10 together). Shared killing signal: AI-authored rules must be *trusted*.
+- **P2 corroborated → ◐.** The confirmed user validated it from real experience: *"a lot of the time we
+  get a bundle of logs and we don't know where the issue happened."* Sharpened P2's job to **localization**
+  (find *where/when* in a bundle you didn't write). Not a full interview → ◐, not ✅. Honesty note +
+  validation table updated.
+
+### v1.3 — grounded P1 in a real interview (n=1)
 - **Interviewed the one confirmed user (the author); P1 is now grounded, not composite.** Corrections in
   their words: the defining job is **causal-sequence reconstruction** (note the times, rebuild the
   ordering, work out *how* the error happened — e.g. "A→B at X, B→C at Y, a concurrent D→C made B→C
