@@ -18,6 +18,11 @@
              lines in the row and spilling over the neighbours. -->
         <Style x:Key="GridCellText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Top"/>
+            <!-- The toolkit DataGridCell presenter sizes to content and centers it, so VerticalAlignment=Top
+                 on a single-line TextBlock alone still looks centered in the fixed 26px row. Give the block a
+                 MinHeight matching the row so it fills the cell; its text then starts at the TOP. Keep it just
+                 under RowHeight (26) so cell padding can't push the row taller. -->
+            <Setter Property="MinHeight" Value="24"/>
         </Style>
 
         <!-- Like GridCellText but reveals the cell's full text on hover — for columns whose content gets

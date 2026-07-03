@@ -22,11 +22,11 @@
                             QuerySubmitted="SettingsSearch_QuerySubmitted"/>
         </NavigationView.AutoSuggestBox>
         <NavigationView.MenuItems>
-            <NavigationViewItem Content="All settings" Tag="all">
+            <NavigationViewItem Content="All settings" Tag="all" IsSelected="True">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE8A9;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
             <NavigationViewItemSeparator/>
-            <NavigationViewItem Content="Appearance" Tag="appearance" IsSelected="True">
+            <NavigationViewItem Content="Appearance" Tag="appearance">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE790;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
             <NavigationViewItem Content="General" Tag="general">

@@ -336,6 +336,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // Index every card so the pane search box can find + jump to a setting.
             BuildSettingsCatalog();
+
+            // Sync the panels to the selected category. SettingsNav_SelectionChanged bails during initial
+            // XAML parse (panels not built yet), so apply it now — otherwise the nav highlights a category
+            // but the panels still show their XAML defaults (only Appearance visible). Defaults to
+            // "All settings" so opening Settings shows everything first.
+            ApplyCategory((SettingsNav.SelectedItem as NavigationViewItem)?.Tag as string ?? "all");
         }
         finally { _suppressEvents = false; }
     }
