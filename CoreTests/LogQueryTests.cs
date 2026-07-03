@@ -33,6 +33,21 @@ public class LogQueryTests
     }
 
     [TestMethod]
+    public void ActivityId_Field_And_Aliases_Match()
+    {
+        const string guid = "12345678-1234-1234-1234-1234567890ab";
+        foreach (var q in new[] { $"activityid == \"{guid}\"", $"aid == \"{guid}\"", $"activity == \"{guid}\"" })
+        {
+            var node = Parse(q);
+            Assert.IsTrue(node.Evaluate(Row(new() { ["activityid"] = guid })), $"should match: {q}");
+            Assert.IsFalse(node.Evaluate(Row(new() { ["activityid"] = "00000000-0000-0000-0000-000000000000" })),
+                $"should not match the zero GUID: {q}");
+        }
+        Assert.IsTrue(LogQuery.IsField("activityid"));
+        Assert.IsTrue(LogQuery.IsField("aid"));
+    }
+
+    [TestMethod]
     public void Contains_And_NotContains()
     {
         var node = Parse("provider ~ Kernel AND msg !~ debug");

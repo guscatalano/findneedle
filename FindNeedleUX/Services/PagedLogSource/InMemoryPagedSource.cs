@@ -218,6 +218,7 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         "level" => l.Level,
         "processid" => l.ProcessId,
         "threadid" => l.ThreadId,
+        "activityid" => l.ActivityId,
         "eventid" => l.EventId,
         "channel" => l.Channel,
         "machinename" => l.MachineName,

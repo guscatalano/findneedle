@@ -1388,6 +1388,21 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     public Dictionary<string, int> GetSourceCounts()
         => _source?.GetSourceCounts() ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Gather every row sharing an ActivityId, time-ordered, to reconstruct one activity as a
+    /// sequence diagram ("follow the ActivityId"). Pushes the match into the backend via the query engine
+    /// (SQL WHERE / in-memory predicate) so it's fast even on large sets; capped so a runaway activity
+    /// stays a readable diagram.</summary>
+    public List<LogLine> GatherByActivityId(string activityId, int cap = 500)
+    {
+        var result = new List<LogLine>();
+        if (string.IsNullOrWhiteSpace(activityId) || _source == null) return result;
+        FindPluginCore.Searching.Query.LogQuery.TryParse($"activityid == \"{activityId}\"", out var node, out _);
+        if (node == null) return result; // couldn't build the filter — bail rather than gather everything
+        var spec = FilterSpec.Empty with { Query = node };
+        _source.WalkAllFiltered(spec, new SortSpec("Time", false), l => { if (result.Count < cap) result.Add(l); });
+        return result;
+    }
+
     private void UpdateStatus()
     {
         StatusText = $"{_totalFilteredCount:N0} / {TotalCount:N0} results";

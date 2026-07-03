@@ -3003,6 +3003,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private static string FirstNonBlank(params string[] xs)
         => xs.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "unknown";
 
+    /// <summary>True when the ActivityId is a real correlation id (not blank or the all-zero GUID).</summary>
+    private static bool HasActivity(string a)
+        => !string.IsNullOrWhiteSpace(a) && a.Trim('0', '-', '{', '}', ' ').Length > 0;
+
     /// <summary>Short file name for a row's Source (strips the folder/prefix) so it reads as a participant.</summary>
     private static string SourceFileName(string source)
     {
@@ -3128,6 +3132,25 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             tagSelSub.Items.Add(clearSel);
             flyout.Items.Add(tagSelSub);
 
+            flyout.Items.Add(new MenuFlyoutSeparator());
+        }
+
+        // ----- Follow the ActivityId → reconstruct that one activity as a sequence diagram -----
+        if (HasActivity(row.ActivityId))
+        {
+            var aid = row.ActivityId;
+            var diagAct = new MenuFlyoutItem { Text = "Diagram this activity (ActivityId)", Icon = new SymbolIcon(Symbol.View) };
+            diagAct.Click += (_, __) =>
+            {
+                var activityRows = ViewModel.GatherByActivityId(aid);
+                if (activityRows.Count == 0)
+                {
+                    _ = ShowDiagramInfoAsync("No events", "No loaded rows share this ActivityId.");
+                    return;
+                }
+                DiagramSelectedRows(activityRows, r => FirstNonBlank(r.Provider, r.ProcessName, "unknown"), DefaultDiagramLabel);
+            };
+            flyout.Items.Add(diagAct);
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
