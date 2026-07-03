@@ -62,6 +62,35 @@ public class KnownFilterTests
         Assert.AreEqual(2, result.Values[0].Count);
     }
 
+    // ---- production fast path: the in-memory source's GROUP BY (populate) + OR-set filter (apply) ----
+    // The other test above exercises the SAMPLING fallback (LogAnalysis.Facets); this covers the path the
+    // viewer actually uses for small logs — GetFieldCounts to fill the "Pick from values" list, and the
+    // multi-select set to apply it — plus cross-filter narrowing.
+    [TestMethod]
+    public void InMemorySource_PopulatesFieldCounts_AppliesSet_AndCrossFilters()
+    {
+        var rows = new List<Row>
+        {
+            new("m", provider: "Alpha", task: "T1"),
+            new("m", provider: "Alpha", task: "T1"),
+            new("m", provider: "Beta",  task: "T2"),
+        };
+        using var src = new InMemoryPagedSource(rows.Select((r, i) => new LogLine(r, i)).ToList());
+
+        // Populate: the fast-path GROUP BY that fills the dropdown.
+        var prov = src.GetFieldCounts("Provider", FilterSpec.Empty);
+        Assert.AreEqual(2, prov["Alpha"]);
+        Assert.AreEqual(1, prov["Beta"]);
+
+        // Apply: picking "Alpha" via the multi-select OR-set narrows the result set.
+        Assert.AreEqual(2, src.GetFilteredCount(FilterSpec.Empty with { ProviderSet = new[] { "Alpha" } }));
+
+        // Cross-filter: TaskName values reflect the active Provider selection.
+        var tasks = src.GetFieldCounts("TaskName", FilterSpec.Empty with { ProviderSet = new[] { "Alpha" } });
+        Assert.AreEqual(1, tasks.Count);
+        Assert.IsTrue(tasks.ContainsKey("T1"));
+    }
+
     private sealed class Row : ISearchResult
     {
         private readonly string _m, _provider, _task;

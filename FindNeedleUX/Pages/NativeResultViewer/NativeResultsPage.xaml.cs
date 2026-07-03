@@ -2287,9 +2287,24 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     }
 
     private async System.Threading.Tasks.Task FillKnownFieldAsync(string field, ComboBox combo, ListView multiList,
-        DropDownButton multiButton, string current, System.Collections.Generic.IReadOnlyList<string> currentSet)
+        DropDownButton multiButton, string current, System.Collections.Generic.IReadOnlyList<string> currentSet,
+        bool skipIfPopulated = false)
     {
         using var _ux = FindNeedleUX.Services.Diagnostics.UxMonitor.Track("KnownFacet:" + field);
+
+        // When a flyout/dropdown OPENS we re-fill for cross-filter freshness — but on an already-populated
+        // list that swap (new ItemsSource + SelectedItems.Clear) races the user's click: a fast tick lands
+        // just as the async refill clears it, so the pick "gets clicked away" and the flyout reflows. Small
+        // (in-memory) logs pre-fill at toggle time, so skip the redundant open-time refill for them; large
+        // logs open empty and still fill on first open. Cross-filter stays fresh via RefreshOtherKnownFields.
+        if (skipIfPopulated)
+        {
+            bool isMultiMode = ResultsViewerSettings.GetKnownFilterMode(field) == KnownFilterMode.Multi;
+            ItemsControl used = isMultiMode ? multiList : combo;
+            if (used != null && used.Items.Count > 0
+                && !(used.Items[0] is KnownFacetItem k0 && k0.IsPlaceholder))
+                return;
+        }
 
         // If this control has never been populated (e.g. a big set where we skipped the at-load
         // precompute), show a transient "Loading…" row so the first on-demand open isn't a blank
@@ -2408,29 +2423,31 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void TaskNameFilterAll_Click(object sender, RoutedEventArgs e) => TaskNameFilterMultiList.SelectedItems.Clear();
     private void SourceFilterAll_Click(object sender, RoutedEventArgs e)   => SourceFilterMultiList.SelectedItems.Clear();
 
-    // When a flyout opens, refresh that field's own values against the other active filters (cross-filter).
+    // When a flyout opens, refresh that field's own values against the other active filters (cross-filter)
+    // — but only if it isn't already populated, so the open-time refill can't race the user's click and
+    // dismiss the flyout (skipIfPopulated). Large sets that skipped the precompute open empty and fill here.
     private async void ProviderFlyout_Opening(object sender, object e)
         => await FillKnownFieldAsync("Provider", ProviderFilterCombo, ProviderFilterMultiList, ProviderFilterMulti,
-                                     ViewModel.ProviderFilter, ViewModel.ProviderFilterSet);
+                                     ViewModel.ProviderFilter, ViewModel.ProviderFilterSet, skipIfPopulated: true);
     private async void TaskNameFlyout_Opening(object sender, object e)
         => await FillKnownFieldAsync("TaskName", TaskNameFilterCombo, TaskNameFilterMultiList, TaskNameFilterMulti,
-                                     ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet);
+                                     ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet, skipIfPopulated: true);
     private async void SourceFlyout_Opening(object sender, object e)
         => await FillKnownFieldAsync("Source", SourceFilterCombo, SourceFilterMultiList, SourceFilterMulti,
-                                     ViewModel.SourceFilter, ViewModel.SourceFilterSet);
+                                     ViewModel.SourceFilter, ViewModel.SourceFilterSet, skipIfPopulated: true);
 
     // Single-select known combos: fill on open (mirrors the multi-select flyout's Opening). Without this,
     // a large set (above KnownPrecomputeRowCap, so the at-load precompute was skipped) opens to an EMPTY
     // dropdown — the values only appeared after toggling "Show known" off/on or changing another field.
     private async void ProviderFilterCombo_DropDownOpened(object sender, object e)
         => await FillKnownFieldAsync("Provider", ProviderFilterCombo, ProviderFilterMultiList, ProviderFilterMulti,
-                                     ViewModel.ProviderFilter, ViewModel.ProviderFilterSet);
+                                     ViewModel.ProviderFilter, ViewModel.ProviderFilterSet, skipIfPopulated: true);
     private async void TaskNameFilterCombo_DropDownOpened(object sender, object e)
         => await FillKnownFieldAsync("TaskName", TaskNameFilterCombo, TaskNameFilterMultiList, TaskNameFilterMulti,
-                                     ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet);
+                                     ViewModel.TaskNameFilter, ViewModel.TaskNameFilterSet, skipIfPopulated: true);
     private async void SourceFilterCombo_DropDownOpened(object sender, object e)
         => await FillKnownFieldAsync("Source", SourceFilterCombo, SourceFilterMultiList, SourceFilterMulti,
-                                     ViewModel.SourceFilter, ViewModel.SourceFilterSet);
+                                     ViewModel.SourceFilter, ViewModel.SourceFilterSet, skipIfPopulated: true);
 
     /// <summary>After one known field changes, refresh the OTHER two so their values reflect the new
     /// filter (cross-filter narrowing). No-op when the "Known" dropdowns aren't showing.</summary>
