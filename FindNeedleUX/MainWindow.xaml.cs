@@ -562,6 +562,9 @@ public sealed partial class MainWindow : Window
 
     private void RefreshStatusStrip()
     {
+        // Keep the window caption in sync with the workspace — visible even when the status strip is hidden.
+        UpdateWindowTitle();
+
         // "Remap CSV columns…" is only relevant when the workspace is a single CSV/TSV file.
         if (RemapCsvMenuItem != null)
             RemapCsvMenuItem.Visibility = MiddleLayerService.GetLoadedCsv() != null
@@ -569,13 +572,6 @@ public sealed partial class MainWindow : Window
 
         if (StatusSegments == null) return; // not yet realized
         StatusSegments.Children.Clear();
-
-        // Always lead with a workspace summary ("Untitled workspace (2 sources, 1 rule): a.evtx, …") —
-        // it orients the user before any configurable segments. Injected directly (not catalog-gated) so
-        // it can't be turned off and always reflects the live state.
-        var ws = BuildWorkspaceSegment();
-        if (ws != null) StatusSegments.Children.Add(ws);
-
         foreach (var id in StatusBarCatalog.GetSelectedIds())
         {
             var item = BuildStatusItem(id);
@@ -602,29 +598,18 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Build the always-on workspace summary segment: name, source + rule counts, and a sample of
-    /// source file names. Clicking it opens Sources. Tooltip lists every source.</summary>
-    private FrameworkElement BuildWorkspaceSegment()
+    /// <summary>Reflect the workspace in the window caption: "FindNeedle — Untitled workspace (2 sources,
+    /// 1 rule)". Always visible, unlike the status strip which can be hidden.</summary>
+    private void UpdateWindowTitle()
     {
-        var locs = MiddleLayerService.Locations ?? new List<ISearchLocation>();
-        var rulePaths = MiddleLayerService.GetCurrentQuery()?.RulesConfigPaths ?? new List<string>();
-        int sources = locs.Count, rules = rulePaths.Count;
-
-        var names = locs
-            .Select(l => { try { return System.IO.Path.GetFileName(l.GetName()); } catch { return "(source)"; } })
-            .Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
-        string sample = names.Count == 0
-            ? ""
-            : ": " + string.Join(", ", names.Take(3)) + (names.Count > 3 ? $", +{names.Count - 3} more" : "");
-
-        string value = $"{MiddleLayerService.WorkspaceDisplayName} " +
-                       $"({sources} source{(sources == 1 ? "" : "s")}, {rules} rule{(rules == 1 ? "" : "s")}){sample}";
-        string tip = names.Count == 0 ? "No sources added yet" : string.Join("\n", names);
-
-        var seg = MakeStatusSegment(Symbol.Home, "Workspace", value, tip, null,
-            () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)));
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(seg, "WorkspaceStatusSegment");
-        return seg;
+        try
+        {
+            int sources = MiddleLayerService.Locations?.Count ?? 0;
+            int rules = MiddleLayerService.GetCurrentQuery()?.RulesConfigPaths?.Count ?? 0;
+            Title = $"FindNeedle — {MiddleLayerService.WorkspaceDisplayName} " +
+                    $"({sources} source{(sources == 1 ? "" : "s")}, {rules} rule{(rules == 1 ? "" : "s")})";
+        }
+        catch { /* title is cosmetic */ }
     }
 
     /// <summary>Build one status-bar item by id. Returns null when an info item is empty and shouldn't
