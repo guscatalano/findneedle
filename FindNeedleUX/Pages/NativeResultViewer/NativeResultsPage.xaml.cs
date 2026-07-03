@@ -2952,15 +2952,20 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// rule). Participant = Provider (else ProcessName); each event becomes a note/arrow in time order, so
     /// the causal chain the user would trace by hand falls out of the ordering. Surfaces in-app alongside
     /// rule-generated outputs (same WebView2 render) rather than an external browser.</summary>
-    private async void DiagramSelectedRows(IReadOnlyList<LogLine> rows)
+    /// <summary>Default arrow/note label: the TaskName when it's meaningful, else the Message.</summary>
+    private static string DefaultDiagramLabel(LogLine r)
+        => (!string.IsNullOrWhiteSpace(r.TaskName) && !string.Equals(r.TaskName, "None", StringComparison.OrdinalIgnoreCase))
+            ? r.TaskName : r.Message;
+
+    private async void DiagramSelectedRows(IReadOnlyList<LogLine> rows,
+        Func<LogLine, string> actorOf, Func<LogLine, string> labelOf)
     {
         if (rows == null || rows.Count == 0) return;
         try
         {
             var events = rows.Select(r => new FindNeedleUmlDsl.SequenceDiagramBuilder.Interaction(
-                Participant: FirstNonBlank(r.Provider, r.ProcessName, "unknown"),
-                Label: (!string.IsNullOrWhiteSpace(r.TaskName) && !string.Equals(r.TaskName, "None", StringComparison.OrdinalIgnoreCase))
-                        ? r.TaskName : r.Message,
+                Participant: actorOf(r),
+                Label: labelOf(r),
                 Time: r.LogTime));
 
             var mermaid = FindNeedleUmlDsl.SequenceDiagramBuilder.BuildMermaid(events);
@@ -2997,6 +3002,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private static string FirstNonBlank(params string[] xs)
         => xs.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "unknown";
+
+    /// <summary>Short file name for a row's Source (strips the folder/prefix) so it reads as a participant.</summary>
+    private static string SourceFileName(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return "unknown";
+        try { var f = System.IO.Path.GetFileName(source); return string.IsNullOrEmpty(f) ? source : f; }
+        catch { return source; }
+    }
 
     private async System.Threading.Tasks.Task ShowDiagramInfoAsync(string title, string message)
     {
@@ -3079,9 +3092,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
             // Reconstruct the sequence: turn the selected events (in time order) into a Mermaid sequence
             // diagram — no hand-written rule. The "how did this happen" chain the user would trace by hand.
-            var diagramSel = new MenuFlyoutItem { Text = $"Diagram {selected.Count:N0} selected (sequence)", Icon = new SymbolIcon(Symbol.View) };
-            diagramSel.Click += (_, __) => DiagramSelectedRows(selected);
-            flyout.Items.Add(diagramSel);
+            // Submenu picks who the lifelines (participants) are; Provider is the sensible default.
+            var diagramSub = new MenuFlyoutSubItem { Text = $"Diagram {selected.Count:N0} selected (sequence)" };
+            void AddDiagOpt(string text, Func<LogLine, string> actorOf, Func<LogLine, string> labelOf)
+            {
+                var it = new MenuFlyoutItem { Text = text };
+                it.Click += (_, __) => DiagramSelectedRows(selected, actorOf, labelOf);
+                diagramSub.Items.Add(it);
+            }
+            AddDiagOpt("Participants: Provider", r => FirstNonBlank(r.Provider, r.ProcessName, "unknown"), DefaultDiagramLabel);
+            AddDiagOpt("Participants: Process", r => FirstNonBlank(r.ProcessName, r.ProcessId, "unknown"), DefaultDiagramLabel);
+            AddDiagOpt("Participants: Task", r => FirstNonBlank(r.TaskName, "unknown"), r => r.Message);
+            AddDiagOpt("Participants: Source (file)", r => FirstNonBlank(SourceFileName(r.Source), "unknown"), DefaultDiagramLabel);
+            flyout.Items.Add(diagramSub);
 
             var tagSelSub = new MenuFlyoutSubItem { Text = $"Tag {selected.Count:N0} selected" };
             foreach (var (name, _) in TagOptions)
