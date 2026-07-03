@@ -200,6 +200,8 @@ public sealed partial class ProcessorOutputPage : Page
         if (MiddleLayerService.LastRuleOutputFiles != null) files.AddRange(MiddleLayerService.LastRuleOutputFiles);
         if (query is FindPluginCore.Searching.NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null)
             files.AddRange(nq.GeneratedRuleOutputFiles);
+        // Ad-hoc "Diagram selected rows" output — surfaced here so it shows in-app, not an external browser.
+        if (MiddleLayerService.AdHocDiagramFiles != null) files.AddRange(MiddleLayerService.AdHocDiagramFiles);
         files = files.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         _diagramUsages = (query as FindPluginCore.Searching.NuSearchQuery)?.GeneratedDiagramUsages?.ToList()

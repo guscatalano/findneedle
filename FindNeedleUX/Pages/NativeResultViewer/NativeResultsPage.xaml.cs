@@ -2947,11 +2947,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     // ----- Row right-click context menu -----
     //
-    /// <summary>Build a Mermaid sequence diagram from the selected rows (time-ordered) and open it — the
-    /// "diagram from selection" quick action (UC7→UC9 without hand-authoring a rule). Participant = Provider
-    /// (else ProcessName); each event becomes a note/arrow in time order, so the causal chain the user would
-    /// trace by hand falls out of the ordering. Renders via the Browser path (always works, no mmdc needed)
-    /// and opens the interactive HTML.</summary>
+    /// <summary>Build a Mermaid sequence diagram from the selected rows (time-ordered) and show it on the
+    /// Processor Output page — the "diagram from selection" quick action (UC7→UC9 without hand-authoring a
+    /// rule). Participant = Provider (else ProcessName); each event becomes a note/arrow in time order, so
+    /// the causal chain the user would trace by hand falls out of the ordering. Surfaces in-app alongside
+    /// rule-generated outputs (same WebView2 render) rather than an external browser.</summary>
     private async void DiagramSelectedRows(IReadOnlyList<LogLine> rows)
     {
         if (rows == null || rows.Count == 0) return;
@@ -2975,18 +2975,18 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             foreach (var r in rows) _rowTags[r.RowId] = new RowTag("UML", "in selection diagram");
             RerenderRowsPreservingView();
 
-            var htmlPath = await System.Threading.Tasks.Task.Run(() =>
+            var mmdPath = await System.Threading.Tasks.Task.Run(() =>
             {
                 var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FindNeedle", "selection-diagrams");
                 System.IO.Directory.CreateDirectory(dir);
-                var mmdPath = System.IO.Path.Combine(dir, "selection-" + Guid.NewGuid().ToString("N") + ".mmd");
-                System.IO.File.WriteAllText(mmdPath, mermaid);
-                var gen = new FindNeedleUmlDsl.MermaidUML.MermaidUMLGenerator(null);
-                return gen.GenerateUML(mmdPath, FindNeedlePluginLib.UmlOutputType.Browser);
+                var p = System.IO.Path.Combine(dir, "selection-" + Guid.NewGuid().ToString("N") + ".mmd");
+                System.IO.File.WriteAllText(p, mermaid);
+                return p;
             });
 
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(htmlPath) { UseShellExecute = true }); }
-            catch (Exception ex) { await ShowDiagramInfoAsync("Couldn't open the diagram", ex.Message + "\n\n" + htmlPath); }
+            // Surface it on the Processor Output page (in-app WebView2), like rule-generated diagrams.
+            MiddleLayerService.RegisterAdHocDiagram(mmdPath);
+            MainWindowActions.NavigateToProcessorOutput();
         }
         catch (Exception ex)
         {

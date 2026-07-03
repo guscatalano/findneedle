@@ -120,6 +120,7 @@ public class MiddleLayerService
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
         // Drop the previous run's rule-output state so the Processor Output page clears too.
         LastRuleOutputFiles.Clear();
+        AdHocDiagramFiles = new List<string>(); // selection diagrams don't outlive the workspace
         LastRuleProcessors.Clear();
         LastAutoAddedRules.Clear();
         WorkspaceRulePaths.Clear(); // a loaded workspace's rules don't outlive a clear/new
@@ -161,6 +162,20 @@ public class MiddleLayerService
     /// rendered images, CSV/JSON exports). The Processor Output page surfaces these so generated
     /// diagrams/exports are discoverable — they're written straight to the output folder otherwise.</summary>
     public static List<string> LastRuleOutputFiles { get; private set; } = new();
+
+    /// <summary>Ad-hoc diagrams generated on demand from the viewer (e.g. "Diagram selected rows") rather
+    /// than by an output rule. The Processor Output page surfaces these alongside rule outputs so they show
+    /// in-app instead of an external browser. Latest-only by default (see <see cref="RegisterAdHocDiagram"/>).</summary>
+    public static List<string> AdHocDiagramFiles { get; private set; } = new();
+
+    /// <summary>Register a just-generated ad-hoc diagram file and make it the one the Processor Output page
+    /// shows. Latest-only (replaces any prior ad-hoc diagram) so the page shows "the diagram from your last
+    /// selection" without piling up.</summary>
+    public static void RegisterAdHocDiagram(string path)
+    {
+        AdHocDiagramFiles = new List<string> { path };
+        NotifyStateChanged();
+    }
 
     /// <summary>Human-readable summary of the most recent search (row count + cache/scanned), set on
     /// every search path so the main window status strip's "Last run" is accurate. Null until a run.</summary>

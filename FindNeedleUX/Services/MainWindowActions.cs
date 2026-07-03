@@ -63,6 +63,14 @@ public class MainWindowActions
             mw.NavigateToSearchLocations();
     }
 
+    /// <summary>Switch to the Processor Output page — used after generating an ad-hoc diagram from the
+    /// viewer so it shows in-app alongside rule outputs.</summary>
+    public static void NavigateToProcessorOutput()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            _ = mw.ExecuteMenuActionAsync("results_processoroutput");
+    }
+
     /// <summary>Open a single log file via the file picker (the "Open log file" empty-state action).</summary>
     public static void OpenLogFile()
     {
