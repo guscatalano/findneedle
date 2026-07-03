@@ -1039,6 +1039,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             {
                 RebindGrid();
             }
+            DrawTimeStrip(); // re-colour the time-density strip with the (possibly new) level colours
         });
     }
 
@@ -2874,9 +2875,17 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             var c = HexToBrushConverter.ParseColor(tagHex);
             bg = new Microsoft.UI.Xaml.Media.SolidColorBrush(global::Windows.UI.Color.FromArgb(0x44, c.R, c.G, c.B));
         }
+        else if (levelHex != null)
+        {
+            // Subtle tint (like tagged rows) rather than a full fill, so a strong/dark theme colour
+            // (e.g. "vivid") doesn't make the row text unreadable. The Level column swatch + the Level
+            // chips still show the full colour.
+            var lc = HexToBrushConverter.ParseColor(levelHex);
+            bg = new Microsoft.UI.Xaml.Media.SolidColorBrush(global::Windows.UI.Color.FromArgb(0x55, lc.R, lc.G, lc.B));
+        }
         else
         {
-            bg = levelHex != null ? HexToBrushConverter.Parse(levelHex) : null;
+            bg = null;
         }
         rowEl.Background = bg;
 
