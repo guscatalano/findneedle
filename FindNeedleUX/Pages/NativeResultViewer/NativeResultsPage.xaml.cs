@@ -2947,6 +2947,72 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     // ----- Row right-click context menu -----
     //
+    /// <summary>Build a Mermaid sequence diagram from the selected rows (time-ordered) and open it — the
+    /// "diagram from selection" quick action (UC7→UC9 without hand-authoring a rule). Participant = Provider
+    /// (else ProcessName); each event becomes a note/arrow in time order, so the causal chain the user would
+    /// trace by hand falls out of the ordering. Renders via the Browser path (always works, no mmdc needed)
+    /// and opens the interactive HTML.</summary>
+    private async void DiagramSelectedRows(IReadOnlyList<LogLine> rows)
+    {
+        if (rows == null || rows.Count == 0) return;
+        try
+        {
+            var events = rows.Select(r => new FindNeedleUmlDsl.SequenceDiagramBuilder.Interaction(
+                Participant: FirstNonBlank(r.Provider, r.ProcessName, "unknown"),
+                Label: (!string.IsNullOrWhiteSpace(r.TaskName) && !string.Equals(r.TaskName, "None", StringComparison.OrdinalIgnoreCase))
+                        ? r.TaskName : r.Message,
+                Time: r.LogTime));
+
+            var mermaid = FindNeedleUmlDsl.SequenceDiagramBuilder.BuildMermaid(events);
+            if (string.IsNullOrEmpty(mermaid))
+            {
+                await ShowDiagramInfoAsync("Nothing to diagram",
+                    "The selected rows had no usable participant to build a sequence.");
+                return;
+            }
+
+            // Mark the contributing rows (reuses the existing "UML" tag) so it's visible what fed the diagram.
+            foreach (var r in rows) _rowTags[r.RowId] = new RowTag("UML", "in selection diagram");
+            RerenderRowsPreservingView();
+
+            var htmlPath = await System.Threading.Tasks.Task.Run(() =>
+            {
+                var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FindNeedle", "selection-diagrams");
+                System.IO.Directory.CreateDirectory(dir);
+                var mmdPath = System.IO.Path.Combine(dir, "selection-" + Guid.NewGuid().ToString("N") + ".mmd");
+                System.IO.File.WriteAllText(mmdPath, mermaid);
+                var gen = new FindNeedleUmlDsl.MermaidUML.MermaidUMLGenerator(null);
+                return gen.GenerateUML(mmdPath, FindNeedlePluginLib.UmlOutputType.Browser);
+            });
+
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(htmlPath) { UseShellExecute = true }); }
+            catch (Exception ex) { await ShowDiagramInfoAsync("Couldn't open the diagram", ex.Message + "\n\n" + htmlPath); }
+        }
+        catch (Exception ex)
+        {
+            try { FindNeedlePluginLib.Logger.Instance.Log($"Diagram-from-selection failed: {ex}"); } catch { }
+            await ShowDiagramInfoAsync("Diagram failed", ex.Message);
+        }
+    }
+
+    private static string FirstNonBlank(params string[] xs)
+        => xs.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "unknown";
+
+    private async System.Threading.Tasks.Task ShowDiagramInfoAsync(string title, string message)
+    {
+        try
+        {
+            await new ContentDialog
+            {
+                Title = title,
+                Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true },
+                CloseButtonText = "OK",
+                XamlRoot = this.XamlRoot,
+            }.ShowAsync();
+        }
+        catch { /* dialog couldn't show */ }
+    }
+
     // RightTapped fires on the DataGrid for any descendant. Walk the visual tree to find both
     // the row (LogLine DataContext) and the clicked cell (DataGridCell — its Column.Header
     // tells us which field). Show a MenuFlyout with cell-copy + row-as-JSON/CSV/XML options.
@@ -3010,6 +3076,12 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             var copySelCsv = new MenuFlyoutItem { Text = $"Copy {selected.Count:N0} selected as CSV" };
             copySelCsv.Click += (_, __) => CopyToClipboard(RowsAsCsv(selected));
             flyout.Items.Add(copySelCsv);
+
+            // Reconstruct the sequence: turn the selected events (in time order) into a Mermaid sequence
+            // diagram — no hand-written rule. The "how did this happen" chain the user would trace by hand.
+            var diagramSel = new MenuFlyoutItem { Text = $"Diagram {selected.Count:N0} selected (sequence)", Icon = new SymbolIcon(Symbol.View) };
+            diagramSel.Click += (_, __) => DiagramSelectedRows(selected);
+            flyout.Items.Add(diagramSel);
 
             var tagSelSub = new MenuFlyoutSubItem { Text = $"Tag {selected.Count:N0} selected" };
             foreach (var (name, _) in TagOptions)
