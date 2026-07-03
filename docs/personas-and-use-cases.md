@@ -1,17 +1,21 @@
 # FindNeedle — User Personas & Use Cases
 
-> **v1.2 (this revision).** A deliberate *sharpening* pass, not more detail. Changes from v1.1, and the
-> reasoning, are in the [Changelog](#changelog) at the bottom. The short version: **6 personas → 4**
+> **v1.3 (this revision).** P1 is now **grounded in a real interview** with the one confirmed user (see
+> P1's ✅ block + the [Changelog](#changelog)) — its defining job, quote, frequency, and use-case ordering
+> are their words, and its validation row flipped to **confirmed (n=1)**. This reweighted the matrix
+> (**UC7 rose to #2; UC3 fell to last**). v1.2 (the prior pass) did the structural sharpening: **6 personas → 4**
 > (the thin/overlapping ones were folded, not deleted — see the [mapping](#persona-mapping-v11--v12)),
 > plus four things v1.1 lacked — **non-goals / anti-personas**, a **frequency-weighted matrix** so
 > priority is *derived* rather than asserted, **measurable success** per use case wired to the app's
 > own instrumentation (`UxMonitor` + `PerfLog`), and a **validation plan** (what signal would confirm or
 > kill each persona).
 >
-> **Honesty note (unchanged and important):** these personas are still *builder-authored composites*,
-> not real users. v1.1 code-verified the *flows*; it did **not** verify the *people*. Nothing here is
-> validated demand — treat it as a falsifiable hypothesis. The whole point of the new validation section
-> is to stop this doc from silently ratifying the roadmap it came from.
+> **Honesty note (important):** **P1 is now grounded** in a real interview with the one confirmed user
+> (the author) — see its ✅ block. **P2–P4 remain builder-authored composites** — plausible but unverified.
+> v1.1 code-verified the *flows*; it did not verify the *people*, and for 3 of 4 personas that's still
+> true. Treat P2–P4 as falsifiable hypotheses; the [validation section](#validation-plan--what-would-confirm-or-kill-a-persona)
+> is how we'd confirm or kill them. And note: even the one confirmed user says the tool *"doesn't make my
+> job easier yet"* — grounding a persona is not the same as satisfying it.
 
 ## What FindNeedle is (one paragraph)
 
@@ -61,7 +65,7 @@ v1.1 were folded into them (their unique needs preserved — see mapping). IDs P
 
 | # | Persona | Drives which default-UX decision | Tech level | Core job | Frequency |
 |---|---------|----------------------------------|-----------|----------|-----------|
-| **P1** | **Priya Nair — the Trace Expert** *(incl. large-capture "scale mode", was P5 Dana)* | **Detail-dense & transparent**: never hide provider/symbol/activity detail; scope *before* loading at volume | Expert (ETW/WPP/kernel, scale) | Root-cause a defect from a trace — or mine a firehose capture down to the slice that matters | Daily |
+| **P1** | **Priya Nair — the Trace Expert** ✅ *grounded (n=1)* | **Reconstruct causal sequences, kill the tedium**: extract interaction events via rules → auto-draw the UML sequence/causality diagram (symbols are plumbing) | Expert (ETW/WPP/kernel, scale) | Reconstruct *how* an error happened — the ordered, cross-actor sequence — without hand-tracing it | Occasional (also the author) |
 | **P2** | **Marcus Bell — the Support Triager** *(incl. forensic variant, was P6 Raj)* | **Recipe-reuse & one-search-across-formats**: bundle in, find the error, save the recipe | High (Windows internals/forensics, not kernel) | Triage a customer/incident bundle, find the failure, attach evidence | Many times/day |
 | **P3** | **Elena Rossi — the Automator** | **Machine-drivable & reproducible**: everything the UI does must be scriptable (RuleDSL + MCP) | High (automation, scripting) | Encode analysis as versioned rules; run headless per failure; let an agent do the first pass | Daily, mostly headless |
 | **P4** | **Sam Okafor — the Casual Dev** | **Zero-setup quick path**: open → red line → done, no pipeline, no jargon | Medium (app logs, some ETW) | Open today's log, jump to the error, read context, move on | A few times/week |
@@ -71,32 +75,45 @@ v1.1 were folded into them (their unique needs preserved — see mapping). IDs P
 > — progressive disclosure (calm default, expert affordances one click away) — is a direct consequence
 > of holding both personas rather than averaging them away.
 
-### P1 — Priya Nair · the Trace Expert *(absorbs P5 Dana's scale mode)*
+### P1 — Priya Nair · the Trace Expert  ✅ *grounded (n=1: the author, occasional real use)*
 
-- **Context.** Storage/networking driver work. Repro runs produce `.etl` (WPP from the driver + kernel +
-  manifest providers); symbols in a private PDB share + public MS symbol server; often debugging off the
-  capture machine. **Scale mode (the former Dana):** also analyzes multi-GB / multi-hour captures
-  (36M+ events, 20+ providers) where the first problem is *volume*, not decode.
-- **Technical level.** Expert. ETW, WPP, TMF/PDB, provider GUIDs, ActivityIds, WinDbg, `tracefmt`,
-  `xperf`. Impatient with tooling that hides detail or "just works" opaquely.
-- **Two jobs, one persona (kept together deliberately):**
-  1. *RCA a single trace* — the one sequence of events that explains a hang/bugcheck/corruption: which
-     provider, which thread/activity, what ordering, what was missing.
-  2. *Scope a firehose* — see what's *in* the capture (providers + counts + span) and load only the
-     slice worth analyzing, before waiting minutes.
-- **Why one persona:** both are "an expert who will not be dumbed down and needs the truth about the
-  data." They pull the UI the same way (density, transparency, scoping). Where they diverge — *follow
-  one activity* vs *facet millions* — is a **mode**, noted per use case, not a separate person.
-- **Frustrations.** WPP decode is finicky (TMF/PDB paths, `_NT_SYMBOL_PATH`, symsrv next to dbghelp);
-  huge traces take minutes and blow memory; she needs 2–3 of 26 providers; correlating ActivityId across
-  providers is manual; "why didn't this decode?" is a black box; she can't see per-provider volume before
-  committing to a load.
-- **Success looks like.** Open the trace, load *only* the providers/time window she cares about within
-  seconds, see decoded WPP with a clear record of which symbols resolved and which didn't, and follow one
-  activity end-to-end (ideally as a sequence diagram).
-- **Quote.** *"Don't decode 40 million kernel events I'll never read. Show me my provider, tell me exactly
-  which TMF you couldn't find, and let me follow the ActivityId."*
-- **Primary use cases.** UC2, UC3, UC8, UC9, UC11, UC13; heavy on UC5/UC6.
+> **No longer a guess.** Grounded in an interview with the one confirmed user (the author). See
+> *Reality vs the composite* below for what changed. Short version: the defining job is **reconstructing
+> the causal *sequence* of an error**, not decoding symbols — and the real user's blunt verdict is
+> *"it doesn't make my job easier yet."*
+
+- **Context.** Windows trace/log analysis (ETW `.etl`, WPP, mixed logs). Uses FindNeedle on real work
+  **occasionally** (not daily) and is also its author — a real user, but a low-frequency one.
+- **Technical level.** Expert (ETW/WPP/kernel/scale). Symbols, provider GUIDs, ActivityIds are fluent —
+  but they're *plumbing to get readable events*, **not the job**.
+- **The actual job (8/10 sessions).** Read through a log, **note the specific times and the sequence of
+  events, and reconstruct how the error happened** — the causal chain across actors. Concretely
+  (sanitized, their example): *A→B at time X, then B→C at time Y; C failed while a concurrent D→C call
+  was in flight, and that made B→C fail.* Ordering, timing, and cross-actor interference are the substance.
+- **The pain (why the tool exists).** Doing that reconstruction **by hand is tedious** — manually noting
+  timestamps and hand-tracing the sequence. **RuleDSL is the origin story:** built to *match/extract the
+  interaction events automatically and draw the UML sequence diagram*, so the tedium goes away.
+- **Success looks like.** Point rules at the trace → interaction events are extracted → a **sequence /
+  causality diagram** is produced from the *actual* rows → the manual time-and-sequence noting is gone.
+  Symbol/WPP decode only needs to be reliable enough that the events are readable.
+- **Blunt reality check (their words).** *"Priya's is pretty close, but it doesn't make my job easier."*
+  Today the RuleDSL→UML path still needs hand-authored rules and schema knowledge; the tedium isn't
+  actually removed yet. **This is the single most important gap in the doc:** the one confirmed user's
+  core loop (UC7 → UC9) exists but is not yet *effortless* — which is the entire point of building it.
+- **Quote (theirs).** *"I go through a log noting times and sequences to figure out how the error
+  happened. It's tedious — that's why I built RuleDSL, to do that for me and draw the diagram."*
+- **Primary use cases (ordered by the interview).** **UC9 (sequence diagram) + UC7 (RuleDSL) are the
+  defining pair**, on a substrate of UC5 (time correlation) and UC6 (filter). UC2/UC8/UC11/UC13 are real
+  but supporting; **UC3 (WPP symbols) is plumbing, not the differentiator.**
+
+- **Reality vs the composite (what the interview corrected):**
+  - *Was:* "root-cause a defect; success = decoded WPP + symbol transparency + follow ActivityId."
+    *Is:* success = an **automatic causal-sequence reconstruction + diagram**; symbols are a means, not the end.
+  - *Was:* headlined by WPP/symbol decode (UC3). *Is:* **UC7+UC9 are the headline; UC3 is plumbing.**
+  - *Was:* "Daily." *Is:* **occasional** real use (and the author).
+  - *Still a hypothesis:* the large-capture "scale mode" (former Dana) is plausible but the interview
+    surfaced *sequence reconstruction*, not firehose-mining, as the daily reality — keep scale as a
+    secondary, unconfirmed mode, not a confirmed job.
 
 ### P2 — Marcus Bell · the Support Triager *(absorbs P6 Raj's forensic variant)*
 
@@ -326,27 +343,30 @@ and fewer people; P4 is many people but infrequent + shallow.
 | Use case | P1 (30) | P2 (30) | P3 (20) | P4 (20) | **Score** |
 |----------|:--:|:--:|:--:|:--:|:--:|
 | UC6 Filter / facet / drill | ● | ● | ● | ● | **200** |
+| UC7 RuleDSL tag/enrich | ● | ● | ● | | **160** |
 | UC1 Open & find failure | ○ | ● | ○ | ● | **150** |
 | UC12 Reuse result / workspace | ○ | ● | ● | ○ | **150** |
 | UC5 Correlate by time | ● | ● | ○ | | **140** |
-| UC7 RuleDSL tag/enrich | | ● | ● | | **100** |
 | UC9 Sequence diagram | ● | | ● | | **100** |
 | UC2 Triage & scope large | ● | ○ | | | **90** |
 | UC8 ETW from crash dump | ● | ○ | | | **90** |
 | UC13 Why so slow | ● | ○ | | | **90** |
 | UC11 Inspect without loading | ● | | | ○ | **80** |
 | UC10 AI agent (MCP) | | ○ | ● | | **70** |
-| UC3 WPP/ETW decode + symbols | ● | | | | **60** |
 | UC4 Bundle across sources | | ● | | | **60** |
+| UC3 WPP/ETW decode + symbols | ○ | | | | **30** |
 
-● primary (2) · ○ secondary (1)
+● primary (2) · ○ secondary (1) — P1 row updated from the interview.
 
 **What the derivation surfaces (that the v1.1 assertion hid):**
-- **UC12 (reuse) ties UC1 for #2.** It was buried as "supporting." Corrected: it's promoted and given
-  measurable success.
-- **UC6 dominates** — every persona, primary. It should get the most polish/perf budget, and it has.
-- **UC3 and UC4 rank *last* by frequency** (single-primary flows) despite being defining. That's the
-  point of the next section.
+- **UC7 (RuleDSL) is #2** — because the interview made P1 primary on it (the confirmed user built the tool
+  *to author sequence-extraction rules*). Combined with **UC9**, the **UC7 → UC9 pipeline is the confirmed
+  user's core loop** and should be treated as priority-critical even though UC9's own frequency score is
+  only mid-pack (see the two axes).
+- **UC12 (reuse) ties UC1 for #3.** It was buried as "supporting." Corrected: promoted + measurable success.
+- **UC6 dominates** — every persona, primary. Most polish/perf budget; it has had it.
+- **UC3 (WPP symbols) falls to *last* (30).** The interview reclassified it from P1's headline to
+  *plumbing*. Still quality-critical (next section), just not a priority-by-frequency.
 
 ### Two axes: frequency vs differentiation
 
@@ -355,12 +375,16 @@ Some low-score use cases are *why someone chooses FindNeedle over `grep`/Notepad
 
 | | High frequency | Low frequency |
 |---|---|---|
-| **High differentiation** | UC6 filter-at-scale, UC5 correlate | **UC3 WPP+symbols, UC8 dump-ETW, UC9 diagram, UC2 scope** |
+| **High differentiation** | UC6 filter-at-scale, **UC7 RuleDSL**, UC5 correlate | **UC9 sequence diagram**, UC3 WPP+symbols, UC8 dump-ETW, UC2 scope |
 | **Low differentiation** | UC1 open, UC12 reuse | UC4 bundle, UC10 MCP (today) |
 
-- **High-freq × high-diff (UC6, UC5):** the crown jewels — invest relentlessly.
-- **Low-freq × high-diff (UC3, UC8, UC9, UC2):** don't optimize for volume, but they must be *excellent
-  and trustworthy* — they're the demo that wins P1/P2. A bug here costs more than its frequency implies.
+- **High-freq × high-diff (UC6, UC7, UC5):** the crown jewels — invest relentlessly. UC7 joined here once
+  the interview confirmed P1's real job is *authoring extraction/sequence rules*.
+- **Low-freq × high-diff (UC9, UC3, UC8, UC2):** don't optimize for raw volume, but they must be *excellent
+  and trustworthy* — a bug here costs more than its frequency implies. **UC9 is the exception that proves
+  the point:** it's the *confirmed user's actual goal* (paired with UC7), so despite a mid frequency score
+  it is **priority-critical, not "nice to have."** The **UC7 → UC9 loop** is where the one real user is
+  currently under-served ("doesn't make my job easier yet") — the highest-leverage thing to fix.
 - **High-freq × low-diff (UC1, UC12):** table stakes — must be frictionless, but they won't differentiate.
 - Nothing should live in low-freq × low-diff for long; if it does, question whether it earns its surface.
 
@@ -375,7 +399,7 @@ log, never content, never network), plus qualitative checks.
 
 | Persona | Confirming signal | Killing / "we're wrong" signal |
 |---------|-------------------|-------------------------------|
-| **P1 Trace Expert** | Meaningful share of sessions open `.etl`, run WPP decode, or use Inspect ETL / scoping (countable from `PerfLog` phase events) | Almost all sessions are text/evtx only; scoping + WPP paths rarely exercised → the "expert" is aspirational |
+| **P1 Trace Expert** | ✅ **Confirmed (n=1: the author, occasional).** Real job verified by interview: reconstruct causal sequences via the RuleDSL→UML loop. *Still open:* whether anyone else runs it, whether it's daily for anyone, whether the scale/scoping mode is real. | The user keeps hand-tracing sequences because the UC7→UC9 loop "doesn't make the job easier" → if that isn't fixed, even the one confirmed user churns back to notepad + manual notes |
 | **P2 Triager** | Frequent ZIP/CAB/folder-bundle opens; workspaces saved & reopened (UC12) | Bundles rare; nobody saves recipes → we built for a workflow no one runs |
 | **P3 Automator** | MCP server enabled; rules authored/imported; CLI runs | MCP toggled ~never; rule files stay empty → automation is a story, not a user |
 | **P4 Casual Dev** | Large share of sessions = single small `.log`/`.txt`, no rules, quick filter, close | If this never happens, the "calm default" investment is mis-aimed (but keep P4 as a design counterweight regardless) |
@@ -403,7 +427,24 @@ by it, not by the author.
 
 ## Changelog
 
-### v1.2 (this revision) — sharpening pass
+### v1.3 (this revision) — grounded P1 in a real interview (n=1)
+- **Interviewed the one confirmed user (the author); P1 is now grounded, not composite.** Corrections in
+  their words: the defining job is **causal-sequence reconstruction** (note the times, rebuild the
+  ordering, work out *how* the error happened — e.g. "A→B at X, B→C at Y, a concurrent D→C made B→C
+  fail"), and the origin pain is that doing it by hand is **tedious**. **RuleDSL + auto UML diagram is the
+  intended fix** and the reason the tool exists.
+- **UC7 + UC9 are P1's defining pair; UC3 (WPP symbols) demoted to plumbing.** Matrix reweighted from the
+  interview (P1 now primary on UC7, secondary on UC3): **UC7 rose to #2 (160); UC3 fell to last (30)**.
+  The **UC7 → UC9 loop** is flagged as the confirmed user's core loop — priority-critical despite UC9's
+  mid frequency score.
+- **P1 frequency corrected Daily → Occasional** (the confirmed user is occasional + the author); daily
+  frequency and the scale/scoping "mode" remain unvalidated hypotheses.
+- **Named the single most important gap:** the real user's verdict is *"it doesn't make my job easier
+  yet"* — the UC7→UC9 loop still needs hand-authored rules/schema knowledge, so the tedium isn't actually
+  removed. That's now the doc's headline finding and P1's churn/killing signal.
+- **Validation table:** P1 flipped to **Confirmed (n=1)**; P2–P4 remain hypotheses.
+
+### v1.2 — sharpening pass
 - **Personas 6 → 4.** Folded P5 Dana into **P1** ("scale mode") and P6 Raj into **P2** ("forensic
   variant"); documented the mapping and where each unique need went (nothing deleted). Kept a persona
   only if it drives a *distinct default-UX decision*; made that criterion explicit. Stable IDs P1–P4 so
