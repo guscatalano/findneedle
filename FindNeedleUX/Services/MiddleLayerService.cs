@@ -68,6 +68,14 @@ public class MiddleLayerService
     /// Lets pages (e.g. Processor Output) show their empty state instead of stale data.</summary>
     public static bool IsWorkspaceCleared => _workspaceCleared;
 
+    /// <summary>File name (no extension) of the currently open/saved workspace, or null when it hasn't been
+    /// saved/opened. The status bar surfaces it (falling back to "Untitled workspace").</summary>
+    public static string WorkspaceName { get; private set; }
+
+    /// <summary>Human label for the current workspace — the saved name, or "Untitled workspace".</summary>
+    public static string WorkspaceDisplayName
+        => string.IsNullOrWhiteSpace(WorkspaceName) ? "Untitled workspace" : WorkspaceName;
+
     public static void AddFolderLocation(string location)
     {
         // Don't add the same folder/file twice — repeated adds (e.g. an agent calling add_folder per run)
@@ -115,6 +123,7 @@ public class MiddleLayerService
         LastRuleProcessors.Clear();
         LastAutoAddedRules.Clear();
         WorkspaceRulePaths.Clear(); // a loaded workspace's rules don't outlive a clear/new
+        WorkspaceName = null;       // back to "Untitled workspace"
         // Reset the active rule set. Rules (incl. auto-added ones like the DISM diagram rules) live on
         // the query's RulesConfigPaths and otherwise survive the clear AND get carried onto the next
         // file you load — so the Processor Output page would keep offering/generating a DISM diagram
@@ -1207,6 +1216,7 @@ public class MiddleLayerService
         }
         // Restore the saved rule set durably (UpdateSearchQuery folds these into the rebuilt query).
         WorkspaceRulePaths = o.RulesConfigPaths != null ? new List<string>(o.RulesConfigPaths) : new List<string>();
+        WorkspaceName = Path.GetFileNameWithoutExtension(filename);
         UpdateSearchQuery();
         NotifyStateChanged();
     }
@@ -1228,6 +1238,8 @@ public class MiddleLayerService
         var rules = SearchQueryUX.CurrentQuery?.RulesConfigPaths ?? new List<string>();
         SerializableSearchQuery r = SearchQueryJsonReader.GetSerializableSearchQuery(Locations, Filters, rules, "Workspace");
         File.WriteAllText(filename, r.GetQueryJson());
+        WorkspaceName = Path.GetFileNameWithoutExtension(filename);
+        NotifyStateChanged();
     }
 
     public static void RemoveLocationByName(string name)

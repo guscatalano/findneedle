@@ -1063,11 +1063,37 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // per text column so the row text actually resizes (the caller rebinds the grid so any
         // realized cells re-render at the new size).
         ResultsGrid.FontSize = size;
-        foreach (var col in ResultsGrid.Columns)
-            if (col is DataGridTextColumn tc) tc.FontSize = size;
         // Keep the row height proportional to the text. The ratio is a user-selectable density preset
         // (default 1.9); floor at 26px so rows never collapse below the comfortable baseline.
-        ResultsGrid.RowHeight = Math.Max(26, Math.Ceiling(size * ratio));
+        double rowHeight = Math.Max(26, Math.Ceiling(size * ratio));
+        ResultsGrid.RowHeight = rowHeight;
+        foreach (var col in ResultsGrid.Columns)
+            if (col is DataGridTextColumn tc)
+            {
+                tc.FontSize = size;
+                tc.ElementStyle = BuildCellStyle(tc, rowHeight);
+            }
+    }
+
+    // Base cell styles (from XAML) keyed by the column's originally-assigned style, so re-deriving on
+    // each font/height change doesn't stack BasedOn chains.
+    private readonly Dictionary<DataGridTextColumn, Style> _baseCellStyles = new();
+
+    /// <summary>Derive a per-column cell style whose MinHeight equals the live row height. The toolkit
+    /// centers content-sized cell content vertically; forcing the text block to the full row height makes
+    /// its (top-anchored) text sit at the TOP of the row instead of the middle. BasedOn the column's
+    /// original XAML style so VerticalAlignment=Top and the Message column's hover tooltip are preserved.</summary>
+    private Style BuildCellStyle(DataGridTextColumn col, double rowHeight)
+    {
+        if (!_baseCellStyles.TryGetValue(col, out var baseStyle))
+        {
+            // First call: the column still carries its XAML ElementStyle — capture it as the base.
+            baseStyle = col.ElementStyle as Style;
+            _baseCellStyles[col] = baseStyle;
+        }
+        var s = new Style(typeof(TextBlock)) { BasedOn = baseStyle };
+        s.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, rowHeight));
+        return s;
     }
 
     /// <summary>Apply the user's configured scrollbar thickness. Overrides the WinUI
