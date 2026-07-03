@@ -11,6 +11,38 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- Scrollbars were hard to see: the default thumb is a low-opacity gray and the resting bar
+                 is transparent, so a wide bar just showed the rows through it. Override the ScrollBar
+                 theme brushes app-wide with a strong thumb + a SOLID gutter background (distinct from the
+                 rows), per theme. This is the canonical override point (theme dictionaries) so it wins over
+                 the control's own ThemeResource lookups. -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="ScrollBarBackground"             Color="#FF2D2D2D"/>
+                    <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver"  Color="#FF383838"/>
+                    <SolidColorBrush x:Key="ScrollBarTrackFill"             Color="#FF2D2D2D"/>
+                    <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver"  Color="#FF383838"/>
+                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#FFB4B4B4"/>
+                    <SolidColorBrush x:Key="ScrollBarThumbFill"             Color="#FFB4B4B4"/>
+                    <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver"  Color="#FFD6D6D6"/>
+                    <SolidColorBrush x:Key="ScrollBarThumbFillPressed"      Color="#FFEDEDED"/>
+                    <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="#FFD6D6D6"/>
+                    <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="#FFF0F0F0"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="ScrollBarBackground"             Color="#FFE6E6E6"/>
+                    <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver"  Color="#FFDADADA"/>
+                    <SolidColorBrush x:Key="ScrollBarTrackFill"             Color="#FFE6E6E6"/>
+                    <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver"  Color="#FFDADADA"/>
+                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#FF7A7A7A"/>
+                    <SolidColorBrush x:Key="ScrollBarThumbFill"             Color="#FF7A7A7A"/>
+                    <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver"  Color="#FF565656"/>
+                    <SolidColorBrush x:Key="ScrollBarThumbFillPressed"      Color="#FF3A3A3A"/>
+                    <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="#FF565656"/>
+                    <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="#FF2A2A2A"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
             <SolidColorBrush x:Key="SystemAccentColorBrush"
                  Color="{StaticResource SystemAccentColor}"
                  Opacity=".33" />

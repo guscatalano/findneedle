@@ -571,7 +571,7 @@ public static class ResultsViewerSettings
     /// corrupt value can't make the bar invisible or eat the grid. Applied as a <c>ScrollBarSize</c>
     /// resource override when the viewer page is built. Broadcasts Changed.
     /// </summary>
-    public const double DefaultScrollBarSize = 12;
+    public const double DefaultScrollBarSize = 14;
     public const double MinScrollBarSize = 8;
     public const double MaxScrollBarSize = 32;
     public static double ClampScrollBarSize(double v) =>
