@@ -210,6 +210,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Idempotent: subtract-then-add is safe even if we accidentally double-subscribe.
         ResultsViewerSettings.Changed -= OnSettingsChanged;
         ResultsViewerSettings.Changed += OnSettingsChanged;
+        _hasLoadedOnce = true;
 
         // Re-evaluate the decode banner when a streaming load finishes — by then the new file's stats
         // are captured, so a stale "missing symbols" warning from a previous bad file clears (or the
@@ -1016,6 +1017,22 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private FindNeedlePluginUtils.StructuredLog.PayloadFormat _appliedPayloadFormat =
         ResultsViewerSettings.EtwPayloadFormat;
     private string _appliedPayloadTemplate = ResultsViewerSettings.EtwPayloadCustomTemplate;
+
+    private bool _hasLoadedOnce;
+
+    /// <summary>NavigationCacheMode.Required means <c>Loaded</c> doesn't reliably re-fire when returning to
+    /// this cached page (see <see cref="ReloadResultsAsync"/>), so a theme / viewer setting changed on the
+    /// Settings page was being missed — the viewer unsubscribed from <c>Changed</c> on Unload and never
+    /// re-applied. <c>OnNavigatedTo</c> fires on every navigation, so re-subscribe and re-apply the current
+    /// settings here whenever the viewer comes back to the foreground.</summary>
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        if (!_hasLoadedOnce) return; // first navigation — the Loaded handler does the initial apply
+        ResultsViewerSettings.Changed -= OnSettingsChanged;
+        ResultsViewerSettings.Changed += OnSettingsChanged;
+        OnSettingsChanged(); // re-apply theme + level overrides + rebind (via the dispatcher)
+    }
 
     private void OnSettingsChanged()
     {
