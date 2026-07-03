@@ -1309,12 +1309,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void ApplyPersistedLevelOverrides()
     {
+        // Re-apply the chosen theme FIRST. LoadResultsAsync repopulates ViewModel.Levels from the DEFAULT
+        // theme colors, which clobbers a non-default ThemeName applied earlier — so without this, changing
+        // the Color theme had no visible effect (the grid always showed the default palette). Then layer any
+        // per-level overrides on top.
+        ViewModel.ApplyTheme(ResultsViewerSettings.ThemeName);
         var overrides = ResultsViewerSettings.LevelColors;
-        if (overrides.Count == 0) { RebuildLevelLookup(); return; }
-        foreach (var entry in ViewModel.Levels)
+        if (overrides.Count > 0)
         {
-            if (overrides.TryGetValue(entry.Level, out var hex))
-                entry.HexColor = hex;
+            foreach (var entry in ViewModel.Levels)
+            {
+                if (overrides.TryGetValue(entry.Level, out var hex))
+                    entry.HexColor = hex;
+            }
         }
         RebuildLevelLookup();
     }
