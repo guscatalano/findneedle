@@ -518,55 +518,55 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ["Subtle"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#33D32F2F" }, { "Error",   "#1FEF5350" },
-            { "Warning",      "#22FFA000" }, { "Info",    "Transparent" },
+            { "Warning",      "#22FFA000" }, { "Info",    "#0E64B5F6" },
             { "Verbose",      "#12808080" }, { "Unknown", "Transparent" }
         },
         ["Vivid"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#FFB3B3" }, { "Error",   "#FFE1E1" },
-            { "Warning",      "#FFF4CC" }, { "Info",    "Transparent" },
+            { "Warning",      "#FFF4CC" }, { "Info",    "#EAF4FF" },
             { "Verbose",      "#F1F1F1" }, { "Unknown", "Transparent" }
         },
         // The familiar log/console look: red errors, yellow warnings, gray for trace levels.
         ["Classic"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#66B71C1C" }, { "Error",   "#44F44336" },
-            { "Warning",      "#44FFEB3B" }, { "Info",    "Transparent" },
+            { "Warning",      "#44FFEB3B" }, { "Info",    "#16546E7A" },
             { "Verbose",      "#1F9E9E9E" }, { "Unknown", "Transparent" }
         },
         // Stronger translucent semantic tints (red/amber) — same meaning as Subtle, more presence.
         ["Bold"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#59D50000" }, { "Error",   "#33F44336" },
-            { "Warning",      "#3DFF9800" }, { "Info",    "Transparent" },
+            { "Warning",      "#3DFF9800" }, { "Info",    "#242196F3" },
             { "Verbose",      "#1F607D8B" }, { "Unknown", "Transparent" }
         },
         // Cool blue/teal palette (aesthetic, translucent — works on light or dark).
         ["Ocean"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#4601579B" }, { "Error",   "#300288D1" },
-            { "Warning",      "#2A26A69A" }, { "Info",    "Transparent" },
+            { "Warning",      "#2A26A69A" }, { "Info",    "#1A26C6DA" },
             { "Verbose",      "#1F4DD0E1" }, { "Unknown", "Transparent" }
         },
         // Green / earth palette.
         ["Forest"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#461B5E20" }, { "Error",   "#30388E3C" },
-            { "Warning",      "#2A9E9D24" }, { "Info",    "Transparent" },
+            { "Warning",      "#2A9E9D24" }, { "Info",    "#18AED581" },
             { "Verbose",      "#1F689F38" }, { "Unknown", "Transparent" }
         },
         // Warm purple → orange palette.
         ["Sunset"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#464A148C" }, { "Error",   "#30AD1457" },
-            { "Warning",      "#2AEF6C00" }, { "Info",    "Transparent" },
+            { "Warning",      "#2AEF6C00" }, { "Info",    "#18CE93D8" },
             { "Verbose",      "#1FF06292" }, { "Unknown", "Transparent" }
         },
         // Neutral grayscale intensity ramp.
         ["Grayscale"] = new Dictionary<string, string>
         {
             { "Catastrophic", "#44424242" }, { "Error",   "#2C757575" },
-            { "Warning",      "#249E9E9E" }, { "Info",    "Transparent" },
+            { "Warning",      "#249E9E9E" }, { "Info",    "#12E0E0E0" },
             { "Verbose",      "#16BDBDBD" }, { "Unknown", "Transparent" }
         },
         ["None"] = new Dictionary<string, string>

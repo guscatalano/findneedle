@@ -57,4 +57,21 @@ public class LevelColorPresetTests
                 Assert.IsTrue(ColorToken.IsMatch(color),
                     $"theme '{theme}' level '{level}' has an invalid color token '{color}'");
     }
+
+    [TestMethod]
+    public void EveryPreset_ExceptNone_TintsInfo()
+    {
+        // Info used to be "Transparent" in every preset, which made a theme change look like it "didn't
+        // apply" on Info-heavy logs. Info is now tinted (a faint wash) in every real theme; only the
+        // explicit "None" theme leaves everything untinted. This guards that regression.
+        foreach (var (theme, colors) in NativeResultsPageViewModel.ThemePresets.Select(kv => (kv.Key, kv.Value)))
+        {
+            var info = colors["Info"];
+            if (theme == "None")
+                Assert.AreEqual("Transparent", info, "the 'None' theme must leave Info untinted");
+            else
+                Assert.AreNotEqual("Transparent", info,
+                    $"theme '{theme}' should tint Info (a faint wash), not leave it Transparent");
+        }
+    }
 }

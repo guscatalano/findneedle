@@ -1054,9 +1054,37 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             }
             else
             {
-                RebindGrid();
+                // Force a FULL re-realization so EVERY row re-runs its tint with the new colours. A
+                // synchronous null→same-collection (RebindGrid) can be coalesced to a no-op on an
+                // already-realized grid, which left a live theme change only PARTLY applied (just the rows
+                // realized at that instant). Deferring the re-bind to the next tick guarantees the grid
+                // clears first, then re-realizes all rows (LoadingRow re-fires for each). Scroll + selection
+                // are preserved.
+                RebindPreservingView();
             }
             DrawTimeStrip(); // re-colour the time-density strip with the (possibly new) level colours
+        });
+    }
+
+    /// <summary>Re-bind the grid so every row re-realizes (re-firing LoadingRow → the level tint), keeping
+    /// the current scroll offset + selection. Unlike <see cref="RebindGrid"/>, the re-set is DEFERRED so the
+    /// null is processed first — a synchronous null→back can be a no-op that leaves stale row tints.</summary>
+    private void RebindPreservingView()
+    {
+        if (ResultsGrid == null) return;
+        var sel = ResultsGrid.SelectedItem;
+        var sv = FindDescendants<ScrollViewer>(ResultsGrid).FirstOrDefault();
+        double offset = sv?.VerticalOffset ?? 0;
+
+        ResultsGrid.ItemsSource = null;
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (ResultsGrid == null) return;
+            ResultsGrid.ItemsSource = ViewModel.Results;
+            if (sel != null) ResultsGrid.SelectedItem = sel;
+            if (sv != null && offset > 0)
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                    () => { try { sv.ChangeView(null, offset, null, disableAnimation: true); } catch { /* best-effort */ } });
         });
     }
 
@@ -2944,11 +2972,15 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
         else if (levelHex != null)
         {
-            // Subtle tint (like tagged rows) rather than a full fill, so a strong/dark theme colour
-            // (e.g. "vivid") doesn't make the row text unreadable. The Level column swatch + the Level
-            // chips still show the full colour.
+            // Honour each preset colour's OWN alpha (so a preset can make Info faint and Error stronger),
+            // but cap it so a strong/opaque colour (e.g. "Vivid") can't fill the row so hard the text
+            // becomes unreadable. A fully-transparent colour (Info/Unknown in the untinted presets, or an
+            // A=0 value) leaves the row untinted. The Level column swatch + chips still show the full colour.
             var lc = HexToBrushConverter.ParseColor(levelHex);
-            bg = new Microsoft.UI.Xaml.Media.SolidColorBrush(global::Windows.UI.Color.FromArgb(0x55, lc.R, lc.G, lc.B));
+            bg = lc.A == 0
+                ? null
+                : new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    global::Windows.UI.Color.FromArgb(Math.Min(lc.A, (byte)0x77), lc.R, lc.G, lc.B));
         }
         else
         {
