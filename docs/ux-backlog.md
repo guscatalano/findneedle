@@ -33,6 +33,12 @@ State so the backlog reflects reality. All on `master`.
 - **The core loop, partial (UC7/UC9):** Rules hub opens config-first + plainer framing; **"Add a starter
   rule"**; **live "would this match?" preview** in the reformat editor; **per-rule match counts + timing**
   on the Active-rules page; Processor-Output previews deferred diagrams before generating.
+- **The linchpin, rung (a) — diagram-from-selection (UC7→UC9):** from the viewer, select rows → **"Diagram
+  selected rows"** builds a Mermaid sequence diagram directly, *no hand-written rule*
+  (`SequenceDiagramBuilder`: time-order → arrows between actors, ×N coalescing, cap+truncation). Plus
+  **"Diagram this activity"** (follow one ActivityId end-to-end) and a **participant picker**
+  (Provider/Process/Task/Source); renders inline on the Processor-Output page, not an external browser.
+  *This is the AI-free chunk of the #1 bet — the first thing that actually removes P1's tedium.*
 - **Time (UC5):** **time-density strip** in the viewer — level-colored, click-to-zoom, hide/restore
   (closed the "no visual timeline" gap from v1.1).
 - **Viewer polish:** full-text hover tooltip on Message; **rows top-aligned + single-line** (first line
@@ -51,11 +57,13 @@ State so the backlog reflects reality. All on `master`.
 - **What.** Close the gap between "I can see the problem" and "the tool reconstructs it for me." Today the
   RuleDSL → sequence-diagram value exists but requires hand-authoring a rules file + schema knowledge — so
   it *doesn't remove the tedium* (P1's exact complaint). Deliver it as a ladder, cheapest-first:
-  - **(a) Diagram-from-selection / "diagram this activity"** — from the viewer, select rows (or an
-    ActivityId) → generate a sequence/causality diagram directly, no hand-written rule. *Manual, no AI —
-    removes most of the tedium immediately.* · **M**
-  - **(b) Sequence-rule templates** — one-click starter UML rules (participants + common match patterns)
-    the user tweaks, instead of authoring from a blank file. · **S–M**
+  - **(a) Diagram-from-selection / "diagram this activity"** — ✅ **SHIPPED.** From the viewer, select rows
+    (or follow one ActivityId) → generate a sequence diagram directly, no hand-written rule. `SequenceDiagram
+    Builder` + participant picker + inline Processor-Output render. *Manual, no AI — removes most of the
+    tedium immediately.* · **M**
+  - **(b) Sequence-rule templates** — ⬅ **NEXT.** One-click starter UML rules (participants + common match
+    patterns) the user tweaks, instead of authoring from a blank file. Bridges (a)'s throwaway diagram to a
+    *saved, re-runnable* rule — ideally "save this selection-diagram as a rule." · **S–M**
   - **(c) AI-assisted authoring (the linchpin proper)** — an agent reads the log/selection, **proposes a
     RuleDSL rule + a sequence UML**, and the human **reviews/edits/accepts**. Uses the MCP surface (UC10).
     · **L**
@@ -65,7 +73,8 @@ State so the backlog reflects reality. All on `master`.
   show the matched rows behind every diagram element, make edits easy, never a black box. If users can't
   trust it, they revert to hand-work and the whole bet fails.
 - **Why now.** It's the only item that fixes the confirmed user's #1 gap; (a) alone is high-value and
-  AI-free, so we get most of the win before taking on the trust problem in (c).
+  AI-free, so we get most of the win before taking on the trust problem in (c). **(a) has now shipped** —
+  the next rung is **(b) templates**, then MCP groundwork (§2.1) tees up the AI-assisted (c).
 
 ### 1.2 During-run progress (the open half of the old "run feedback")  · **M**
 - **What.** Rows-scanned / current-file / elapsed during a run, not a bare spinner. (Pre-run summary
@@ -133,6 +142,7 @@ State so the backlog reflects reality. All on `master`.
 | 3.1 | Cross-source time normalization | UC5 · P2 | L | LATER |
 | 3.2 | Left activity rail (D4) | all | L | LATER |
 
-**Recommended next build:** **1.1(a) diagram-from-selection** — the biggest chunk of the #1 bet, AI-free,
-and it directly attacks P1's "doesn't make my job easier yet." Then 1.1(b) templates, then 1.2/1.3 as the
-safe wins, and 2.1 to tee up the AI-assisted 1.1(c).
+**Recommended next build:** **1.1(b) sequence-rule templates** — 1.1(a) diagram-from-selection has shipped
+(the AI-free chunk that attacks P1's "doesn't make my job easier yet"). (b) turns those throwaway
+selection-diagrams into *saved, re-runnable* rules from one-click starters. Then 1.2/1.3 as the safe wins,
+and 2.1 to tee up the AI-assisted 1.1(c).
