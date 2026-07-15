@@ -98,6 +98,16 @@ public interface IPagedLogSource : IDisposable
     /// </summary>
     FindNeedleUX.LogLine GetByRowId(long rowId);
 
+    /// <summary>
+    /// 0-based ordinal of the row with <paramref name="rowId"/> inside the <paramref name="filters"/> +
+    /// <paramref name="sort"/> result set — i.e. the position <see cref="GetPage"/> would surface it at.
+    /// Returns -1 when the row doesn't match the filter (or doesn't exist). Lets the viewer stay
+    /// anchored on a row across a filter change (e.g. clearing a search) instead of resetting to page 1.
+    /// For rows sharing an equal sort key the ordinal is resolved by RowId, which may differ from the
+    /// page query's tie order — page-accurate, not row-exact, within a run of ties.
+    /// </summary>
+    int GetRowPosition(FilterSpec filters, SortSpec sort, long rowId);
+
     /// <summary>Distinct level names present anywhere in the store (for the filter dropdown).</summary>
     List<string> GetDistinctLevels();
 

@@ -1689,6 +1689,60 @@ namespace FindPluginCore.Implementations.Storage
                 string.IsNullOrEmpty(f.LogTimeTo));
 
         /// <summary>
+        /// 0-based ordinal of the row with <paramref name="id"/> inside the filter+sort result set —
+        /// the position <see cref="GetFilteredPage"/> would surface it at. -1 when the row doesn't
+        /// match the filter (or doesn't exist). Lets the viewer stay anchored on a row across a
+        /// filter change (e.g. clearing a search) without paging through the set. Load order is two
+        /// indexed COUNTs on the Id primary key; a sorted view ranks via a ROW_NUMBER window with Id
+        /// as the tiebreak (page-accurate, not row-exact, within a run of equal sort keys).
+        /// </summary>
+        public int GetFilteredRowPosition(FilterInput filter, SortInput sort, long id)
+        {
+            lock (_sync)
+            {
+                int Run(bool ftsAvailable)
+                {
+                    var (where, ps) = BuildWhere(filter, ftsAvailable, _shardCount);
+                    var and = string.IsNullOrEmpty(where) ? "WHERE " : where + " AND ";
+
+                    if (sort == null || string.IsNullOrEmpty(sort.Column))
+                    {
+                        // Load order (ORDER BY Id ASC): the anchor must itself match the filter,
+                        // then its ordinal is how many matching rows precede it by Id.
+                        using (var exists = _connection.CreateCommand())
+                        {
+                            exists.CommandText = $"SELECT COUNT(*) FROM FilteredResults {and}Id = @anchorId";
+                            BindParams(exists, ps);
+                            exists.Parameters.AddWithValue("@anchorId", id);
+                            if (Convert.ToInt32(exists.ExecuteScalar() ?? 0) == 0) return -1;
+                        }
+                        using var count = _connection.CreateCommand();
+                        count.CommandText = $"SELECT COUNT(*) FROM FilteredResults {and}Id < @anchorId";
+                        BindParams(count, ps);
+                        count.Parameters.AddWithValue("@anchorId", id);
+                        return Convert.ToInt32(count.ExecuteScalar() ?? 0);
+                    }
+
+                    // Sorted view: rank every matching row under the page query's ORDER BY (Id breaks
+                    // ties deterministically), then pick the anchor's rank. No row → anchor filtered out.
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText =
+                        "SELECT rn - 1 FROM (" +
+                        $"SELECT Id, ROW_NUMBER() OVER ({BuildOrderBy(sort)}, Id ASC) AS rn " +
+                        $"FROM FilteredResults {where}" +
+                        ") WHERE Id = @anchorId";
+                    BindParams(cmd, ps);
+                    cmd.Parameters.AddWithValue("@anchorId", id);
+                    var rank = cmd.ExecuteScalar();
+                    return rank == null || rank == DBNull.Value ? -1 : Convert.ToInt32(rank);
+                }
+
+                try { return Run(UseFts); }
+                catch (SqliteException) when (UseFts && HasGlobalSearch(filter)) { return Run(false); }
+            }
+        }
+
+        /// <summary>
         /// Fetch a single filtered row by its stable <c>FilteredResults.Id</c>, independent of any
         /// filter/sort/paging. Returns null if no such row exists. Used for record lookup
         /// (e.g. the MCP <c>get_record</c> tool and row tagging by stable id).

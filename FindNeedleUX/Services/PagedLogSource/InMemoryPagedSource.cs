@@ -60,6 +60,14 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         return null;
     }
 
+    public int GetRowPosition(FilterSpec filters, SortSpec sort, long rowId)
+    {
+        EnsureCache(filters, sort);
+        for (int i = 0; i < _filtered.Count; i++)
+            if (_filtered[i].RowId == rowId) return i;
+        return -1;
+    }
+
     public List<string> GetDistinctLevels()
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

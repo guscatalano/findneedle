@@ -98,6 +98,9 @@ public sealed class SqlitePagedSource : IPagedLogSource
         return r == null ? null : new FindNeedleUX.LogLine(r, -1);
     }
 
+    public int GetRowPosition(FilterSpec filters, SortSpec sort, long rowId)
+        => _storage.GetFilteredRowPosition(ToInput(filters), ToSortInput(sort), rowId);
+
     public List<string> GetDistinctLevels()
     {
         var ints = _storage.GetDistinctLevels();

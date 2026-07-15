@@ -200,6 +200,47 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     public RangeObservableCollection<LogLine> Results { get; } = new();
 
+    /// <summary>Stable <see cref="LogLine.RowId"/> of the grid's selected row, pushed by the view on
+    /// selection change (null when nothing is selected). Used as the anchor when a search is cleared
+    /// so the viewer can return to the page the user was actually looking at.</summary>
+    public long? SelectedRowId { get; set; }
+
+    // Row the NEXT filter apply should keep in view. Set when the search box is cleared (the user
+    // "unsearches" to read the lines around a match); the apply locates it under the new filter and
+    // opens that page instead of resetting to page 1. Consumed (nulled) by the apply that uses it.
+    private long? _pendingAnchorRowId;
+
+    /// <summary>True while the search box is narrowing the view (plain substring or parsed query).</summary>
+    private bool HasSearchNarrowing => !string.IsNullOrEmpty(_effectiveSearch) || _parsedQuery != null;
+
+    /// <summary>On a search-active → search-cleared transition, remember the row the user was looking
+    /// at (their selection, else the top visible row) so the apply can stay on its page.</summary>
+    private void CaptureAnchorOnSearchCleared(bool wasNarrowing)
+    {
+        if (wasNarrowing && !HasSearchNarrowing)
+            _pendingAnchorRowId = SelectedRowId ?? (Results.Count > 0 ? Results[0].RowId : (long?)null);
+    }
+
+    /// <summary>Take (and clear) the pending anchor, so exactly one apply honors it.</summary>
+    private long? ConsumePendingAnchor()
+    {
+        var anchor = _pendingAnchorRowId;
+        _pendingAnchorRowId = null;
+        return anchor;
+    }
+
+    /// <summary>1-based page that keeps <paramref name="anchor"/> in view under the new filter+sort;
+    /// page 1 when there's no anchor or the anchor doesn't match the new filter. Runs a source query —
+    /// call off the UI thread.</summary>
+    private int PageForAnchor(long? anchor, FilterSpec filters, SortSpec sort, int pageSize, int total)
+    {
+        if (!anchor.HasValue || pageSize <= 0) return 1;
+        int pos = _source.GetRowPosition(filters, sort, anchor.Value);
+        if (pos < 0) return 1;
+        int pages = Math.Max(1, (total + pageSize - 1) / pageSize);
+        return Math.Clamp(pos / pageSize + 1, 1, pages);
+    }
+
     // ----- filter state -----
     private string _searchText = "";
     public string SearchText
@@ -208,8 +249,10 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         set
         {
             if (_searchText == value) return;
+            bool wasNarrowing = HasSearchNarrowing;
             _searchText = value ?? "";
             ReparseSearch();
+            CaptureAnchorOnSearchCleared(wasNarrowing);
             OnPropertyChanged(nameof(SearchText));
             ApplyFilters();
         }
@@ -858,6 +901,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         var sort = new SortSpec(_sortColumn, _sortDescending);
         int pageSize = _pageSize;
         int curPage = _currentPage;
+        long? anchor = ConsumePendingAnchor();
 
         var r = await Task.Run(() =>
         {
@@ -865,7 +909,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             int total = _source.GetFilteredCount(filters); long tc = sw.ElapsedMilliseconds; sw.Restart();
             var levels = _source.GetLevelCounts(filters); long tl = sw.ElapsedMilliseconds; sw.Restart();
             int pages = Math.Max(1, (int)Math.Ceiling(total / (double)Math.Max(1, pageSize)));
-            int page = Math.Clamp(curPage, 1, pages);
+            int page = anchor.HasValue
+                ? PageForAnchor(anchor, filters, sort, pageSize, total) // stay with the anchored row
+                : Math.Clamp(curPage, 1, pages);
             var rows = _source.GetPage(filters, sort, (page - 1) * pageSize, pageSize);
             long tp = sw.ElapsedMilliseconds;
             return (total, levels, rows, page, tc, tl, tp);
@@ -1049,6 +1095,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         MiddleLayerService.OutputTimeFrom = MiddleLayerService.OutputTimeTo = null;
         _currentPage = 1;
         HasPendingRows = false;
+        // A new file's rows share nothing with the old anchor/selection — drop both.
+        _pendingAnchorRowId = null;
+        SelectedRowId = null;
         OnPropertyChanged(nameof(SearchText));
         OnPropertyChanged(nameof(ProviderFilter));
         OnPropertyChanged(nameof(TaskNameFilter));
@@ -1070,6 +1119,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         var filters = BuildFilterSpec();
         var sort = new SortSpec(_sortColumn, _sortDescending);
         int pageSize = _pageSize;
+        long? anchor = ConsumePendingAnchor();
 
         // The actual queries (COUNT, level counts, first page) run on a background thread. Awaiting
         // from the UI thread resumes back on it, so the publish below is UI-thread-safe.
@@ -1077,8 +1127,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         {
             var total  = _source.GetFilteredCount(filters);
             var levels = _source.GetLevelCounts(filters);
-            var rows   = _source.GetPage(filters, sort, 0, pageSize);
-            return (total, levels, rows);
+            int page   = PageForAnchor(anchor, filters, sort, pageSize, total);
+            var rows   = _source.GetPage(filters, sort, (page - 1) * pageSize, pageSize);
+            return (total, levels, rows, page);
         }).ConfigureAwait(false);
 
         if (ct.IsCancellationRequested) return; // a newer search superseded this one
@@ -1087,7 +1138,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         await RunOnUiAsync(() =>
         {
             if (ct.IsCancellationRequested) return;
-            _currentPage = 1;
+            _currentPage = snapshot.page;
             TotalFilteredCount = snapshot.total;
             UpdateLevelCountsFrom(snapshot.levels);
             Results.ReplaceAll(snapshot.rows);
@@ -1117,8 +1168,10 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         value ??= "";
         if (string.Equals(_searchText, value, StringComparison.Ordinal)) return false;
+        bool wasNarrowing = HasSearchNarrowing;
         _searchText = value;
         ReparseSearch(); // keep the parsed-query / substring state in sync (MCP-driven set)
+        CaptureAnchorOnSearchCleared(wasNarrowing);
         OnPropertyChanged(nameof(SearchText));
         return true;
     }
@@ -1131,6 +1184,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     {
         var filters = BuildFilterSpec();
         var sort = new SortSpec(_sortColumn, _sortDescending);
+        long? anchor = ConsumePendingAnchor();
 
         // Time each stage so the user can see what made a filter slow (count vs level chips vs page).
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -1138,6 +1192,10 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         long tCount = sw.ElapsedMilliseconds; sw.Restart();
         UpdateLevelCountsFrom(_source.GetLevelCounts(filters));
         long tLevels = sw.ElapsedMilliseconds; sw.Restart();
+
+        // A cleared search stays anchored on the row the user was reading (see CaptureAnchorOnSearchCleared).
+        if (anchor.HasValue)
+            _currentPage = PageForAnchor(anchor, filters, sort, _pageSize, TotalFilteredCount);
 
         // Clamp page to valid range after filter changed total.
         if (_currentPage > TotalPages && TotalPages > 0) _currentPage = TotalPages;

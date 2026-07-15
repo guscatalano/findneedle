@@ -1655,6 +1655,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Keep the VM's stable-row handle current: it's the anchor used to stay on the selected
+        // row's page when the search box is cleared.
+        ViewModel.SelectedRowId = (ResultsGrid.SelectedItem as LogLine)?.RowId;
         if (DetailsPanel.Visibility == Visibility.Visible) RefreshDetailsPanel();
     }
 
