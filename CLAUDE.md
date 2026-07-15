@@ -38,6 +38,22 @@ dotnet test --filter "TestCategory=Storage"
 Tests use **MSTest** (`[TestClass]` / `[TestMethod]`), not xUnit/NUnit. Test projects pair with their
 source project by name (`FindNeedleRuleDSL` → `FindNeedleRuleDSLTests`, etc.).
 
+### Test gotchas
+
+- CI (`.github/workflows/dotnet-desktop.yml`) builds x64 / `win-x64` /
+  `net8.0-windows10.0.19041.0` and runs `dotnet test` with
+  `--filter "TestCategory!=SkipCI&TestCategory!=UITests&TestCategory!=Performance"` — tag tests
+  with those categories to control where they run.
+- **`ETWPluginTests` is x64-only**: build with `-p:Platform=x64` and run `vstest.console` against
+  `bin\x64\Debug\...`. A plain `dotnet build` produces AnyCPU output and vstest can silently run a
+  stale dll.
+- If a WinUI-dependent test build fails under `dotnet test` with **MSB4062** (PriGen task), build
+  with Visual Studio's MSBuild and run `vstest.console` on the output instead.
+  (`FindNeedleUXTests` deliberately disables WinUI in its csproj so plain `dotnet test` works.)
+- `FindNeedleUX.UITests` drives the real app with FlaUI (x64); it's excluded from CI.
+- Sample `*.log` test data is gitignored — a test that reads it passes locally but fails in CI
+  unless the data file is tracked and copied to the test output.
+
 ## Architecture big picture
 
 The system is built around three concepts. Read these as the mental model; details live in `AGENTS.md`.
@@ -74,12 +90,14 @@ behind them) — consult it first.
 
 - `findneedle/` — CLI executable; holds `PluginConfig.json` (legacy plugin config).
 - `FindNeedleUX/` — WinUI 3 UI: `MainWindow`, `Pages/` (Search/Results/Rules/etc.),
-  `ViewModels/`, `Services/`, `MiddleLayerService` (UI ↔ core bridge).
+  `ViewModels/`, `Services/`, `MiddleLayerService` (UI ↔ core bridge). `Services/Mcp/` hosts a
+  built-in MCP server so an AI agent can drive the viewer and author rules.
 - `FindPluginCore/` — search engine, `PluginManager`, storage, `Diagnostics/PerfLog`.
 - `FindNeedlePluginLib/` — plugin interfaces and shared types.
 - `FindNeedleCoreUtils/` / `FindNeedlePluginUtils/` — utilities (file I/O, storage helpers).
 - `FindNeedleRuleDSL/` — rule engine. `FindNeedleUmlDsl/` — PlantUML/Mermaid diagram generation.
-- `*Plugin/` (ETWPlugin, EventLogPlugin, ZipFilePlugin, BasicTextPlugin, Plugins/Kusto) — concrete plugins.
+- `*Plugin/` (ETWPlugin, EventLogPlugin, ZipFilePlugin, BasicTextPlugin, CsvPlugin, JsonPlugin,
+  PcapPlugin, Plugins/Kusto) — concrete plugins.
 
 ## Conventions worth knowing
 
@@ -89,4 +107,8 @@ behind them) — consult it first.
 - Diagnostics: app writes a structured timing log to `%LocalAppData%\FindNeedle\perf-log.txt`. When
   investigating "search/viewer is slow," read it — phase events (`search.run`, `consolidate.skipped`,
   `viewer.*.load`, etc.) point at where wall-clock time went.
+- The app runs **unpackaged** in dev, so WinRT `ApplicationData.Current.LocalSettings` throws —
+  persist UI settings to a file under `%LocalAppData%\FindNeedle` instead.
+- `PcapPlugin` parses .pcap/.pcapng with a hand-written managed reader + PacketDotNet — deliberately
+  not SharpPcap, to avoid native libpcap dependencies. Keep it managed-only.
 - `.editorconfig` at the repo root governs formatting/style — follow it.
