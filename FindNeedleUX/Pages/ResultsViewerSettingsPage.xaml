@@ -634,7 +634,7 @@
                             <TextBlock Text="…or build TMFs from symbols" FontWeight="SemiBold" Margin="0,8,0,0"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Point at a folder of PDBs and/or the binaries that produced the trace, plus a symbol path (PDB folders or a symbol server, srv*cache*https://…). 'Build TMFs' runs tracepdb to extract TMFs into a managed cache that's used automatically."/>
+                                       Text="Point at a folder of PDBs and/or the binaries that produced the trace, plus a symbol path (PDB folders or a symbol server, srv*cache*https://…). 'Build TMFs' resolves each binary's exact PDB (by GUID+age) and extracts TMFs into a managed cache that's used automatically. Note: TMF data lives only in full/private PDBs — public symbol servers (e.g. msdl) strip it, so use your component's own symbol store for WPP decoding."/>
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <TextBox x:Name="SymbolSourceBox" Width="460" PlaceholderText="PDBs / binaries folder"
                                          LostFocus="SymbolSourceBox_LostFocus" AutomationProperties.Name="PDB or binary source folder"/>
