@@ -13,9 +13,16 @@ namespace FindNeedleUX.Services;
 /// </summary>
 public static class ResultsViewerSettings
 {
-    private static readonly string DefaultSettingsPath = Path.Combine(
-        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
-        "FindNeedle", "viewer-settings.json");
+    // FINDNEEDLE_VIEWER_SETTINGS redirects persistence to a custom file. It exists for the FlaUI
+    // UI tests, which launch the real .exe: without it they inherit — and pollute — the user's
+    // persisted settings, and ambient state (a persisted PageSize, a narrow window width) has
+    // repeatedly surfaced as "flaky" UI-test failures. Normal launches never set it.
+    private static readonly string DefaultSettingsPath =
+        Environment.GetEnvironmentVariable("FINDNEEDLE_VIEWER_SETTINGS") is { Length: > 0 } overridePath
+            ? overridePath
+            : Path.Combine(
+                FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
+                "FindNeedle", "viewer-settings.json");
 
     // Mutable so tests can redirect persistence to a temp file via the seam below; production
     // always uses DefaultSettingsPath.

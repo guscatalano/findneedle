@@ -37,6 +37,7 @@ namespace FindNeedleUX.UITests
         private static Window _mainWindow;
         private static UIA3Automation _automation;
         private static string _tempLogPath;
+        private static string _tempSettingsPath;
 
         // Enough rows that the first page (PageSize = 100, RowHeight = 26 → ~2600px) overflows
         // any reasonable viewport, so the grid is genuinely scrollable.
@@ -103,7 +104,12 @@ namespace FindNeedleUX.UITests
                 var appPath = GetAppExecutablePath();
 
                 // Launch straight into the native viewer with the temp log loaded — no picker.
-                _app = Application.Launch(appPath, $"\"{_tempLogPath}\" --viewer=native");
+                // Isolated settings: this test's premise is the DEFAULT PageSize (100) making page 1
+                // overflow the viewport. A persisted PageSize (e.g. 5000, set by a scale test or the
+                // user) puts all rows on one page, collapsing a large-increment scroll to <1% and
+                // failing the movement assert — the exact "flaky" failure seen on 2026-07-18.
+                _app = Application.Launch(
+                    UiTestHelpers.IsolatedLaunch(appPath, $"\"{_tempLogPath}\" --viewer=native", out _tempSettingsPath));
 
                 // The app activates the welcome page immediately, then runs the search and
                 // navigates to the viewer. Give it a moment, then resolve the main window.
@@ -128,6 +134,7 @@ namespace FindNeedleUX.UITests
             try { _app?.Dispose(); } catch { }
             try { _automation?.Dispose(); } catch { }
             try { if (_tempLogPath != null && File.Exists(_tempLogPath)) File.Delete(_tempLogPath); } catch { }
+            try { if (_tempSettingsPath != null && File.Exists(_tempSettingsPath)) File.Delete(_tempSettingsPath); } catch { }
         }
 
         /// <summary>

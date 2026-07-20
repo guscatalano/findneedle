@@ -50,6 +50,22 @@ namespace FindNeedleUX.UITests
             return path;
         }
 
+        /// <summary>
+        /// A ProcessStartInfo that launches the app with a pristine, throwaway settings file
+        /// (FINDNEEDLE_VIEWER_SETTINGS): defaults for PageSize, window size, theme, columns —
+        /// regardless of what the user or a previous test persisted. Ambient persisted settings
+        /// have caused "flaky" UI-test failures twice (a narrow persisted window hid the status
+        /// text; a persisted PageSize=5000 broke the pixel-scroll test's premise). Callers should
+        /// delete <paramref name="settingsPath"/> in cleanup.
+        /// </summary>
+        public static System.Diagnostics.ProcessStartInfo IsolatedLaunch(string appPath, string args, out string settingsPath)
+        {
+            settingsPath = Path.Combine(Path.GetTempPath(), $"fn_uitest_settings_{Guid.NewGuid():N}.json");
+            var psi = new System.Diagnostics.ProcessStartInfo(appPath, args) { UseShellExecute = false };
+            psi.EnvironmentVariables["FINDNEEDLE_VIEWER_SETTINGS"] = settingsPath;
+            return psi;
+        }
+
         public static string SafeName(AutomationElement e)
         { try { return e.Properties.Name.ValueOrDefault ?? ""; } catch { return ""; } }
 
