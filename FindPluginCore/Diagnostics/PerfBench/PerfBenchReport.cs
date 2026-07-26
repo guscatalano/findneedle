@@ -47,6 +47,8 @@ public static class PerfBenchReport
         AppendTiles(sb, "Headline", "compares across machines", HeadlineTiles(r));
         // Wall-clock times as stat tiles (per-machine — what a run actually costs)
         AppendTiles(sb, "Time", "on this machine", TimeTiles(r));
+        // Paging / viewer-responsiveness latency (per-machine)
+        AppendTiles(sb, "Paging", "first page & jump — on this machine", PagingTiles(r));
 
         // Make a noisy run look noisy, rather than printing a confident median it can't back up.
         bool wideSpread = r.Scenarios.Any(s => s.Spread != null && s.Spread.Values.Any(m => m.Min > 0 && m.Max / m.Min > 1.3));
@@ -147,6 +149,23 @@ public static class PerfBenchReport
         if (c.TryGetValue("ingestMs", out var i2) && c.TryGetValue("indexBuildMs", out var x2))
             tiles.Add(TimeTile(i2 + x2, "Ready to search", sub));
         if (c.TryGetValue("searchWorstMs", out var w)) tiles.Add(TimeTile(w, "Search · matches all", sub));
+        return tiles;
+    }
+
+    private static List<Tile> PagingTiles(PerfBenchResult r)
+    {
+        var tiles = new List<Tile>();
+        var eng = r.Scenarios
+            .Where(s => s.Kind == "engine" && s.Cold != null && s.Cold.ContainsKey("firstPage500Ms"))
+            .OrderByDescending(s => s.Rows).FirstOrDefault();
+        if (eng?.Cold == null) return tiles;
+        var c = eng.Cold;
+        string sub = RowsShort(eng.Rows) + "-row table";
+        void Add(string key, string label) { if (c.TryGetValue(key, out var v)) tiles.Add(TimeTile(v, label, sub)); }
+        Add("firstPage500Ms", "First page · 500");
+        Add("firstPage1000Ms", "First page · 1,000");
+        Add("firstPage5000Ms", "First page · 5,000");
+        Add("jumpToLastMs", "Jump to last page");
         return tiles;
     }
 

@@ -42,8 +42,8 @@ public static class PerfBenchRunner
             SystemLoad = CollectLoad(sampleLoad),
             PrimaryMetrics = { "ftsVsScan", "usPerRow" },
         };
-        result.Notes.Add("v1 engine scenarios only (ingest/index/search). Viewer, decode, parallel-ingest, "
-                       + "time-scope and storage-tier scenarios are follow-on.");
+        result.Notes.Add("v1 engine + paging-latency metrics (ingest / index / search / first-page). Full "
+                       + "viewer render, decode, parallel-ingest, time-scope and storage-tier are follow-on.");
 
         // Watch for OTHER processes stealing CPU during the run — a contended run inflates the ms,
         // and this is what makes that visible in the report (idleCpuPercentBefore only sees the start).
@@ -81,6 +81,10 @@ public static class PerfBenchRunner
         var likeSel = new List<double>();
         var ftsSel = new List<double>();
         var worst = new List<double>();
+        var fp500 = new List<double>();
+        var fp1000 = new List<double>();
+        var fp5000 = new List<double>();
+        var jumpLast = new List<double>();
 
         // A specific rare token that exists exactly once → selective query hits 1 row.
         long rareCount = SyntheticLogGenerator.RareTokenCount(size);
@@ -112,6 +116,14 @@ public static class PerfBenchRunner
                     sw.Restart();
                     s.GetFilteredCount(new SqliteStorage.FilterInput { Search = SyntheticLogGenerator.CommonToken }); // matches ~all
                     sw.Stop(); worst.Add(sw.Elapsed.TotalMilliseconds);
+
+                    // Paging latency (viewer-responsiveness data side): first page at a few page sizes,
+                    // plus jump-to-last (O(pageSize) via the flipped-sort trick). No filter, load order.
+                    var empty = new SqliteStorage.FilterInput();
+                    sw.Restart(); s.GetFilteredPage(empty, null, 0, 500); sw.Stop(); fp500.Add(sw.Elapsed.TotalMilliseconds);
+                    sw.Restart(); s.GetFilteredPage(empty, null, 0, 1000); sw.Stop(); fp1000.Add(sw.Elapsed.TotalMilliseconds);
+                    sw.Restart(); s.GetFilteredPage(empty, null, 0, 5000); sw.Stop(); fp5000.Add(sw.Elapsed.TotalMilliseconds);
+                    sw.Restart(); s.GetLastFilteredPage(empty, null, 500); sw.Stop(); jumpLast.Add(sw.Elapsed.TotalMilliseconds);
                 }
             }
             finally { TryDeleteDb(dbBase); }
@@ -134,6 +146,10 @@ public static class PerfBenchRunner
                 ["indexBuildMs"] = Round(mIndex),
                 ["searchSelectiveMs"] = Round(mFts),
                 ["searchWorstMs"] = Round(mWorst),
+                ["firstPage500Ms"] = Round(Median(fp500), 1),
+                ["firstPage1000Ms"] = Round(Median(fp1000), 1),
+                ["firstPage5000Ms"] = Round(Median(fp5000), 1),
+                ["jumpToLastMs"] = Round(Median(jumpLast), 1),
             },
             Ratios = new()
             {
