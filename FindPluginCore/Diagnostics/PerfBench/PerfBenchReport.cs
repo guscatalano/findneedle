@@ -32,10 +32,13 @@ public static class PerfBenchReport
         sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
         sb.Append("<title>FindNeedle Performance Benchmark</title><style>").Append(Css).Append("</style></head><body><main>");
 
-        sb.Append("<header><div class=\"eyebrow\">FindNeedle</div><h1>Performance report</h1>")
-          .Append("<p class=\"meta\">how fast this computer runs FindNeedle")
+        bool profileMode = big == null && r.HotMethods.Count > 0;
+        sb.Append("<header><div class=\"eyebrow\">FindNeedle</div><h1>Performance ")
+          .Append(profileMode ? "profile" : "report").Append("</h1>")
+          .Append("<p class=\"meta\">").Append(profileMode ? "where FindNeedle spends processor time" : "how fast this computer runs FindNeedle")
           .Append("<span class=\"dot\"></span>").Append(E(ShortDate(r.TimestampUtc)))
-          .Append("<span class=\"dot\"></span>median of ").Append(r.Repeats).Append(" runs</p></header>");
+          .Append("<span class=\"dot\"></span>").Append(profileMode ? "CPU sample profile" : "median of " + r.Repeats + " runs")
+          .Append("</p></header>");
 
         // Plain-English summary — the part a non-technical person reads.
         if (big?.Cold is { } bc)

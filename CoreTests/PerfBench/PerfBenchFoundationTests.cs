@@ -201,6 +201,9 @@ public class PerfBenchFoundationTests
         var html = PerfBenchReport.RenderHtml(r);
 
         StringAssert.Contains(html, "Where the time goes");
+        StringAssert.Contains(html, "Performance profile");          // profile-mode header (not "report")
+        StringAssert.Contains(html, "where FindNeedle spends processor time");
+        Assert.IsFalse(html.Contains("median of"), "profile has no median-of-N runs line");
         StringAssert.Contains(html, "code-path profile");            // profile-mode intro
         StringAssert.Contains(html, "SqliteDataReader.NextResult");
         StringAssert.Contains(html, "64%");                          // top frame percent
