@@ -27,6 +27,34 @@ public static class PerfBenchRunner
     public static PerfBenchResult RunQuick(bool sampleLoad = true)
         => Run(new long[] { 100_000, 1_000_000 }, repeats: 3, preset: "quick", sampleLoad: sampleLoad);
 
+    /// <summary>
+    /// The separate <b>profile</b> mode: CPU-samples the load-and-search workload over
+    /// <paramref name="rows"/> lines and returns a result whose <see cref="PerfBenchResult.HotMethods"/>
+    /// lists the hottest code paths. Timings are intentionally NOT taken here — sampling perturbs them —
+    /// so this result carries machine identity + hot frames only, for the "Where the time goes" section.
+    /// </summary>
+    public static PerfBenchResult RunProfile(long rows = 1_000_000)
+    {
+        var startedUtc = DateTime.UtcNow;
+        var sw = Stopwatch.StartNew();
+        var (frames, note) = WorkloadProfiler.Profile(rows);
+        sw.Stop();
+        return new PerfBenchResult
+        {
+            RunId = Guid.NewGuid().ToString("N").Substring(0, 12),
+            TimestampUtc = startedUtc.ToString("o", CultureInfo.InvariantCulture),
+            Preset = "profile",
+            Repeats = 1,
+            App = CollectApp(),
+            Machine = CollectMachine(),
+            SystemLoad = CollectLoad(false),
+            DurationOfRunSec = Math.Round(sw.Elapsed.TotalSeconds, 1),
+            ProfileRows = rows,
+            ProfileNote = note,
+            HotMethods = frames,
+        };
+    }
+
     public static PerfBenchResult Run(long[] engineSizes, int repeats = 3, string preset = "custom", bool sampleLoad = true)
     {
         var startedUtc = DateTime.UtcNow;
@@ -214,7 +242,7 @@ public static class PerfBenchRunner
         };
     }
 
-    private static IEnumerable<ISearchResult> Rows(long n)
+    internal static IEnumerable<ISearchResult> Rows(long n)
     {
         for (long i = 0; i < n; i++)
             yield return new Row(SyntheticLogGenerator.Message(i), SyntheticLogGenerator.Time(i));

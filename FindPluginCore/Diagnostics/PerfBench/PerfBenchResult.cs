@@ -42,6 +42,20 @@ public sealed class PerfBenchResult
     /// <summary>Free-form run notes (e.g. "WPP decode skipped: tracefmt/WDK not found").</summary>
     public List<string> Notes { get; set; } = new();
 
+    /// <summary>
+    /// Optional CPU-profile result (the separate "Profile workload" mode). Populated only by
+    /// <c>PerfBenchRunner.RunProfile</c> — sampling inflates timing, so it never rides along with a
+    /// timed run. Each entry is a code path and the share of on-CPU samples it took while loading +
+    /// searching <see cref="ProfileRows"/> lines.
+    /// </summary>
+    public List<PerfBenchHotFrame> HotMethods { get; set; } = new();
+
+    /// <summary>Rows the profiled workload processed (0 when no profile was run).</summary>
+    public long ProfileRows { get; set; }
+
+    /// <summary>Human note about the profile (sample count, capture caveats). Null when no profile ran.</summary>
+    public string? ProfileNote { get; set; }
+
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
@@ -131,4 +145,18 @@ public sealed class PerfBenchMinMax
 {
     public double Min { get; set; }
     public double Max { get; set; }
+}
+
+/// <summary>
+/// One hot code path from the CPU-sampling profile: a method (or native module) and the percentage of
+/// on-CPU samples it was the innermost frame for, while the profiled workload ran. Purely code identity
+/// — no log content.
+/// </summary>
+public sealed class PerfBenchHotFrame
+{
+    public string Method { get; set; } = "";
+    public double Percent { get; set; }
+    public int Samples { get; set; }
+    /// <summary>"managed" or "native" — native frames are usually the SQLite engine / OS doing I/O.</summary>
+    public string Kind { get; set; } = "managed";
 }

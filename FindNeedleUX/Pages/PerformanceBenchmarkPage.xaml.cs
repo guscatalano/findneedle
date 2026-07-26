@@ -61,9 +61,48 @@ public sealed partial class PerformanceBenchmarkPage : Page
         ResultsCard.Visibility = Visibility.Visible;
     }
 
+    private async void Profile_Click(object sender, RoutedEventArgs e)
+    {
+        RunButton.IsEnabled = false;
+        ProfileButton.IsEnabled = false;
+        Progress.IsActive = true;
+        ResultsCard.Visibility = Visibility.Collapsed;
+        StatusText.Text = "Profiling a 1M-line load+search… this samples the CPU and takes a bit longer.";
+
+        PerfBenchResult res = null;
+        try { res = await Task.Run(() => PerfBenchRunner.RunProfile(1_000_000)); }
+        catch (Exception ex) { StatusText.Text = "Failed: " + ex.Message; }
+        finally { RunButton.IsEnabled = true; ProfileButton.IsEnabled = true; Progress.IsActive = false; }
+        if (res == null) return;
+
+        _last = res;
+        StatusText.Text = $"Profiled in {res.DurationOfRunSec:0.#}s. Open the report to see the hot code paths.";
+        WriteArtifacts(res);
+        RenderResults(res);
+        ResultsCard.Visibility = Visibility.Visible;
+    }
+
     private void RenderResults(PerfBenchResult r)
     {
         ResultsHost.Children.Clear();
+
+        if (r.HotMethods.Count > 0)
+        {
+            ResultsHost.Children.Add(new TextBlock
+            {
+                Text = "Hottest code paths (share of CPU time):",
+                FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            foreach (var f in r.HotMethods)
+                ResultsHost.Children.Add(new TextBlock
+                {
+                    Text = $"{f.Percent,5:0.#}%   {f.Method}",
+                    FontSize = 13, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            return;
+        }
+
         foreach (var s in r.Scenarios)
         {
             var sb = new StringBuilder();

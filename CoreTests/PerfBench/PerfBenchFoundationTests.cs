@@ -180,6 +180,61 @@ public class PerfBenchFoundationTests
         StringAssert.Contains(html, "28.4 MB", "in-memory RAM figure rendered");
     }
 
+    // ---- profiler (separate "where the time goes" mode) ----
+
+    [TestMethod]
+    public void Report_RendersHotMethodsSection()
+    {
+        // A profile-only result: no timing scenarios, just the hot code paths the profiler found.
+        var r = new PerfBenchResult
+        {
+            Preset = "profile", ProfileRows = 1_000_000,
+            ProfileNote = "4,000 CPU samples on the workload thread.",
+            HotMethods =
+            {
+                new PerfBenchHotFrame { Method = "SqliteDataReader.NextResult", Percent = 64.0, Samples = 2560, Kind = "managed" },
+                new PerfBenchHotFrame { Method = "e_sqlite3 (native)", Percent = 18.5, Samples = 740, Kind = "native" },
+                new PerfBenchHotFrame { Method = "SqliteParameterCollection.Bind", Percent = 12.0, Samples = 480, Kind = "managed" },
+            },
+        };
+
+        var html = PerfBenchReport.RenderHtml(r);
+
+        StringAssert.Contains(html, "Where the time goes");
+        StringAssert.Contains(html, "code-path profile");            // profile-mode intro
+        StringAssert.Contains(html, "SqliteDataReader.NextResult");
+        StringAssert.Contains(html, "64%");                          // top frame percent
+        StringAssert.Contains(html, "native");                       // native tag rendered
+        StringAssert.Contains(html, "4,000 CPU samples");            // profile note
+        // The top frame's bar is full width; a smaller frame's is proportionally shorter.
+        StringAssert.Contains(html, "width:100%");
+        // Still self-contained.
+        Assert.IsFalse(html.Contains("<script"), "no scripts");
+        Assert.IsFalse(html.Contains("src="), "no external assets");
+    }
+
+    [TestMethod]
+    [TestCategory("SkipCI")]
+    [TestCategory("Performance")]
+    [Timeout(180000)]
+    public void Profiler_CapturesWorkloadHotMethods()
+    {
+        // Real in-proc EventPipe sampling over the SQLite load+search workload. Excluded from CI
+        // (needs the diagnostics IPC endpoint + a few seconds of CPU); a smoke test that the profiler
+        // attributes samples to at least one method and stays self-consistent.
+        var r = PerfBenchRunner.RunProfile(300_000);
+
+        Assert.AreEqual("profile", r.Preset);
+        Assert.AreEqual(300_000, r.ProfileRows);
+        Assert.IsTrue(r.HotMethods.Count > 0, "profiler must find at least one hot code path: " + r.ProfileNote);
+        Assert.IsTrue(r.HotMethods.All(f => f.Percent >= 0 && f.Percent <= 100), "percentages in range");
+        Assert.IsTrue(r.HotMethods.Sum(f => f.Percent) <= 100.5, "top-N shares can't exceed 100%");
+        Assert.IsFalse(string.IsNullOrEmpty(r.ProfileNote));
+
+        var html = PerfBenchReport.RenderHtml(r);
+        StringAssert.Contains(html, "Where the time goes");
+    }
+
     private static string TempFile() => Path.Combine(Path.GetTempPath(), $"perfbench_{Guid.NewGuid():N}.log");
     private static void Del(string p) { try { File.Delete(p); } catch { } }
 }

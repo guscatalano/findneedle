@@ -54,12 +54,21 @@ public static class PerfBenchReport
             sb.Append("Bigger number of cores and faster disks make the times below shorter.</p>");
         }
 
-        sb.Append("<p class=\"about\"><b>What this measured:</b> plain-text log lines generated on this "
-          + "computer — reading them in, building the search index, searching, and scrolling. It did "
-          + "<b>not</b> decode a real ETW / WPP trace or Windows event log — that decoding is separate, "
-          + "heavier work that isn't part of this test yet. Storage engine: FindNeedle's on-disk "
-          + "<b>SQLite</b> index with full-text search, which is what it uses for logs this size (smaller "
-          + "logs, under ~50,000 lines, use a faster in-memory engine instead).</p>");
+        if (big != null)
+            sb.Append("<p class=\"about\"><b>What this measured:</b> plain-text log lines generated on this "
+              + "computer — reading them in, building the search index, searching, and scrolling. It did "
+              + "<b>not</b> decode a real ETW / WPP trace or Windows event log — that decoding is separate, "
+              + "heavier work that isn't part of this test yet. Storage engine: FindNeedle's on-disk "
+              + "<b>SQLite</b> index with full-text search, which is what it uses for logs this size (smaller "
+              + "logs, under ~50,000 lines, use a faster in-memory engine instead).</p>");
+
+        // Profile-only run (no timing scenarios): a short intro so the report reads on its own.
+        if (big == null && r.HotMethods.Count > 0)
+            sb.Append("<p class=\"summary\">This is a <b>code-path profile</b> of FindNeedle loading and "
+              + "searching a <b>").Append(r.ProfileRows.ToString("N0", CultureInfo.InvariantCulture))
+              .Append("-line</b> log on this computer — it shows <b>where</b> the processor time went, not "
+              + "how long things took. (Profiling deliberately slows the run, so it's kept separate from the "
+              + "timing report.)</p>");
 
         AppendContentionWarning(sb, r);
 
@@ -70,6 +79,7 @@ public static class PerfBenchReport
 
         AppendScaling(sb, r);
         AppendStorageCompare(sb, r);
+        AppendHotMethods(sb, r);
 
         // This computer + this run
         sb.Append("<section class=\"twocol\">");
@@ -220,6 +230,31 @@ public static class PerfBenchReport
         sb.Append("</tbody></table></section>");
     }
 
+    private static void AppendHotMethods(StringBuilder sb, PerfBenchResult r)
+    {
+        var hot = r.HotMethods;
+        if (hot.Count == 0) return;
+        double max = hot.Max(h => h.Percent);
+        if (max <= 0) max = 1;
+
+        sb.Append("<section><h2>Where the time goes</h2><p class=\"gdesc\">The internal code paths that used "
+          + "the most processor time while loading and searching the log. Lower-level names like "
+          + "<span class=\"mono\">sqlite3_step</span> are the database engine doing its work — that FindNeedle "
+          + "leans on the database is expected and is what keeps big logs fast.</p><div class=\"hot\">");
+        foreach (var h in hot)
+        {
+            double w = Math.Max(2, Math.Round(100.0 * h.Percent / max, 1)); // scale bar to the top frame
+            sb.Append("<div class=\"hotrow\"><div class=\"hotname mono\">").Append(E(h.Method));
+            if (h.Kind == "native") sb.Append(" <span class=\"tag\">native</span>");
+            sb.Append("</div><div class=\"hottrack\"><div class=\"hotbar\" style=\"width:").Append(w.ToString(CultureInfo.InvariantCulture))
+              .Append("%\"></div></div><div class=\"hotpct\">").Append(Num(h.Percent)).Append("%</div></div>");
+        }
+        sb.Append("</div>");
+        if (!string.IsNullOrEmpty(r.ProfileNote))
+            sb.Append("<p class=\"tsub\" style=\"margin-top:.7rem\">").Append(E(r.ProfileNote)).Append("</p>");
+        sb.Append("</section>");
+    }
+
     private static string MB(Dictionary<string, double> m, string key)
         => m.TryGetValue(key, out var v) && v > 0 ? Num(v) + " MB" : "<span class=\"muted\">—</span>";
 
@@ -346,6 +381,14 @@ table.scale th{font-size:.7rem}
 table.scale th,table.scale td{padding:.6rem .75rem}
 .raw table tbody tr:last-child td{border-bottom:0}
 .muted{color:var(--faint)}
+.hot{display:flex;flex-direction:column;gap:.5rem}
+.hotrow{display:grid;grid-template-columns:minmax(0,1fr) 42% auto;align-items:center;gap:.75rem}
+.hotname{font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hottrack{background:var(--border);border-radius:6px;height:14px;overflow:hidden}
+.hotbar{height:100%;background:var(--accent);border-radius:6px;min-width:3px}
+.hotpct{font-variant-numeric:tabular-nums;font-weight:600;font-size:.85rem;color:var(--accent);min-width:3.2rem;text-align:right}
+.tag{font-size:.62rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:.02rem .3rem;vertical-align:middle}
+@media(max-width:560px){.hotrow{grid-template-columns:minmax(0,1fr) auto}.hottrack{display:none}}
 footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.82rem;line-height:1.55}
 ";
 }
