@@ -144,7 +144,7 @@ public class PerfBenchFoundationTests
         StringAssert.StartsWith(html, "<!doctype html>");
         StringAssert.Contains(html, "FindNeedle Performance Benchmark");
         StringAssert.Contains(html, "engine.text.5k");
-        StringAssert.Contains(html, "FTS vs LIKE scan");      // ratio label rendered
+        StringAssert.Contains(html, "FTS index vs. LIKE scan"); // headline ratio tile rendered
         // Self-contained: no external resources of any kind.
         Assert.IsFalse(html.Contains("<script"), "no scripts");
         Assert.IsFalse(html.Contains("<link"), "no external stylesheets");

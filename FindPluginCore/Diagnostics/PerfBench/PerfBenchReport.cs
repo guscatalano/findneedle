@@ -12,8 +12,12 @@ namespace FindPluginCore.Diagnostics.PerfBench;
 /// <summary>
 /// Renders a <see cref="PerfBenchResult"/> to its two outputs: the JSON submission and a self-contained
 /// HTML report (inline CSS, no external/CDN dependencies). Both come from the one result object, so the
-/// author's published report can never drift from the numbers. Ratios lead; milliseconds are labeled
-/// "on this machine."
+/// author's published report can never drift from the numbers.
+///
+/// Form choices (why it looks the way it does): the headline ratios are incommensurable (× vs µs/row),
+/// so they are <b>stat tiles</b> — hero numbers, never bars on a shared scale. Milliseconds live in one
+/// clean table, labeled "on this machine." One restrained accent; warm-neutral surfaces; validated
+/// light + dark.
 /// </summary>
 public static class PerfBenchReport
 {
@@ -27,95 +31,124 @@ public static class PerfBenchReport
         sb.Append("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">");
         sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
         sb.Append("<title>FindNeedle Performance Benchmark</title>");
-        sb.Append("<style>").Append(Css).Append("</style></head><body>");
+        sb.Append("<style>").Append(Css).Append("</style></head><body><main>");
 
-        sb.Append("<h1>FindNeedle Performance Benchmark</h1>");
-        sb.Append("<p class=\"sub\">")
-          .Append("benchmark v").Append(r.BenchmarkVersion)
-          .Append(" · preset <b>").Append(E(r.Preset)).Append("</b>")
-          .Append(" · median of ").Append(r.Repeats)
-          .Append(" · ").Append(E(r.TimestampUtc))
-          .Append(" · run ").Append(E(r.RunId))
-          .Append("</p>");
+        // Header
+        sb.Append("<header><div class=\"eyebrow\">FindNeedle</div>")
+          .Append("<h1>Performance Benchmark</h1>")
+          .Append("<p class=\"meta\">")
+          .Append("v").Append(r.BenchmarkVersion)
+          .Append("<span class=\"dot\"></span>preset <b>").Append(E(r.Preset)).Append("</b>")
+          .Append("<span class=\"dot\"></span>median of ").Append(r.Repeats)
+          .Append("<span class=\"dot\"></span>").Append(E(ShortDate(r.TimestampUtc)))
+          .Append("</p></header>");
 
-        // Machine + load
-        sb.Append("<div class=\"cards\">");
-        Card(sb, "Machine", new (string, string)[]
+        // Headline ratios as stat tiles (cross-machine — the comparable numbers)
+        var tiles = HeadlineTiles(r);
+        if (tiles.Count > 0)
+        {
+            sb.Append("<section><h2>Headline<span class=\"tag\">compares across machines</span></h2><div class=\"tiles\">");
+            foreach (var t in tiles)
+                sb.Append("<div class=\"tile\"><div class=\"num\">").Append(E(t.value))
+                  .Append("<span class=\"unit\">").Append(E(t.unit)).Append("</span></div>")
+                  .Append("<div class=\"tlabel\">").Append(E(t.label)).Append("</div>")
+                  .Append("<div class=\"tsub\">").Append(E(t.sub)).Append("</div></div>");
+            sb.Append("</div></section>");
+        }
+
+        // Machine + run context
+        sb.Append("<section class=\"twocol\">");
+        InfoCard(sb, "Machine", new (string, string)[]
         {
             ("CPU", r.Machine.CpuModel),
             ("Cores", r.Machine.LogicalCores.ToString()),
-            ("RAM", Num(r.Machine.RamGB) + " GB"),
+            ("Memory", Num(r.Machine.RamGB) + " GB"),
             ("OS", r.Machine.Os),
             ("Arch", r.App.Arch),
         });
-        Card(sb, "Run context", new (string, string)[]
+        InfoCard(sb, "Run context", new (string, string)[]
         {
-            ("App", string.IsNullOrEmpty(r.App.Version) ? "(dev)" : r.App.Version + " " + r.App.Configuration),
+            ("App", string.IsNullOrEmpty(r.App.Version) ? "dev build" : r.App.Version + " · " + r.App.Configuration),
             ("Runtime", r.App.Runtime),
-            ("Idle CPU before", Num(r.SystemLoad.IdleCpuPercentBefore) + " %"),
-            ("Free RAM", Num(r.SystemLoad.AvailableRamGB) + " GB"),
-            ("WDK (WPP decode)", r.SystemLoad.WdkPresent ? "present" : "absent"),
+            ("Idle CPU before run", Num(r.SystemLoad.IdleCpuPercentBefore) + " %"),
+            ("Free memory", Num(r.SystemLoad.AvailableRamGB) + " GB"),
+            ("WPP decode (WDK)", r.SystemLoad.WdkPresent ? "available" : "not installed"),
         });
-        sb.Append("</div>");
+        sb.Append("</section>");
 
-        // Headline ratios (cross-machine)
-        var ratioRows = r.Scenarios
-            .SelectMany(s => s.Ratios.Select(kv => (s.Id, kv.Key, kv.Value)))
-            .ToList();
-        if (ratioRows.Count > 0)
-        {
-            sb.Append("<h2>Headline ratios <span class=\"hint\">— compare across machines</span></h2>");
-            double max = ratioRows.Max(x => x.Value);
-            if (max <= 0) max = 1;
-            sb.Append("<table class=\"ratios\">");
-            foreach (var (id, key, val) in ratioRows)
-            {
-                sb.Append("<tr><td class=\"k\">").Append(E(RatioLabel(key)))
-                  .Append("</td><td class=\"scn\">").Append(E(id))
-                  .Append("</td><td class=\"barcell\"><div class=\"bar\" style=\"width:")
-                  .Append((Math.Min(val, max) / max * 100).ToString("F0", CultureInfo.InvariantCulture))
-                  .Append("%\"></div></td><td class=\"v\">").Append(Num(val)).Append(RatioSuffix(key))
-                  .Append("</td></tr>");
-            }
-            sb.Append("</table>");
-        }
-
-        // Per-scenario milliseconds (on this machine)
-        sb.Append("<h2>Timings <span class=\"hint\">— on this machine (ms)</span></h2>");
-        sb.Append("<table class=\"scenarios\"><thead><tr>")
-          .Append("<th>Scenario</th><th>Rows</th><th>Tier</th><th>Ingest</th><th>Index build</th>")
-          .Append("<th>Search (selective)</th><th>Search (worst)</th><th>Status</th></tr></thead><tbody>");
+        // Timings table (on this machine)
+        sb.Append("<section><h2>Timings<span class=\"tag\">on this machine · ms</span></h2>");
+        sb.Append("<table><thead><tr>")
+          .Append("<th class=\"l\">Scenario</th><th>Rows</th><th>Ingest</th><th>Index</th>")
+          .Append("<th>Search · selective</th><th>Search · worst</th><th class=\"l\"></th></tr></thead><tbody>");
         foreach (var s in r.Scenarios)
         {
             var c = s.Cold ?? new Dictionary<string, double>();
-            sb.Append("<tr><td>").Append(E(s.Id)).Append("</td><td>").Append(s.Rows.ToString("N0", CultureInfo.InvariantCulture))
-              .Append("</td><td>").Append(E(s.StorageTierChosen ?? "—"))
-              .Append("</td><td>").Append(MsCell(c, "ingestMs"))
-              .Append("</td><td>").Append(MsCell(c, "indexBuildMs"))
-              .Append("</td><td>").Append(MsCell(c, "searchSelectiveMs"))
-              .Append("</td><td>").Append(MsCell(c, "searchWorstMs"))
-              .Append("</td><td>").Append(s.Status == "ok" ? "✓" : "⤳ " + E(s.SkipReason ?? "skipped"))
+            sb.Append("<tr><td class=\"l mono\">").Append(E(s.Id)).Append("</td><td>")
+              .Append(s.Rows.ToString("N0", CultureInfo.InvariantCulture))
+              .Append("</td><td>").Append(Ms(c, "ingestMs"))
+              .Append("</td><td>").Append(Ms(c, "indexBuildMs"))
+              .Append("</td><td>").Append(Ms(c, "searchSelectiveMs"))
+              .Append("</td><td>").Append(Ms(c, "searchWorstMs"))
+              .Append("</td><td class=\"l\">")
+              .Append(s.Status == "ok" ? "<span class=\"ok\">ok</span>" : "<span class=\"skip\">" + E(s.SkipReason ?? "skipped") + "</span>")
               .Append("</td></tr>");
         }
-        sb.Append("</tbody></table>");
+        sb.Append("</tbody></table></section>");
 
         if (r.Notes.Count > 0)
         {
-            sb.Append("<h2>Notes</h2><ul class=\"notes\">");
+            sb.Append("<section><h2>Notes</h2><ul class=\"notes\">");
             foreach (var n in r.Notes) sb.Append("<li>").Append(E(n)).Append("</li>");
-            sb.Append("</ul>");
+            sb.Append("</ul></section>");
         }
 
-        sb.Append("<p class=\"foot\">Ratios (FTS-vs-scan, µs/row, …) compare across any hardware; ")
-          .Append("absolute milliseconds are specific to this machine and its current load. ")
-          .Append("Generated by FindNeedle.</p>");
-        sb.Append("</body></html>");
+        sb.Append("<footer>Ratios compare across any hardware; milliseconds are specific to this machine and its load at run time")
+          .Append("<span class=\"dot\"></span>idle CPU was ").Append(Num(r.SystemLoad.IdleCpuPercentBefore)).Append("%")
+          .Append("<span class=\"dot\"></span>run ").Append(E(r.RunId)).Append("</footer>");
+        sb.Append("</main></body></html>");
         return sb.ToString();
     }
 
-    // ---- helpers ----
+    // ---- headline tiles ----
 
-    private static void Card(StringBuilder sb, string title, (string k, string v)[] rows)
+    private readonly record struct Tile(string value, string unit, string label, string sub);
+
+    private static List<Tile> HeadlineTiles(PerfBenchResult r)
+    {
+        var tiles = new List<Tile>();
+        // For each ratio kind, use the largest-size scenario that carries it.
+        foreach (var key in new[] { "ftsVsScan", "usPerRow", "parallelSpeedup", "scopeSpeedup" })
+        {
+            var pick = r.Scenarios
+                .Where(s => s.Ratios.ContainsKey(key))
+                .OrderByDescending(s => s.Rows)
+                .FirstOrDefault();
+            if (pick == null) continue;
+            double v = pick.Ratios[key];
+            tiles.Add(new Tile(Num(v), RatioUnit(key), RatioLabel(key), $"at {RowsShort(pick.Rows)} rows"));
+        }
+        return tiles;
+    }
+
+    private static string RatioLabel(string key) => key switch
+    {
+        "ftsVsScan" => "FTS index vs. LIKE scan",
+        "usPerRow" => "Ingest cost per row",
+        "parallelSpeedup" => "Parallel ingest speed-up",
+        "scopeSpeedup" => "Scoped-load speed-up",
+        _ => key,
+    };
+    private static string RatioUnit(string key) => key switch
+    {
+        "ftsVsScan" or "parallelSpeedup" or "scopeSpeedup" => "×",
+        "usPerRow" => "µs",
+        _ => "",
+    };
+
+    // ---- small helpers ----
+
+    private static void InfoCard(StringBuilder sb, string title, (string k, string v)[] rows)
     {
         sb.Append("<div class=\"card\"><h3>").Append(E(title)).Append("</h3><dl>");
         foreach (var (k, v) in rows)
@@ -123,45 +156,78 @@ public static class PerfBenchReport
         sb.Append("</dl></div>");
     }
 
-    private static string MsCell(Dictionary<string, double> c, string key)
-        => c.TryGetValue(key, out var v) ? Num(v) : "—";
+    private static string Ms(Dictionary<string, double> c, string key)
+        => c.TryGetValue(key, out var v) ? "<span class=\"mono\">" + Num(v) + "</span>" : "<span class=\"muted\">—</span>";
 
-    private static string RatioLabel(string key) => key switch
+    private static string RowsShort(long n) => n >= 1_000_000 ? $"{n / 1_000_000}M" : n >= 1000 ? $"{n / 1000}k" : n.ToString();
+
+    private static string ShortDate(string iso)
     {
-        "ftsVsScan" => "FTS vs LIKE scan",
-        "usPerRow" => "Ingest µs/row",
-        "parallelSpeedup" => "Parallel ingest speed-up",
-        "scopeSpeedup" => "Scoped-load speed-up",
-        _ => key,
-    };
-    private static string RatioSuffix(string key) => key switch
-    {
-        "ftsVsScan" or "parallelSpeedup" or "scopeSpeedup" => "×",
-        "usPerRow" => " µs",
-        _ => "",
-    };
+        return DateTime.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var d)
+            ? d.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture) : iso;
+    }
 
     private static string Num(double v)
-        => (Math.Abs(v - Math.Round(v)) < 0.05 ? Math.Round(v).ToString("N0", CultureInfo.InvariantCulture)
-                                               : v.ToString("0.##", CultureInfo.InvariantCulture));
+        => Math.Abs(v - Math.Round(v)) < 0.05
+            ? Math.Round(v).ToString("N0", CultureInfo.InvariantCulture)
+            : v.ToString("0.##", CultureInfo.InvariantCulture);
+
     private static string E(string? s) => WebUtility.HtmlEncode(s ?? "");
 
+    // Warm-neutral surfaces, one indigo accent, validated light + dark. Numbers tabular + mono.
     private const string Css = @"
-:root{color-scheme:light dark}
-body{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a;background:#fff}
-@media(prefers-color-scheme:dark){body{color:#e6e6e6;background:#151515}.card,table{background:#1e1e1e;border-color:#333}th{background:#242424}.bar{background:#4aa3ff}}
-h1{font-size:1.5rem;margin:.2rem 0}.sub{color:#888;margin:.2rem 0 1.2rem}.hint{color:#888;font-weight:400;font-size:.85rem}
-.cards{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0}
-.card{flex:1 1 300px;border:1px solid #e2e2e2;border-radius:8px;padding:.8rem 1rem;background:#fafafa}
-.card h3{margin:.1rem 0 .5rem;font-size:.95rem}
-dl{display:grid;grid-template-columns:auto 1fr;gap:.15rem .8rem;margin:0}
-dt{color:#888}dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
-h2{font-size:1.1rem;margin:1.6rem 0 .5rem;border-bottom:1px solid #e2e2e2;padding-bottom:.2rem}
-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-th,td{padding:.35rem .5rem;border-bottom:1px solid #eee;text-align:right}
-th:first-child,td:first-child,.scn,.k{text-align:left}
-.ratios .k{width:16rem}.ratios .scn{color:#888;font-size:.85rem}.ratios .v{font-weight:600;width:5rem}
-.barcell{width:40%}.bar{height:12px;border-radius:6px;background:#2b7fff;min-width:2px}
-.notes{color:#666}.foot{color:#999;font-size:.85rem;margin-top:2rem;border-top:1px solid #eee;padding-top:.6rem}
+:root{
+  --bg:#f4f2ee; --card:#fffdfa; --border:#e7e3da; --ink:#211e19; --muted:#77726a; --faint:#a49e93;
+  --accent:#5b4bd6; --accent-weak:#efeaff; --ok:#1f8a5b; --skip:#b06a1a;
+  color-scheme:light dark;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#141219; --card:#1c1a24; --border:#2c2836; --ink:#ece8f4; --muted:#9c96ab; --faint:#6a6478;
+  --accent:#a394ff; --accent-weak:#241f39; --ok:#4cc38a; --skip:#e0a250;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.55 ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+main{max-width:900px;margin:0 auto;padding:3rem 1.5rem 4rem}
+.mono{font-family:ui-monospace,'Cascadia Code','SF Mono',Consolas,monospace;font-variant-numeric:tabular-nums}
+header{margin-bottom:2.5rem}
+.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.72rem}
+h1{font-size:2rem;line-height:1.1;margin:.35rem 0 .5rem;letter-spacing:-.02em}
+.meta{color:var(--muted);font-size:.88rem;margin:0;display:flex;align-items:center;flex-wrap:wrap;gap:.6rem}
+.meta b{color:var(--ink)}
+.dot{width:3px;height:3px;border-radius:50%;background:var(--faint);display:inline-block}
+section{margin:2.2rem 0}
+h2{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 .9rem;display:flex;align-items:baseline;gap:.6rem}
+.tag{font-size:.68rem;letter-spacing:.04em;color:var(--faint);text-transform:none}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.9rem}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.2rem}
+.num{font-size:2.1rem;font-weight:700;line-height:1;letter-spacing:-.02em;color:var(--accent);
+  font-variant-numeric:tabular-nums}
+.unit{font-size:1rem;font-weight:600;margin-left:.15rem;color:var(--accent);opacity:.7}
+.tlabel{margin-top:.55rem;font-weight:600;font-size:.92rem}
+.tsub{color:var(--muted);font-size:.8rem;margin-top:.1rem}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+@media(max-width:640px){.twocol{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.3rem}
+.card h3{margin:0 0 .7rem;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+dl{display:grid;grid-template-columns:auto 1fr;gap:.4rem 1rem;margin:0}
+dt{color:var(--muted);white-space:nowrap}
+dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+thead th{font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600;
+  text-align:right;padding:0 .7rem .55rem;border-bottom:1px solid var(--border)}
+th.l{text-align:left}
+tbody td{padding:.55rem .7rem;text-align:right;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+td.l{text-align:left}
+tbody tr:last-child td{border-bottom:0}
+.muted{color:var(--faint)}
+.ok{color:var(--ok);font-size:.78rem;font-weight:600}
+.skip{color:var(--skip);font-size:.78rem}
+.notes{margin:0;padding-left:1.1rem;color:var(--muted);font-size:.88rem}
+.notes li{margin:.2rem 0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);
+  color:var(--faint);font-size:.78rem;display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}
 ";
 }
