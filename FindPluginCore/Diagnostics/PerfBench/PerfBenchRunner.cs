@@ -45,6 +45,10 @@ public static class PerfBenchRunner
         result.Notes.Add("v1 engine scenarios only (ingest/index/search). Viewer, decode, parallel-ingest, "
                        + "time-scope and storage-tier scenarios are follow-on.");
 
+        // Watch for OTHER processes stealing CPU during the run — a contended run inflates the ms,
+        // and this is what makes that visible in the report (idleCpuPercentBefore only sees the start).
+        var sampler = sampleLoad ? new ForeignCpuSampler() : null;
+
         // Own the process-global storage flags for the duration; restore after.
         bool priorDisableFts = SqliteStorage.DisableFtsForMeasurement;
         SqliteStorage.DisableFtsForMeasurement = false; // we WANT the FTS index built
@@ -56,6 +60,11 @@ public static class PerfBenchRunner
         finally
         {
             SqliteStorage.DisableFtsForMeasurement = priorDisableFts;
+            if (sampler != null)
+            {
+                result.SystemLoad.PeakForeignCpuPercentDuring = Math.Round(sampler.PeakForeignPercent, 1);
+                sampler.Dispose();
+            }
         }
 
         runSw.Stop();
@@ -239,6 +248,59 @@ public static class PerfBenchRunner
                 try { if (File.Exists(f)) File.Delete(f); } catch { }
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Background sampler tracking the peak <b>non-benchmark</b> CPU during a run. Every few seconds it
+    /// reads the summed CPU time of all processes and of this one; the delta between them is CPU other
+    /// apps used, as a % of (wall × cores). The peak of that flags a contended run (which inflates the ms).
+    /// </summary>
+    private sealed class ForeignCpuSampler : IDisposable
+    {
+        private readonly System.Threading.Timer _timer;
+        private readonly int _cores = Math.Max(1, Environment.ProcessorCount);
+        private readonly int _ownPid = Environment.ProcessId;
+        private long _lastAllMs, _lastOwnMs, _lastTick;
+        public double PeakForeignPercent { get; private set; }
+
+        public ForeignCpuSampler()
+        {
+            (_lastAllMs, _lastOwnMs) = Snapshot();
+            _lastTick = Stopwatch.GetTimestamp();
+            _timer = new System.Threading.Timer(_ => Tick(), null, 3000, 3000);
+        }
+
+        private (long all, long own) Snapshot()
+        {
+            long all = 0, own = 0;
+            foreach (var p in Process.GetProcesses())
+            {
+                try { var t = (long)p.TotalProcessorTime.TotalMilliseconds; all += t; if (p.Id == _ownPid) own = t; }
+                catch { /* exited / access denied */ }
+                finally { p.Dispose(); }
+            }
+            return (all, own);
+        }
+
+        private void Tick()
+        {
+            try
+            {
+                var (all, own) = Snapshot();
+                long now = Stopwatch.GetTimestamp();
+                double wallMs = (now - _lastTick) * 1000.0 / Stopwatch.Frequency;
+                double foreignBusy = (all - _lastAllMs) - (own - _lastOwnMs);
+                _lastAllMs = all; _lastOwnMs = own; _lastTick = now;
+                if (wallMs > 0)
+                {
+                    double pct = Math.Clamp(foreignBusy / (wallMs * _cores) * 100.0, 0, 100);
+                    if (pct > PeakForeignPercent) PeakForeignPercent = pct;
+                }
+            }
+            catch { /* best-effort */ }
+        }
+
+        public void Dispose() => _timer.Dispose();
     }
 
     /// <summary>Synthetic row fed straight to storage — carries the generator's message + timestamp.</summary>

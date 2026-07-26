@@ -48,6 +48,18 @@ public static class PerfBenchReport
         // Wall-clock times as stat tiles (per-machine — what a run actually costs)
         AppendTiles(sb, "Time", "on this machine", TimeTiles(r));
 
+        // Make a noisy run look noisy, rather than printing a confident median it can't back up.
+        bool wideSpread = r.Scenarios.Any(s => s.Spread != null && s.Spread.Values.Any(m => m.Min > 0 && m.Max / m.Min > 1.3));
+        if (r.SystemLoad.PeakForeignCpuPercentDuring >= 15 || wideSpread)
+        {
+            var bits = new List<string>();
+            if (r.SystemLoad.PeakForeignCpuPercentDuring >= 15)
+                bits.Add($"other apps used up to <b>{Num(r.SystemLoad.PeakForeignCpuPercentDuring)}%</b> CPU during it");
+            if (wideSpread) bits.Add("some repeats disagreed (see the ranges under the times)");
+            sb.Append("<p class=\"warn\">⚠ This run looks contended: ").Append(string.Join(", and ", bits))
+              .Append(". Absolute milliseconds are inflated here — the ratios hold up better; re-run with fewer apps open for cleaner times.</p>");
+        }
+
         // Machine + run context
         sb.Append("<section class=\"twocol\">");
         InfoCard(sb, "Machine", new (string, string)[]
@@ -63,6 +75,7 @@ public static class PerfBenchReport
             ("App", string.IsNullOrEmpty(r.App.Version) ? "dev build" : r.App.Version + " · " + r.App.Configuration),
             ("Runtime", r.App.Runtime),
             ("Idle CPU before run", Num(r.SystemLoad.IdleCpuPercentBefore) + " %"),
+            ("Other-app CPU · peak", Num(r.SystemLoad.PeakForeignCpuPercentDuring) + " %"),
             ("Free memory", Num(r.SystemLoad.AvailableRamGB) + " GB"),
             ("WPP decode (WDK)", r.SystemLoad.WdkPresent ? "available" : "not installed"),
         });
@@ -127,21 +140,37 @@ public static class PerfBenchReport
             .OrderByDescending(s => s.Rows).FirstOrDefault();
         if (eng?.Cold == null) return tiles;
         var c = eng.Cold;
+        var sp = eng.Spread;
         string sub = RowsShort(eng.Rows) + " rows";
-        if (c.TryGetValue("ingestMs", out var ing)) tiles.Add(TimeTile(ing, "Ingest", sub));
-        if (c.TryGetValue("indexBuildMs", out var idx)) tiles.Add(TimeTile(idx, "Build search index", sub));
+        if (c.TryGetValue("ingestMs", out var ing)) tiles.Add(TimeTile(ing, "Ingest", WithRange(sub, sp, "ingestMs")));
+        if (c.TryGetValue("indexBuildMs", out var idx)) tiles.Add(TimeTile(idx, "Build search index", WithRange(sub, sp, "indexBuildMs")));
         if (c.TryGetValue("ingestMs", out var i2) && c.TryGetValue("indexBuildMs", out var x2))
             tiles.Add(TimeTile(i2 + x2, "Ready to search", sub));
         if (c.TryGetValue("searchWorstMs", out var w)) tiles.Add(TimeTile(w, "Search · matches all", sub));
         return tiles;
     }
 
+    /// <summary>Append the median's min–max spread to a tile sub-line when the repeats disagreed —
+    /// so a noisy run's hero number visibly carries its uncertainty.</summary>
+    private static string WithRange(string sub, Dictionary<string, PerfBenchMinMax>? sp, string key)
+        => sp != null && sp.TryGetValue(key, out var mm) && mm.Max > mm.Min
+            ? sub + " · " + FmtRange(mm.Min, mm.Max)
+            : sub;
+
     private static Tile TimeTile(double ms, string label, string sub)
     {
-        var (v, u) = ms >= 1000
-            ? ((ms / 1000.0).ToString("0.#", CultureInfo.InvariantCulture), "s")
-            : (Num(ms), "ms");
+        var (v, u) = FmtTimeParts(ms);
         return new Tile(v, u, label, sub);
+    }
+
+    private static (string v, string u) FmtTimeParts(double ms)
+        => ms >= 1000 ? ((ms / 1000.0).ToString("0.#", CultureInfo.InvariantCulture), "s") : (Num(ms), "ms");
+
+    private static string FmtRange(double min, double max)
+    {
+        var (v1, u1) = FmtTimeParts(min);
+        var (v2, u2) = FmtTimeParts(max);
+        return u1 == u2 ? $"{v1}–{v2} {u1}" : $"{v1} {u1} – {v2} {u2}";
     }
 
     private static List<Tile> HeadlineTiles(PerfBenchResult r)
@@ -209,11 +238,13 @@ public static class PerfBenchReport
 :root{
   --bg:#f4f2ee; --card:#fffdfa; --border:#e7e3da; --ink:#211e19; --muted:#77726a; --faint:#a49e93;
   --accent:#5b4bd6; --accent-weak:#efeaff; --ok:#1f8a5b; --skip:#b06a1a;
+  --warn:#c67611; --warn-weak:#fdf1df;
   color-scheme:light dark;
 }
 @media(prefers-color-scheme:dark){:root{
   --bg:#141219; --card:#1c1a24; --border:#2c2836; --ink:#ece8f4; --muted:#9c96ab; --faint:#6a6478;
   --accent:#a394ff; --accent-weak:#241f39; --ok:#4cc38a; --skip:#e0a250;
+  --warn:#e0a250; --warn-weak:#2a2012;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -255,6 +286,9 @@ tbody tr:last-child td{border-bottom:0}
 .muted{color:var(--faint)}
 .ok{color:var(--ok);font-size:.78rem;font-weight:600}
 .skip{color:var(--skip);font-size:.78rem}
+.warn{background:var(--warn-weak);border:1px solid var(--warn);border-radius:10px;padding:.65rem .95rem;
+  font-size:.85rem;margin:1.2rem 0;color:var(--ink)}
+.warn b{color:var(--warn)}
 .notes{margin:0;padding-left:1.1rem;color:var(--muted);font-size:.88rem}
 .notes li{margin:.2rem 0}
 footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);
