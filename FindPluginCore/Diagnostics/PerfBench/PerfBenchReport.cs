@@ -44,17 +44,9 @@ public static class PerfBenchReport
           .Append("</p></header>");
 
         // Headline ratios as stat tiles (cross-machine — the comparable numbers)
-        var tiles = HeadlineTiles(r);
-        if (tiles.Count > 0)
-        {
-            sb.Append("<section><h2>Headline<span class=\"tag\">compares across machines</span></h2><div class=\"tiles\">");
-            foreach (var t in tiles)
-                sb.Append("<div class=\"tile\"><div class=\"num\">").Append(E(t.value))
-                  .Append("<span class=\"unit\">").Append(E(t.unit)).Append("</span></div>")
-                  .Append("<div class=\"tlabel\">").Append(E(t.label)).Append("</div>")
-                  .Append("<div class=\"tsub\">").Append(E(t.sub)).Append("</div></div>");
-            sb.Append("</div></section>");
-        }
+        AppendTiles(sb, "Headline", "compares across machines", HeadlineTiles(r));
+        // Wall-clock times as stat tiles (per-machine — what a run actually costs)
+        AppendTiles(sb, "Time", "on this machine", TimeTiles(r));
 
         // Machine + run context
         sb.Append("<section class=\"twocol\">");
@@ -110,9 +102,47 @@ public static class PerfBenchReport
         return sb.ToString();
     }
 
-    // ---- headline tiles ----
+    // ---- tiles ----
 
     private readonly record struct Tile(string value, string unit, string label, string sub);
+
+    private static void AppendTiles(StringBuilder sb, string title, string tag, List<Tile> tiles)
+    {
+        if (tiles.Count == 0) return;
+        sb.Append("<section><h2>").Append(E(title)).Append("<span class=\"tag\">").Append(E(tag))
+          .Append("</span></h2><div class=\"tiles\">");
+        foreach (var t in tiles)
+            sb.Append("<div class=\"tile\"><div class=\"num\">").Append(E(t.value))
+              .Append("<span class=\"unit\">").Append(E(t.unit)).Append("</span></div>")
+              .Append("<div class=\"tlabel\">").Append(E(t.label)).Append("</div>")
+              .Append("<div class=\"tsub\">").Append(E(t.sub)).Append("</div></div>");
+        sb.Append("</div></section>");
+    }
+
+    private static List<Tile> TimeTiles(PerfBenchResult r)
+    {
+        var tiles = new List<Tile>();
+        var eng = r.Scenarios
+            .Where(s => s.Kind == "engine" && s.Cold != null && s.Cold.ContainsKey("ingestMs"))
+            .OrderByDescending(s => s.Rows).FirstOrDefault();
+        if (eng?.Cold == null) return tiles;
+        var c = eng.Cold;
+        string sub = RowsShort(eng.Rows) + " rows";
+        if (c.TryGetValue("ingestMs", out var ing)) tiles.Add(TimeTile(ing, "Ingest", sub));
+        if (c.TryGetValue("indexBuildMs", out var idx)) tiles.Add(TimeTile(idx, "Build search index", sub));
+        if (c.TryGetValue("ingestMs", out var i2) && c.TryGetValue("indexBuildMs", out var x2))
+            tiles.Add(TimeTile(i2 + x2, "Ready to search", sub));
+        if (c.TryGetValue("searchWorstMs", out var w)) tiles.Add(TimeTile(w, "Search · matches all", sub));
+        return tiles;
+    }
+
+    private static Tile TimeTile(double ms, string label, string sub)
+    {
+        var (v, u) = ms >= 1000
+            ? ((ms / 1000.0).ToString("0.#", CultureInfo.InvariantCulture), "s")
+            : (Num(ms), "ms");
+        return new Tile(v, u, label, sub);
+    }
 
     private static List<Tile> HeadlineTiles(PerfBenchResult r)
     {
