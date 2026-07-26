@@ -142,9 +142,10 @@ public class PerfBenchFoundationTests
         var html = PerfBenchReport.RenderHtml(r);
 
         StringAssert.StartsWith(html, "<!doctype html>");
-        StringAssert.Contains(html, "FindNeedle Performance Benchmark");
-        StringAssert.Contains(html, "engine.text.5k");
-        StringAssert.Contains(html, "FTS index vs. LIKE scan"); // headline ratio tile rendered
+        StringAssert.Contains(html, "FindNeedle Performance Benchmark"); // <title>
+        StringAssert.Contains(html, "5k-line log");                       // plain-labelled details row
+        StringAssert.Contains(html, "Faster than no index");              // plain ratio tile
+        StringAssert.Contains(html, "Find one specific line");            // plain search label
         // Self-contained: no external resources of any kind.
         Assert.IsFalse(html.Contains("<script"), "no scripts");
         Assert.IsFalse(html.Contains("<link"), "no external stylesheets");
