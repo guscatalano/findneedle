@@ -153,6 +153,33 @@ public class PerfBenchFoundationTests
         Assert.IsFalse(html.Contains("href="), "no external links");
     }
 
+    [TestMethod]
+    public void Report_RendersStorageEngineComparison()
+    {
+        // A result carrying the three "storage" scenarios the runner emits at >=100k rows: the same log
+        // loaded in-memory / hybrid / SQLite. The report must table them head-to-head so a reader can see
+        // the load-speed / RAM / disk tradeoff that drives FindNeedle's automatic engine choice.
+        var r = new PerfBenchResult { Preset = "test" };
+        void Storage(string tier, double ingestMs, double memMB, double diskMB) =>
+            r.Scenarios.Add(new PerfBenchScenario
+            {
+                Id = $"storage.{tier}", Kind = "storage", Rows = 250_000, StorageTierChosen = tier,
+                Metrics = { ["ingestMs"] = ingestMs, ["memoryMB"] = memMB, ["diskMB"] = diskMB },
+            });
+        Storage("In-memory", 152, 28.4, 0);
+        Storage("Hybrid", 157, 28.4, 0.1);
+        Storage("SQLite", 1419, 0, 59.6);
+
+        var html = PerfBenchReport.RenderHtml(r);
+
+        StringAssert.Contains(html, "Storage engines compared");
+        StringAssert.Contains(html, "250k-line");
+        foreach (var tier in new[] { "In-memory", "Hybrid", "SQLite" })
+            StringAssert.Contains(html, tier, $"{tier} row present in the comparison table");
+        StringAssert.Contains(html, "59.6 MB", "SQLite disk figure rendered");
+        StringAssert.Contains(html, "28.4 MB", "in-memory RAM figure rendered");
+    }
+
     private static string TempFile() => Path.Combine(Path.GetTempPath(), $"perfbench_{Guid.NewGuid():N}.log");
     private static void Del(string p) { try { File.Delete(p); } catch { } }
 }

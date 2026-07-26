@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
+using FindNeedlePluginLib.Interfaces;
 using FindPluginCore.Implementations.Storage;
 
 namespace FindPluginCore.Diagnostics.PerfBench;
@@ -56,6 +57,10 @@ public static class PerfBenchRunner
         {
             foreach (var size in engineSizes)
                 result.Scenarios.Add(RunEngine(size, repeats));
+
+            // Same log loaded three ways — the storage-tier tradeoff (RAM vs disk). Real runs only.
+            if (engineSizes.Length > 0 && engineSizes.Max() >= 100_000)
+                result.Scenarios.AddRange(RunStorageComparison(250_000, Math.Min(repeats, 2)));
         }
         finally
         {
@@ -168,6 +173,46 @@ public static class PerfBenchRunner
     // Parallel-vs-serial ingest is a follow-on: the real fan-out win is in the source-file SCAN, not
     // the storage insert this direct-storage runner measures, so it would always read ~1x here. It
     // needs the full file->scan->storage pipeline to measure honestly (see the note in Run()).
+
+    // ---- storage-tier comparison (same log, three engines) ----
+
+    private static List<PerfBenchScenario> RunStorageComparison(long size, int repeats)
+    {
+        return new List<PerfBenchScenario>
+        {
+            CompareStorage("inmemory", "In-memory", size, repeats, _ => new InMemoryStorage()),
+            CompareStorage("hybrid", "Hybrid", size, repeats, b => new HybridStorage(b)),
+            CompareStorage("sqlite", "SQLite", size, repeats, b => new SqliteStorage(b)),
+        };
+    }
+
+    private static PerfBenchScenario CompareStorage(string id, string label, long size, int repeats, Func<string, ISearchStorage> make)
+    {
+        var ingest = new List<double>();
+        double memMB = 0, diskMB = 0;
+        for (int r = 0; r < repeats; r++)
+        {
+            var dbBase = Path.Combine(Path.GetTempPath(), "perfbench_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                using var s = make(dbBase);
+                var sw = Stopwatch.StartNew();
+                s.AddFilteredBatch(Rows(size));
+                sw.Stop(); ingest.Add(sw.Elapsed.TotalMilliseconds);
+                var (_, _, disk, mem) = s.GetStatistics();
+                memMB = Math.Round(mem / 1e6, 1);
+                diskMB = Math.Round(disk / 1e6, 1);
+            }
+            catch { /* an engine may refuse a size — leave its metrics at 0 */ }
+            finally { TryDeleteDb(dbBase); }
+        }
+        return new PerfBenchScenario
+        {
+            Id = "storage." + id, Kind = "storage", Dataset = "synthetic-log",
+            DatasetVersion = SyntheticLogGenerator.DatasetVersion, Rows = size, StorageTierChosen = label,
+            Metrics = new() { ["ingestMs"] = Round(Median(ingest)), ["memoryMB"] = memMB, ["diskMB"] = diskMB },
+        };
+    }
 
     private static IEnumerable<ISearchResult> Rows(long n)
     {

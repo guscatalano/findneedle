@@ -69,6 +69,7 @@ public static class PerfBenchReport
         AppendGroup(sb, "Staying smooth", "How responsive scrolling and jumping around feel.", ResponsiveTiles(big));
 
         AppendScaling(sb, r);
+        AppendStorageCompare(sb, r);
 
         // This computer + this run
         sb.Append("<section class=\"twocol\">");
@@ -200,6 +201,27 @@ public static class PerfBenchReport
         "Hybrid" => "Hybrid",
         _ => string.IsNullOrEmpty(t) ? "—" : t!,
     };
+
+    /// <summary>The same log loaded into each engine — the RAM-vs-disk tradeoff behind the tier choice.</summary>
+    private static void AppendStorageCompare(StringBuilder sb, PerfBenchResult r)
+    {
+        var st = r.Scenarios.Where(s => s.Kind == "storage").ToList();
+        if (st.Count == 0) return;
+        sb.Append("<section><h2>Storage engines compared</h2><p class=\"gdesc\">FindNeedle keeps small logs in memory (fastest) and puts big ones in an on-disk database — the same <b>")
+          .Append(RowsShort(st[0].Rows)).Append("-line</b> log loaded three ways.</p>")
+          .Append("<table class=\"scale\"><thead><tr><th class=\"l\">Engine</th><th>Load time</th><th>Memory used</th><th>Disk used</th></tr></thead><tbody>");
+        foreach (var s in st)
+        {
+            var m = s.Metrics;
+            sb.Append("<tr><td class=\"l\"><b>").Append(E(s.StorageTierChosen ?? s.Id)).Append("</b></td><td>")
+              .Append(m.TryGetValue("ingestMs", out var i) ? FmtTimeStr(i) : "—").Append("</td><td>")
+              .Append(MB(m, "memoryMB")).Append("</td><td>").Append(MB(m, "diskMB")).Append("</td></tr>");
+        }
+        sb.Append("</tbody></table></section>");
+    }
+
+    private static string MB(Dictionary<string, double> m, string key)
+        => m.TryGetValue(key, out var v) && v > 0 ? Num(v) + " MB" : "<span class=\"muted\">—</span>";
 
     private static string FmtTimeStr(double ms) { var (v, u) = FmtTimeParts(ms); return v + " " + u; }
     private static string TimeCell(Dictionary<string, double> c, string key)
