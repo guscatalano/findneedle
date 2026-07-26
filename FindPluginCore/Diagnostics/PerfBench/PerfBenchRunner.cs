@@ -52,6 +52,11 @@ public static class PerfBenchRunner
         {
             foreach (var size in engineSizes)
                 result.Scenarios.Add(RunEngine(size, repeats));
+
+            // Parallel-vs-serial ingest on the largest size (needs enough rows to engage fan-out).
+            long biggest = engineSizes.Length > 0 ? engineSizes.Max() : 0;
+            if (biggest >= 50_000)
+                result.Scenarios.Add(RunParallelIngest(biggest, repeats));
         }
         finally
         {
@@ -140,6 +145,51 @@ public static class PerfBenchRunner
         };
     }
 
+    // ---- parallel-vs-serial ingest scenario ----
+
+    private static PerfBenchScenario RunParallelIngest(long size, int repeats)
+    {
+        var serial = new List<double>();
+        var parallel = new List<double>();
+        bool prior = SqliteStorage.ParallelIngestEnabled;
+        try
+        {
+            for (int r = 0; r < repeats; r++)
+            {
+                SqliteStorage.ParallelIngestEnabled = false; serial.Add(IngestOnce(size));
+                SqliteStorage.ParallelIngestEnabled = true; parallel.Add(IngestOnce(size));
+            }
+        }
+        finally { SqliteStorage.ParallelIngestEnabled = prior; }
+
+        double ms = Median(serial), mp = Median(parallel);
+        return new PerfBenchScenario
+        {
+            Id = $"ingest.parallel.{ShortSize(size)}",
+            Kind = "engine",
+            Dataset = "synthetic-log",
+            DatasetVersion = SyntheticLogGenerator.DatasetVersion,
+            Rows = size,
+            StorageTierChosen = "Sqlite",
+            Metrics = new() { ["serialMs"] = Round(ms), ["parallelMs"] = Round(mp) },
+            Ratios = new() { ["parallelSpeedup"] = mp > 0 ? Round(ms / mp, 2) : 0 },
+        };
+    }
+
+    private static double IngestOnce(long size)
+    {
+        var dbBase = Path.Combine(Path.GetTempPath(), "perfbench_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var s = new SqliteStorage(dbBase);
+            var sw = Stopwatch.StartNew();
+            s.AddFilteredBatch(Rows(size));
+            sw.Stop();
+            return sw.Elapsed.TotalMilliseconds;
+        }
+        finally { TryDeleteDb(dbBase); }
+    }
+
     private static IEnumerable<ISearchResult> Rows(long n)
     {
         for (long i = 0; i < n; i++)
@@ -147,6 +197,9 @@ public static class PerfBenchRunner
     }
 
     // ---- machine / load ----
+
+    /// <summary>Machine specs for a pre-run summary card (no measurement).</summary>
+    public static PerfBenchMachine DescribeMachine() => CollectMachine();
 
     private static PerfBenchApp CollectApp()
     {

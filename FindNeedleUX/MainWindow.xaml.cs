@@ -1042,6 +1042,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: WppSymbolResolutionPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.WppSymbolResolutionPage));
                 break;
+            case "perf_benchmark":
+                Logger.Instance.Log("Navigated: PerformanceBenchmarkPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.PerformanceBenchmarkPage));
+                break;
             case "sim_wpp_scale":
                 Logger.Instance.Log("Navigated: WppSymbolResolutionPage (simulate)");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.WppSymbolResolutionPage), "simulate");

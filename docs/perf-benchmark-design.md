@@ -1,8 +1,12 @@
 # FindNeedle Performance Benchmark — end-to-end design (draft)
 
-Status: **draft for review.** Goal: a built-in, reproducible benchmark that (a) the author publishes as a
-reference run, and (b) anyone can run on their own machine and send back a result file — a **community
-benchmark**. No phone-home: results are a file the user reviews and submits manually.
+Status: **v1 implemented.** Steps 1–6 built and shipping under Diagnostics → Performance benchmark
+(`FindPluginCore/Diagnostics/PerfBench/*`, `FindNeedleUX/Pages/PerformanceBenchmarkPage`,
+`tools/perfbench/aggregate.ps1`). v1 covers the **engine** scenarios (ingest / FTS-build / selective-vs-
+worst search + parallel-vs-serial ingest); **viewer, decode, time-scope and storage-tier scenarios are
+follow-on** (recorded in each result's `notes`). Goal: a built-in, reproducible benchmark that (a) the
+author publishes as a reference run, and (b) anyone can run on their own machine and send back a result
+file — a **community benchmark**. No phone-home: results are a file the user reviews and submits manually.
 
 ## 0. Principles (the decisions we've locked)
 

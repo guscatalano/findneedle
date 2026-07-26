@@ -133,6 +133,25 @@ public class PerfBenchFoundationTests
         Assert.IsNotNull(PerfBenchResult.FromJson(json));
     }
 
+    // ---- report renderer (step 4) ----
+
+    [TestMethod]
+    public void Report_RendersSelfContainedHtml()
+    {
+        var r = PerfBenchRunner.Run(new long[] { 5000 }, repeats: 1, preset: "test", sampleLoad: false);
+        var html = PerfBenchReport.RenderHtml(r);
+
+        StringAssert.StartsWith(html, "<!doctype html>");
+        StringAssert.Contains(html, "FindNeedle Performance Benchmark");
+        StringAssert.Contains(html, "engine.text.5k");
+        StringAssert.Contains(html, "FTS vs LIKE scan");      // ratio label rendered
+        // Self-contained: no external resources of any kind.
+        Assert.IsFalse(html.Contains("<script"), "no scripts");
+        Assert.IsFalse(html.Contains("<link"), "no external stylesheets");
+        Assert.IsFalse(html.Contains("src="), "no external assets");
+        Assert.IsFalse(html.Contains("href="), "no external links");
+    }
+
     private static string TempFile() => Path.Combine(Path.GetTempPath(), $"perfbench_{Guid.NewGuid():N}.log");
     private static void Del(string p) { try { File.Delete(p); } catch { } }
 }

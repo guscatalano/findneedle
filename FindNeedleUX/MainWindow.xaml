@@ -57,6 +57,8 @@
                 <MenuFlyoutItem Text="Search statistics (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
                 <MenuFlyoutItem Text="WPP symbol resolution…" Click="MenuFlyoutItem_Click" Name="wpp_symbols"
                                 ToolTipService.ToolTip="Resolve the PDBs/TMFs a WPP .etl needs to decode — point at your symbols and see per-binary status"/>
+                <MenuFlyoutItem Text="Performance benchmark…" Click="MenuFlyoutItem_Click" Name="perf_benchmark"
+                                ToolTipService.ToolTip="Measure how this machine performs on a standard synthetic workload — share the result to compare hardware"/>
                 <!-- Developer-only (hidden unless AppMode.IsDeveloper). -->
                 <MenuFlyoutSeparator x:Name="PreviewDevSeparator"/>
                 <MenuFlyoutItem Text="Preview first-run (new user)…" Click="MenuFlyoutItem_Click" Name="preview_new_user"
