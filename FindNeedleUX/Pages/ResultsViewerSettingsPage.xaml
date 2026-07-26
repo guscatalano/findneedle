@@ -615,42 +615,16 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- WPP / tracefmt symbols -->
+                    <!-- WPP / tracefmt symbols — moved to its own page; this is just a pointer -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                             CornerRadius="6" Padding="16">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="WPP symbols (tracefmt TMF path)" FontWeight="SemiBold"/>
+                            <TextBlock Text="WPP symbols (TMF decoding)" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="WPP-traced .etl files need TMF files (extracted from the binary's PDB via tracepdb) to decode — otherwise events show as 'Unknown'. Point this at the folder containing your .tmf files; FindNeedle passes it to tracefmt. Separate multiple folders with ';'."/>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBox x:Name="TmfPathBox" Width="460" PlaceholderText="e.g. C:\symbols\tmf"
-                                         LostFocus="TmfPathBox_LostFocus"
-                                         AutomationProperties.Name="TMF search path"/>
-                                <Button Content="Browse…" Click="BrowseTmfPath_Click"/>
-                            </StackPanel>
-
-                            <TextBlock Text="…or build TMFs from symbols" FontWeight="SemiBold" Margin="0,8,0,0"/>
-                            <TextBlock TextWrapping="Wrap" FontSize="12"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Point at a folder of PDBs and/or the binaries that produced the trace, plus a symbol path (PDB folders or a symbol server, srv*cache*https://…). 'Build TMFs' resolves each binary's exact PDB (by GUID+age) and extracts TMFs into a managed cache that's used automatically. Note: TMF data lives only in full/private PDBs — public symbol servers (e.g. msdl) strip it, so use your component's own symbol store for WPP decoding."/>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBox x:Name="SymbolSourceBox" Width="460" PlaceholderText="PDBs / binaries folder"
-                                         LostFocus="SymbolSourceBox_LostFocus" AutomationProperties.Name="PDB or binary source folder"/>
-                                <Button Content="Browse…" Click="BrowseSymbolSource_Click"/>
-                            </StackPanel>
-                            <TextBox x:Name="SymbolPathBox" Width="560" HorizontalAlignment="Left"
-                                     PlaceholderText="Symbol path, e.g. srv*C:\symcache*https://msdl.microsoft.com/download/symbols"
-                                     LostFocus="SymbolPathBox_LostFocus" AutomationProperties.Name="Symbol path"/>
-                            <TextBlock TextWrapping="Wrap" FontSize="12"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Defaults to the Microsoft public symbol server, so WPP traces from Microsoft binaries resolve automatically — the first decode may download PDBs (slower). Clear this box to disable, or set your own PDB folders / symbol server."/>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button x:Name="BuildTmfsButton" Content="Build TMFs from symbols" Click="BuildTmfs_Click"/>
-                                <TextBlock x:Name="BuildTmfsStatus" VerticalAlignment="Center" FontSize="12"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
+                                       Text="WPP-traced .etl files need TMF format files (from each binary's private PDB) to decode — otherwise events show as 'Unknown'. Point at ready-made TMFs, resolve them from PDBs/symbols, and see per-binary status on the dedicated page."/>
+                            <Button Content="Open WPP symbol resolution →" Click="OpenWppSymbols_Click"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>

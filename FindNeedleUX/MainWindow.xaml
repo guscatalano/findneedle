@@ -55,10 +55,14 @@
                 <MenuFlyoutItem Text="System check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
                 <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
                 <MenuFlyoutItem Text="Search statistics (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
+                <MenuFlyoutItem Text="WPP symbol resolution…" Click="MenuFlyoutItem_Click" Name="wpp_symbols"
+                                ToolTipService.ToolTip="Resolve the PDBs/TMFs a WPP .etl needs to decode — point at your symbols and see per-binary status"/>
                 <!-- Developer-only (hidden unless AppMode.IsDeveloper). -->
                 <MenuFlyoutSeparator x:Name="PreviewDevSeparator"/>
                 <MenuFlyoutItem Text="Preview first-run (new user)…" Click="MenuFlyoutItem_Click" Name="preview_new_user"
                                 ToolTipService.ToolTip="Launch a second instance with an empty, throwaway profile — see the app as a brand-new user would. Your real settings/caches are untouched."/>
+                <MenuFlyoutItem Text="Simulate: 1000 WPP providers (75% missing)" Click="MenuFlyoutItem_Click" Name="sim_wpp_scale"
+                                ToolTipService.ToolTip="Open the WPP symbol-resolution page filled with a synthetic large, mostly-unresolved trace — a scale check for the resolution UI."/>
             </MenuBarItem>
 
             <MenuBarItem Title="Help">

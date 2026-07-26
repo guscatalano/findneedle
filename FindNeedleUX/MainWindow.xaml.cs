@@ -51,6 +51,7 @@ public sealed partial class MainWindow : Window
         if (!FindNeedleUX.Services.AppMode.IsDeveloper)
         {
             if (preview_new_user != null) preview_new_user.Visibility = Visibility.Collapsed;
+            if (sim_wpp_scale != null) sim_wpp_scale.Visibility = Visibility.Collapsed;
             if (PreviewDevSeparator != null) PreviewDevSeparator.Visibility = Visibility.Collapsed;
         }
         contentFrame.Navigated += (s, e) => { RefreshStatusStrip(); BuildQuickMenu(); };
@@ -484,6 +485,12 @@ public sealed partial class MainWindow : Window
     {
         DispatcherQueue.TryEnqueue(() =>
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage)));
+    }
+
+    public void NavigateToWppSymbols()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+            contentFrame.Navigate(typeof(FindNeedleUX.Pages.WppSymbolResolutionPage)));
     }
 
     public void NavigateToSearchLocations()
@@ -1030,6 +1037,14 @@ public sealed partial class MainWindow : Window
             case "settings_resultviewer":
                 Logger.Instance.Log("Navigated: ResultsViewerSettingsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage));
+                break;
+            case "wpp_symbols":
+                Logger.Instance.Log("Navigated: WppSymbolResolutionPage");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.WppSymbolResolutionPage));
+                break;
+            case "sim_wpp_scale":
+                Logger.Instance.Log("Navigated: WppSymbolResolutionPage (simulate)");
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.WppSymbolResolutionPage), "simulate");
                 break;
             case "diagramtools":
                 Logger.Instance.Log("Navigated: DiagramToolsPage");

@@ -1169,23 +1169,21 @@ public class MiddleLayerService
                     var missing = d.Contains("missingTmfs") ? d["missingTmfs"]?.ToString() : null;
                     var file = Path.GetFileName(kv.Key);
 
+                    int needed = CountTmfs(missing);
                     if (method.Contains("symbols missing", StringComparison.OrdinalIgnoreCase))
                     {
-                        var detail =
-                            $"“{file}” is a WPP trace, and the formatting symbols (TMF files) needed to turn its " +
-                            "events into readable text aren't available — so almost nothing could be decoded.";
-                        if (!string.IsNullOrEmpty(missing))
-                            detail += $"\n\n{SummarizeTmfs(missing)}";
-                        detail +=
-                            "\n\nTo fix: open WPP symbol settings below, point it at the folder with the matching PDBs " +
-                            "(or a symbol path / symbol server), click “Build TMFs from symbols,” then reopen this file.";
+                        // Keep this compact: the full per-binary breakdown + how-to-fix lives on the
+                        // "Symbol resolution" page (the button below), so the banner is just a one-liner.
+                        var detail = $"“{file}” is a WPP trace whose formatting symbols (TMF) aren't available"
+                            + (needed > 0 ? $" — {needed} needed" : "")
+                            + ", so it couldn’t decode. Open Symbol resolution below to point at your symbols and fix it.";
                         return ("Couldn’t decode this ETL — missing WPP symbols", detail, true, missing);
                     }
                     if (!string.IsNullOrEmpty(missing))
                     {
                         return ("Some events couldn’t be decoded — missing WPP symbols",
-                            $"“{file}” has events with no matching WPP symbols (TMF), so they show as raw/unformatted.\n\n" +
-                            $"{SummarizeTmfs(missing)}\n\nSet a symbol/TMF path in WPP symbol settings below and reopen for full text.",
+                            $"“{file}” has WPP events with no matching symbols ({needed} TMF needed), shown raw. "
+                            + "Open Symbol resolution below to add symbols and reopen.",
                             false, missing);
                     }
                 }
@@ -1194,20 +1192,10 @@ public class MiddleLayerService
         return null;
     }
 
-    /// <summary>Summarize the missing-TMF GUID list for the decode banner. Each GUID is 36 chars, so a
-    /// raw comma-joined list of many wraps into a wall of text that buries the actionable message —
-    /// show the count and the first few, and point at the Copy button for the rest (Copy still puts the
-    /// full list on the clipboard).</summary>
-    private static string SummarizeTmfs(string missing)
-    {
-        if (string.IsNullOrEmpty(missing)) return "";
-        var guids = missing.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
-        const int show = 4;
-        if (guids.Length <= show)
-            return $"Needs TMF ({guids.Length}): {missing}";
-        var shown = string.Join(", ", guids.Take(show));
-        return $"Needs TMF ({guids.Length}): {shown} — and {guids.Length - show} more (click Copy for the full list).";
-    }
+    /// <summary>Count of missing TMF GUIDs in the comma-joined list (for the compact decode banner —
+    /// the exact GUIDs are on the Symbol resolution page and on the banner's Copy button).</summary>
+    private static int CountTmfs(string missing)
+        => string.IsNullOrEmpty(missing) ? 0 : missing.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries).Length;
 
     /// <summary>Rule-config paths restored from a loaded workspace. Re-applied in <see cref="UpdateSearchQuery"/>
     /// every time the query is rebuilt (each search recreates the query), so a loaded workspace's rules

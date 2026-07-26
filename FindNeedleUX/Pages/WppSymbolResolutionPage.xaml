@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="FindNeedleUX.Pages.WppSymbolResolutionPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FindNeedleUX.Pages"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <ScrollViewer Padding="24">
+        <StackPanel MaxWidth="860" Spacing="14">
+            <TextBlock Text="WPP symbol resolution" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Text="WPP-traced .etl files need TMF format files — extracted from each binary's private PDB — to decode; without them events show as 'Unknown'. Point FindNeedle at your symbols here, resolve them one at a time or all at once, then reopen the trace. A PDB is identified by a GUID (which component) plus an age (which build/revision of it), and symbols are matched on both exactly — so a folder holding many builds is safe: the right one is picked, and same-GUID-but-wrong-age copies are flagged as the wrong version."/>
+
+            <!-- What the current trace needs -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="What the current trace needs" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="NeedsText" TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Your symbols -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Your symbols" FontWeight="SemiBold"/>
+
+                    <!-- TMF folders: ready-made .tmf files (the fastest path if you already have them) -->
+                    <TextBlock Text="TMF folders — ready-made .tmf files (fastest, if your team already ships them; no PDBs needed)"
+                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                    <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4"
+                            Background="{ThemeResource ControlFillColorDefaultBrush}" AllowDrop="True"
+                            DragOver="TmfList_DragOver" Drop="TmfList_Drop">
+                        <StackPanel>
+                            <TextBlock x:Name="TmfEmptyText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Margin="8,8" Text="No TMF folders — add one if you already have .tmf files, or resolve from symbols below."/>
+                            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="TmfList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="x:String">
+                                            <Grid Padding="8,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{x:Bind}" IsTextSelectionEnabled="True"
+                                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                           ToolTipService.ToolTip="{x:Bind}"/>
+                                                <Button Grid.Column="1" Content="✕" Tag="{x:Bind}" Click="RemoveTmfFolder_Click"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,2" FontSize="12"
+                                                        ToolTipService.ToolTip="Remove this folder"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+                    <Button Content="Add TMF folder…" Click="AddTmfFolder_Click" HorizontalAlignment="Left"/>
+
+                    <!-- Symbol source: an editable list of folders (add / remove / drag-drop) -->
+                    <TextBlock Text="…or resolve from symbols — folders of PDBs and/or the binaries that produced the trace"
+                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4"
+                            Background="{ThemeResource ControlFillColorDefaultBrush}" AllowDrop="True"
+                            DragOver="SourceList_DragOver" Drop="SourceList_Drop">
+                        <StackPanel>
+                            <TextBlock x:Name="SourceEmptyText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Margin="8,8" Text="No symbol folders yet — Add folder… or drag folders here."/>
+                            <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="SourceList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="x:String">
+                                            <Grid Padding="8,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{x:Bind}" IsTextSelectionEnabled="True"
+                                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                           ToolTipService.ToolTip="{x:Bind}"/>
+                                                <Button Grid.Column="1" Content="✕" Tag="{x:Bind}" Click="RemoveSourceFolder_Click"
+                                                        Background="Transparent" BorderThickness="0" Padding="8,2" FontSize="12"
+                                                        ToolTipService.ToolTip="Remove this folder"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+                    <Button Content="Add folder…" Click="AddSymbolFolder_Click" HorizontalAlignment="Left"/>
+
+                    <!-- Symbol path: multiline (_NT_SYMBOL_PATH), one element per line, with quick-insert -->
+                    <TextBlock Text="Symbol path — optional local stores / symbol servers (_NT_SYMBOL_PATH), one per line"
+                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <TextBox x:Name="SymbolPathBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" MaxHeight="120"
+                             FontFamily="Consolas" FontSize="12" IsSpellCheckEnabled="False" HorizontalAlignment="Stretch"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto" LostFocus="SymbolPathBox_LostFocus"
+                             PlaceholderText="One element per line, e.g.  srv*C:\symcache*https://msdl.microsoft.com/download/symbols"
+                             AutomationProperties.Name="Symbol path"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="+ Microsoft public server" Click="AddMsServer_Click"/>
+                        <Button Content="+ Local folder…" Click="AddSymPathFolder_Click"/>
+                        <Button Content="+ Symbol server…" Click="AddSymServer_Click"/>
+                    </StackPanel>
+                    <TextBlock FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                               Text="Public servers (e.g. msdl) strip WPP data — for decoding, point at your component's own private symbols."/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                        <Button x:Name="LocateButton" Content="Locate symbols…" Click="Locate_Click"
+                                Style="{StaticResource AccentButtonStyle}"
+                                ToolTipService.ToolTip="Pick a folder of PDBs/binaries, resolve every needed symbol from it, then reopen the trace"/>
+                        <Button x:Name="BuildButton" Content="Build &amp;&amp; reopen" Click="BuildReopen_Click"
+                                ToolTipService.ToolTip="Build TMFs from the symbol source/path above, then reopen the trace"/>
+                        <Button x:Name="RefreshButton" Content="Refresh status" Click="Refresh_Click"/>
+                        <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Per-symbol status -->
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Symbols" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="EmptyStatusText" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Set a symbol source above and press Refresh — each binary's PDB status (✓ found · ✗ missing/wrong · ⚠ no WPP data) shows here, with a Locate… action on the ones that still need attention."/>
+
+                    <StackPanel x:Name="TableArea" Spacing="6" Visibility="Collapsed">
+                        <!-- Filter row -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Name="SymbolSearchBox" Width="300" PlaceholderText="Filter by provider, PDB GUID, or note…"
+                                     TextChanged="SymbolSearch_TextChanged" AutomationProperties.Name="Filter symbols"/>
+                            <CheckBox x:Name="UnresolvedOnlyCheck" Content="Unresolved only"
+                                      Checked="FilterToggle_Changed" Unchecked="FilterToggle_Changed" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SymbolCountText" VerticalAlignment="Center" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- Table header (same column widths as the rows below so they align) -->
+                        <Grid Padding="8,0,8,4" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="26"/>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="240"/>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="92"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="1" Text="Provider" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       ToolTipService.ToolTip="The binary (.dll/.exe/.sys) that emitted these WPP events — the file we read the PDB identity from."/>
+                            <TextBlock Grid.Column="2" Text="PDB GUID" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       ToolTipService.ToolTip="The PDB's unique identity. Together with Age it pins the exact build the binary was linked against; the resolver requires BOTH to match."/>
+                            <TextBlock Grid.Column="3" Text="Age" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       ToolTipService.ToolTip="The PDB's revision number (not a date). The linker bumps it each time it rewrites the PDB without minting a new GUID. Symbols match on GUID + Age together — so the same GUID with a different Age is a different build of the same component, which the resolver rejects as the wrong version."/>
+                            <TextBlock Grid.Column="4" Text="Status / note" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       ToolTipService.ToolTip="What resolution found: ✓ TMF extracted · ✗ not found / wrong build · ⚠ matched but no WPP data (public/stripped PDB)."/>
+                        </Grid>
+
+                        <!-- Virtualized so a trace with hundreds/thousands of providers stays smooth. -->
+                        <ListView x:Name="StatusList" MaxHeight="420" SelectionMode="None" IsItemClickEnabled="False"
+                                  ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="8,3"/>
+                                    <Setter Property="MinHeight" Value="0"/>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:SymbolRow">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="26"/>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="240"/>
+                                            <ColumnDefinition Width="40"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="92"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{x:Bind Glyph}" Foreground="{x:Bind GlyphBrush}"
+                                                   FontSize="14" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Provider}" IsTextSelectionEnabled="True"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                   ToolTipService.ToolTip="{x:Bind Provider}"/>
+                                        <TextBlock Grid.Column="2" Text="{x:Bind Guid}" IsTextSelectionEnabled="True"
+                                                   FontFamily="Consolas" FontSize="12" TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Grid.Column="3" Text="{x:Bind AgeText}" IsTextSelectionEnabled="True"
+                                                   FontSize="12" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="4" Text="{x:Bind Note}" IsTextSelectionEnabled="True"
+                                                   TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <Button Grid.Column="5" Content="Locate…" Click="RowLocate_Click"
+                                                Visibility="{x:Bind LocateVisibility}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -518,7 +518,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             : $"Missing TMF GUIDs: {warn.Value.missingTmfs}\n\n{warn.Value.detail}";
         // "Symbol details" opens the per-file resolution log (what was tried / resolved / missing).
         _resolveLogPaths = MiddleLayerService.GetResolveLogPaths();
-        DecodeBannerResolve.Visibility = _resolveLogPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DecodeBannerResolveItem.Visibility = _resolveLogPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         DecodeBanner.Visibility = Visibility.Visible;
         DecodeBanner.IsOpen = true;
     }
@@ -554,8 +554,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void DecodeBannerAction_Click(object sender, RoutedEventArgs e)
     {
-        // Jump straight to the WPP symbol settings so the fix is one click away.
-        MainWindowActions.NavigateToResultsViewerSettings();
+        // Open the dedicated WPP symbol-resolution page (per-binary status + one-by-one resolution).
+        MainWindowActions.NavigateToWppSymbols();
     }
 
     private void DecodeAnyway_Click(object sender, RoutedEventArgs e)
@@ -1188,7 +1188,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             _suppressKnownCombo = false;
             ApplyKnownFilterVisibility(ResultsViewerSettings.ShowKnownValues);
         }
-        if (TimeStripToggle != null) TimeStripToggle.IsChecked = ResultsViewerSettings.ShowTimeStrip;
+        _suppressTimeStripSync = true;
+        if (TimeStripColumnCheck != null) TimeStripColumnCheck.IsChecked = ResultsViewerSettings.ShowTimeStrip;
+        _suppressTimeStripSync = false;
         ApplyToolbarVisibility();
     }
 
@@ -2778,19 +2780,28 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ViewModel.ToDate = null;
     }
 
-    private void TimeStripHide_Click(object sender, RoutedEventArgs e)
-    {
-        ResultsViewerSettings.ShowTimeStrip = false;
-        if (TimeStripHost != null) TimeStripHost.Visibility = Visibility.Collapsed;
-        if (TimeStripToggle != null) TimeStripToggle.IsChecked = false;
-    }
+    // Guards the programmatic IsChecked writes below from re-entering the Checked/Unchecked handler.
+    private bool _suppressTimeStripSync;
 
-    private void TimeStripToggle_Click(object sender, RoutedEventArgs e)
+    /// <summary>Single source of truth for turning the time strip on/off: persists the setting, keeps
+    /// every control that mirrors it in sync (the Columns-flyout checkbox), and shows/hides the strip.</summary>
+    private void SetTimeStripEnabled(bool on)
     {
-        bool on = TimeStripToggle?.IsChecked ?? true;
         ResultsViewerSettings.ShowTimeStrip = on;
+        _suppressTimeStripSync = true;
+        if (TimeStripColumnCheck != null) TimeStripColumnCheck.IsChecked = on;
+        _suppressTimeStripSync = false;
         if (on) ScheduleTimeStrip();
         else if (TimeStripHost != null) TimeStripHost.Visibility = Visibility.Collapsed;
+    }
+
+    // The strip's own "✕" is a quick hide; it flows through the same helper so the checkbox updates too.
+    private void TimeStripHide_Click(object sender, RoutedEventArgs e) => SetTimeStripEnabled(false);
+
+    private void TimeStripColumnCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressTimeStripSync) return;
+        SetTimeStripEnabled(TimeStripColumnCheck?.IsChecked == true);
     }
 
     /// <summary>Click-to-zoom: set the From/To window to a bucket and reflect it in the time UI.</summary>

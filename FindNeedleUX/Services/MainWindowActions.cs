@@ -85,6 +85,14 @@ public class MainWindowActions
             mw.NavigateToResultsViewerSettings();
     }
 
+    /// <summary>Open the dedicated WPP symbol-resolution diagnostics page (the "Symbol resolution…"
+    /// banner action).</summary>
+    public static void NavigateToWppSymbols()
+    {
+        if (WindowUtil.GetMainWindow() is FindNeedleUX.MainWindow mw)
+            mw.NavigateToWppSymbols();
+    }
+
     /// <summary>Force a full decode + reopen (the "Decode anyway" banner action).</summary>
     public static void RerunWithFullDecode()
     {
