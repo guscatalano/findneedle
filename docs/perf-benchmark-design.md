@@ -194,6 +194,13 @@ decode number; and the report **always states whether WDK was present**.
 
 ## 6. In-app UX — Diagnostics → "Performance benchmark…"
 
+**Navigation:** a general (non-dev) item in the **Diagnostics** menu, next to *System check / Logs /
+Search statistics / WPP symbol resolution*. It pairs with **Search statistics** — that page explains
+*your last search*, this one measures *your machine* on a standard workload. Wired like the other pages:
+a `<MenuFlyoutItem Name="perf_benchmark">` in `MainWindow.xaml` + a `case "perf_benchmark"` navigating to
+`PerformanceBenchmarkPage`.
+
+
 1. **Intro + consent** (must accept before running): "This generates up to ~350 MB of synthetic logs in a
    temp folder and runs the full pipeline — expect heavy CPU/disk for ~1–2 min. Temp files are deleted
    afterward. Your result file contains only hardware specs and timings — **no log data**."
