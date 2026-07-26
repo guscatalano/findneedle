@@ -262,6 +262,62 @@ public class StorageTests
         Assert.IsTrue(page.All(r => r.GetSource() == "Beta" || r.GetSource() == "Gamma"));
     }
 
+    /// <summary>
+    /// FastBulkIngest (defer secondary indexes + no AUTOINCREMENT) must be a pure performance change:
+    /// with the flag ON vs OFF the stored data and every query answer are identical — same total, same
+    /// filtered counts (Level / ProviderSet / FTS search), and the same rows in the same default order.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_FastBulkIngest_ParityAcrossFlag()
+    {
+        List<ISearchResult> MakeRows() => new()
+        {
+            new LeveledResult(Level.Error), new LeveledResult(Level.Error), new LeveledResult(Level.Warning),
+            new ProvResult("Alpha"), new ProvResult("Gamma"),
+            new DummySearchResult("connection failed - timeout"),
+            new DummySearchResult("file not found"),
+            new DummySearchResult("authentication failed"),
+        };
+
+        (int total, int errors, int alphaGamma, int failed, string order) Snapshot(bool fast)
+        {
+            bool prior = SqliteStorage.FastBulkIngest;
+            SqliteStorage.FastBulkIngest = fast;
+            try
+            {
+                var (searchedFile, _) = CreateUniqueSearchFile();
+                using var s = new SqliteStorage(searchedFile);
+                s.ClearTables();
+                s.AddFilteredBatch(MakeRows());
+                s.BuildSearchIndex(); // where FastBulkIngest builds the deferred secondary indexes
+                var page = s.GetFilteredPage(new SqliteStorage.FilterInput(), new SqliteStorage.SortInput(), 0, 100);
+                return (
+                    s.GetStatistics().filteredRecordCount,
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { LevelInt = (int)Level.Error }),
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { ProviderSet = new[] { "Alpha", "Gamma" } }),
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Search = "failed" }),
+                    string.Join("|", page.Select(r => (int)r.GetLevel() + ":" + r.GetSource() + ":" + r.GetMessage())));
+            }
+            finally { SqliteStorage.FastBulkIngest = prior; }
+        }
+
+        var legacy = Snapshot(false);
+        var fast = Snapshot(true);
+
+        Assert.AreEqual(8, fast.total, "sanity: all rows stored");
+        Assert.AreEqual(legacy.total, fast.total, "row count parity");
+        Assert.AreEqual(legacy.errors, fast.errors, "Level filter parity (IX_Level deferred)");
+        Assert.AreEqual(legacy.alphaGamma, fast.alphaGamma, "ProviderSet filter parity (IX_Source deferred)");
+        Assert.AreEqual(legacy.failed, fast.failed, "FTS search parity");
+        Assert.AreEqual(legacy.order, fast.order, "same rows in same default (Id) order — no AUTOINCREMENT divergence");
+        // Sanity on the fixture: 2 LeveledResult(Error) + 3 DummySearchResult (also Level.Error) = 5 errors;
+        // Alpha+Gamma = 2; "failed" appears in 2 of the 3 messages ("file not found" excluded).
+        Assert.AreEqual(5, fast.errors);
+        Assert.AreEqual(2, fast.alphaGamma);
+        Assert.AreEqual(2, fast.failed);
+    }
+
     // Backs the fast "known value" filter dropdowns (GetFieldCounts) — an exact GROUP BY per field
     // instead of the old O(sample) row scan, so the dropdowns open quickly on big result sets.
     [TestMethod]

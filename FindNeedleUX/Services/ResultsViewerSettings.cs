@@ -199,6 +199,26 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// When on (default), the SQLite cache is built with fast-ingest tuning: the secondary indexes are
+    /// created in one bulk pass after the rows are loaded instead of being maintained on every insert,
+    /// and the row Id is a plain key without AUTOINCREMENT. Measured ~29% faster raw ingest on a 1M-line
+    /// log (rows become viewable sooner); the full-text index still builds afterward as before. Off
+    /// restores the original eager-index behavior. Applied to <c>SqliteStorage.FastBulkIngest</c> (also at
+    /// startup); takes effect on the next fresh search (an already-cached log keeps its current layout).
+    /// </summary>
+    public const bool DefaultFastBulkIngest = true;
+    public static bool FastBulkIngest
+    {
+        get => Data.FastBulkIngest ?? DefaultFastBulkIngest;
+        set
+        {
+            Data.FastBulkIngest = value;
+            FindPluginCore.Implementations.Storage.SqliteStorage.FastBulkIngest = value;
+            Save();
+        }
+    }
+
+    /// <summary>
     /// How the result viewer's search box submits searches:
     ///   Auto    — live until a search is slow (>~1s) or the log is large, then Enter-to-search (default)
     ///   Live    — search on every keystroke
@@ -811,6 +831,7 @@ public static class ResultsViewerSettings
         public string IndexingMode { get; set; }
         public bool? IndexTimestampsInSearch { get; set; }
         public bool? ParallelIngest { get; set; }
+        public bool? FastBulkIngest { get; set; }
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }

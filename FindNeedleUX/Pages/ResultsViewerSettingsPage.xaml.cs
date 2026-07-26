@@ -283,6 +283,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectIndexingMode();
             IndexTimestampsCheck.IsChecked = ResultsViewerSettings.IndexTimestampsInSearch;
             ParallelIngestCheck.IsChecked = ResultsViewerSettings.ParallelIngest;
+            FastBulkIngestCheck.IsChecked = ResultsViewerSettings.FastBulkIngest;
 
             // --- Search submit mode ---
             SelectSearchSubmitMode();
@@ -692,6 +693,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (_suppressEvents) return;
         ResultsViewerSettings.ParallelIngest = ParallelIngestCheck.IsChecked == true;
+    }
+
+    private void FastBulkIngestCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.FastBulkIngest = FastBulkIngestCheck.IsChecked == true;
     }
 
     // ----- Search submit mode -----

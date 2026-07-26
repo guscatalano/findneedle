@@ -79,6 +79,15 @@ public partial class App : Application
         }
         catch (Exception ex) { Logger.Instance.Log($"Apply ParallelIngest failed: {ex.Message}"); }
 
+        // Apply the persisted "fast bulk ingest" preference (default on — defers secondary indexes to a
+        // bulk post-pass + drops AUTOINCREMENT, ~29% faster raw ingest). See ResultsViewerSettings.FastBulkIngest.
+        try
+        {
+            FindPluginCore.Implementations.Storage.SqliteStorage.FastBulkIngest =
+                FindNeedleUX.Services.ResultsViewerSettings.FastBulkIngest;
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Apply FastBulkIngest failed: {ex.Message}"); }
+
         // Disk hygiene: the result cache had no eviction (it grew into the hundreds of GB) and a
         // killed/crashed run leaks its %Temp% extraction dir. Prune both on startup, off the UI thread,
         // and log the outcome so we can prove the cache stays bounded.

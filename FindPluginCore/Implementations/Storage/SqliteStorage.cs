@@ -64,8 +64,11 @@ namespace FindPluginCore.Implementations.Storage
         // old v6 caches (which indexed timestamps) rebuild under the toggle-aware schema rather than
         // being reused with a mismatched setting. v8: Source/ResultSource are excluded from the FTS when
         // the load has a single distinct value (constant path = repetitive trigrams, no search value);
-        // bumped so old caches rebuild with the new triggers. Old caches rescan; EnsureColumns migrates.
-        public const int CacheSchemaVersion = 8;
+        // bumped so old caches rebuild with the new triggers. v9: FastBulkIngest — Id is a plain
+        // INTEGER PRIMARY KEY (no AUTOINCREMENT) and the FilteredResults secondary indexes are built after
+        // ingest, not up front; bumped so an old v8 cache (AUTOINCREMENT + eager indexes) rebuilds rather
+        // than being reused. Old caches rescan; EnsureColumns migrates.
+        public const int CacheSchemaVersion = 9;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -227,14 +230,17 @@ namespace FindPluginCore.Implementations.Storage
 
         private void InitializeSchema()
         {
+            // FastBulkIngest: plain INTEGER PRIMARY KEY (rowid alias) so inserts skip the per-row
+            // sqlite_sequence maintenance AUTOINCREMENT forces. Auto-Id and explicit-Id both still work.
+            string idCol = FastBulkIngest ? "Id INTEGER PRIMARY KEY" : "Id INTEGER PRIMARY KEY AUTOINCREMENT";
             var cmd = _connection.CreateCommand();
-            cmd.CommandText = @"
+            cmd.CommandText = $@"
                 CREATE TABLE IF NOT EXISTS _meta (
                     Key   TEXT PRIMARY KEY,
                     Value TEXT
                 );
                 CREATE TABLE IF NOT EXISTS RawResults (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    {idCol},
                     LogTime TEXT,
                     MachineName TEXT,
                     Level INTEGER,
@@ -258,7 +264,7 @@ namespace FindPluginCore.Implementations.Storage
                     StructuredData TEXT
                 );
                 CREATE TABLE IF NOT EXISTS FilteredResults (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    {idCol},
                     LogTime TEXT,
                     MachineName TEXT,
                     Level INTEGER,
@@ -281,12 +287,15 @@ namespace FindPluginCore.Implementations.Storage
                     ProcessName TEXT,
                     StructuredData TEXT
                 );
-                -- Indexes for the result viewer's most common filter/sort columns.
-                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Level    ON FilteredResults(Level);
-                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Source   ON FilteredResults(Source);
-                CREATE INDEX IF NOT EXISTS IX_FilteredResults_LogTime  ON FilteredResults(LogTime);
             ";
             cmd.ExecuteNonQuery();
+
+            // The FilteredResults secondary indexes (viewer filter/sort columns). With FastBulkIngest they
+            // are deferred to EnsureSecondaryIndexes() at index-build time — building them per-row during
+            // ingest makes every insert maintain four B-trees. With the flag off, create them eagerly here
+            // (original behavior, so a live streaming viewer has them from the first row).
+            if (!FastBulkIngest)
+                EnsureSecondaryIndexes();
 
             // Migrate older cache DBs in place: CREATE TABLE IF NOT EXISTS leaves a pre-existing table's
             // columns untouched, so a warm cache from before a column was added is missing it and inserts
@@ -317,6 +326,24 @@ namespace FindPluginCore.Implementations.Storage
                 a.CommandText = $"ALTER TABLE {table} ADD COLUMN {col} TEXT;";
                 a.ExecuteNonQuery();
             }
+        }
+
+        /// <summary>
+        /// Create the FilteredResults secondary indexes (Level / Source / LogTime) the result viewer's
+        /// filter and sort use. Idempotent (CREATE INDEX IF NOT EXISTS): under FastBulkIngest this runs
+        /// once after ingest (from <see cref="BuildSearchIndex"/>) as a single sorted bulk build — far
+        /// cheaper than maintaining three B-trees per inserted row; with the flag off the indexes already
+        /// exist (created in <see cref="InitializeSchema"/>) so this is a no-op. Held under _sync by the
+        /// caller when a concurrent reader is possible.
+        /// </summary>
+        private void EnsureSecondaryIndexes()
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = @"
+                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Level    ON FilteredResults(Level);
+                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Source   ON FilteredResults(Source);
+                CREATE INDEX IF NOT EXISTS IX_FilteredResults_LogTime  ON FilteredResults(LogTime);";
+            cmd.ExecuteNonQuery();
         }
 
         /// <summary>
@@ -353,6 +380,24 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         public static bool IndexLogTimeInFts { get; set; } =
             !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_FTS_INDEX_LOGTIME"));
+
+        /// <summary>
+        /// Fast bulk-ingest optimizations (default ON). Two changes that shrink per-row insert cost, both
+        /// measured via the PerfBench engine ingest metric:
+        ///  • The three secondary indexes on FilteredResults (Level / Source / LogTime) are NOT created
+        ///    up front, so each row's <c>sqlite3_step</c> maintains only the table B-tree instead of four.
+        ///    They are built once, in a single sorted bulk pass, at index-build time
+        ///    (<see cref="EnsureSecondaryIndexes"/>, invoked from <see cref="BuildSearchIndex"/>) — the same
+        ///    "after all rows are in" point the FTS index already uses.
+        ///  • The Id columns are a plain <c>INTEGER PRIMARY KEY</c> (rowid alias) instead of
+        ///    <c>AUTOINCREMENT</c>, so inserts skip the per-row <c>sqlite_sequence</c> read/update. Auto-Id
+        ///    assignment and the fan-out's explicit-Id path both still work.
+        /// Turn OFF (app can set it, or FINDNEEDLE_FAST_INGEST=0/false/off) to restore the eager-index +
+        /// AUTOINCREMENT behavior for A/B measurement or troubleshooting. Only affects freshly created cache
+        /// DBs (an existing warm cache keeps whatever schema it was built with).
+        /// </summary>
+        public static bool FastBulkIngest { get; set; } =
+            !IsEnvFalse(Environment.GetEnvironmentVariable("FINDNEEDLE_FAST_INGEST"));
 
         /// <summary>
         /// When the filtered row count is at least this, the FTS index is built as N parallel shards
@@ -528,6 +573,12 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         public void BuildSearchIndex(CancellationToken cancellationToken = default, Action<long, long> onProgress = null)
         {
+            // FastBulkIngest defers the FilteredResults secondary indexes to here (one sorted bulk build
+            // instead of per-row B-tree maintenance during ingest). Runs BEFORE the FTS-availability guard
+            // so the viewer's filter/sort indexes exist even when FTS is disabled/unavailable. No-op when
+            // the flag is off (they were created in InitializeSchema).
+            lock (_sync) { EnsureSecondaryIndexes(); }
+
             if (!_ftsAvailable) { _ftsIndexBuilt = false; return; }
 
             // Large logs: build the index as parallel shards (the trigram build is the dominant
@@ -1312,10 +1363,13 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         /// <summary>
-        /// Bulk-insert path used by both AddRawBatch and AddFilteredBatch. Accumulates rows up to
-        /// <see cref="InsertChunkRows"/>, flushes via a single multi-row <c>INSERT … VALUES (…),(…)</c>
-        /// statement, then drains any tail through the single-row prepared command. Both commands
-        /// are constructed and prepared exactly once per call.
+        /// Bulk-insert path used by both AddRawBatch and AddFilteredBatch. Inserts rows one at a time
+        /// through a single prepared <c>INSERT … VALUES (…)</c> command that is constructed and prepared
+        /// exactly once per call, then reused for every row by mutating its cached parameter values (see
+        /// <see cref="CreatePreparedInsert"/> / <see cref="InsertParams"/>). This single-row-reused path
+        /// benchmarks ~28× faster than a 500-row multi-VALUES statement under Microsoft.Data.Sqlite,
+        /// whose per-parameter bind cost dominates a wide multi-row chunk (see SqliteInsertBenchmark).
+        /// <see cref="InsertChunkRows"/> is only the progress-callback cadence, not a SQL batch size.
         /// </summary>
         private void BulkInsert(
             string table,

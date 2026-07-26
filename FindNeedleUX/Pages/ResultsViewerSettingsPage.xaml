@@ -507,6 +507,11 @@
                                       Checked="ParallelIngestCheck_Changed" Unchecked="ParallelIngestCheck_Changed"/>
                             <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
                                        Text="On by default. Large logs load by inserting across several writer threads while one thread decodes, then merging — about 2× faster first open on a multi-million-event .etl. Turn off to use the slower single-writer load (the fail-safe), which also lets rows appear in the viewer live as they load. Takes effect on the next search."/>
+                            <CheckBox x:Name="FastBulkIngestCheck" Margin="0,8,0,0"
+                                      Content="Fast bulk ingest (defer indexes, faster row loading)"
+                                      Checked="FastBulkIngestCheck_Changed" Unchecked="FastBulkIngestCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="On by default. Builds the cache's secondary indexes in one pass after the rows load instead of maintaining them on every insert, and skips AUTOINCREMENT — about 29% faster raw ingest on a 1M-line log, so rows become viewable sooner (the full-text search index still builds afterward). Turn off to restore the original eager-index behavior. Takes effect on the next fresh search."/>
                         </StackPanel>
                     </Border>
 
