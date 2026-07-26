@@ -107,6 +107,32 @@ public class PerfBenchFoundationTests
         finally { Del(f); }
     }
 
+    // ---- runner (step 3) ----
+
+    [TestMethod]
+    public void Runner_ProducesPopulatedResult()
+    {
+        var r = PerfBenchRunner.Run(new long[] { 5000 }, repeats: 1, preset: "test", sampleLoad: false);
+
+        Assert.AreEqual("test", r.Preset);
+        Assert.AreEqual(1, r.Scenarios.Count);
+        var sc = r.Scenarios[0];
+        Assert.AreEqual("engine.text.5k", sc.Id);
+        Assert.AreEqual(5000, sc.Rows);
+        Assert.IsNotNull(sc.Cold);
+        Assert.IsTrue(sc.Cold!.ContainsKey("ingestMs") && sc.Cold["ingestMs"] >= 0);
+        Assert.IsTrue(sc.Cold.ContainsKey("indexBuildMs"));
+        Assert.IsTrue(sc.Cold.ContainsKey("searchSelectiveMs"));
+        Assert.IsTrue(sc.Ratios.ContainsKey("ftsVsScan"), "cross-machine ratio present");
+        Assert.IsTrue(sc.Ratios.ContainsKey("usPerRow"));
+        Assert.IsTrue(r.Machine.LogicalCores > 0, "machine specs captured");
+
+        // The whole thing serializes as the submission artifact.
+        var json = r.ToJson();
+        StringAssert.Contains(json, "engine.text.5k");
+        Assert.IsNotNull(PerfBenchResult.FromJson(json));
+    }
+
     private static string TempFile() => Path.Combine(Path.GetTempPath(), $"perfbench_{Guid.NewGuid():N}.log");
     private static void Del(string p) { try { File.Delete(p); } catch { } }
 }
