@@ -61,6 +61,8 @@ public static class PerfBenchReport
         AppendGroup(sb, "Searching", "How quickly it finds things once the log is open.", SearchTiles(big));
         AppendGroup(sb, "Staying smooth", "How responsive scrolling and jumping around feel.", ResponsiveTiles(big));
 
+        AppendScaling(sb, r);
+
         // This computer + this run
         sb.Append("<section class=\"twocol\">");
         InfoCard(sb, "This computer", new (string, string)[]
@@ -157,6 +159,35 @@ public static class PerfBenchReport
               .Append("<div class=\"tsub\">").Append(E(t.sub)).Append("</div></div>");
         sb.Append("</div></section>");
     }
+
+    /// <summary>All engine sizes side by side — the scaling story (open-time grows, search stays fast).</summary>
+    private static void AppendScaling(StringBuilder sb, PerfBenchResult r)
+    {
+        var engs = r.Scenarios
+            .Where(s => s.Kind == "engine" && s.Cold != null && s.Cold.ContainsKey("ingestMs"))
+            .OrderBy(s => s.Rows).ToList();
+        if (engs.Count < 2) return;
+
+        sb.Append("<section><h2>How it scales with log size</h2>")
+          .Append("<p class=\"gdesc\">Bigger logs take longer to open, but finding things and scrolling stay fast.</p>")
+          .Append("<table class=\"scale\"><thead><tr><th class=\"l\">Log size</th><th>Ready to use</th>")
+          .Append("<th>Find a line</th><th>First page</th><th>Faster than<br>no index</th></tr></thead><tbody>");
+        foreach (var s in engs)
+        {
+            var c = s.Cold!;
+            double ready = c.GetValueOrDefault("ingestMs") + c.GetValueOrDefault("indexBuildMs");
+            sb.Append("<tr><td class=\"l\"><b>").Append(E(Rows(s.Rows))).Append("</b></td><td>")
+              .Append(FmtTimeStr(ready)).Append("</td><td>").Append(TimeCell(c, "searchSelectiveMs"))
+              .Append("</td><td>").Append(TimeCell(c, "firstPage5000Ms"))
+              .Append("</td><td>").Append(s.Ratios.TryGetValue("ftsVsScan", out var f) ? Num(f) + "×" : "—")
+              .Append("</td></tr>");
+        }
+        sb.Append("</tbody></table></section>");
+    }
+
+    private static string FmtTimeStr(double ms) { var (v, u) = FmtTimeParts(ms); return v + " " + u; }
+    private static string TimeCell(Dictionary<string, double> c, string key)
+        => c.TryGetValue(key, out var v) ? FmtTimeStr(v) : "<span class=\"muted\">—</span>";
 
     private static void AppendContentionWarning(StringBuilder sb, PerfBenchResult r)
     {
@@ -269,6 +300,10 @@ table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font
 th,td{padding:.4rem .55rem;text-align:right;border-bottom:1px solid var(--border)}
 th{font-size:.68rem;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:600}
 th.l,td.l{text-align:left}tbody tr:last-child td{border-bottom:0}
+table.scale{font-size:.98rem}
+table.scale th{font-size:.7rem}
+table.scale th,table.scale td{padding:.6rem .75rem}
+.raw table tbody tr:last-child td{border-bottom:0}
 .muted{color:var(--faint)}
 footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.82rem;line-height:1.55}
 ";
