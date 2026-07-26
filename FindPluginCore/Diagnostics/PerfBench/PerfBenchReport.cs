@@ -54,6 +54,13 @@ public static class PerfBenchReport
             sb.Append("Bigger number of cores and faster disks make the times below shorter.</p>");
         }
 
+        sb.Append("<p class=\"about\"><b>What this measured:</b> plain-text log lines generated on this "
+          + "computer — reading them in, building the search index, searching, and scrolling. It did "
+          + "<b>not</b> decode a real ETW / WPP trace or Windows event log — that decoding is separate, "
+          + "heavier work that isn't part of this test yet. Storage engine: FindNeedle's on-disk "
+          + "<b>SQLite</b> index with full-text search, which is what it uses for logs this size (smaller "
+          + "logs, under ~50,000 lines, use a faster in-memory engine instead).</p>");
+
         AppendContentionWarning(sb, r);
 
         // Grouped by the question a user asks — plain labels, a one-line explanation each.
@@ -170,13 +177,14 @@ public static class PerfBenchReport
 
         sb.Append("<section><h2>How it scales with log size</h2>")
           .Append("<p class=\"gdesc\">Bigger logs take longer to open, but finding things and scrolling stay fast.</p>")
-          .Append("<table class=\"scale\"><thead><tr><th class=\"l\">Log size</th><th>Ready to use</th>")
+          .Append("<table class=\"scale\"><thead><tr><th class=\"l\">Log size</th><th class=\"l\">Storage</th><th>Ready to use</th>")
           .Append("<th>Find a line</th><th>First page</th><th>Faster than<br>no index</th></tr></thead><tbody>");
         foreach (var s in engs)
         {
             var c = s.Cold!;
             double ready = c.GetValueOrDefault("ingestMs") + c.GetValueOrDefault("indexBuildMs");
-            sb.Append("<tr><td class=\"l\"><b>").Append(E(Rows(s.Rows))).Append("</b></td><td>")
+            sb.Append("<tr><td class=\"l\"><b>").Append(E(Rows(s.Rows))).Append("</b></td>")
+              .Append("<td class=\"l muted\">").Append(E(TierLabel(s.StorageTierChosen))).Append("</td><td>")
               .Append(FmtTimeStr(ready)).Append("</td><td>").Append(TimeCell(c, "searchSelectiveMs"))
               .Append("</td><td>").Append(TimeCell(c, "firstPage5000Ms"))
               .Append("</td><td>").Append(s.Ratios.TryGetValue("ftsVsScan", out var f) ? Num(f) + "×" : "—")
@@ -184,6 +192,14 @@ public static class PerfBenchReport
         }
         sb.Append("</tbody></table></section>");
     }
+
+    private static string TierLabel(string? t) => t switch
+    {
+        "Sqlite" => "SQLite",
+        "InMemory" => "In-memory",
+        "Hybrid" => "Hybrid",
+        _ => string.IsNullOrEmpty(t) ? "—" : t!,
+    };
 
     private static string FmtTimeStr(double ms) { var (v, u) = FmtTimeParts(ms); return v + " " + u; }
     private static string TimeCell(Dictionary<string, double> c, string key)
@@ -277,6 +293,9 @@ h1{font-size:2rem;line-height:1.1;margin:.35rem 0 .4rem;letter-spacing:-.02em}
 .dot{width:3px;height:3px;border-radius:50%;background:var(--faint);display:inline-block}
 .summary{font-size:1.12rem;line-height:1.65;margin:1.4rem 0 .5rem}
 .summary b{color:var(--accent);font-weight:700}
+.about{color:var(--muted);font-size:.9rem;line-height:1.6;margin:.5rem 0;padding:.75rem 1rem;
+  border-left:3px solid var(--accent);background:var(--card);border-radius:0 10px 10px 0}
+.about b{color:var(--ink);font-weight:600}
 section{margin:2rem 0}
 h2{font-size:1.15rem;margin:0 0 .15rem;letter-spacing:-.01em}
 .gdesc{color:var(--muted);font-size:.9rem;margin:0 0 .9rem}
