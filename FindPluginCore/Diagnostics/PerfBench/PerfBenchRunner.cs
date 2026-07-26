@@ -193,10 +193,28 @@ public static class PerfBenchRunner
 
     private static PerfBenchSystemLoad CollectLoad(bool sample)
     {
-        var l = new PerfBenchSystemLoad { WdkPresent = false }; // decode scenarios (WDK) are follow-on
+        var l = new PerfBenchSystemLoad { WdkPresent = DetectWdk() };
         try { var gc = GC.GetGCMemoryInfo(); l.AvailableRamGB = Math.Round(gc.TotalAvailableMemoryBytes / 1e9, 1); } catch { }
         if (sample) l.IdleCpuPercentBefore = SampleSystemCpuPercent();
         return l;
+    }
+
+    /// <summary>True when the WDK's <c>tracefmt.exe</c> is present (registry KitsRoot10 → bin\**\x64) —
+    /// i.e. this machine could run the WPP decode scenario.</summary>
+    private static bool DetectWdk()
+    {
+        try
+        {
+            var kits = Microsoft.Win32.Registry.LocalMachine
+                .OpenSubKey(@"SOFTWARE\WOW6432Node\Microsoft\Windows Kits\Installed Roots")?
+                .GetValue("KitsRoot10") as string;
+            if (string.IsNullOrEmpty(kits)) return false;
+            var bin = Path.Combine(kits, "bin");
+            return Directory.Exists(bin)
+                && Directory.EnumerateFiles(bin, "tracefmt.exe", SearchOption.AllDirectories)
+                    .Any(p => p.Contains(@"\x64\", StringComparison.OrdinalIgnoreCase));
+        }
+        catch { return false; }
     }
 
     /// <summary>Best-effort system-wide CPU % over a ~1 s window, summing all processes' CPU time
