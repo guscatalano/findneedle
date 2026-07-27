@@ -38,10 +38,13 @@ public sealed partial class PerformanceBenchmarkPage : Page
 
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
-        long[] sizes = PresetCombo.SelectedIndex == 1
-            ? new long[] { 100_000, 1_000_000, 5_000_000 }
-            : new long[] { 100_000, 1_000_000 };
-        string preset = PresetCombo.SelectedIndex == 1 ? "full" : "quick";
+        long[] sizes = PresetCombo.SelectedIndex switch
+        {
+            2 => new long[] { 100_000, 1_000_000, 5_000_000, 10_000_000 },
+            1 => new long[] { 100_000, 1_000_000, 5_000_000 },
+            _ => new long[] { 100_000, 1_000_000 },
+        };
+        string preset = PresetCombo.SelectedIndex switch { 2 => "stress", 1 => "full", _ => "quick" };
 
         RunButton.IsEnabled = false;
         Progress.IsActive = true;
