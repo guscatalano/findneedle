@@ -65,13 +65,19 @@ public static class PerfBenchReport
               + "<b>SQLite</b> index with full-text search, which is what it uses for logs this size (smaller "
               + "logs, under ~50,000 lines, use a faster in-memory engine instead).</p>");
 
-        // Profile-only run (no timing scenarios): a short intro so the report reads on its own.
+        // Profile-only run (no timing scenarios): a short intro so the report reads on its own. Only name
+        // a row count when we actually have one (ProfileRows == 0 means "a workload we didn't size in
+        // lines" — e.g. profiling a real trace decode — so don't render a nonsensical "0-line log").
         if (big == null && r.HotMethods.Count > 0)
-            sb.Append("<p class=\"summary\">This is a <b>code-path profile</b> of FindNeedle loading and "
-              + "searching a <b>").Append(r.ProfileRows.ToString("N0", CultureInfo.InvariantCulture))
-              .Append("-line</b> log on this computer — it shows <b>where</b> the processor time went, not "
+        {
+            string what = r.ProfileRows > 0
+                ? "loading and searching a <b>" + r.ProfileRows.ToString("N0", CultureInfo.InvariantCulture) + "-line</b> log"
+                : "a FindNeedle workload";
+            sb.Append("<p class=\"summary\">This is a <b>code-path profile</b> of ").Append(what)
+              .Append(" on this computer — it shows <b>where</b> the processor time went, not "
               + "how long things took. (Profiling deliberately slows the run, so it's kept separate from the "
               + "timing report.)</p>");
+        }
 
         AppendContentionWarning(sb, r);
 
