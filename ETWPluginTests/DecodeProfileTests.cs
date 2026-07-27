@@ -47,12 +47,25 @@ public class DecodeProfileTests
         {
             var p = new ETLProcessor();
             p.OpenFile(etl);
-            p.DoPreProcessing(); // the decode: ETWTraceEventSource.Process() on this thread (LoadEarly inline)
+            p.DoPreProcessing(); // detect modern/WPP + arm the decode (deferred for modern traces)
+            p.LoadInMemory();    // FORCE the real decode — for a modern trace DoPreProcessing only defers it
+            _ = p.GetResults();
         }, threadMarker: "ETLProcessor", topN: 18);
 
         Console.WriteLine("note: " + note);
         foreach (var f in frames)
-            Console.WriteLine($"  {f.Percent,5:F1}%  {f.Kind,-7}  {f.Method}");
+            Console.WriteLine($"  {f.Percent,5:F1}%  {f.Category,-12}  {f.Method}");
+
+        // Render the "Where the time goes" report for this real decode so the category rollup + chips
+        // can be eyeballed. Written next to the other perfbench artifacts.
+        var result = new PerfBenchResult
+        {
+            Preset = "profile", ProfileRows = 0, ProfileNote = note, HotMethods = frames,
+        };
+        var outDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle", "perfbench");
+        Directory.CreateDirectory(outDir);
+        PerfBenchReport.WriteHtml(result, Path.Combine(outDir, "PREVIEW_DECODE.html"));
+
         Assert.IsTrue(frames.Count > 0, "expected decode hot frames: " + note);
     }
 }

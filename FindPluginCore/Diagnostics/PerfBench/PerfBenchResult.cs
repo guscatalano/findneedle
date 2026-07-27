@@ -159,4 +159,8 @@ public sealed class PerfBenchHotFrame
     public int Samples { get; set; }
     /// <summary>"managed" or "native" — native frames are usually the SQLite engine / OS doing I/O.</summary>
     public string Kind { get; set; } = "managed";
+    /// <summary>The frame's module/assembly (e.g. "Microsoft.Data.Sqlite", "e_sqlite3", "FindPluginCore").</summary>
+    public string Module { get; set; } = "";
+    /// <summary>Plain-language bucket from <see cref="Module"/>: SQLite / ETW decode / FindNeedle / .NET runtime / native / other.</summary>
+    public string Category { get; set; } = "";
 }

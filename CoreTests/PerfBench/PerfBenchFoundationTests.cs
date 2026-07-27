@@ -192,9 +192,9 @@ public class PerfBenchFoundationTests
             ProfileNote = "4,000 CPU samples on the workload thread.",
             HotMethods =
             {
-                new PerfBenchHotFrame { Method = "SqliteDataReader.NextResult", Percent = 64.0, Samples = 2560, Kind = "managed" },
-                new PerfBenchHotFrame { Method = "e_sqlite3 (native)", Percent = 18.5, Samples = 740, Kind = "native" },
-                new PerfBenchHotFrame { Method = "SqliteParameterCollection.Bind", Percent = 12.0, Samples = 480, Kind = "managed" },
+                new PerfBenchHotFrame { Method = "SqliteDataReader.NextResult", Percent = 64.0, Samples = 2560, Kind = "managed", Category = "SQLite" },
+                new PerfBenchHotFrame { Method = "e_sqlite3 (native)", Percent = 18.5, Samples = 740, Kind = "native", Category = "SQLite" },
+                new PerfBenchHotFrame { Method = "TraceEventDispatcher.Insert", Percent = 12.0, Samples = 480, Kind = "managed", Category = "ETW decode" },
             },
         };
 
@@ -207,7 +207,10 @@ public class PerfBenchFoundationTests
         StringAssert.Contains(html, "code-path profile");            // profile-mode intro
         StringAssert.Contains(html, "SqliteDataReader.NextResult");
         StringAssert.Contains(html, "64%");                          // top frame percent
-        StringAssert.Contains(html, "native");                       // native tag rendered
+        // Category rollup: SQLite (64+18.5) and ETW decode (12) buckets, plus per-row pills.
+        StringAssert.Contains(html, "SQLite");
+        StringAssert.Contains(html, "ETW decode");
+        StringAssert.Contains(html, "82.5%");                        // SQLite rollup = 64 + 18.5
         StringAssert.Contains(html, "4,000 CPU samples");            // profile note
         // The top frame's bar is full width; a smaller frame's is proportionally shorter.
         StringAssert.Contains(html, "width:100%");

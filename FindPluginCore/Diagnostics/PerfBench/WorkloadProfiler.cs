@@ -81,14 +81,19 @@ public static class WorkloadProfiler
         var client = new DiagnosticsClient(Environment.ProcessId);
         using var session = client.StartEventPipeSession(providers, requestRundown: true, circularBufferMB: 256);
 
-        // Drain the event stream on a background task while the workload runs on THIS thread.
+        // Drain the event stream on a background task.
         var copy = Task.Run(() =>
         {
             using var fs = File.Create(nettrace);
             session.EventStream.CopyTo(fs);
         });
 
-        workload();
+        // Run the workload on a DEDICATED thread so it's the only thread that touches the marker. The
+        // profiler's own teardown (copy.Wait / session.Stop) then runs on THIS thread and the pipe drain
+        // on the Task thread — neither is marked, so their samples never leak into the attribution.
+        var worker = new System.Threading.Thread(() => workload()) { IsBackground = false, Name = "perfbench-workload" };
+        worker.Start();
+        worker.Join();
 
         session.Stop();
         copy.Wait();
@@ -123,7 +128,7 @@ public static class WorkloadProfiler
         }
     }
 
-    // ---- aggregate: attribute samples to the innermost frame on the workload thread ----
+    // ---- aggregate: attribute in-scope samples to their innermost frame ----
 
     private static (List<PerfBenchHotFrame> frames, int active, int total) Aggregate(string nettrace, int topN, string threadMarker)
     {
@@ -132,9 +137,15 @@ public static class WorkloadProfiler
         {
             using var log = TraceLog.OpenOrConvert(etlx);
 
-            // Pass 1: which thread(s) ran the workload entrypoint? Pass 2: count innermost frames there.
-            var workloadThreads = new HashSet<int>();
-            var samples = new List<(int tid, string name, bool native)>();
+            // Two passes over the samples. Pass 1: find the thread(s) that ran the workload marker — with
+            // the workload on its own dedicated thread, that's exactly one thread doing only workload code.
+            // Pass 2: count the innermost frame of every sample on those threads. Per-THREAD (not
+            // per-sample) is deliberate: a native ProcessTrace sample can't always reconstruct its managed
+            // stack back through the marker across the native boundary, so a per-sample marker test would
+            // silently drop the bulk of native decode cost. The dedicated-thread trick is what keeps this
+            // clean — the profiler's own copy/wait frames live on other threads and never count.
+            var workThreads = new HashSet<int>();
+            var samples = new List<(int tid, string name, bool native, string module)>();
             foreach (var ev in log.Events)
             {
                 if (!ev.EventName.Contains("Sample")) continue;
@@ -144,20 +155,21 @@ public static class WorkloadProfiler
                 var ca = cs.CodeAddress;
                 var method = ca?.Method;
                 bool native = method == null;
-                string name = FriendlyName(method?.FullMethodName, ca?.ModuleFile?.Name);
-                samples.Add((ev.ThreadID, name, native));
+                string module = ca?.ModuleFile?.Name ?? "";
+                string name = FriendlyName(method?.FullMethodName, module);
+                samples.Add((ev.ThreadID, name, native, module));
 
                 for (var f = cs; f != null; f = f.Caller)
                     if ((f.CodeAddress?.Method?.FullMethodName ?? "").Contains(threadMarker))
-                    { workloadThreads.Add(ev.ThreadID); break; }
+                    { workThreads.Add(ev.ThreadID); break; }
             }
 
-            var active = samples.Where(s => workloadThreads.Contains(s.tid)).ToList();
-            var counts = new Dictionary<string, (int n, bool native)>();
+            var active = samples.Where(s => workThreads.Contains(s.tid)).ToList();
+            var counts = new Dictionary<string, (int n, bool native, string module)>();
             foreach (var s in active)
             {
-                var cur = counts.TryGetValue(s.name, out var v) ? v : (0, s.native);
-                counts[s.name] = (cur.Item1 + 1, s.native);
+                var cur = counts.TryGetValue(s.name, out var v) ? v : (0, s.native, s.module);
+                counts[s.name] = (cur.Item1 + 1, s.native, s.module);
             }
 
             var frames = counts
@@ -169,11 +181,29 @@ public static class WorkloadProfiler
                     Samples = kv.Value.n,
                     Percent = active.Count > 0 ? Math.Round(100.0 * kv.Value.n / active.Count, 1) : 0,
                     Kind = kv.Value.native ? "native" : "managed",
+                    Module = kv.Value.module,
+                    Category = Categorize(kv.Value.module, kv.Value.native),
                 })
                 .ToList();
             return (frames, active.Count, samples.Count);
         }
         finally { try { if (File.Exists(etlx)) File.Delete(etlx); } catch { } }
+    }
+
+    /// <summary>
+    /// A plain-language bucket for a frame, from its module/assembly, so a non-expert reading the report
+    /// sees "the database engine" rather than only <c>sqlite3_step</c>. Order matters — first match wins.
+    /// </summary>
+    private static string Categorize(string module, bool native)
+    {
+        var m = module ?? "";
+        bool Has(string s) => m.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0;
+        if (Has("sqlite") || Has("e_sqlite") || Has("SQLitePCLRaw")) return "SQLite";
+        if (Has("TraceEvent") || Has("Diagnostics.Tracing")) return "ETW decode";
+        if (Has("FindNeedle") || Has("FindPluginCore")) return "FindNeedle";
+        if (Has("System.") || Has("CoreLib") || Has("Interop") || Has("mscorlib") || m == "clrjit" || m == "coreclr")
+            return ".NET runtime";
+        return native ? "native" : "other";
     }
 
     /// <summary>

@@ -243,12 +243,30 @@ public static class PerfBenchReport
         sb.Append("<section><h2>Where the time goes</h2><p class=\"gdesc\">The internal code paths that used "
           + "the most processor time while loading and searching the log. Lower-level names like "
           + "<span class=\"mono\">sqlite3_step</span> are the database engine doing its work — that FindNeedle "
-          + "leans on the database is expected and is what keeps big logs fast.</p><div class=\"hot\">");
+          + "leans on the database is expected and is what keeps big logs fast.</p>");
+
+        // Category rollup — the digestible headline: how the time splits across the big buckets.
+        var byCat = hot.Where(h => !string.IsNullOrEmpty(h.Category))
+                       .GroupBy(h => h.Category)
+                       .Select(g => (cat: g.Key, pct: g.Sum(h => h.Percent)))
+                       .OrderByDescending(x => x.pct)
+                       .ToList();
+        if (byCat.Count > 1)
+        {
+            sb.Append("<div class=\"catroll\">");
+            foreach (var (cat, pct) in byCat)
+                sb.Append("<span class=\"catpill\" data-cat=\"").Append(E(CatSlug(cat))).Append("\">")
+                  .Append(E(cat)).Append(" <b>").Append(Num(pct)).Append("%</b></span>");
+            sb.Append("</div>");
+        }
+
+        sb.Append("<div class=\"hot\">");
         foreach (var h in hot)
         {
             double w = Math.Max(2, Math.Round(100.0 * h.Percent / max, 1)); // scale bar to the top frame
-            sb.Append("<div class=\"hotrow\"><div class=\"hotname mono\">").Append(E(h.Method));
-            if (h.Kind == "native") sb.Append(" <span class=\"tag\">native</span>");
+            sb.Append("<div class=\"hotrow\"><div class=\"hotname\"><span class=\"mono\">").Append(E(h.Method)).Append("</span>");
+            if (!string.IsNullOrEmpty(h.Category))
+                sb.Append(" <span class=\"catpill sm\" data-cat=\"").Append(E(CatSlug(h.Category))).Append("\">").Append(E(h.Category)).Append("</span>");
             sb.Append("</div><div class=\"hottrack\"><div class=\"hotbar\" style=\"width:").Append(w.ToString(CultureInfo.InvariantCulture))
               .Append("%\"></div></div><div class=\"hotpct\">").Append(Num(h.Percent)).Append("%</div></div>");
         }
@@ -257,6 +275,16 @@ public static class PerfBenchReport
             sb.Append("<p class=\"tsub\" style=\"margin-top:.7rem\">").Append(E(r.ProfileNote)).Append("</p>");
         sb.Append("</section>");
     }
+
+    /// <summary>Stable slug for a hot-frame category, used as the <c>data-cat</c> the CSS colors by.</summary>
+    private static string CatSlug(string cat) => cat switch
+    {
+        "SQLite" => "sqlite",
+        "ETW decode" => "etw",
+        "FindNeedle" => "app",
+        ".NET runtime" => "runtime",
+        _ => "other",
+    };
 
     private static string MB(Dictionary<string, double> m, string key)
         => m.TryGetValue(key, out var v) && v > 0 ? Num(v) + " MB" : "<span class=\"muted\">—</span>";
@@ -391,6 +419,20 @@ table.scale th,table.scale td{padding:.6rem .75rem}
 .hotbar{height:100%;background:var(--accent);border-radius:6px;min-width:3px}
 .hotpct{font-variant-numeric:tabular-nums;font-weight:600;font-size:.85rem;color:var(--accent);min-width:3.2rem;text-align:right}
 .tag{font-size:.62rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:.02rem .3rem;vertical-align:middle}
+.catroll{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 1rem}
+.catpill{font-size:.78rem;padding:.15rem .55rem;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--ink);white-space:nowrap}
+.catpill.sm{font-size:.62rem;padding:.04rem .4rem;vertical-align:middle}
+.catpill b{font-weight:700}
+.catpill[data-cat=sqlite]{border-color:#6b4bd6;color:#6b4bd6}
+.catpill[data-cat=etw]{border-color:#1f8a70;color:#1f8a70}
+.catpill[data-cat=app]{border-color:#c2410c;color:#c2410c}
+.catpill[data-cat=runtime]{border-color:#8a8a99;color:#77726a}
+@media(prefers-color-scheme:dark){
+  .catpill[data-cat=sqlite]{border-color:#a394ff;color:#a394ff}
+  .catpill[data-cat=etw]{border-color:#4fd6b0;color:#4fd6b0}
+  .catpill[data-cat=app]{border-color:#f0915a;color:#f0915a}
+  .catpill[data-cat=runtime]{border-color:#6a6478;color:#9c96ab}
+}
 @media(max-width:560px){.hotrow{grid-template-columns:minmax(0,1fr) auto}.hottrack{display:none}}
 footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.82rem;line-height:1.55}
 ";
