@@ -3222,10 +3222,29 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
-        // ----- Follow the ActivityId → reconstruct that one activity as a sequence diagram -----
+        // ----- Follow the ActivityId → reconstruct that one activity as a sequence -----
         if (HasActivity(row.ActivityId))
         {
             var aid = row.ActivityId;
+
+            // Filter the grid to this activity's causal sequence: every event in the activity, PLUS the
+            // start events of the child activities it spawned (which carry it as RelatedActivityId), in
+            // time order. Uses the structured query DSL — no capped in-memory gather, so it works across
+            // the full paged result set.
+            var followAct = new MenuFlyoutItem { Text = "Follow this activity (filter to sequence)", Icon = new SymbolIcon(Symbol.Link) };
+            followAct.Click += async (_, __) =>
+            {
+                var q = $"activityid == \"{aid}\" OR relatedactivityid == \"{aid}\"";
+                ViewModel.SetSortState("Time", false); // chronological, without a separate reload
+                SearchBox.Text = q;
+                SearchBox.Focus(FocusState.Programmatic);
+                try { SearchBox.SelectionStart = q.Length; } catch { /* cursor position is best-effort */ }
+                _searchDebounceTimer.Stop();
+                await RunSearchAsync();                 // one reload: this filter + the Time sort
+                SyncSortArrowsFromViewModel();
+            };
+            flyout.Items.Add(followAct);
+
             var diagAct = new MenuFlyoutItem { Text = "Diagram this activity (ActivityId)", Icon = new SymbolIcon(Symbol.View) };
             diagAct.Click += (_, __) =>
             {

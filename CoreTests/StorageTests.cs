@@ -108,6 +108,26 @@ public class StorageTests
         public string GetResultSource() => "RS";
     }
 
+    /// <summary>A dummy with settable ActivityId + RelatedActivityId, for the "follow this activity" query.</summary>
+    private sealed class CorrelatedResult : ISearchResult
+    {
+        private readonly string _activityId, _relatedActivityId;
+        public CorrelatedResult(string activityId, string relatedActivityId) { _activityId = activityId; _relatedActivityId = relatedActivityId; }
+        public DateTime GetLogTime() => DummySearchResult.FixedTime;
+        public string GetMachineName() => "M";
+        public void WriteToConsole() { }
+        public Level GetLevel() => Level.Info;
+        public string GetUsername() => "U";
+        public string GetTaskName() => "T";
+        public string GetOpCode() => "O";
+        public string GetSource() => "S";
+        public string GetSearchableData() => "D";
+        public string GetMessage() => "Msg";
+        public string GetResultSource() => "RS";
+        public string GetActivityId() => _activityId;
+        public string GetRelatedActivityId() => _relatedActivityId;
+    }
+
     private (string searchedFile, string dbPath) CreateUniqueSearchFile()
     {
         var searchedFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -226,6 +246,44 @@ public class StorageTests
         Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message ~ failed AND NOT message ~ timeout") }));
         Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message == \"all good\"") }));
         Assert.AreEqual(3, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message ~ failed OR message ~ found") }));
+    }
+
+    /// <summary>
+    /// Backs the viewer's "Follow this activity" action: the query DSL can filter by ActivityId and (new)
+    /// RelatedActivityId, so <c>activityid == X OR relatedactivityid == X</c> selects the activity's own
+    /// events PLUS the child activities that carry it as their parent — the one-hop causal sequence.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_FollowActivity_QueryMatchesActivityAndRelated()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+        storage.AddFilteredBatch(new List<ISearchResult>
+        {
+            new CorrelatedResult("AAA", ""),      // in activity AAA
+            new CorrelatedResult("AAA", ""),      // in activity AAA
+            new CorrelatedResult("BBB", "AAA"),   // child of AAA (start event carries AAA as related)
+            new CorrelatedResult("CCC", "ZZZ"),   // unrelated
+        });
+
+        FindPluginCore.Searching.Query.QueryNode Q(string s)
+        {
+            Assert.IsTrue(FindPluginCore.Searching.Query.LogQuery.TryParse(s, out var n, out var e), $"parse: {e}");
+            return n;
+        }
+
+        // The DSL now maps relatedactivityid (and its aliases) to the RelatedActivityId column.
+        Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("relatedactivityid == \"AAA\"") }));
+        Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("raid == \"AAA\"") }), "alias raid");
+        // The "follow this activity" query: activity's own events + its children = 3 of 4 rows
+        // (the unrelated CCC/ZZZ row is excluded).
+        Assert.AreEqual(3, storage.GetFilteredCount(
+            new SqliteStorage.FilterInput { Query = Q("activityid == \"AAA\" OR relatedactivityid == \"AAA\"") }));
+        // Following a different activity that nothing references matches only its own event.
+        Assert.AreEqual(1, storage.GetFilteredCount(
+            new SqliteStorage.FilterInput { Query = Q("activityid == \"CCC\" OR relatedactivityid == \"CCC\"") }));
     }
 
     [TestMethod]
