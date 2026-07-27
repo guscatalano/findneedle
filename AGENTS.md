@@ -139,20 +139,32 @@ Configurable via `PluginConfig.json` (`SearchStorageType`), Settings → Results
 `systemConfig.storageType`. Options: `"Auto"`, `"InMemory"`, `"Hybrid"`, `"SqlLite"`.
 
 **SQLite tuning** (`SqliteStorage`):
-- `journal_mode = MEMORY`, `synchronous = OFF` — cache DB is wiped on every construction, so
-  durability is worthless; trades fsync cost for ~2× insert throughput.
-- Multi-row `INSERT … VALUES (…),(…)` chunked at 500 rows / 5000 parameters — drops managed↔native
-  interop crossings from one-per-row to one-per-500-rows.
-- Prepared statement reused across the batch with cached `SqliteParameter` handles (no per-row
-  `AddWithValue` allocation).
-- Indexes on `Level`, `Source`, `LogTime` for per-column viewer filters.
-- **FTS5 trigram virtual table** on `(Source, TaskName, Message, ResultSource, SearchableData,
-  LogTime)` with triggers keeping it in sync — substring search on million-row tables runs in
-  milliseconds instead of the unindexable `LIKE '%term%'` full scan. Falls back to LIKE for
-  queries shorter than 3 chars (trigram requires ≥3 chars to generate any tokens) and on any
-  FTS5 query exception.
+- `journal_mode = MEMORY`, `synchronous = OFF`, `temp_store = MEMORY`, `cache_size = 64 MB` — cache
+  DB is wiped on every construction, so durability is worthless; trades fsync cost for throughput.
+- **Single-row prepared INSERT, reused per row** with cached `SqliteParameter` handles (no per-row
+  `AddWithValue` allocation). Counter-intuitively this benchmarks **~28× faster** than a 500-row
+  multi-`VALUES` statement here — Microsoft.Data.Sqlite's per-parameter bind cost dominates a wide
+  chunk (see `CoreTests/SqliteInsertBenchmark`). `InsertChunkRows` (500) is only the progress-callback
+  cadence, NOT a SQL batch size.
+- **`FastBulkIngest`** (static, default ON; `FINDNEEDLE_FAST_INGEST=0` or Settings → Loading
+  performance to disable): (1) the `FilteredResults` secondary indexes (`Level`/`Source`/`LogTime`)
+  are built once in a bulk pass at index-build time (`EnsureSecondaryIndexes`, from `BuildSearchIndex`)
+  instead of being maintained per row, and (2) `Id` is a plain `INTEGER PRIMARY KEY` (no
+  `AUTOINCREMENT`), skipping the per-row `sqlite_sequence` update. ~29% faster raw ingest on 1M rows
+  (net "ready" gain smaller — cost relocates into the FTS build, which dominates large loads). Only
+  affects a freshly built cache. Flag off = eager indexes + AUTOINCREMENT (original behaviour).
+- **FTS5 trigram virtual table** (external-content) on `(Source, TaskName, Message, ResultSource,
+  SearchableData, LogTime)` — substring search on million-row tables runs in milliseconds instead of
+  the unindexable `LIKE '%term%'` full scan. **Built in one bulk pass after ingest** (`BuildSearchIndex`),
+  ~2.8× faster than a per-row insert trigger; delete/update triggers keep it consistent on later edits.
+  Sharded across N contentless FTS DBs above `FtsShardThreshold` (2M rows, ~5× on the trigram build).
+  Column blanking cuts trigram volume (SearchableData==Message, single-distinct Source/ResultSource,
+  LogTime unless `IndexLogTimeInFts`). Falls back to LIKE for queries < 3 chars and on FTS5 exceptions.
+  Disable entirely with `FINDNEEDLE_DISABLE_FTS` (measurement). The trigram build is the dominant cost
+  on large loads — the real lever for "open a huge log" speed.
 - Corruption recovery: if `ClearTables()` throws `SQLITE_CORRUPT` (file left over from a
   prior crash), the file is deleted and the constructor retries once with a fresh DB.
+- Cache compatibility is gated by `CacheSchemaVersion` (currently 9); a mismatch forces a rescan.
 
 ### 4. Search Pipeline
 ```
@@ -226,6 +238,25 @@ structured `key=value` events with elapsed_ms scopes. Phases emitted: `search.ru
 `rule_filter`, `search.settle`, `viewer.native.*`, `viewer.web.load`, `viewer.web.page`. Used
 to diagnose where wall-clock time goes; never breaks the calling path (all I/O wrapped in
 try/catch).
+
+### 7. Performance Benchmark + Profiler (`FindPluginCore.Diagnostics.PerfBench`)
+Two related tools under Diagnostics → **Performance benchmark** in the app; see
+`docs/perf-benchmark-design.md`.
+
+- **Benchmark** (`PerfBenchRunner`): runs the search engine over a **deterministic** synthetic log
+  (`SyntheticLogGenerator`, byte-identical run-to-run) and produces a `PerfBenchResult` → a
+  self-contained HTML report (`PerfBenchReport`, general-audience) + a privacy-safe JSON (hardware +
+  timings only, no log content) meant for community submission. Scenarios: engine (ingest / FTS-build /
+  selective-vs-worst search / first-page + paging latency) and a storage-tier comparison
+  (in-memory / hybrid / SQLite → load-time vs RAM vs disk). Ratios (ftsVsScan, µs/row) are the
+  cross-machine numbers; ms are per-machine. `tools/perfbench/aggregate.ps1` merges submissions.
+- **Profiler** (`WorkloadProfiler`): separate mode — CPU-samples the process via **in-proc EventPipe**
+  (deps `Microsoft.Diagnostics.NETCore.Client` + TraceEvent, in FindPluginCore) while a workload runs
+  on a dedicated thread, parses the trace, and attributes samples per-thread (keyed on a workload
+  marker frame) → a "Where the time goes" hot-method list with plain-language categories
+  (SQLite / ETW decode / FindNeedle / .NET runtime). Kept separate because sampling perturbs timing.
+  `ProfileAction(workload, threadMarker)` profiles any code path (see `ETWPluginTests/DecodeProfileTests`
+  for the ETL-decode diagnostic).
 
 ---
 
@@ -486,7 +517,12 @@ dotnet run --project findneedle/findneedle.csproj -- --verbose
 - `PerformanceTests/AdaptivePerformanceTests.cs` - Performance benchmarks
 
 ### Environment Variables
-- None required (uses AppData for temp files)
+- None required (uses AppData for temp files). Optional tuning/diagnostic switches on `SqliteStorage`:
+  - `FINDNEEDLE_FAST_INGEST=0` — disable `FastBulkIngest` (defer-indexes + no-AUTOINCREMENT), default on.
+  - `FINDNEEDLE_DISABLE_FTS` — skip the FTS trigram build (measure ingest without it).
+  - `FINDNEEDLE_PARALLEL_INGEST=0` — disable the fan-out streaming ingest.
+  - `FINDNEEDLE_FTS_SHARD_THRESHOLD`, `FINDNEEDLE_FTS_INDEX_LOGTIME`, `FINDNEEDLE_PARALLEL_INGEST_MIN`.
+  - `FINDNEEDLE_ETL` — points the large-ETL / decode-profile tests at a specific `.etl`.
 
 ---
 
@@ -539,9 +575,12 @@ dotnet run --project findneedle/findneedle.csproj -- --verbose
 - `HybridStorage.README.md` - Hybrid storage documentation
 - `CoreTests/StorageTests.README.md` - Storage testing guide
 - `FindNeedleUX/NativeResultViewer/NATIVE_VIEWER_SPEC.md` - Native viewer design
+- `docs/perf-benchmark-design.md` - Performance benchmark + report design
+- `docs/decode-scoping-plan.md` - Deferred plan: provider/time decode scoping (grounded in CPU profiles)
 
 ---
 
-*Last updated: 2026-05-11 — storage tier recalibration (50k cutover), FTS5 trigram global
-search, multi-row INSERT, IPagedLogSource + streaming search, web viewer hybrid mode,
-PerfLog diagnostics.*
+*Last updated: 2026-07-26 — FastBulkIngest (defer secondary indexes + no AUTOINCREMENT); corrected the
+SQLite insert note (single-row-reused is ~28× faster than multi-VALUES here) and the FTS note (bulk
+post-pass build, sharded); added the PerfBench benchmark + WorkloadProfiler. Prior: storage tier
+recalibration (50k), FTS5 trigram search, IPagedLogSource + streaming search, PerfLog diagnostics.*
