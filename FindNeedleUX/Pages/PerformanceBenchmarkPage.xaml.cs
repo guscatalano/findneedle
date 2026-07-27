@@ -1,11 +1,23 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.WinUI.UI.Controls;
+using FindNeedlePluginLib;
+using FindNeedlePluginLib.Interfaces;
+using FindNeedleUX.Pages.NativeResultViewer;
+using FindNeedleUX.Services.PagedLogSource;
 using FindPluginCore.Diagnostics.PerfBench;
+using FindPluginCore.Implementations.Storage;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 
 namespace FindNeedleUX.Pages;
 
@@ -85,6 +97,231 @@ public sealed partial class PerformanceBenchmarkPage : Page
         ResultsCard.Visibility = Visibility.Visible;
     }
 
+    // ===== Viewer responsiveness (UI-thread render measurement) =====
+
+    private async void Viewer_Click(object sender, RoutedEventArgs e)
+    {
+        const long rows = 200_000;
+        SetBusy(true, $"Building a {rows:N0}-line log for the viewer test…");
+
+        string dbBase = Path.Combine(Path.GetTempPath(), "perfbench_viewer_" + Guid.NewGuid().ToString("N"));
+        SqliteStorage storage = null;
+        DataGrid grid = null;
+        try
+        {
+            // Generate + ingest + index OFF the UI thread; only the render is measured on the UI thread.
+            bool priorFts = SqliteStorage.DisableFtsForMeasurement;
+            storage = await Task.Run(() =>
+            {
+                SqliteStorage.DisableFtsForMeasurement = false;
+                var s = new SqliteStorage(dbBase);
+                s.AddFilteredBatch(SynthRows(rows));
+                s.BuildSearchIndex();
+                return s;
+            });
+            SqliteStorage.DisableFtsForMeasurement = priorFts;
+
+            StatusText.Text = "Measuring viewer render…";
+            var source = new SqlitePagedSource(storage, ownsStorage: false);
+            var vm = new NativeResultsPageViewModel();
+            vm.SetSourceForTests(source);
+            vm.PageSize = 100;
+            vm.TotalCount = source.TotalCount;
+
+            grid = BuildBenchGrid();
+            grid.ItemsSource = vm.Results;
+            ViewerBenchHost.Child = grid;
+            ViewerBenchHost.Visibility = Visibility.Visible;
+
+            // Warm up (also establishes TotalFilteredCount / TotalPages, which LastPage needs).
+            await MeasureRenderAsync(vm, grid, () => _ = vm.ApplyFiltersAsync(CancellationToken.None));
+            await SettleAsync();
+
+            double firstPage = await MedianRenderAsync(3, vm, grid,
+                measure: () => _ = vm.ApplyFiltersAsync(CancellationToken.None));           // re-render page 1
+
+            vm.FirstPage(); await SettleAsync();
+            double pageFwd = await MedianRenderAsync(5, vm, grid, measure: () => vm.NextPage()); // advance a page each time
+
+            double jumpLast = await MedianRenderAsync(3, vm, grid,
+                reset: () => vm.FirstPage(), measure: () => vm.LastPage());                  // jump to the end
+
+            string term = SyntheticLogGenerator.RareTokenPrefix + "1";
+            double filter = await MedianRenderAsync(3, vm, grid,
+                reset: () => vm.SearchText = "", measure: () => vm.SearchText = term);       // filter as typed
+
+            var scenario = new PerfBenchScenario
+            {
+                Id = "viewer.text." + (rows >= 1_000_000 ? $"{rows / 1_000_000}M" : $"{rows / 1000}k"),
+                Kind = "viewer", Dataset = "synthetic-log", DatasetVersion = SyntheticLogGenerator.DatasetVersion,
+                Rows = rows, StorageTierChosen = "SQLite",
+                Metrics = new()
+                {
+                    ["firstPageMs"] = Math.Round(firstPage, 1),
+                    ["pageForwardMs"] = Math.Round(pageFwd, 1),
+                    ["jumpToLastMs"] = Math.Round(jumpLast, 1),
+                    ["filterApplyMs"] = Math.Round(filter, 1),
+                },
+            };
+            var res = new PerfBenchResult
+            {
+                RunId = Guid.NewGuid().ToString("N").Substring(0, 12),
+                TimestampUtc = DateTime.UtcNow.ToString("o"),
+                Preset = "viewer", Repeats = 3,
+                Machine = PerfBenchRunner.DescribeMachine(),
+                Scenarios = { scenario },
+            };
+            try { res.SystemLoad.AvailableRamGB = Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1e9, 1); } catch { }
+
+            _last = res;
+            StatusText.Text = "Viewer measured. Open the report for the on-screen render times.";
+            WriteArtifacts(res);
+            RenderResults(res);
+            ResultsCard.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex) { StatusText.Text = "Viewer measurement failed: " + ex.Message; }
+        finally
+        {
+            if (grid != null) grid.ItemsSource = null;
+            ViewerBenchHost.Child = null;
+            ViewerBenchHost.Visibility = Visibility.Collapsed;
+            try { storage?.Dispose(); } catch { }
+            TryDeleteDb(dbBase);
+            SetBusy(false, null);
+        }
+    }
+
+    /// <summary>Median of N render measurements. <paramref name="reset"/> (optional) runs + settles before
+    /// each measured trigger, so the measured op always causes a fresh page render.</summary>
+    private async Task<double> MedianRenderAsync(int n, NativeResultsPageViewModel vm, DataGrid grid,
+        Action measure, Action reset = null)
+    {
+        var xs = new List<double>();
+        for (int i = 0; i < n; i++)
+        {
+            if (reset != null) { reset(); await SettleAsync(); }
+            xs.Add(await MeasureRenderAsync(vm, grid, measure));
+        }
+        xs.Sort();
+        return xs.Count == 0 ? 0 : xs[xs.Count / 2];
+    }
+
+    /// <summary>Time from an action to the rows actually painted: fire the trigger, wait for the page swap
+    /// (Results Reset), then stop on the grid's next LayoutUpdated (rows arranged). A dispatcher backstop
+    /// guarantees completion if no render happens.</summary>
+    private async Task<double> MeasureRenderAsync(NativeResultsPageViewModel vm, DataGrid grid, Action trigger)
+    {
+        var tcs = new TaskCompletionSource<double>();
+        var sw = new Stopwatch();
+        bool done = false;
+        NotifyCollectionChangedEventHandler onCol = null;
+        EventHandler<object> onLayout = null;
+
+        void Finish(double ms)
+        {
+            if (done) return;
+            done = true;
+            try { vm.Results.CollectionChanged -= onCol; } catch { }
+            try { grid.LayoutUpdated -= onLayout; } catch { }
+            tcs.TrySetResult(ms);
+        }
+        onLayout = (_, __) => { sw.Stop(); Finish(sw.Elapsed.TotalMilliseconds); };
+        onCol = (_, a) =>
+        {
+            if (a.Action != NotifyCollectionChangedAction.Reset) return;
+            try { vm.Results.CollectionChanged -= onCol; } catch { }
+            grid.LayoutUpdated += onLayout; // stop on the arrange that follows the swap
+        };
+
+        vm.Results.CollectionChanged += onCol;
+        sw.Start();
+        trigger();
+
+        // Backstop: if nothing rendered within 5 s, record the elapsed and move on.
+        _ = Task.Delay(5000).ContinueWith(_ =>
+            DispatcherQueue.TryEnqueue(() => { if (!done) { sw.Stop(); Finish(sw.Elapsed.TotalMilliseconds); } }));
+
+        return await tcs.Task;
+    }
+
+    /// <summary>Await one UI-thread idle turn (Low-priority drain) plus a short beat.</summary>
+    private async Task SettleAsync()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        if (!DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => tcs.TrySetResult(true)))
+            tcs.TrySetResult(true);
+        await tcs.Task;
+        await Task.Delay(60);
+    }
+
+    /// <summary>A CommunityToolkit DataGrid mirroring the real results grid's columns/widths/row height, so
+    /// the layout + paint cost measured here matches the real viewer.</summary>
+    private static DataGrid BuildBenchGrid()
+    {
+        var grid = new DataGrid
+        {
+            AutoGenerateColumns = false, IsReadOnly = true, RowHeight = 26,
+            HeadersVisibility = DataGridHeadersVisibility.All, GridLinesVisibility = DataGridGridLinesVisibility.None,
+        };
+        void Col(string header, string path, double width)
+            => grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = header, Width = new DataGridLength(width),
+                Binding = new Binding { Path = new PropertyPath(path) },
+            });
+        Col("Index", "Index", 70); Col("Time", "LogTime", 160); Col("Provider", "Provider", 120);
+        Col("TaskName", "TaskName", 140); Col("Message", "Message", 800); Col("Source", "Source", 140);
+        Col("Level", "Level", 90); Col("ProcessId", "ProcessId", 80); Col("ProcessName", "ProcessName", 140);
+        Col("ThreadId", "ThreadId", 80); Col("ActivityId", "ActivityId", 240); Col("EventId", "EventId", 80);
+        Col("OpCode", "OpCode", 100); Col("Keywords", "Keywords", 140); Col("RelatedActivityId", "RelatedActivityId", 240);
+        Col("Channel", "Channel", 120); Col("ProviderGuid", "ProviderGuid", 240); Col("RecordId", "RecordId", 90);
+        Col("Raw Row", "SearchableData", 500);
+        return grid;
+    }
+
+    private void SetBusy(bool busy, string status)
+    {
+        RunButton.IsEnabled = ProfileButton.IsEnabled = ViewerButton.IsEnabled = !busy;
+        Progress.IsActive = busy;
+        if (status != null) StatusText.Text = status;
+        if (busy) ResultsCard.Visibility = Visibility.Collapsed;
+    }
+
+    private static IEnumerable<ISearchResult> SynthRows(long n)
+    {
+        for (long i = 0; i < n; i++) yield return new BenchRow(i);
+    }
+
+    /// <summary>Synthetic row for the viewer harness — deterministic message/time from the generator, with a
+    /// rotating level so the grid renders varied content.</summary>
+    private sealed class BenchRow : ISearchResult
+    {
+        private readonly long _i;
+        public BenchRow(long i) { _i = i; }
+        public DateTime GetLogTime() => SyntheticLogGenerator.Time(_i);
+        public string GetMachineName() => "bench";
+        public void WriteToConsole() { }
+        public Level GetLevel() => (Level)(int)(_i % 3);
+        public string GetUsername() => "u";
+        public string GetTaskName() => "task";
+        public string GetOpCode() => "";
+        public string GetSource() => "synthetic";
+        public string GetSearchableData() => SyntheticLogGenerator.Message(_i);
+        public string GetMessage() => SyntheticLogGenerator.Message(_i);
+        public string GetResultSource() => "perfbench";
+    }
+
+    private static void TryDeleteDb(string dbBase)
+    {
+        try
+        {
+            var db = FindNeedleCoreUtils.CachedStorage.GetCacheFilePath(dbBase, ".db");
+            foreach (var f in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
+                try { if (File.Exists(f)) File.Delete(f); } catch { }
+        }
+        catch { }
+    }
+
     private void RenderResults(PerfBenchResult r)
     {
         ResultsHost.Children.Clear();
@@ -116,6 +353,11 @@ public sealed partial class PerformanceBenchmarkPage : Page
             {
                 if (s.Cold.TryGetValue("ingestMs", out var ing)) sb.Append("   ·   ingest ").Append(ing).Append(" ms");
                 if (s.Cold.TryGetValue("indexBuildMs", out var idx)) sb.Append("   ·   index ").Append(idx).Append(" ms");
+            }
+            if (s.Kind == "viewer")
+            {
+                foreach (var kv in new[] { ("firstPageMs", "first page"), ("pageForwardMs", "scroll"), ("jumpToLastMs", "jump to end"), ("filterApplyMs", "filter") })
+                    if (s.Metrics.TryGetValue(kv.Item1, out var v)) sb.Append("   ·   ").Append(kv.Item2).Append(' ').Append(v).Append(" ms");
             }
             ResultsHost.Children.Add(new TextBlock { Text = sb.ToString(), FontSize = 13, TextWrapping = TextWrapping.Wrap });
         }

@@ -45,6 +45,8 @@
                         <Button x:Name="RunButton" Content="Run benchmark" Click="Run_Click" Style="{StaticResource AccentButtonStyle}"/>
                         <Button x:Name="ProfileButton" Content="Profile workload" Click="Profile_Click"
                                 ToolTipService.ToolTip="Separate run that CPU-samples a 1M-line load+search to show WHICH code paths take the longest. Slower (sampling perturbs timing), so it doesn't affect the benchmark numbers."/>
+                        <Button x:Name="ViewerButton" Content="Measure viewer" Click="Viewer_Click"
+                                ToolTipService.ToolTip="Renders the real results grid over a synthetic log and times how long each action (first page, scroll, jump to end, apply filter) takes to actually appear on screen — the perceived responsiveness, not just the database query."/>
                         <ProgressRing x:Name="Progress" IsActive="False" Width="20" Height="20"/>
                         <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -69,6 +71,12 @@
                     </StackPanel>
                 </StackPanel>
             </Border>
+
+            <!-- Host for the "Measure viewer" harness: the real results grid is created in code and placed
+                 here (sized realistically so row virtualization + layout are faithful) only while measuring. -->
+            <Border x:Name="ViewerBenchHost" Visibility="Collapsed" Height="360"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

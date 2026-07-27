@@ -65,6 +65,14 @@ public static class PerfBenchReport
               + "<b>SQLite</b> index with full-text search, which is what it uses for logs this size (smaller "
               + "logs, under ~50,000 lines, use a faster in-memory engine instead).</p>");
 
+        // Viewer-only run (no engine timings): a short intro so the report reads on its own.
+        var viewerSc = r.Scenarios.FirstOrDefault(s => s.Kind == "viewer");
+        if (big == null && viewerSc != null)
+            sb.Append("<p class=\"summary\">This measures how <b>responsive the results viewer feels</b> — the "
+              + "real grid rendering a <b>").Append(viewerSc.Rows.ToString("N0", CultureInfo.InvariantCulture))
+              .Append("-line</b> log on this computer: the time from an action (open a page, scroll, jump to "
+              + "the end, apply a filter) to the rows actually <b>on screen</b>, not just the database query.</p>");
+
         // Profile-only run (no timing scenarios): a short intro so the report reads on its own. Only name
         // a row count when we actually have one (ProfileRows == 0 means "a workload we didn't size in
         // lines" — e.g. profiling a real trace decode — so don't render a nonsensical "0-line log").
@@ -88,6 +96,7 @@ public static class PerfBenchReport
 
         AppendScaling(sb, r);
         AppendStorageCompare(sb, r);
+        AppendViewerResponsiveness(sb, r);
         AppendHotMethods(sb, r);
 
         // This computer + this run
@@ -237,6 +246,25 @@ public static class PerfBenchReport
               .Append(MB(m, "memoryMB")).Append("</td><td>").Append(MB(m, "diskMB")).Append("</td></tr>");
         }
         sb.Append("</tbody></table></section>");
+    }
+
+    /// <summary>Render times from the UI-thread viewer harness (Kind=="viewer") — what a person actually
+    /// feels, vs the data-side paging latency in "Staying smooth" (which is only the DB query).</summary>
+    private static void AppendViewerResponsiveness(StringBuilder sb, PerfBenchResult r)
+    {
+        var v = r.Scenarios.FirstOrDefault(s => s.Kind == "viewer");
+        if (v == null) return;
+        var m = v.Metrics;
+        var sub = RowsShort(v.Rows) + "-line log";
+        var tiles = new List<Tile>();
+        if (m.TryGetValue("firstPageMs", out var a)) tiles.Add(TimeTile(a, "First page on screen", sub));
+        if (m.TryGetValue("pageForwardMs", out var b)) tiles.Add(TimeTile(b, "Scroll one page", sub));
+        if (m.TryGetValue("jumpToLastMs", out var c)) tiles.Add(TimeTile(c, "Jump to the end", sub));
+        if (m.TryGetValue("filterApplyMs", out var d)) tiles.Add(TimeTile(d, "Apply a filter", sub));
+        AppendGroup(sb, "Viewer responsiveness (on screen)",
+            "Measured by rendering the real results grid — the time from the action to the rows actually "
+          + "painted on screen (database query + UI layout), median of several. This is what you feel, "
+          + "unlike the raw query timings above.", tiles);
     }
 
     private static void AppendHotMethods(StringBuilder sb, PerfBenchResult r)
