@@ -1,7 +1,9 @@
 # Decode-scoping plan (deferred)
 
-Status: **planned, not started.** Parked while we continue the profiling work. Grounded in the
-decode CPU profiles captured 2026-07 (see `WorkloadProfiler` / `ETWPluginTests/DecodeProfileTests`).
+Status: **Gap 1 done; Gap 2 pending.** Grounded in the decode CPU profiles captured 2026-07 (see
+`WorkloadProfiler` / `ETWPluginTests/DecodeProfileTests`). Gap 1 (tracefmt/WPP path honors `DecodeScope`)
+shipped; Gap 2a/2b (time early-out + provider-scoped subscription to cut the TraceEvent-internal cost)
+remain.
 
 ## Goal
 Make "only load the providers / time window I care about" actually skip the work for everything else,
@@ -47,16 +49,17 @@ Key realizations:
 
 ## The two real gaps
 
-### Gap 1 — the legacy tracefmt/WPP path ignores `DecodeScope` (highest value, lowest risk)
-`scope.Keep` exists only in `DecodeWithTraceEvent`. A pure-classic-WPP `.etl` that fails
-`LooksLikeModernTrace` (`ETLProcessor.cs:305`) goes down the tracefmt line-parse loop
-(`ETLProcessor.cs:490–501`) and wraps + emits **every** line regardless of scope.
+### Gap 1 — the legacy tracefmt/WPP path ignores `DecodeScope` — **DONE**
+`scope.Keep` used to exist only in `DecodeWithTraceEvent`. A pure-classic-WPP `.etl` that fails
+`LooksLikeModernTrace` (`ETLProcessor.cs:305`) goes down the tracefmt line-parse loop and wrapped + emitted
+**every** line regardless of scope.
 
-**Fix:** between `etlline.PreLoad()` (`:491`) and `emit(etlline)` (`:501`), add
-`if (DecodeScope.Current is {} sc && !sc.Keep(etlline.GetSource(), etlline.GetLogTime(), -1)) continue;`
-(mirrors `:634`). Skips the wrap + ingest + FTS for out-of-scope WPP lines. Cannot scope tracefmt.exe's
-own decode (black box), but the downstream is the bigger end-to-end cost. Add a scope test mirroring
-`ETWPluginTests/TriageScopeTests`.
+**Shipped:** the tracefmt loop now checks `DecodeScope.Current.Keep(Source, LogTime-or-null, -1)` right after
+`etlline.PreLoad()` and `continue`s on a miss (mirrors the modern `:634`), skipping wrap + ingest + FTS for
+out-of-scope WPP lines. Cannot scope tracefmt.exe's own decode (black box), but the downstream is the bigger
+end-to-end cost. **Test gap (accepted):** no automated test — the path needs a classic-WPP `.etl` (fails
+`LooksLikeModernTrace`) + tracefmt/WDK, not deterministically CI-runnable. The `Keep` logic is covered by
+`DecodeScopeKeepTests` and the identical modern use by `ScopeRuleWiringTests`.
 
 ### Gap 2 — filter runs too late to cut the dominant *decode* cost
 The callback-level `scope.Keep` runs after TraceEvent's per-event work, so it can't shrink the decode
