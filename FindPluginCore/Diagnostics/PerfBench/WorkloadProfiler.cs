@@ -39,16 +39,27 @@ public static class WorkloadProfiler
     /// returns an empty list with an explanatory note if sampling or trace parsing is unavailable.
     /// </summary>
     public static (List<PerfBenchHotFrame> frames, string note) Profile(long rows, int topN = 12)
+        => ProfileAction(() => RunWorkload(rows), EntrypointMarker, topN);
+
+    /// <summary>
+    /// General CPU-profile harness: run <paramref name="workload"/> under in-proc EventPipe sampling and
+    /// return the hottest <paramref name="topN"/> code paths, counting only samples on threads whose stack
+    /// contains <paramref name="threadMarker"/> — that filter includes the threads actually doing the work
+    /// (e.g. a namespace/type substring the workload runs through) and excludes the profiler's own pipe-copy
+    /// thread and idle/background threads. Best-effort: returns an empty list + explanatory note on failure.
+    /// Reused for both the synthetic ingest workload and the ETL-decode workload.
+    /// </summary>
+    public static (List<PerfBenchHotFrame> frames, string note) ProfileAction(Action workload, string threadMarker, int topN = 12)
     {
         var nettrace = Path.Combine(Path.GetTempPath(), $"perfbench_profile_{Guid.NewGuid():N}.nettrace");
         try
         {
-            Capture(rows, nettrace);
-            var (frames, active, total) = Aggregate(nettrace, topN);
+            Capture(workload, nettrace);
+            var (frames, active, total) = Aggregate(nettrace, topN, threadMarker);
             var note = active > 0
-                ? $"{active:N0} CPU samples on the workload thread ({total:N0} across all threads). "
+                ? $"{active:N0} CPU samples on the work threads ({total:N0} across all threads). "
                 + "Percentages are the share of processor time spent with that code on top of the stack."
-                : "No workload samples were captured (the run may have been too short). Try more rows.";
+                : "No workload samples were captured (the run may have been too short).";
             return (frames, note);
         }
         catch (Exception ex)
@@ -61,7 +72,7 @@ public static class WorkloadProfiler
 
     // ---- capture: EventPipe self-session around the workload ----
 
-    private static void Capture(long rows, string nettrace)
+    private static void Capture(Action workload, string nettrace)
     {
         var providers = new[]
         {
@@ -77,7 +88,7 @@ public static class WorkloadProfiler
             session.EventStream.CopyTo(fs);
         });
 
-        RunWorkload(rows);
+        workload();
 
         session.Stop();
         copy.Wait();
@@ -114,7 +125,7 @@ public static class WorkloadProfiler
 
     // ---- aggregate: attribute samples to the innermost frame on the workload thread ----
 
-    private static (List<PerfBenchHotFrame> frames, int active, int total) Aggregate(string nettrace, int topN)
+    private static (List<PerfBenchHotFrame> frames, int active, int total) Aggregate(string nettrace, int topN, string threadMarker)
     {
         var etlx = TraceLog.CreateFromEventPipeDataFile(nettrace);
         try
@@ -137,7 +148,7 @@ public static class WorkloadProfiler
                 samples.Add((ev.ThreadID, name, native));
 
                 for (var f = cs; f != null; f = f.Caller)
-                    if ((f.CodeAddress?.Method?.FullMethodName ?? "").Contains(EntrypointMarker))
+                    if ((f.CodeAddress?.Method?.FullMethodName ?? "").Contains(threadMarker))
                     { workloadThreads.Add(ev.ThreadID); break; }
             }
 
