@@ -153,6 +153,11 @@ Configurable via `PluginConfig.json` (`SearchStorageType`), Settings → Results
   `AUTOINCREMENT`), skipping the per-row `sqlite_sequence` update. ~29% faster raw ingest on 1M rows
   (net "ready" gain smaller — cost relocates into the FTS build, which dominates large loads). Only
   affects a freshly built cache. Flag off = eager indexes + AUTOINCREMENT (original behaviour).
+- **`UseNarrowInsertForPlainRows`** (static, default ON; `FINDNEEDLE_NARROW_INSERT=0` to disable): a row
+  with no extended ETW/EventLog fields (plain-text / CSV / JSON logs) inserts via a 10-column statement
+  instead of 21 — the per-row parameter-bind machinery is a large share of ingest, so this measured **~43%
+  faster ingest on 1M plain-text rows**. Rows with extended fields still take the 21-column insert
+  (lossless); omitted columns default to NULL and read back as "" (readers already guard with `IsDBNull`).
 - **`BlankRedundantSearchableData`** (static, default ON; `FINDNEEDLE_BLANK_SEARCHABLE=0` to disable): at
   ingest, store NULL for `SearchableData` when it equals `Message` (the common case) instead of a duplicate
   copy; the reader reconstructs NULL→Message unconditionally. Measured ~12% faster ingest + ~40% smaller
@@ -525,6 +530,7 @@ dotnet run --project findneedle/findneedle.csproj -- --verbose
 - None required (uses AppData for temp files). Optional tuning/diagnostic switches on `SqliteStorage`:
   - `FINDNEEDLE_FAST_INGEST=0` — disable `FastBulkIngest` (defer-indexes + no-AUTOINCREMENT), default on.
   - `FINDNEEDLE_BLANK_SEARCHABLE=0` — disable storing NULL for a SearchableData that dups Message, default on.
+  - `FINDNEEDLE_NARROW_INSERT=0` — disable the 10-column insert for plain (no-extended-fields) rows, default on.
   - `FINDNEEDLE_DISABLE_FTS` — skip the FTS trigram build (measure ingest without it).
   - `FINDNEEDLE_PARALLEL_INGEST=0` — disable the fan-out streaming ingest.
   - `FINDNEEDLE_FTS_SHARD_THRESHOLD`, `FINDNEEDLE_FTS_INDEX_LOGTIME`, `FINDNEEDLE_PARALLEL_INGEST_MIN`.

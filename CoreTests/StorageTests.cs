@@ -395,6 +395,59 @@ public class StorageTests
     }
 
     /// <summary>
+    /// The narrow-insert optimization (plain rows use a 10-column insert, rows with extended ETW fields use
+    /// the 21-column one) must be lossless: flag ON vs OFF give identical row counts, extended-field values,
+    /// and structured-query results — and a plain row's omitted extended columns read back as "".
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_NarrowInsert_ParityWithWide()
+    {
+        List<ISearchResult> Rows() => new()
+        {
+            new DummySearchResult(message: "plain one"),   // no extended → narrow
+            new CorrelatedResult("AAA", ""),               // ActivityId set → wide
+            new DummySearchResult(message: "plain two"),   // narrow
+        };
+
+        FindPluginCore.Searching.Query.QueryNode Q(string s)
+        {
+            Assert.IsTrue(FindPluginCore.Searching.Query.LogQuery.TryParse(s, out var n, out var e), $"parse: {e}");
+            return n;
+        }
+
+        (int total, int aaa, string acts) Snapshot(bool narrow)
+        {
+            bool prior = SqliteStorage.UseNarrowInsertForPlainRows;
+            SqliteStorage.UseNarrowInsertForPlainRows = narrow;
+            try
+            {
+                var (searchedFile, _) = CreateUniqueSearchFile();
+                using var s = new SqliteStorage(searchedFile);
+                s.ClearTables();
+                s.AddFilteredBatch(Rows());
+                s.BuildSearchIndex();
+                var page = s.GetFilteredPage(new SqliteStorage.FilterInput(), new SqliteStorage.SortInput(), 0, 100);
+                return (
+                    s.GetStatistics().filteredRecordCount,
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("activityid == \"AAA\"") }),
+                    string.Join("|", page.Select(r => r.GetActivityId())));
+            }
+            finally { SqliteStorage.UseNarrowInsertForPlainRows = prior; }
+        }
+
+        var wide = Snapshot(false);
+        var narrow = Snapshot(true);
+
+        Assert.AreEqual(3, narrow.total);
+        Assert.AreEqual(wide.total, narrow.total, "row-count parity");
+        Assert.AreEqual(1, narrow.aaa);
+        Assert.AreEqual(wide.aaa, narrow.aaa, "activityid query finds the wide (extended) row under either mode");
+        Assert.AreEqual("|AAA|", narrow.acts, "plain rows read back empty ActivityId; the wide row keeps AAA");
+        Assert.AreEqual(wide.acts, narrow.acts, "extended-field parity");
+    }
+
+    /// <summary>
     /// BlankRedundantSearchableData (store NULL when SearchableData == Message) must be lossless: with the
     /// flag ON vs OFF the reconstructed SearchableData and global-search results are identical, a superset
     /// SearchableData is preserved, and a genuinely-empty one stays empty (not reconstructed to Message).
