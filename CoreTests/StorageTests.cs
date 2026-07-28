@@ -128,6 +128,24 @@ public class StorageTests
         public string GetRelatedActivityId() => _relatedActivityId;
     }
 
+    /// <summary>A dummy with settable Message + SearchableData, for the SearchableData-blanking test.</summary>
+    private sealed class SearchableResult : ISearchResult
+    {
+        private readonly string _msg, _sd;
+        public SearchableResult(string msg, string sd) { _msg = msg; _sd = sd; }
+        public DateTime GetLogTime() => DummySearchResult.FixedTime;
+        public string GetMachineName() => "M";
+        public void WriteToConsole() { }
+        public Level GetLevel() => Level.Info;
+        public string GetUsername() => "U";
+        public string GetTaskName() => "T";
+        public string GetOpCode() => "O";
+        public string GetSource() => "S";
+        public string GetSearchableData() => _sd;
+        public string GetMessage() => _msg;
+        public string GetResultSource() => "RS";
+    }
+
     private (string searchedFile, string dbPath) CreateUniqueSearchFile()
     {
         var searchedFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -374,6 +392,54 @@ public class StorageTests
         Assert.AreEqual(5, fast.errors);
         Assert.AreEqual(2, fast.alphaGamma);
         Assert.AreEqual(2, fast.failed);
+    }
+
+    /// <summary>
+    /// BlankRedundantSearchableData (store NULL when SearchableData == Message) must be lossless: with the
+    /// flag ON vs OFF the reconstructed SearchableData and global-search results are identical, a superset
+    /// SearchableData is preserved, and a genuinely-empty one stays empty (not reconstructed to Message).
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_BlankSearchableData_ParityAndReconstruct()
+    {
+        List<ISearchResult> Rows() => new()
+        {
+            new SearchableResult("alpha bravo", "alpha bravo"),        // duplicate → stored NULL, reconstructs
+            new SearchableResult("charlie", "charlie delta echo"),     // superset → stored as-is
+            new SearchableResult("foxtrot", ""),                       // genuinely empty → stays ""
+        };
+
+        (string sds, int bravo, int delta) Snapshot(bool blank)
+        {
+            bool prior = SqliteStorage.BlankRedundantSearchableData;
+            SqliteStorage.BlankRedundantSearchableData = blank;
+            try
+            {
+                var (searchedFile, _) = CreateUniqueSearchFile();
+                using var s = new SqliteStorage(searchedFile);
+                s.ClearTables();
+                s.AddFilteredBatch(Rows());
+                s.BuildSearchIndex();
+                var page = s.GetFilteredPage(new SqliteStorage.FilterInput(), new SqliteStorage.SortInput(), 0, 100);
+                return (
+                    string.Join("|", page.Select(r => r.GetSearchableData())),
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Search = "bravo" }),  // in row 1
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Search = "delta" })); // only in row 2's SearchableData
+            }
+            finally { SqliteStorage.BlankRedundantSearchableData = prior; }
+        }
+
+        var off = Snapshot(false);
+        var on = Snapshot(true);
+
+        Assert.AreEqual(off.sds, on.sds, "reconstructed SearchableData identical to the un-blanked storage");
+        Assert.AreEqual("alpha bravo|charlie delta echo|", on.sds,
+            "dup reconstructed to Message, superset preserved, genuinely-empty stays empty");
+        Assert.AreEqual(off.bravo, on.bravo, "search parity (term in a blanked row)");
+        Assert.AreEqual(1, on.bravo);
+        Assert.AreEqual(off.delta, on.delta, "search parity (term only in a preserved superset SearchableData)");
+        Assert.AreEqual(1, on.delta);
     }
 
     // Backs the fast "known value" filter dropdowns (GetFieldCounts) — an exact GROUP BY per field

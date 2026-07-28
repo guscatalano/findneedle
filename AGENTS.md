@@ -153,6 +153,11 @@ Configurable via `PluginConfig.json` (`SearchStorageType`), Settings → Results
   `AUTOINCREMENT`), skipping the per-row `sqlite_sequence` update. ~29% faster raw ingest on 1M rows
   (net "ready" gain smaller — cost relocates into the FTS build, which dominates large loads). Only
   affects a freshly built cache. Flag off = eager indexes + AUTOINCREMENT (original behaviour).
+- **`BlankRedundantSearchableData`** (static, default ON; `FINDNEEDLE_BLANK_SEARCHABLE=0` to disable): at
+  ingest, store NULL for `SearchableData` when it equals `Message` (the common case) instead of a duplicate
+  copy; the reader reconstructs NULL→Message unconditionally. Measured ~12% faster ingest + ~40% smaller
+  cache DB on realistic ~200-char lines (the win scales with message length). Lossless; a genuinely-empty
+  `SearchableData` is stored as `""`, not NULL.
 - **FTS5 trigram virtual table** (external-content) on `(Source, TaskName, Message, ResultSource,
   SearchableData, LogTime)` — substring search on million-row tables runs in milliseconds instead of
   the unindexable `LIKE '%term%'` full scan. **Built in one bulk pass after ingest** (`BuildSearchIndex`),
@@ -519,6 +524,7 @@ dotnet run --project findneedle/findneedle.csproj -- --verbose
 ### Environment Variables
 - None required (uses AppData for temp files). Optional tuning/diagnostic switches on `SqliteStorage`:
   - `FINDNEEDLE_FAST_INGEST=0` — disable `FastBulkIngest` (defer-indexes + no-AUTOINCREMENT), default on.
+  - `FINDNEEDLE_BLANK_SEARCHABLE=0` — disable storing NULL for a SearchableData that dups Message, default on.
   - `FINDNEEDLE_DISABLE_FTS` — skip the FTS trigram build (measure ingest without it).
   - `FINDNEEDLE_PARALLEL_INGEST=0` — disable the fan-out streaming ingest.
   - `FINDNEEDLE_FTS_SHARD_THRESHOLD`, `FINDNEEDLE_FTS_INDEX_LOGTIME`, `FINDNEEDLE_PARALLEL_INGEST_MIN`.
