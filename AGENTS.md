@@ -52,6 +52,13 @@ The project uses a plugin architecture with three main interface types:
 - `PlainTextProcessor`
 - Responsible for parsing specific file formats
 
+**Symbol Resolver Plugins** (`ISymbolResolver` - KEEP):
+- Consulted with a binary's PDB identity (`SymbolLookupRequest`: PdbFileName / Guid / Age / BinaryPath +
+  the symbol-store `Key`) when the built-in WPP lookup can't find a PDB — a plugin locates it on an SMB
+  share / symbol server / REST service and returns a PDB path. Hooked in `WppSymbolResolver.BuildTmfs`
+  (the `if (!res.Found)` branch), enumerated via `PluginManager.GetAllPluginsInstancesOfAType<ISymbolResolver>()`.
+  Consulted only on the build/extract path (never the offline diagnostic banner), so it may do network I/O.
+
 **Deprecated Plugin Types** (REPLACED BY RuleDSL):
 - `ISearchFilter` → Replaced by RuleDSL filter rules
 - `IResultProcessor` → Replaced by RuleDSL enrichment rules

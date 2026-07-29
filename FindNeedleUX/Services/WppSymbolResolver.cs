@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using FindNeedleCoreUtils;
+using FindNeedlePluginLib;
+using findneedle.PluginSubsystem;
 using Microsoft.Win32;
 
 namespace FindNeedleUX.Services;
@@ -34,7 +36,37 @@ public static class WppSymbolResolver
     // with no WDK: fake the tracepdb location and capture invocations instead of spawning it.
     internal static Func<string> FindTracePdbOverride;
     internal static Action<string, string, StringBuilder> RunTracePdbOverride;
-    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; }
+    // Inject fake ISymbolResolver plugins without going through PluginManager (which loads DLLs).
+    internal static IReadOnlyList<ISymbolResolver> ResolversOverride;
+    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; ResolversOverride = null; }
+
+    /// <summary>The registered symbol-resolver plugins (SMB share / symbol server / …), consulted when the
+    /// built-in local + symbol-path lookup misses. Best-effort: an unavailable plugin subsystem = none.</summary>
+    private static IReadOnlyList<ISymbolResolver> GetSymbolResolvers()
+    {
+        if (ResolversOverride != null) return ResolversOverride;
+        try { return PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<ISymbolResolver>(); }
+        catch { return Array.Empty<ISymbolResolver>(); }
+    }
+
+    /// <summary>Ask each resolver plugin, in order, to find the PDB for this identity. Returns the first
+    /// non-null path that exists on disk (local or UNC), or null. Plugin exceptions are logged and skipped.</summary>
+    private static string TryResolverPlugins(IReadOnlyList<ISymbolResolver> resolvers,
+        WppSymbols.PdbIdentity id, string binary, StringBuilder sb)
+    {
+        if (resolvers == null || resolvers.Count == 0) return null;
+        var request = new SymbolLookupRequest(id.PdbFileName, id.Guid, id.Age, binary);
+        foreach (var r in resolvers)
+        {
+            string path;
+            try { path = r.TryResolvePdb(request); }
+            catch (Exception ex) { sb.AppendLine($"symbol resolver {r.GetType().Name} threw: {ex.Message}"); continue; }
+            if (string.IsNullOrEmpty(path)) continue;
+            if (File.Exists(path)) { sb.AppendLine($"resolved via plugin {r.GetType().Name}: {path}"); return path; }
+            sb.AppendLine($"symbol resolver {r.GetType().Name} returned a missing path: {path}");
+        }
+        return null;
+    }
 
     public static string FindTracePdb()
     {
@@ -81,6 +113,9 @@ public static class WppSymbolResolver
             sb.AppendLine("No PDB/binary source folder configured.");
 
         var resolver = new WppSymbols.PdbResolver();
+        var symbolResolverPlugins = GetSymbolResolvers(); // consulted once we've exhausted the built-in lookup
+        if (symbolResolverPlugins.Count > 0)
+            sb.AppendLine($"{symbolResolverPlugins.Count} symbol-resolver plugin(s) available as a fallback.");
         // PDB paths already extracted (or rejected as stale) this run — so the loose-PDB sweep
         // below neither re-extracts a resolved PDB nor touches one that failed verification.
         var extracted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -105,18 +140,22 @@ public static class WppSymbolResolver
                     sb.AppendLine($"{Path.GetFileName(binary)} needs: {id} (key {id.Key})");
                     var res = resolver.Resolve(id, folders, symbolPath, PdbCacheDir, sb);
                     foreach (var r in res.RejectedLooseCandidates) rejected.Add(r);
-                    if (!res.Found)
+
+                    // Built-in lookup first; if it missed, give the resolver plugins (SMB share, symbol
+                    // server, …) a shot before declaring the binary unresolved.
+                    string resolvedPath = res.Found ? res.ResolvedPath : TryResolverPlugins(symbolResolverPlugins, id, binary, sb);
+                    if (resolvedPath == null)
                     {
                         sb.AppendLine($"FAILED to resolve {id.PdbFileName} for {Path.GetFileName(binary)} — probes above show every location tried.");
                         outcomes.Add(NotFoundOrWrong(binary, id, res));
                         continue;
                     }
-                    if (extracted.Add(res.ResolvedPath))
+                    if (extracted.Add(resolvedPath))
                     {
                         // Snapshot-diff (not count-based) so re-extracting a PDB whose TMFs are
                         // already cached — same files rewritten, count unchanged — doesn't misfire.
                         var beforeTmfs = SnapshotTmfs(cache);
-                        Run(tracepdb, $"-f \"{res.ResolvedPath}\" -p \"{cache}\"", sb);
+                        Run(tracepdb, $"-f \"{resolvedPath}\" -p \"{cache}\"", sb);
                         // The most confusing failure mode is "everything resolved, still no TMFs".
                         // Per Microsoft's docs, WPP trace-format data is STRIPPED from public
                         // symbols (tracepdb needs the full/private PDB); since Win8 a component can
@@ -137,8 +176,8 @@ public static class WppSymbolResolver
                             PdbName = id.PdbFileName,
                             Guid = id.Guid.ToString("N").ToUpperInvariant(),
                             Age = id.Age,
-                            ResolvedPath = res.ResolvedPath,
-                            Detail = producedTmf ? $"TMF extracted from {res.ResolvedPath}"
+                            ResolvedPath = resolvedPath,
+                            Detail = producedTmf ? $"TMF extracted from {resolvedPath}"
                                                  : "PDB matched but carries no WPP trace-format data (public/stripped PDB)",
                         });
                     }
