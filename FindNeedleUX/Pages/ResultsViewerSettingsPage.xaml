@@ -412,16 +412,20 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Command palette (Ctrl+K) -->
+                    <!-- Keyboard shortcuts -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                             CornerRadius="6" Padding="16">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Command palette" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="CommandPaletteCheck" Content="Enable the Ctrl+K command palette"
+                            <TextBlock Text="Keyboard shortcuts" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="HotkeysCheck" Content="Enable keyboard shortcuts"
+                                      Checked="HotkeysCheck_Changed" Unchecked="HotkeysCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="On by default. App hotkeys like Ctrl+F (focus the search box) and Ctrl+K (command palette). Turn off to disable them all — typing keys like Enter and Escape are unaffected."/>
+                            <CheckBox x:Name="CommandPaletteCheck" Content="Ctrl+K command palette" Margin="0,8,0,0"
                                       Checked="CommandPaletteCheck_Changed" Unchecked="CommandPaletteCheck_Changed"/>
                             <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="Off by default. When on, Ctrl+K opens a keyboard-first jump list to any page or action."/>
+                                       Text="Off by default. A keyboard-first jump list to any page or action. Requires keyboard shortcuts (above) to be on."/>
                         </StackPanel>
                     </Border>
 

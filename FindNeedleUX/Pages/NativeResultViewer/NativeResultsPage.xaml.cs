@@ -2060,6 +2060,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     // ----- Keyboard shortcuts -----
     private void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
+        // Master hotkey switch — Ctrl+F (and any future page shortcut) is inert when shortcuts are off.
+        if (!FindNeedleUX.Services.ResultsViewerSettings.HotkeysEnabled) return;
         var ctrl = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(global::Windows.System.VirtualKey.Control)
                     & global::Windows.UI.Core.CoreVirtualKeyStates.Down)
                     == global::Windows.UI.Core.CoreVirtualKeyStates.Down;

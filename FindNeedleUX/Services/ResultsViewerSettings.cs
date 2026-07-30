@@ -219,8 +219,21 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Master switch for the app's keyboard shortcuts (Ctrl+F focus-search, Ctrl+K command palette, …).
+    /// Default ON. Turn off to disable every app hotkey at once (basic text-input keys like Enter/Escape
+    /// in boxes are unaffected — those aren't shortcuts).
+    /// </summary>
+    public const bool DefaultHotkeysEnabled = true;
+    public static bool HotkeysEnabled
+    {
+        get => Data.HotkeysEnabled ?? DefaultHotkeysEnabled;
+        set { Data.HotkeysEnabled = value; Save(); }
+    }
+
+    /// <summary>
     /// Whether the Ctrl+K command palette is active. Default OFF — the accelerator does nothing unless a
     /// user opts in (some people hit Ctrl+K expecting a different action and were surprised by the palette).
+    /// Also requires <see cref="HotkeysEnabled"/>.
     /// </summary>
     public const bool DefaultCommandPaletteEnabled = false;
     public static bool CommandPaletteEnabled
@@ -843,6 +856,7 @@ public static class ResultsViewerSettings
         public bool? IndexTimestampsInSearch { get; set; }
         public bool? ParallelIngest { get; set; }
         public bool? FastBulkIngest { get; set; }
+        public bool? HotkeysEnabled { get; set; }
         public bool? CommandPaletteEnabled { get; set; }
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
