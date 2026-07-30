@@ -58,6 +58,17 @@ The project uses a plugin architecture with three main interface types:
   share / symbol server / REST service and returns a PDB path. Hooked in `WppSymbolResolver.BuildTmfs`
   (the `if (!res.Found)` branch), enumerated via `PluginManager.GetAllPluginsInstancesOfAType<ISymbolResolver>()`.
   Consulted only on the build/extract path (never the offline diagnostic banner), so it may do network I/O.
+- **Runs on the decode path, not just the manual page.** `BuildTmfs` is reachable two ways: the "WPP
+  Symbol Resolution" page button, and — new — on-demand during a decode. When a WPP `.etl` fails to decode
+  because ≈all events are unformattable (missing TMFs), `ETLProcessor.DoPreProcessing` calls the
+  `WppSymbolProvisioning` seam (an ambient static in `FindNeedlePluginLib`, same pattern as `DecodeOptions`
+  — ETWPlugin can't reference the UX). The UX registers the handler at startup (`App.OnLaunched`) as
+  `WppSymbolResolver.TryProvision`, which sweeps the ETL's own folder + the configured `SymbolSourcePath`
+  (once per folder per session), runs `BuildTmfs` (→ the resolver plugins), re-applies `TraceFormatConfig`
+  so the freshened TMF cache is on `TRACE_FORMAT_SEARCH_PATH`, and returns whether new TMFs appeared;
+  `ETLProcessor` then retries the decode exactly once (`_provisionAttempted` guards against a loop). The
+  decode is refactored around `DecodeEtlOnce` (one attempt → outcome) + `ReportMissingSymbolsAndBail` so the
+  terminal "symbols missing" banner is only emitted if provisioning didn't help.
 
 **Deprecated Plugin Types** (REPLACED BY RuleDSL):
 - `ISearchFilter` → Replaced by RuleDSL filter rules

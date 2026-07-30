@@ -216,6 +216,67 @@ public static class WppSymbolResolver
         return new BuildTmfsResult { TmfCount = count, Log = sb.ToString(), Outcomes = outcomes };
     }
 
+    // On-demand provisioning serializes (tracepdb writes a shared TMF cache) and remembers which source
+    // folders it already swept this session, so a second ETL from the same drop doesn't re-run the
+    // (possibly network) resolve. Cleared implicitly per process launch.
+    private static readonly object _provisionLock = new();
+    private static readonly HashSet<string> _provisionedSources = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// On-demand symbol provisioning for the DECODE path, registered as
+    /// <see cref="FindNeedlePluginLib.WppSymbolProvisioning.Handler"/>. When a WPP ETL fails to decode for
+    /// missing TMFs, sweep the ETL's own folder plus the configured symbol-source folder(s) for
+    /// binaries/PDBs, resolve them (built-in lookup, then the <see cref="ISymbolResolver"/> plugins — SMB
+    /// share, symbol server, …), extract their TMFs into the managed cache via <see cref="BuildTmfs"/>, and
+    /// refresh <c>TRACE_FORMAT_SEARCH_PATH</c>. Returns true if NEW TMFs were produced (so the caller
+    /// retries the decode). Each source folder is swept at most once per session. Never throws.
+    /// </summary>
+    public static bool TryProvision(FindNeedlePluginLib.WppProvisionRequest request)
+    {
+        if (request == null) return false;
+        lock (_provisionLock)
+        {
+            try
+            {
+                // Sources: the ETL's own folder (captures often ship binaries alongside the trace) + the
+                // user's configured symbol-source folder(s). Symbol path (servers / PDB stores) is passed
+                // through so the resolver can pull a PDB it can't find locally.
+                var sources = new List<string>();
+                try
+                {
+                    var dir = Path.GetDirectoryName(request.EtlPath);
+                    if (!string.IsNullOrEmpty(dir)) sources.Add(dir);
+                }
+                catch { /* bad path — just skip the ETL folder */ }
+                sources.AddRange(SplitFolders(ResultsViewerSettings.SymbolSourcePath));
+
+                // Only sweep folders we haven't already tried this session (idempotent; skips repeat
+                // network hits when many ETLs share a drop).
+                var fresh = sources.Where(s => _provisionedSources.Add(s)).ToList();
+                if (fresh.Count == 0)
+                {
+                    FindNeedlePluginLib.Logger.Instance.Log(
+                        $"WPP provision: no new symbol sources to sweep for {request.EtlPath} (all seen this session)");
+                    return false;
+                }
+
+                int before = CountTmfs();
+                var result = BuildTmfs(string.Join(";", fresh), ResultsViewerSettings.SymbolPath);
+                TraceFormatConfig.Apply(); // put the (now-populated) TMF cache dir on TRACE_FORMAT_SEARCH_PATH
+                int after = CountTmfs();
+                FindNeedlePluginLib.Logger.Instance.Log(
+                    $"WPP provision for {request.EtlPath}: swept {fresh.Count} folder(s), TMF cache {before}->{after}");
+                return after > before;
+            }
+            catch (Exception ex)
+            {
+                FindNeedlePluginLib.Logger.Instance.Log(
+                    $"WPP symbol provision failed for {request?.EtlPath}: {ex.Message}");
+                return false;
+            }
+        }
+    }
+
     /// <summary>
     /// Discovery-only: for each binary in <paramref name="sourceFolders"/>, read its expected PDB
     /// identity and resolve it against loose folders + LOCAL stores only — no extraction, no network.

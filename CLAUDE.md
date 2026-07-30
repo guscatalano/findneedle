@@ -64,7 +64,11 @@ The system is built around three concepts. Read these as the mental model; detai
 - `IFileExtensionProcessor` — **file-format parsers** (e.g. plain text).
 - `ISymbolResolver` — **symbol locators**. Consulted (with a binary's PDB identity) when the built-in
   WPP symbol lookup can't find a PDB, so a plugin can fetch it from an SMB share / symbol server / REST
-  service. Discovered like the others; hooked in `WppSymbolResolver.BuildTmfs`.
+  service. Discovered like the others; hooked in `WppSymbolResolver.BuildTmfs`. Runs both on the manual
+  "WPP Symbol Resolution" page **and on the decode path**: when a WPP `.etl` fails to decode for missing
+  TMFs, `ETLProcessor` calls the `WppSymbolProvisioning` seam (`FindNeedlePluginLib`, an ambient static
+  like `DecodeOptions`), which the UX registers to run `BuildTmfs` over the ETL's folder + configured
+  symbol sources, then retries the decode once.
 
 New I/O-acquisition seams like these are fine. The three **result-pipeline** plugin kinds
 (`ISearchFilter`, `IResultProcessor`, `ISearchOutput`) are **deprecated** — their functionality moved to

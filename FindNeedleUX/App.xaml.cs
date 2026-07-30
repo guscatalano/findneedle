@@ -58,6 +58,13 @@ public partial class App : Application
         {
             FindNeedleUX.Services.TraceFormatConfig.Apply();
             FindNeedleUX.Services.ResultsViewerSettings.Changed += FindNeedleUX.Services.TraceFormatConfig.Apply;
+
+            // On-demand WPP symbol provisioning: when a WPP ETL fails to decode for missing TMFs, the ETL
+            // processor calls this to resolve them (built-in lookup + the ISymbolResolver plugins), extract
+            // TMFs, and retry the decode — so custom resolvers now run on the DECODE path, not only the
+            // manual "WPP Symbol Resolution" page. Registered here because ETWPlugin can't reference the UX.
+            FindNeedlePluginLib.WppSymbolProvisioning.Handler =
+                FindNeedleUX.Services.WppSymbolResolver.TryProvision;
         }
         catch (Exception ex) { Logger.Instance.Log($"TraceFormat config init failed: {ex.Message}"); }
 

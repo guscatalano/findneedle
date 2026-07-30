@@ -67,6 +67,10 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private readonly HashSet<string> _missingTmfGuids = new(StringComparer.OrdinalIgnoreCase);
     // True when we bailed from the fast pre-scan (counts are sample-scoped, full file not decoded).
     private bool _prescanFailFast = false;
+    // Guards the ON-DEMAND symbol provisioning (WppSymbolProvisioning) to a single attempt per run: when a
+    // WPP decode fails for missing TMFs we ask the host to resolve them and retry the decode once — never
+    // in a loop. Reset per DoPreProcessing run (this processor instance can be reused across searches).
+    private bool _provisionAttempted = false;
 
     // "Decode anyway" de-dupes unformattable events by message GUID — this tallies how many events
     // each distinct GUID had, so the single emitted row can show the collapsed count.
@@ -286,6 +290,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         _lastDecodeRowCount = 0;
         _forcedGuidCounts.Clear();
         _prescanFailFast = false;
+        _provisionAttempted = false;
         _missingTmfGuids.Clear();
         _deferredFmtParse = false;
         _fmtParsed = false;
@@ -300,73 +305,48 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         }
         else
         {
-            // Skip tracefmt for modern (non-WPP) traces — it can't decode them and would emit one
-            // "Unknown" line per event. Decode directly with TraceEvent instead.
-            if (LooksLikeModernTrace(inputfile, cancellationToken))
+            var outcome = DecodeEtlOnce(cancellationToken);
+
+            // On-demand symbol provisioning: if the decode failed ONLY because WPP symbols (TMFs) were
+            // missing, ask the host to resolve them — the ISymbolResolver plugins (SMB share, symbol
+            // server, …) sweeping the ETL's folder + configured symbol sources, extracting TMFs into the
+            // cache and refreshing TRACE_FORMAT_SEARCH_PATH — then retry the decode ONCE. When no host is
+            // registered (CLI/tests) this is a no-op and we report "symbols missing" exactly as before.
+            if (outcome == EtlDecodeOutcome.MissingSymbols
+                && !_provisionAttempted
+                && FindNeedlePluginLib.WppSymbolProvisioning.HasHandler)
             {
-                // Don't decode here — defer to the consumer so the streaming search path
-                // (GetResultsWithCallback) can pump events straight to storage without ever
-                // holding the whole trace in RAM. GetResults() decodes lazily for legacy callers.
-                Logger.Instance.Log($"{inputfile} is a modern (non-WPP) trace; will decode with TraceEvent on demand (deferred)");
-                _traceEventModern = true;
-                _decodeMethod = "TraceEvent (modern)";
-                _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile} (decode deferred)");
-                return;
+                _provisionAttempted = true;
+                _progressSink?.NotifyProgress("Missing WPP symbols — asking symbol resolvers to fetch them…");
+                Logger.Instance.Log($"Missing WPP symbols for {inputfile} ({_missingTmfGuids.Count} GUID(s)); invoking symbol provisioner");
+                bool provisioned = FindNeedlePluginLib.WppSymbolProvisioning.TryProvision(
+                    new FindNeedlePluginLib.WppProvisionRequest
+                    {
+                        EtlPath = inputfile,
+                        MissingMessageGuids = _missingTmfGuids.ToArray(),
+                    });
+                if (provisioned)
+                {
+                    Logger.Instance.Log($"Symbol provisioner produced new TMFs; retrying decode for {inputfile}");
+                    _missingTmfGuids.Clear();
+                    _prescanFailFast = false;
+                    outcome = DecodeEtlOnce(cancellationToken);
+                }
+                else
+                {
+                    Logger.Instance.Log($"Symbol provisioner made no new symbols available for {inputfile}");
+                }
             }
 
-            // Fast pre-scan: decode only the first few MB to estimate decodability before the full
-            // (slow, processing-bound) run. If the sample is ~all unformattable, it's a missing-symbols
-            // problem — bail in well under a second with the missing GUIDs instead of grinding the
-            // whole file. Skipped entirely when the user chose "Decode anyway" (force full decode).
-            var pre = DecodeOptions.ForceFullDecode ? null : TraceFmt.PreScan(inputfile, tempPath, _progressSink);
-            if (!DecodeOptions.ForceFullDecode)
-                _progressSink?.NotifyProgress(5, "Pre-scanning ETL for decodability…");
-            if (pre != null && pre.TotalEventsProcessed > 0
-                && pre.TotalFormatsUnknown >= pre.TotalEventsProcessed * 0.99)
+            switch (outcome)
             {
-                currentResult = pre;
-                _prescanFailFast = true;
-                _decodeMethod = "tracefmt (WPP) — symbols missing";
-                _lastDecodeRowCount = 0;
-                SampleMissingGuids(pre.outputfile, 200_000);
-                RetainTracefmtArtifacts();
-                var which = _missingTmfGuids.Count > 0 ? string.Join(", ", _missingTmfGuids.Take(5)) : "?";
-                Logger.Instance.Log($"Pre-scan fail-fast: {inputfile} — sample {pre.TotalFormatsUnknown:N0}/{pre.TotalEventsProcessed:N0} unformattable. Missing: {which}");
-                _progressSink?.NotifyProgress(100,
-                    $"Pre-scan: ~0% of events decodable — missing WPP symbols (TMF for {which}). Set a symbol/TMF path in settings and reopen.");
-                return;
-            }
-
-            // Surface the decode phase on the loading screen. tracefmt runs synchronously (a black box
-            // until it finishes), so the count can't tick during it — but the phase label + animation
-            // show, and the parse loop below ticks the line count once tracefmt returns.
-            FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
-            Logger.Instance.Log($"Calling TraceFmt.ParseSimpleETL for file: {inputfile}");
-            currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath, _progressSink);
-            if (currentResult == null)
-            {
-                Logger.Instance.Log($"TraceFmt result is null for {inputfile}, skipping ETL processing.");
-                _progressSink?.NotifyProgress(100, $"TraceFmt not found or failed for {inputfile}, skipping ETL processing.");
-                return;
-            }
-
-            // Fail fast: tracefmt's summary (already parsed) tells us how much is decodable BEFORE we
-            // grind line-by-line through the output. If (nearly) everything is unformattable, it's a
-            // missing-symbols problem — sample the missing GUIDs, report, and skip the multi-million-
-            // line parse + the (futile) TraceEvent fallback so the user can fix symbols and reopen.
-            long total = currentResult.TotalEventsProcessed;
-            long unknown = currentResult.TotalFormatsUnknown;
-            if (!DecodeOptions.ForceFullDecode && total > 0 && unknown >= total * 0.99)
-            {
-                _decodeMethod = "tracefmt (WPP) — symbols missing";
-                _lastDecodeRowCount = 0;
-                SampleMissingGuids(currentResult.outputfile, 200_000);
-                RetainTracefmtArtifacts();
-                var which = _missingTmfGuids.Count > 0 ? string.Join(", ", _missingTmfGuids.Take(5)) : "?";
-                Logger.Instance.Log($"Fail-fast: {inputfile} — {unknown:N0}/{total:N0} events unformattable (missing TMF). Skipping full parse. Missing: {which}");
-                _progressSink?.NotifyProgress(100,
-                    $"Can't decode: {unknown:N0} of {total:N0} events need WPP symbols (missing TMF for {which}). Set a symbol/TMF path in settings and reopen.");
-                return;
+                case EtlDecodeOutcome.Handled:
+                    return; // modern-deferred / tracefmt-unavailable — DecodeEtlOnce already reported.
+                case EtlDecodeOutcome.MissingSymbols:
+                    ReportMissingSymbolsAndBail(); // still missing after any provisioning → report + bail.
+                    return;
+                case EtlDecodeOutcome.FormattedNeedsParse:
+                    break; // tracefmt formatted events → fall through to the shared deferred-parse setup.
             }
         }
         // tracefmt has run (it can't be streamed). Defer the cheap line-parse of its formatted output
@@ -412,6 +392,102 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 : ""));
         Logger.Instance.Log($"DoPreProcessing complete for {inputfile}");
         _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
+    }
+
+    /// <summary>Outcome of a single <see cref="DecodeEtlOnce"/> attempt.</summary>
+    private enum EtlDecodeOutcome
+    {
+        /// <summary>Nothing more for DoPreProcessing to do here — it should return. Used for a modern
+        /// (TraceEvent-deferred) trace and for "tracefmt unavailable"; the banner/return state is set inline.</summary>
+        Handled,
+        /// <summary>≈all events unformattable — the WPP symbols (TMFs) are missing. currentResult,
+        /// _decodeMethod, _prescanFailFast and _missingTmfGuids are set; the caller decides whether to
+        /// provision symbols + retry, and emits the terminal banner (ReportMissingSymbolsAndBail) if not.</summary>
+        MissingSymbols,
+        /// <summary>tracefmt formatted events — fall through to the shared deferred-parse setup.</summary>
+        FormattedNeedsParse,
+    }
+
+    /// <summary>
+    /// One attempt to decode the .etl: modern-trace probe → tracefmt pre-scan → full tracefmt decode, with
+    /// the "≈everything unformattable = missing WPP symbols" fail-fast. Deliberately does NOT emit the
+    /// terminal "symbols missing" banner or retain the resolution log for that case — the caller does, AFTER
+    /// deciding whether to provision symbols and retry, so a successful retry leaves no stale "missing" state.
+    /// Safe to call twice (the retry after provisioning).
+    /// </summary>
+    private EtlDecodeOutcome DecodeEtlOnce(CancellationToken cancellationToken)
+    {
+        // Skip tracefmt for modern (non-WPP) traces — it can't decode them and would emit one "Unknown"
+        // line per event. Defer the TraceEvent decode to the consumer so the streaming search path pumps
+        // events straight to storage without ever holding the whole trace in RAM.
+        if (LooksLikeModernTrace(inputfile, cancellationToken))
+        {
+            Logger.Instance.Log($"{inputfile} is a modern (non-WPP) trace; will decode with TraceEvent on demand (deferred)");
+            _traceEventModern = true;
+            _decodeMethod = "TraceEvent (modern)";
+            _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile} (decode deferred)");
+            return EtlDecodeOutcome.Handled;
+        }
+
+        // Fast pre-scan: decode only the first few MB to estimate decodability before the full (slow,
+        // processing-bound) run. If the sample is ~all unformattable, it's a missing-symbols problem —
+        // report the missing GUIDs instead of grinding the whole file. Skipped for "Decode anyway".
+        var pre = DecodeOptions.ForceFullDecode ? null : TraceFmt.PreScan(inputfile, tempPath, _progressSink);
+        if (!DecodeOptions.ForceFullDecode)
+            _progressSink?.NotifyProgress(5, "Pre-scanning ETL for decodability…");
+        if (pre != null && pre.TotalEventsProcessed > 0
+            && pre.TotalFormatsUnknown >= pre.TotalEventsProcessed * 0.99)
+        {
+            currentResult = pre;
+            _prescanFailFast = true;
+            _decodeMethod = "tracefmt (WPP) — symbols missing";
+            _lastDecodeRowCount = 0;
+            SampleMissingGuids(pre.outputfile, 200_000);
+            return EtlDecodeOutcome.MissingSymbols;
+        }
+
+        // Surface the decode phase on the loading screen. tracefmt runs synchronously (a black box until
+        // it finishes), so the count can't tick during it — but the phase label + animation show.
+        FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
+        Logger.Instance.Log($"Calling TraceFmt.ParseSimpleETL for file: {inputfile}");
+        currentResult = TraceFmt.ParseSimpleETL(inputfile, tempPath, _progressSink);
+        if (currentResult == null)
+        {
+            Logger.Instance.Log($"TraceFmt result is null for {inputfile}, skipping ETL processing.");
+            _progressSink?.NotifyProgress(100, $"TraceFmt not found or failed for {inputfile}, skipping ETL processing.");
+            return EtlDecodeOutcome.Handled;
+        }
+
+        // Fail fast: tracefmt's summary (already parsed) tells us how much is decodable BEFORE we grind
+        // line-by-line through the output. If (nearly) everything is unformattable, it's a missing-symbols
+        // problem — sample the missing GUIDs and skip the multi-million-line parse + futile TraceEvent fallback.
+        long total = currentResult.TotalEventsProcessed;
+        long unknown = currentResult.TotalFormatsUnknown;
+        if (!DecodeOptions.ForceFullDecode && total > 0 && unknown >= total * 0.99)
+        {
+            _decodeMethod = "tracefmt (WPP) — symbols missing";
+            _lastDecodeRowCount = 0;
+            SampleMissingGuids(currentResult.outputfile, 200_000);
+            return EtlDecodeOutcome.MissingSymbols;
+        }
+
+        return EtlDecodeOutcome.FormattedNeedsParse;
+    }
+
+    /// <summary>Terminal report for the "≈all events unformattable = missing WPP symbols" case: retain the
+    /// resolution log (which TMFs/symbols are still needed) and surface the banner. Split out of the
+    /// fail-fast so on-demand provisioning can run BETWEEN the failed decode and this report — and be
+    /// skipped entirely on a successful retry.</summary>
+    private void ReportMissingSymbolsAndBail()
+    {
+        RetainTracefmtArtifacts();
+        long total = currentResult?.TotalEventsProcessed ?? 0;
+        long unknown = currentResult?.TotalFormatsUnknown ?? 0;
+        var which = _missingTmfGuids.Count > 0 ? string.Join(", ", _missingTmfGuids.Take(5)) : "?";
+        var countPart = total > 0 ? $"{unknown:N0} of {total:N0} events" : "events";
+        Logger.Instance.Log($"Missing WPP symbols (final): {inputfile} — {countPart} unformattable; {_missingTmfGuids.Count} GUID(s) unresolved. Missing: {which}");
+        _progressSink?.NotifyProgress(100,
+            $"Can't decode: {countPart} need WPP symbols (missing TMF for {which}). Set a symbol/TMF path in settings and reopen.");
     }
 
     /// <summary>
