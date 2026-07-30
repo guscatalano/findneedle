@@ -412,6 +412,19 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Command palette (Ctrl+K) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Command palette" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="CommandPaletteCheck" Content="Enable the Ctrl+K command palette"
+                                      Checked="CommandPaletteCheck_Changed" Unchecked="CommandPaletteCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="Off by default. When on, Ctrl+K opens a keyboard-first jump list to any page or action."/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Drag and drop behavior -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

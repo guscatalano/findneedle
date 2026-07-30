@@ -1141,6 +1141,9 @@ public sealed partial class MainWindow : Window
     private void CommandPaletteAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
         Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
     {
+        // Off by default — the palette only responds to Ctrl+K when the user opts in (Settings). Leave the
+        // key unhandled when disabled so it isn't silently swallowed.
+        if (!FindNeedleUX.Services.ResultsViewerSettings.CommandPaletteEnabled) return;
         args.Handled = true;
         if (CommandPalettePanel.Visibility == Visibility.Visible) CloseCommandPalette();
         else OpenCommandPalette();

@@ -219,6 +219,17 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
+    /// Whether the Ctrl+K command palette is active. Default OFF — the accelerator does nothing unless a
+    /// user opts in (some people hit Ctrl+K expecting a different action and were surprised by the palette).
+    /// </summary>
+    public const bool DefaultCommandPaletteEnabled = false;
+    public static bool CommandPaletteEnabled
+    {
+        get => Data.CommandPaletteEnabled ?? DefaultCommandPaletteEnabled;
+        set { Data.CommandPaletteEnabled = value; Save(); }
+    }
+
+    /// <summary>
     /// How the result viewer's search box submits searches:
     ///   Auto    — live until a search is slow (>~1s) or the log is large, then Enter-to-search (default)
     ///   Live    — search on every keystroke
@@ -832,6 +843,7 @@ public static class ResultsViewerSettings
         public bool? IndexTimestampsInSearch { get; set; }
         public bool? ParallelIngest { get; set; }
         public bool? FastBulkIngest { get; set; }
+        public bool? CommandPaletteEnabled { get; set; }
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
         public bool? ShowStepHistory { get; set; }

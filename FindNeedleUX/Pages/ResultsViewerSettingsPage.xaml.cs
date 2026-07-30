@@ -284,6 +284,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             IndexTimestampsCheck.IsChecked = ResultsViewerSettings.IndexTimestampsInSearch;
             ParallelIngestCheck.IsChecked = ResultsViewerSettings.ParallelIngest;
             FastBulkIngestCheck.IsChecked = ResultsViewerSettings.FastBulkIngest;
+            CommandPaletteCheck.IsChecked = ResultsViewerSettings.CommandPaletteEnabled;
 
             // --- Search submit mode ---
             SelectSearchSubmitMode();
@@ -699,6 +700,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (_suppressEvents) return;
         ResultsViewerSettings.FastBulkIngest = FastBulkIngestCheck.IsChecked == true;
+    }
+
+    private void CommandPaletteCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.CommandPaletteEnabled = CommandPaletteCheck.IsChecked == true;
     }
 
     // ----- Search submit mode -----
