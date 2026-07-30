@@ -41,6 +41,7 @@ name: .NET Core Desktop
 permissions:
   contents: write
   checks: write
+  pull-requests: write  # publish-unit-test-result-action posts a results comment on PRs
 
 on:
   push:
