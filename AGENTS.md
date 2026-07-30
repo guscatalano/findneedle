@@ -66,8 +66,17 @@ The project uses a plugin architecture with three main interface types:
 
 **Plugin Loading**:
 - Configured via `PluginConfig.json` (in `findneedle/` directory)
-- Supports registry-based plugin discovery (HKCU\Software\FindNeedle\Plugins)
-- Uses `FakeLoadPlugin.exe` for dynamic plugin loading
+- Supports registry-based plugin discovery — `HKCU\Software\FindNeedle\Plugins` default value = a
+  `;`-separated list of absolute DLL paths, merged with the config entries at startup
+  (`UserRegistryPluginKeyEnabled`, on by default). This is the user/org **extension seam**.
+  **Packaging-verified:** a packaged (MSIX, full-trust) FindNeedle reads this HKCU value and loads the
+  external DLL by absolute path. Prefer the registry (not a file) for extension lists — the app's
+  `%LocalAppData%\FindNeedle` writes are MSIX-virtualized into the package container, so an external
+  file there wouldn't be seen; and the DLL can't live in the read-only `WindowsApps` install dir, so it
+  goes in a writable folder (`%LocalAppData%\FindNeedle\plugins\`) referenced by absolute path. See
+  `tools/symbol-resolver/`.
+- Uses `FakeLoadPlugin.exe` for dynamic plugin loading (reflects the DLL, records every interface
+  FullName; `PluginManager.GetAllPluginsInstancesOfAType<T>()` matches by FullName)
 
 ### 2. RuleDSL System (PRIMARY CONFIGURATION)
 The **RuleDSL** (Rule Domain Specific Language) is the modern configuration system that replaces deprecated plugins:

@@ -11,10 +11,27 @@ Make FindNeedle resolve WPP symbols from *your* source automatically, with nothi
 
 2. **`install-symbol-resolver.ps1`** — a per-user script (no admin) that wires it in:
    - optionally `winget install <FindNeedle package>` (`-WingetId`),
-   - copies the resolver DLL next to `FindNeedleUX.exe` (so its `FindNeedlePluginLib` dependency resolves),
-   - registers it under `HKCU\Software\FindNeedle\Plugins` (a `;`-separated DLL-path list FindNeedle merges
-     with its built-in plugins at startup — the shipped `PluginConfig.json` has this enabled),
+   - deploys the resolver DLL to `%LocalAppData%\FindNeedle\plugins\` (a writable folder — see the
+     packaging note below),
+   - registers its absolute path under `HKCU\Software\FindNeedle\Plugins` (a `;`-separated list FindNeedle
+     merges with its built-in plugins at startup — the shipped `PluginConfig.json` has this enabled),
    - sets `FINDNEEDLE_SYMBOL_SHARES` (user scope) for the bundled SMB resolver.
+
+## Packaging note (why registry + a writable folder — verified)
+
+FindNeedle ships as a **packaged (MSIX, full-trust) app**, which changes two things — both confirmed by
+registering the app with real package identity and testing:
+
+- **The registry seam works packaged.** A full-trust packaged FindNeedle reads the external
+  `HKCU\Software\FindNeedle\Plugins` value and loads the DLL at the absolute path it points to. (With the
+  key set the resolver loaded; with it removed it didn't — clean A/B.)
+- **A file-based list would NOT work packaged.** The app's `%LocalAppData%\FindNeedle` writes are
+  virtualized into `…\Packages\<family>\LocalCache\…`, so a plugin-list file an external script drops in
+  the real `%LocalAppData%\FindNeedle` isn't the one the packaged app reads. That's why the extension list
+  lives in the **registry**, not a file.
+- **The DLL can't go in the install dir.** A packaged app lives under read-only
+  `C:\Program Files\WindowsApps\…`. The DLL goes in the writable `%LocalAppData%\FindNeedle\plugins\`
+  instead; the app loads it by **absolute path**, which bypasses the known-folder virtualization above.
 
 ## Quick start
 
