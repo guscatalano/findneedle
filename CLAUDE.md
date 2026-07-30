@@ -59,12 +59,16 @@ source project by name (`FindNeedleRuleDSL` → `FindNeedleRuleDSLTests`, etc.).
 The system is built around three concepts. Read these as the mental model; details live in `AGENTS.md`.
 
 **1. Plugins (legacy mechanism, still active for I/O).** Defined by interfaces in
-`FindNeedlePluginLib/Interfaces/`. Two plugin kinds are still first-class and should be kept:
+`FindNeedlePluginLib/Interfaces/`. Three plugin kinds are first-class and should be kept:
 - `ISearchLocation` — **data sources** (folders, ETW, Event Log, ZIP). They acquire raw data.
 - `IFileExtensionProcessor` — **file-format parsers** (e.g. plain text).
+- `ISymbolResolver` — **symbol locators**. Consulted (with a binary's PDB identity) when the built-in
+  WPP symbol lookup can't find a PDB, so a plugin can fetch it from an SMB share / symbol server / REST
+  service. Discovered like the others; hooked in `WppSymbolResolver.BuildTmfs`.
 
-Three other plugin kinds (`ISearchFilter`, `IResultProcessor`, `ISearchOutput`) are **deprecated** —
-their functionality moved to RuleDSL. Don't add new ones; add RuleDSL rules instead.
+New I/O-acquisition seams like these are fine. The three **result-pipeline** plugin kinds
+(`ISearchFilter`, `IResultProcessor`, `ISearchOutput`) are **deprecated** — their functionality moved to
+RuleDSL. Don't add new ones of those; add RuleDSL rules instead.
 
 **2. RuleDSL — the primary configuration system** (`FindNeedleRuleDSL/`). JSON files
 (`*.rules.json`) declare filter / enrichment / UML / output rules so behavior changes without

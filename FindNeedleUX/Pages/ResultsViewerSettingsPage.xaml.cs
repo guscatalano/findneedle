@@ -283,6 +283,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectIndexingMode();
             IndexTimestampsCheck.IsChecked = ResultsViewerSettings.IndexTimestampsInSearch;
             ParallelIngestCheck.IsChecked = ResultsViewerSettings.ParallelIngest;
+            FastBulkIngestCheck.IsChecked = ResultsViewerSettings.FastBulkIngest;
+            HotkeysCheck.IsChecked = ResultsViewerSettings.HotkeysEnabled;
+            CommandPaletteCheck.IsChecked = ResultsViewerSettings.CommandPaletteEnabled;
 
             // --- Search submit mode ---
             SelectSearchSubmitMode();
@@ -318,10 +321,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
                     + "Use \"Manage defaults in Windows…\" to choose FindNeedle per file type.";
             }
 
-            // --- WPP / tracefmt TMF path ---
-            TmfPathBox.Text = ResultsViewerSettings.TraceFormatSearchPath;
-            SymbolSourceBox.Text = ResultsViewerSettings.SymbolSourcePath;
-            SymbolPathBox.Text = ResultsViewerSettings.SymbolPath;
+            // --- WPP symbols: managed on the dedicated Diagnostics → WPP symbol resolution page ---
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += OnMcpStatusChanged;
 
@@ -697,6 +697,24 @@ public sealed partial class ResultsViewerSettingsPage : Page
         ResultsViewerSettings.ParallelIngest = ParallelIngestCheck.IsChecked == true;
     }
 
+    private void FastBulkIngestCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.FastBulkIngest = FastBulkIngestCheck.IsChecked == true;
+    }
+
+    private void HotkeysCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.HotkeysEnabled = HotkeysCheck.IsChecked == true;
+    }
+
+    private void CommandPaletteCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.CommandPaletteEnabled = CommandPaletteCheck.IsChecked == true;
+    }
+
     // ----- Search submit mode -----
     private void SelectSearchSubmitMode()
     {
@@ -891,80 +909,10 @@ public sealed partial class ResultsViewerSettingsPage : Page
     }
 
     // ----- WPP / tracefmt TMF path -----
-    private void TmfPathBox_LostFocus(object sender, RoutedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        ResultsViewerSettings.TraceFormatSearchPath = TmfPathBox.Text?.Trim() ?? "";
-    }
-
-    private void BrowseTmfPath_Click(object sender, RoutedEventArgs e)
-    {
-        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
-        var path = Win32FileDialog.PickFolder(hWnd);
-        if (path != null)
-        {
-            TmfPathBox.Text = path;
-            ResultsViewerSettings.TraceFormatSearchPath = path;
-        }
-    }
-
-    private void SymbolSourceBox_LostFocus(object sender, RoutedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        ResultsViewerSettings.SymbolSourcePath = SymbolSourceBox.Text?.Trim() ?? "";
-    }
-
-    private void SymbolPathBox_LostFocus(object sender, RoutedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        ResultsViewerSettings.SymbolPath = SymbolPathBox.Text?.Trim() ?? "";
-    }
-
-    private void BrowseSymbolSource_Click(object sender, RoutedEventArgs e)
-    {
-        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
-        var path = Win32FileDialog.PickFolder(hWnd);
-        if (path != null)
-        {
-            SymbolSourceBox.Text = path;
-            ResultsViewerSettings.SymbolSourcePath = path;
-        }
-    }
-
-    private async void BuildTmfs_Click(object sender, RoutedEventArgs e)
-    {
-        // Persist current text first (in case the user didn't tab out of the boxes).
-        ResultsViewerSettings.SymbolSourcePath = SymbolSourceBox.Text?.Trim() ?? "";
-        ResultsViewerSettings.SymbolPath = SymbolPathBox.Text?.Trim() ?? "";
-
-        BuildTmfsButton.IsEnabled = false;
-        BuildTmfsStatus.Text = "Building TMFs from symbols…";
-        var source = ResultsViewerSettings.SymbolSourcePath;
-        var symPath = ResultsViewerSettings.SymbolPath;
-        (int count, string log) result = (0, "");
-        try
-        {
-            result = await System.Threading.Tasks.Task.Run(() => WppSymbolResolver.BuildTmfs(source, symPath));
-        }
-        catch (Exception ex) { result = (0, ex.Message); }
-
-        // Re-apply env so the new TMF cache is on the search path immediately.
-        TraceFormatConfig.Apply();
-
-        BuildTmfsButton.IsEnabled = true;
-        BuildTmfsStatus.Text = $"{result.count} TMF(s) in cache";
-        _ = new ContentDialog
-        {
-            Title = "Build TMFs from symbols",
-            Content = new ScrollViewer
-            {
-                MaxHeight = 380,
-                Content = new TextBlock { Text = result.log, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 12, IsTextSelectionEnabled = true, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
-            },
-            CloseButtonText = "OK",
-            XamlRoot = this.XamlRoot,
-        }.ShowAsync();
-    }
+    // WPP symbol decoding now lives on its dedicated diagnostics page (Diagnostics → WPP symbol
+    // resolution) so this settings section stays a single link instead of duplicating that UI.
+    private void OpenWppSymbols_Click(object sender, RoutedEventArgs e)
+        => FindNeedleUX.Services.MainWindowActions.NavigateToWppSymbols();
 
     private void OnMcpStatusChanged() => DispatcherQueue.TryEnqueue(UpdateMcpStatus);
 

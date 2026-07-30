@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using FindNeedleCoreUtils;
+using FindNeedlePluginLib;
+using findneedle.PluginSubsystem;
 using Microsoft.Win32;
 
 namespace FindNeedleUX.Services;
@@ -34,7 +36,37 @@ public static class WppSymbolResolver
     // with no WDK: fake the tracepdb location and capture invocations instead of spawning it.
     internal static Func<string> FindTracePdbOverride;
     internal static Action<string, string, StringBuilder> RunTracePdbOverride;
-    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; }
+    // Inject fake ISymbolResolver plugins without going through PluginManager (which loads DLLs).
+    internal static IReadOnlyList<ISymbolResolver> ResolversOverride;
+    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; ResolversOverride = null; }
+
+    /// <summary>The registered symbol-resolver plugins (SMB share / symbol server / …), consulted when the
+    /// built-in local + symbol-path lookup misses. Best-effort: an unavailable plugin subsystem = none.</summary>
+    private static IReadOnlyList<ISymbolResolver> GetSymbolResolvers()
+    {
+        if (ResolversOverride != null) return ResolversOverride;
+        try { return PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<ISymbolResolver>(); }
+        catch { return Array.Empty<ISymbolResolver>(); }
+    }
+
+    /// <summary>Ask each resolver plugin, in order, to find the PDB for this identity. Returns the first
+    /// non-null path that exists on disk (local or UNC), or null. Plugin exceptions are logged and skipped.</summary>
+    private static string TryResolverPlugins(IReadOnlyList<ISymbolResolver> resolvers,
+        WppSymbols.PdbIdentity id, string binary, StringBuilder sb)
+    {
+        if (resolvers == null || resolvers.Count == 0) return null;
+        var request = new SymbolLookupRequest(id.PdbFileName, id.Guid, id.Age, binary);
+        foreach (var r in resolvers)
+        {
+            string path;
+            try { path = r.TryResolvePdb(request); }
+            catch (Exception ex) { sb.AppendLine($"symbol resolver {r.GetType().Name} threw: {ex.Message}"); continue; }
+            if (string.IsNullOrEmpty(path)) continue;
+            if (File.Exists(path)) { sb.AppendLine($"resolved via plugin {r.GetType().Name}: {path}"); return path; }
+            sb.AppendLine($"symbol resolver {r.GetType().Name} returned a missing path: {path}");
+        }
+        return null;
+    }
 
     public static string FindTracePdb()
     {
@@ -59,24 +91,31 @@ public static class WppSymbolResolver
     /// Extract TMFs from the given source folders (PDBs, and binaries via <paramref name="symbolPath"/>)
     /// into the managed cache. Returns the total TMF count now in the cache and a diagnostic log.
     /// </summary>
-    public static (int tmfCount, string log) BuildTmfs(string sourceFolders, string symbolPath)
+    public static BuildTmfsResult BuildTmfs(string sourceFolders, string symbolPath)
     {
         var sb = new StringBuilder();
+        var outcomes = new List<SymbolOutcome>();
         var tracepdb = FindTracePdb();
         if (string.IsNullOrEmpty(tracepdb))
-            return (CountTmfs(), "tracepdb.exe not found — install the Windows SDK/WDK (Debugging Tools).");
+            return new BuildTmfsResult
+            {
+                TmfCount = CountTmfs(),
+                Log = "tracepdb.exe not found — install the Windows SDK/WDK (Debugging Tools).",
+                Outcomes = outcomes,
+            };
         sb.AppendLine($"tracepdb: {tracepdb}");
 
         var cache = TmfCacheDir;
         Directory.CreateDirectory(cache);
 
-        var folders = (sourceFolders ?? "")
-            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+        var folders = SplitFolders(sourceFolders);
         if (folders.Count == 0)
             sb.AppendLine("No PDB/binary source folder configured.");
 
         var resolver = new WppSymbols.PdbResolver();
+        var symbolResolverPlugins = GetSymbolResolvers(); // consulted once we've exhausted the built-in lookup
+        if (symbolResolverPlugins.Count > 0)
+            sb.AppendLine($"{symbolResolverPlugins.Count} symbol-resolver plugin(s) available as a fallback.");
         // PDB paths already extracted (or rejected as stale) this run — so the loose-PDB sweep
         // below neither re-extracts a resolved PDB nor touches one that failed verification.
         var extracted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -101,29 +140,46 @@ public static class WppSymbolResolver
                     sb.AppendLine($"{Path.GetFileName(binary)} needs: {id} (key {id.Key})");
                     var res = resolver.Resolve(id, folders, symbolPath, PdbCacheDir, sb);
                     foreach (var r in res.RejectedLooseCandidates) rejected.Add(r);
-                    if (!res.Found)
+
+                    // Built-in lookup first; if it missed, give the resolver plugins (SMB share, symbol
+                    // server, …) a shot before declaring the binary unresolved.
+                    string resolvedPath = res.Found ? res.ResolvedPath : TryResolverPlugins(symbolResolverPlugins, id, binary, sb);
+                    if (resolvedPath == null)
                     {
                         sb.AppendLine($"FAILED to resolve {id.PdbFileName} for {Path.GetFileName(binary)} — probes above show every location tried.");
+                        outcomes.Add(NotFoundOrWrong(binary, id, res));
                         continue;
                     }
-                    if (extracted.Add(res.ResolvedPath))
+                    if (extracted.Add(resolvedPath))
                     {
                         // Snapshot-diff (not count-based) so re-extracting a PDB whose TMFs are
                         // already cached — same files rewritten, count unchanged — doesn't misfire.
                         var beforeTmfs = SnapshotTmfs(cache);
-                        Run(tracepdb, $"-f \"{res.ResolvedPath}\" -p \"{cache}\"", sb);
+                        Run(tracepdb, $"-f \"{resolvedPath}\" -p \"{cache}\"", sb);
                         // The most confusing failure mode is "everything resolved, still no TMFs".
                         // Per Microsoft's docs, WPP trace-format data is STRIPPED from public
                         // symbols (tracepdb needs the full/private PDB); since Win8 a component can
                         // opt individual trace functions into its public PDB, but most don't.
                         // A GUID+age match can't tell the two apart — a stripped PDB keeps the
                         // private one's identity — so explain it here, at extraction time.
-                        if (!AnyTmfChanged(cache, beforeTmfs))
+                        bool producedTmf = AnyTmfChanged(cache, beforeTmfs);
+                        if (!producedTmf)
                             sb.AppendLine(
                                 $"note: {id.PdbFileName} matched (GUID+age) but produced no TMFs — it carries no " +
                                 "WPP trace-format data. Either the binary doesn't use WPP, or this is a " +
                                 "public/stripped PDB (symbol servers like msdl strip TMF data; WPP decoding " +
                                 "needs the component's private PDB).");
+                        outcomes.Add(new SymbolOutcome
+                        {
+                            Status = producedTmf ? SymbolStatus.Resolved : SymbolStatus.NoTmf,
+                            Binary = Path.GetFileName(binary),
+                            PdbName = id.PdbFileName,
+                            Guid = id.Guid.ToString("N").ToUpperInvariant(),
+                            Age = id.Age,
+                            ResolvedPath = resolvedPath,
+                            Detail = producedTmf ? $"TMF extracted from {resolvedPath}"
+                                                 : "PDB matched but carries no WPP trace-format data (public/stripped PDB)",
+                        });
                     }
                 }
             }
@@ -139,13 +195,198 @@ public static class WppSymbolResolver
                     continue;
                 }
                 if (extracted.Add(pdb))
+                {
+                    var beforeTmfs = SnapshotTmfs(cache);
                     Run(tracepdb, $"-f \"{pdb}\" -p \"{cache}\"", sb);
+                    bool producedTmf = AnyTmfChanged(cache, beforeTmfs);
+                    outcomes.Add(new SymbolOutcome
+                    {
+                        Status = producedTmf ? SymbolStatus.Resolved : SymbolStatus.NoTmf,
+                        PdbName = Path.GetFileName(pdb),
+                        ResolvedPath = pdb,
+                        Detail = producedTmf ? "TMF extracted (loose PDB, no binary to verify against)"
+                                             : "loose PDB carries no WPP trace-format data",
+                    });
+                }
             }
         }
 
         int count = CountTmfs();
         sb.AppendLine($"TMF cache now holds {count} file(s): {cache}");
-        return (count, sb.ToString());
+        return new BuildTmfsResult { TmfCount = count, Log = sb.ToString(), Outcomes = outcomes };
+    }
+
+    /// <summary>
+    /// Discovery-only: for each binary in <paramref name="sourceFolders"/>, read its expected PDB
+    /// identity and resolve it against loose folders + LOCAL stores only — no extraction, no network.
+    /// Returns a per-binary status so callers (e.g. the decode-warning banner) can name the exact PDB
+    /// each binary needs and whether it's missing or the WRONG build. Fast and side-effect-free;
+    /// bounded by <paramref name="maxBinaries"/> so it stays cheap enough to run on the banner path.
+    /// </summary>
+    public static IReadOnlyList<SymbolOutcome> Diagnose(string sourceFolders, string symbolPath, int maxBinaries = 64)
+    {
+        var outcomes = new List<SymbolOutcome>();
+        var folders = SplitFolders(sourceFolders);
+        if (folders.Count == 0) return outcomes;
+        var resolver = new WppSymbols.PdbResolver(new NullFetcher()); // local-only: HTTP probes no-op
+        var sink = new StringBuilder();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // A local-only diagnosis can't see PDBs on a symbol server; when one is configured, say so on
+        // the "not found" rows rather than implying they're unrecoverable (Build DOES probe the server).
+        bool hasHttp = HasHttpSymbolServer(symbolPath);
+        int scanned = 0;
+        foreach (var folder in folders)
+        {
+            if (!Directory.Exists(folder)) continue;
+            foreach (var pattern in new[] { "*.dll", "*.exe", "*.sys" })
+                foreach (var binary in SafeEnumerate(folder, pattern))
+                {
+                    if (scanned >= maxBinaries) return outcomes;
+                    scanned++;
+                    var id = WppSymbols.PdbIdentity.TryReadFromBinary(binary, out _);
+                    if (id == null) continue;
+                    if (!seenKeys.Add(id.Key)) continue; // one line per distinct PDB identity
+                    var res = resolver.Resolve(id, folders, symbolPath, PdbCacheDir, sink);
+                    if (res.Found)
+                        outcomes.Add(new SymbolOutcome
+                        {
+                            Status = SymbolStatus.FoundLocal,
+                            Binary = Path.GetFileName(binary),
+                            PdbName = id.PdbFileName,
+                            Guid = id.Guid.ToString("N").ToUpperInvariant(),
+                            Age = id.Age,
+                            ResolvedPath = res.ResolvedPath,
+                            Detail = $"PDB present at {res.ResolvedPath} — Build TMFs to extract",
+                        });
+                    else
+                    {
+                        var oc = NotFoundOrWrong(binary, id, res);
+                        if (oc.Status == SymbolStatus.NotFound && hasHttp)
+                            oc = new SymbolOutcome
+                            {
+                                Status = SymbolStatus.NotFound,
+                                Binary = oc.Binary, PdbName = oc.PdbName, Guid = oc.Guid, Age = oc.Age,
+                                Detail = oc.Detail + " — a symbol server is configured, so Build & reopen may still fetch it",
+                            };
+                        outcomes.Add(oc);
+                    }
+                }
+        }
+        return outcomes;
+    }
+
+    /// <summary>True when the symbol path names any HTTP(S) symbol server. A local-only
+    /// <see cref="Diagnose"/> can't see server PDBs, so callers use this to caveat "not found".</summary>
+    public static bool HasHttpSymbolServer(string symbolPath)
+    {
+        try
+        {
+            foreach (var chain in WppSymbols.SymbolPathParser.Parse(symbolPath ?? "", null))
+                foreach (var store in chain)
+                    if (store.IsHttp) return true;
+        }
+        catch { /* malformed path — treat as no server */ }
+        return false;
+    }
+
+    /// <summary>
+    /// Deterministic synthetic outcomes for exercising the resolution UI at scale (e.g. the dev
+    /// "1000 providers, 75% missing" simulation) — no binaries, no I/O, no randomness. The missing
+    /// ones are interspersed (not clustered) so the list looks like a real mixed result. Roughly
+    /// <paramref name="missingFraction"/> of the entries are <see cref="SymbolStatus.NotFound"/>; a
+    /// few of the resolved ones are marked <see cref="SymbolStatus.WrongVersion"/> so the UI shows
+    /// every state a real fix-up would surface.
+    /// </summary>
+    public static List<SymbolOutcome> GenerateSimulatedOutcomes(int count, double missingFraction)
+    {
+        var list = new List<SymbolOutcome>(Math.Max(0, count));
+        missingFraction = Math.Clamp(missingFraction, 0, 1);
+        // Resolve every k-th entry so ~missingFraction are missing, interspersed.
+        int resolvedStride = missingFraction >= 1 ? int.MaxValue
+                            : Math.Max(1, (int)Math.Round(1.0 / (1.0 - missingFraction)));
+        for (int i = 0; i < count; i++)
+        {
+            var guid = (i.ToString("X8") + new string('0', 24)).Substring(0, 32); // deterministic 32-hex
+            int age = (i % 20) + 1;
+            var name = $"provider{i:D4}";
+            bool missing = (i % resolvedStride) != 0;
+            if (missing)
+            {
+                // Every 7th missing one is a "wrong build present" rather than absent, for variety.
+                bool wrong = (i % 7) == 0;
+                list.Add(new SymbolOutcome
+                {
+                    Status = wrong ? SymbolStatus.WrongVersion : SymbolStatus.NotFound,
+                    Binary = $"{name}.dll",
+                    PdbName = $"{name}.pdb",
+                    Guid = guid,
+                    Age = age,
+                    Detail = wrong
+                        ? $"found {name}.pdb but it's a different build (has {(i.ToString("X8") + new string('1', 24)).Substring(0, 32)} age {age + 1}, need {guid} age {age})"
+                        : $"not found in the symbol source or symbol path (need {guid} age {age})",
+                });
+            }
+            else
+            {
+                list.Add(new SymbolOutcome
+                {
+                    Status = SymbolStatus.Resolved,
+                    Binary = $"{name}.dll",
+                    PdbName = $"{name}.pdb",
+                    Guid = guid,
+                    Age = age,
+                    Detail = "TMF extracted",
+                });
+            }
+        }
+        return list;
+    }
+
+    /// <summary>Classify a binary whose PDB did NOT resolve: either the user pointed us at a
+    /// wrong-build PDB (right name, wrong GUID/age) or nothing was found at all.</summary>
+    private static SymbolOutcome NotFoundOrWrong(string binary, WppSymbols.PdbIdentity id, WppSymbols.PdbResolveResult res)
+    {
+        var guidHex = id.Guid.ToString("N").ToUpperInvariant();
+        var need = $"{guidHex} age {id.Age}";
+        if (res.RejectedLooseCandidates.Count > 0)
+        {
+            var bad = res.RejectedLooseCandidates[0];
+            var info = WppSymbols.MsfPdbInfo.TryRead(bad, out _);
+            var detail = info != null
+                ? $"found {id.PdbFileName} but it's a different build " +
+                  $"(has {info.Value.guid.ToString("N").ToUpperInvariant()} age {info.Value.age}, need {need})"
+                : $"found {id.PdbFileName} but its version couldn't be verified (need {need})";
+            return new SymbolOutcome
+            {
+                Status = SymbolStatus.WrongVersion,
+                Binary = Path.GetFileName(binary),
+                PdbName = id.PdbFileName,
+                Guid = guidHex,
+                Age = id.Age,
+                Detail = detail,
+            };
+        }
+        return new SymbolOutcome
+        {
+            Status = SymbolStatus.NotFound,
+            Binary = Path.GetFileName(binary),
+            PdbName = id.PdbFileName,
+            Guid = guidHex,
+            Age = id.Age,
+            Detail = $"not found in the symbol source or symbol path (need {need})",
+        };
+    }
+
+    private static List<string> SplitFolders(string sourceFolders) =>
+        (sourceFolders ?? "")
+            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+
+    /// <summary>A fetcher that never touches the network, so <see cref="Diagnose"/>'s HTTP store
+    /// probes miss instantly — a diagnosis can't block on a slow/absent symbol server.</summary>
+    private sealed class NullFetcher : WppSymbols.ISymbolFetcher
+    {
+        public byte[] TryGet(string url, out string error) { error = "network skipped (local diagnosis)"; return null; }
     }
 
     private static IEnumerable<string> SafeEnumerate(string folder, string pattern, bool recurse = false)
@@ -225,6 +466,95 @@ public static class WppSymbolResolver
         catch (Exception ex)
         {
             log.AppendLine($"tracepdb failed for [{args}]: {ex.Message}");
+        }
+    }
+}
+
+/// <summary>What happened to one binary/PDB during a Build or Diagnose pass — the structured form of
+/// the resolver's per-line log, so the UI can show a readable status list instead of a raw dump.</summary>
+public enum SymbolStatus
+{
+    Resolved,      // PDB found (GUID+age) and a TMF was extracted
+    NoTmf,         // PDB matched but carries no WPP data (public/stripped, or a non-WPP binary)
+    FoundLocal,    // (diagnose-only) PDB present locally but not yet extracted
+    WrongVersion,  // a PDB by the right name was present but is a different build
+    NotFound,      // the needed PDB wasn't found anywhere searched
+}
+
+/// <summary>One binary/PDB's result from <see cref="WppSymbolResolver.BuildTmfs"/> or
+/// <see cref="WppSymbolResolver.Diagnose"/>.</summary>
+public sealed class SymbolOutcome
+{
+    public SymbolStatus Status { get; init; }
+    public string Binary { get; init; }        // producing binary's file name (null for a bare loose PDB)
+    public string PdbName { get; init; }        // e.g. wppcat.pdb
+    public string Guid { get; init; }           // needed PDB GUID (32 hex), when known
+    public int Age { get; init; }               // needed age, when known
+    public string Detail { get; init; }         // one human line (what was found / where we looked)
+    public string ResolvedPath { get; init; }   // for Resolved / NoTmf / FoundLocal
+
+    /// <summary>True for the states the user needs to act on (missing / wrong / no-data).</summary>
+    public bool IsProblem => Status is SymbolStatus.WrongVersion or SymbolStatus.NotFound or SymbolStatus.NoTmf;
+
+    /// <summary>Leading status glyph for the UI list.</summary>
+    public string Glyph => Status switch
+    {
+        SymbolStatus.Resolved or SymbolStatus.FoundLocal => "✓", // ✓
+        SymbolStatus.NoTmf => "⚠",                                // ⚠
+        _ => "✗",                                                 // ✗
+    };
+
+    /// <summary>One-line label for the status list.</summary>
+    public string Headline
+    {
+        get
+        {
+            var who = Binary ?? PdbName ?? "(unknown)";
+            return Status switch
+            {
+                SymbolStatus.Resolved     => $"{who} — TMF extracted",
+                SymbolStatus.FoundLocal   => $"{who} — PDB found ({PdbName}); Build TMFs to extract",
+                SymbolStatus.NoTmf        => $"{who} — PDB matched but no WPP data (public/stripped; needs the private PDB)",
+                SymbolStatus.WrongVersion => $"{who} — WRONG PDB: {Detail}",
+                SymbolStatus.NotFound     => $"{who} — {PdbName} {Guid} age {Age} not found",
+                _ => who,
+            };
+        }
+    }
+}
+
+/// <summary>Result of <see cref="WppSymbolResolver.BuildTmfs"/>: the cache count, the full resolver
+/// log, and the per-binary outcomes. Deconstructs to the old <c>(tmfCount, log)</c> tuple so existing
+/// callers keep working.</summary>
+public sealed class BuildTmfsResult
+{
+    public int TmfCount { get; init; }
+    public string Log { get; init; } = "";
+    public IReadOnlyList<SymbolOutcome> Outcomes { get; init; } = System.Array.Empty<SymbolOutcome>();
+
+    /// <summary>Back-compat with the old (tmfCount, log) tuple: <c>var (count, log) = BuildTmfs(...)</c>.</summary>
+    public void Deconstruct(out int tmfCount, out string log) { tmfCount = TmfCount; log = Log; }
+
+    /// <summary>Compact one-line roll-up for the Settings status text.</summary>
+    public string Summary
+    {
+        get
+        {
+            int resolved = 0, wrong = 0, missing = 0, notmf = 0;
+            foreach (var o in Outcomes)
+                switch (o.Status)
+                {
+                    case SymbolStatus.Resolved: case SymbolStatus.FoundLocal: resolved++; break;
+                    case SymbolStatus.WrongVersion: wrong++; break;
+                    case SymbolStatus.NotFound: missing++; break;
+                    case SymbolStatus.NoTmf: notmf++; break;
+                }
+            var parts = new List<string> { $"{TmfCount} TMF(s) in cache" };
+            if (resolved > 0) parts.Add($"{resolved} resolved");
+            if (notmf > 0) parts.Add($"{notmf} no-WPP-data");
+            if (wrong > 0) parts.Add($"{wrong} wrong version");
+            if (missing > 0) parts.Add($"{missing} missing");
+            return string.Join(" · ", parts);
         }
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using FindNeedleUX.Services;
 using FindNeedleUX.Services.WppSymbols;
+using FindNeedlePluginLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FindNeedleUXTests.WppSymbols;
@@ -72,6 +73,61 @@ public class BuildTmfsOrchestrationTests
             "the stale loose PDB must NEVER reach tracepdb");
         StringAssert.Contains(log, "STALE", "rejection must be loud in the log");
         StringAssert.Contains(log, "skip (stale", "the loose sweep must skip the rejected file");
+    }
+
+    [TestMethod]
+    public void UnresolvedBinary_SymbolResolverPlugin_ProvidesPdb_ThatGetsExtracted()
+    {
+        // A binary with no PDB in any built-in location (no loose PDB, empty symbol path) → the built-in
+        // lookup misses → a registered ISymbolResolver plugin supplies the matching PDB, which is extracted.
+        var work = NewDir("bin");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "ntdll.dll"), Path.Combine(work, "ntdll.dll"));
+        var id = PdbIdentity.TryReadFromBinary(Path.Combine(work, "ntdll.dll"), out _);
+        Assert.IsNotNull(id);
+
+        // The plugin's PDB lives somewhere the built-in resolver never looks (not a source/symbol folder).
+        var pluginStore = NewDir("plugin-store");
+        var pluginPdb = Path.Combine(pluginStore, id.PdbFileName);
+        TestPdbFactory.WriteMsfPdb(pluginPdb, id.Guid, id.Age); // matching GUID+age
+
+        SymbolLookupRequest seen = null;
+        WppSymbolResolver.ResolversOverride = new ISymbolResolver[]
+        {
+            new FakeSymbolResolver(req => { seen = req; return pluginPdb; }),
+        };
+
+        var (_, log) = WppSymbolResolver.BuildTmfs(work, symbolPath: ""); // empty symbol path → built-in misses
+
+        Assert.IsNotNull(seen, $"the resolver plugin must be consulted on a miss. Log:\n{log}");
+        Assert.AreEqual(id.PdbFileName, seen.PdbFileName, "plugin gets the real PDB name");
+        Assert.AreEqual(id.Guid, seen.Guid, "plugin gets the real GUID");
+        Assert.AreEqual(id.Age, seen.Age, "plugin gets the real age");
+        Assert.AreEqual(id.Key, seen.Key, "plugin gets the same symbol-store key the built-in resolver uses");
+        Assert.AreEqual(1, _tracepdbCalls.Count, $"the plugin-provided PDB should be extracted once. Log:\n{log}");
+        StringAssert.Contains(_tracepdbCalls[0], pluginPdb, "the plugin-returned PDB is what tracepdb extracts");
+        StringAssert.Contains(log, "resolved via plugin", "the plugin resolution must be logged");
+    }
+
+    [TestMethod]
+    public void SymbolResolverPlugin_ReturnsNull_FallsBackToNotFound()
+    {
+        // A plugin that passes (null) must not change the outcome — the binary stays unresolved.
+        var work = NewDir("bin");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "ntdll.dll"), Path.Combine(work, "ntdll.dll"));
+        WppSymbolResolver.ResolversOverride = new ISymbolResolver[] { new FakeSymbolResolver(_ => null) };
+
+        var (_, log) = WppSymbolResolver.BuildTmfs(work, symbolPath: "");
+
+        Assert.AreEqual(0, _tracepdbCalls.Count, "nothing is extracted when every resolver passes");
+        StringAssert.Contains(log, "FAILED to resolve", "the binary stays unresolved");
+    }
+
+    /// <summary>Test double: an ISymbolResolver whose answer is a supplied function.</summary>
+    private sealed class FakeSymbolResolver : ISymbolResolver
+    {
+        private readonly Func<SymbolLookupRequest, string> _fn;
+        public FakeSymbolResolver(Func<SymbolLookupRequest, string> fn) { _fn = fn; }
+        public string TryResolvePdb(SymbolLookupRequest request) => _fn(request);
     }
 
     [TestMethod]

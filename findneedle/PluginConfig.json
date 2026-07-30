@@ -11,7 +11,7 @@
   "PathToFakeLoadPlugin": "FakeLoadPlugin.exe",
   "SearchQueryClass": "NuSearchQuery",
   "UserRegistryPluginKey": "Software\\FindNeedle\\Plugins",
-  "UserRegistryPluginKeyEnabled": false,
+  "UserRegistryPluginKeyEnabled": true,
   "PlantUMLPath": "",
   "_comment": "RuleDSL is the primary configuration system. Standard extension processors are listed here so file types (.txt/.log/.evtx/.etl/.zip) get parsed into search results."
 }

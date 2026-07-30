@@ -490,6 +490,17 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     var etlline = new ETLLogLine(line, inputfile);
                     etlline.PreLoad(); // was a separate LoadInMemory pass — do it inline so streamed rows are ready
                     if (etlline.tasktxt == "Badly formatted event") _badlyFormattedCount++;
+                    // ----- Triage scope filter (WPP / tracefmt path) -----
+                    // Mirror DecodeWithTraceEvent (:634): drop out-of-scope lines BEFORE the wrap + storage
+                    // ingest + FTS, so a "load only these providers / this time window" scope skips most of a
+                    // huge WPP capture instead of ingesting all of it. Provider = parsed Source; timestamp is
+                    // null for an un-timestamped line (kept); level not applied at decode (matches modern -1).
+                    if (DecodeScope.Current is { } scope)
+                    {
+                        var t = etlline.GetLogTime();
+                        DateTime? tsUtc = t == DateTime.MinValue ? (DateTime?)null : t.ToUniversalTime();
+                        if (!scope.Keep(etlline.GetSource(), tsUtc, -1)) continue;
+                    }
                     if (providers.ContainsKey(etlline.GetSource()))
                     {
                         providers[etlline.GetSource()]++;

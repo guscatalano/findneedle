@@ -138,15 +138,21 @@
                      Severity="Warning" Margin="12,8,12,0">
                 <InfoBar.Content>
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
-                        <Button x:Name="DecodeBannerSettings" Content="Open WPP symbol settings"
-                                Click="DecodeBannerAction_Click"/>
+                        <Button x:Name="DecodeBannerSettings" Content="Resolve symbols…" Style="{StaticResource AccentButtonStyle}"
+                                Click="DecodeBannerAction_Click"
+                                ToolTipService.ToolTip="Open the WPP symbol-resolution page: point at your symbols, see per-binary status, and fix them"/>
                         <Button x:Name="DecodeBannerForce" Content="Decode anyway" Click="DecodeAnyway_Click"
-                                ToolTipService.ToolTip="Decode whatever can be read, even if most events are unformatted garbage"/>
-                        <Button x:Name="DecodeBannerCopy" Content="Copy" Click="DecodeBannerCopy_Click"
-                                ToolTipService.ToolTip="Copy the missing TMF GUIDs and error detail to clipboard"/>
-                        <Button x:Name="DecodeBannerResolve" Content="Symbol details" Click="DecodeBannerResolve_Click"
-                                Visibility="Collapsed"
-                                ToolTipService.ToolTip="Open the symbol-resolution log: which search paths were tried, what resolved, and which TMFs are missing"/>
+                                ToolTipService.ToolTip="Decode whatever can be read, even if most events are unformatted"/>
+                        <Button x:Name="DecodeBannerMore" Content="⋯" AutomationProperties.Name="More decode actions"
+                                ToolTipService.ToolTip="More actions">
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="Copy missing symbol GUIDs" Click="DecodeBannerCopy_Click"/>
+                                    <MenuFlyoutItem x:Name="DecodeBannerResolveItem" Text="Open resolution log"
+                                                    Click="DecodeBannerResolve_Click" Visibility="Collapsed"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
                     </StackPanel>
                 </InfoBar.Content>
             </InfoBar>
@@ -251,6 +257,13 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                <!-- Optional viewer extras, grouped under the column toggles. The time
+                                     strip is off-by-a-click here so users who misclick its bars can hide it. -->
+                                <MenuFlyoutSeparator Margin="0,2"/>
+                                <TextBlock Text="Show" FontWeight="SemiBold" FontSize="13"/>
+                                <CheckBox x:Name="TimeStripColumnCheck" Content="Time strip (activity over time)"
+                                          Checked="TimeStripColumnCheck_Changed" Unchecked="TimeStripColumnCheck_Changed"
+                                          Margin="0,2,0,2"/>
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>
@@ -310,8 +323,6 @@
                                 <RadioMenuFlyoutItem x:Name="DockTopItem"  Text="Filters on top"  GroupName="filterDock" Click="FilterDockTop_Click"/>
                                 <RadioMenuFlyoutItem x:Name="DockLeftItem" Text="Filters on left" GroupName="filterDock" Click="FilterDockLeft_Click"/>
                             </MenuFlyoutSubItem>
-                            <MenuFlyoutSeparator/>
-                            <ToggleMenuFlyoutItem x:Name="TimeStripToggle" Text="Time strip (activity over time)" Click="TimeStripToggle_Click"/>
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>

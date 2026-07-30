@@ -108,6 +108,44 @@ public class StorageTests
         public string GetResultSource() => "RS";
     }
 
+    /// <summary>A dummy with settable ActivityId + RelatedActivityId, for the "follow this activity" query.</summary>
+    private sealed class CorrelatedResult : ISearchResult
+    {
+        private readonly string _activityId, _relatedActivityId;
+        public CorrelatedResult(string activityId, string relatedActivityId) { _activityId = activityId; _relatedActivityId = relatedActivityId; }
+        public DateTime GetLogTime() => DummySearchResult.FixedTime;
+        public string GetMachineName() => "M";
+        public void WriteToConsole() { }
+        public Level GetLevel() => Level.Info;
+        public string GetUsername() => "U";
+        public string GetTaskName() => "T";
+        public string GetOpCode() => "O";
+        public string GetSource() => "S";
+        public string GetSearchableData() => "D";
+        public string GetMessage() => "Msg";
+        public string GetResultSource() => "RS";
+        public string GetActivityId() => _activityId;
+        public string GetRelatedActivityId() => _relatedActivityId;
+    }
+
+    /// <summary>A dummy with settable Message + SearchableData, for the SearchableData-blanking test.</summary>
+    private sealed class SearchableResult : ISearchResult
+    {
+        private readonly string _msg, _sd;
+        public SearchableResult(string msg, string sd) { _msg = msg; _sd = sd; }
+        public DateTime GetLogTime() => DummySearchResult.FixedTime;
+        public string GetMachineName() => "M";
+        public void WriteToConsole() { }
+        public Level GetLevel() => Level.Info;
+        public string GetUsername() => "U";
+        public string GetTaskName() => "T";
+        public string GetOpCode() => "O";
+        public string GetSource() => "S";
+        public string GetSearchableData() => _sd;
+        public string GetMessage() => _msg;
+        public string GetResultSource() => "RS";
+    }
+
     private (string searchedFile, string dbPath) CreateUniqueSearchFile()
     {
         var searchedFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -228,6 +266,44 @@ public class StorageTests
         Assert.AreEqual(3, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("message ~ failed OR message ~ found") }));
     }
 
+    /// <summary>
+    /// Backs the viewer's "Follow this activity" action: the query DSL can filter by ActivityId and (new)
+    /// RelatedActivityId, so <c>activityid == X OR relatedactivityid == X</c> selects the activity's own
+    /// events PLUS the child activities that carry it as their parent — the one-hop causal sequence.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_FollowActivity_QueryMatchesActivityAndRelated()
+    {
+        var (searchedFile, _) = CreateUniqueSearchFile();
+        using var storage = new SqliteStorage(searchedFile);
+        storage.ClearTables();
+        storage.AddFilteredBatch(new List<ISearchResult>
+        {
+            new CorrelatedResult("AAA", ""),      // in activity AAA
+            new CorrelatedResult("AAA", ""),      // in activity AAA
+            new CorrelatedResult("BBB", "AAA"),   // child of AAA (start event carries AAA as related)
+            new CorrelatedResult("CCC", "ZZZ"),   // unrelated
+        });
+
+        FindPluginCore.Searching.Query.QueryNode Q(string s)
+        {
+            Assert.IsTrue(FindPluginCore.Searching.Query.LogQuery.TryParse(s, out var n, out var e), $"parse: {e}");
+            return n;
+        }
+
+        // The DSL now maps relatedactivityid (and its aliases) to the RelatedActivityId column.
+        Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("relatedactivityid == \"AAA\"") }));
+        Assert.AreEqual(1, storage.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("raid == \"AAA\"") }), "alias raid");
+        // The "follow this activity" query: activity's own events + its children = 3 of 4 rows
+        // (the unrelated CCC/ZZZ row is excluded).
+        Assert.AreEqual(3, storage.GetFilteredCount(
+            new SqliteStorage.FilterInput { Query = Q("activityid == \"AAA\" OR relatedactivityid == \"AAA\"") }));
+        // Following a different activity that nothing references matches only its own event.
+        Assert.AreEqual(1, storage.GetFilteredCount(
+            new SqliteStorage.FilterInput { Query = Q("activityid == \"CCC\" OR relatedactivityid == \"CCC\"") }));
+    }
+
     [TestMethod]
     [TestCategory("Storage")]
     public void Sqlite_ProviderSet_FiltersAsExactOrSet()
@@ -260,6 +336,163 @@ public class StorageTests
             new SqliteStorage.SortInput(), 0, 100);
         Assert.AreEqual(4, page.Count);
         Assert.IsTrue(page.All(r => r.GetSource() == "Beta" || r.GetSource() == "Gamma"));
+    }
+
+    /// <summary>
+    /// FastBulkIngest (defer secondary indexes + no AUTOINCREMENT) must be a pure performance change:
+    /// with the flag ON vs OFF the stored data and every query answer are identical — same total, same
+    /// filtered counts (Level / ProviderSet / FTS search), and the same rows in the same default order.
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_FastBulkIngest_ParityAcrossFlag()
+    {
+        List<ISearchResult> MakeRows() => new()
+        {
+            new LeveledResult(Level.Error), new LeveledResult(Level.Error), new LeveledResult(Level.Warning),
+            new ProvResult("Alpha"), new ProvResult("Gamma"),
+            new DummySearchResult("connection failed - timeout"),
+            new DummySearchResult("file not found"),
+            new DummySearchResult("authentication failed"),
+        };
+
+        (int total, int errors, int alphaGamma, int failed, string order) Snapshot(bool fast)
+        {
+            bool prior = SqliteStorage.FastBulkIngest;
+            SqliteStorage.FastBulkIngest = fast;
+            try
+            {
+                var (searchedFile, _) = CreateUniqueSearchFile();
+                using var s = new SqliteStorage(searchedFile);
+                s.ClearTables();
+                s.AddFilteredBatch(MakeRows());
+                s.BuildSearchIndex(); // where FastBulkIngest builds the deferred secondary indexes
+                var page = s.GetFilteredPage(new SqliteStorage.FilterInput(), new SqliteStorage.SortInput(), 0, 100);
+                return (
+                    s.GetStatistics().filteredRecordCount,
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { LevelInt = (int)Level.Error }),
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { ProviderSet = new[] { "Alpha", "Gamma" } }),
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Search = "failed" }),
+                    string.Join("|", page.Select(r => (int)r.GetLevel() + ":" + r.GetSource() + ":" + r.GetMessage())));
+            }
+            finally { SqliteStorage.FastBulkIngest = prior; }
+        }
+
+        var legacy = Snapshot(false);
+        var fast = Snapshot(true);
+
+        Assert.AreEqual(8, fast.total, "sanity: all rows stored");
+        Assert.AreEqual(legacy.total, fast.total, "row count parity");
+        Assert.AreEqual(legacy.errors, fast.errors, "Level filter parity (IX_Level deferred)");
+        Assert.AreEqual(legacy.alphaGamma, fast.alphaGamma, "ProviderSet filter parity (IX_Source deferred)");
+        Assert.AreEqual(legacy.failed, fast.failed, "FTS search parity");
+        Assert.AreEqual(legacy.order, fast.order, "same rows in same default (Id) order — no AUTOINCREMENT divergence");
+        // Sanity on the fixture: 2 LeveledResult(Error) + 3 DummySearchResult (also Level.Error) = 5 errors;
+        // Alpha+Gamma = 2; "failed" appears in 2 of the 3 messages ("file not found" excluded).
+        Assert.AreEqual(5, fast.errors);
+        Assert.AreEqual(2, fast.alphaGamma);
+        Assert.AreEqual(2, fast.failed);
+    }
+
+    /// <summary>
+    /// The narrow-insert optimization (plain rows use a 10-column insert, rows with extended ETW fields use
+    /// the 21-column one) must be lossless: flag ON vs OFF give identical row counts, extended-field values,
+    /// and structured-query results — and a plain row's omitted extended columns read back as "".
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_NarrowInsert_ParityWithWide()
+    {
+        List<ISearchResult> Rows() => new()
+        {
+            new DummySearchResult(message: "plain one"),   // no extended → narrow
+            new CorrelatedResult("AAA", ""),               // ActivityId set → wide
+            new DummySearchResult(message: "plain two"),   // narrow
+        };
+
+        FindPluginCore.Searching.Query.QueryNode Q(string s)
+        {
+            Assert.IsTrue(FindPluginCore.Searching.Query.LogQuery.TryParse(s, out var n, out var e), $"parse: {e}");
+            return n;
+        }
+
+        (int total, int aaa, string acts) Snapshot(bool narrow)
+        {
+            bool prior = SqliteStorage.UseNarrowInsertForPlainRows;
+            SqliteStorage.UseNarrowInsertForPlainRows = narrow;
+            try
+            {
+                var (searchedFile, _) = CreateUniqueSearchFile();
+                using var s = new SqliteStorage(searchedFile);
+                s.ClearTables();
+                s.AddFilteredBatch(Rows());
+                s.BuildSearchIndex();
+                var page = s.GetFilteredPage(new SqliteStorage.FilterInput(), new SqliteStorage.SortInput(), 0, 100);
+                return (
+                    s.GetStatistics().filteredRecordCount,
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Query = Q("activityid == \"AAA\"") }),
+                    string.Join("|", page.Select(r => r.GetActivityId())));
+            }
+            finally { SqliteStorage.UseNarrowInsertForPlainRows = prior; }
+        }
+
+        var wide = Snapshot(false);
+        var narrow = Snapshot(true);
+
+        Assert.AreEqual(3, narrow.total);
+        Assert.AreEqual(wide.total, narrow.total, "row-count parity");
+        Assert.AreEqual(1, narrow.aaa);
+        Assert.AreEqual(wide.aaa, narrow.aaa, "activityid query finds the wide (extended) row under either mode");
+        Assert.AreEqual("|AAA|", narrow.acts, "plain rows read back empty ActivityId; the wide row keeps AAA");
+        Assert.AreEqual(wide.acts, narrow.acts, "extended-field parity");
+    }
+
+    /// <summary>
+    /// BlankRedundantSearchableData (store NULL when SearchableData == Message) must be lossless: with the
+    /// flag ON vs OFF the reconstructed SearchableData and global-search results are identical, a superset
+    /// SearchableData is preserved, and a genuinely-empty one stays empty (not reconstructed to Message).
+    /// </summary>
+    [TestMethod]
+    [TestCategory("Storage")]
+    public void Sqlite_BlankSearchableData_ParityAndReconstruct()
+    {
+        List<ISearchResult> Rows() => new()
+        {
+            new SearchableResult("alpha bravo", "alpha bravo"),        // duplicate → stored NULL, reconstructs
+            new SearchableResult("charlie", "charlie delta echo"),     // superset → stored as-is
+            new SearchableResult("foxtrot", ""),                       // genuinely empty → stays ""
+        };
+
+        (string sds, int bravo, int delta) Snapshot(bool blank)
+        {
+            bool prior = SqliteStorage.BlankRedundantSearchableData;
+            SqliteStorage.BlankRedundantSearchableData = blank;
+            try
+            {
+                var (searchedFile, _) = CreateUniqueSearchFile();
+                using var s = new SqliteStorage(searchedFile);
+                s.ClearTables();
+                s.AddFilteredBatch(Rows());
+                s.BuildSearchIndex();
+                var page = s.GetFilteredPage(new SqliteStorage.FilterInput(), new SqliteStorage.SortInput(), 0, 100);
+                return (
+                    string.Join("|", page.Select(r => r.GetSearchableData())),
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Search = "bravo" }),  // in row 1
+                    s.GetFilteredCount(new SqliteStorage.FilterInput { Search = "delta" })); // only in row 2's SearchableData
+            }
+            finally { SqliteStorage.BlankRedundantSearchableData = prior; }
+        }
+
+        var off = Snapshot(false);
+        var on = Snapshot(true);
+
+        Assert.AreEqual(off.sds, on.sds, "reconstructed SearchableData identical to the un-blanked storage");
+        Assert.AreEqual("alpha bravo|charlie delta echo|", on.sds,
+            "dup reconstructed to Message, superset preserved, genuinely-empty stays empty");
+        Assert.AreEqual(off.bravo, on.bravo, "search parity (term in a blanked row)");
+        Assert.AreEqual(1, on.bravo);
+        Assert.AreEqual(off.delta, on.delta, "search parity (term only in a preserved superset SearchableData)");
+        Assert.AreEqual(1, on.delta);
     }
 
     // Backs the fast "known value" filter dropdowns (GetFieldCounts) — an exact GROUP BY per field

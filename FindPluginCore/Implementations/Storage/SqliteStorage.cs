@@ -64,8 +64,13 @@ namespace FindPluginCore.Implementations.Storage
         // old v6 caches (which indexed timestamps) rebuild under the toggle-aware schema rather than
         // being reused with a mismatched setting. v8: Source/ResultSource are excluded from the FTS when
         // the load has a single distinct value (constant path = repetitive trigrams, no search value);
-        // bumped so old caches rebuild with the new triggers. Old caches rescan; EnsureColumns migrates.
-        public const int CacheSchemaVersion = 8;
+        // bumped so old caches rebuild with the new triggers. v9: FastBulkIngest — Id is a plain
+        // INTEGER PRIMARY KEY (no AUTOINCREMENT) and the FilteredResults secondary indexes are built after
+        // ingest, not up front; bumped so an old v8 cache (AUTOINCREMENT + eager indexes) rebuilds rather
+        // than being reused. v10: BlankRedundantSearchableData stores NULL for a SearchableData that dups
+        // Message; new code reconstructs it, but a pre-v10 build would throw on the NULL — bumped so an old
+        // build rebuilds rather than reuse+crash. Old caches rescan; EnsureColumns migrates.
+        public const int CacheSchemaVersion = 10;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -227,14 +232,17 @@ namespace FindPluginCore.Implementations.Storage
 
         private void InitializeSchema()
         {
+            // FastBulkIngest: plain INTEGER PRIMARY KEY (rowid alias) so inserts skip the per-row
+            // sqlite_sequence maintenance AUTOINCREMENT forces. Auto-Id and explicit-Id both still work.
+            string idCol = FastBulkIngest ? "Id INTEGER PRIMARY KEY" : "Id INTEGER PRIMARY KEY AUTOINCREMENT";
             var cmd = _connection.CreateCommand();
-            cmd.CommandText = @"
+            cmd.CommandText = $@"
                 CREATE TABLE IF NOT EXISTS _meta (
                     Key   TEXT PRIMARY KEY,
                     Value TEXT
                 );
                 CREATE TABLE IF NOT EXISTS RawResults (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    {idCol},
                     LogTime TEXT,
                     MachineName TEXT,
                     Level INTEGER,
@@ -258,7 +266,7 @@ namespace FindPluginCore.Implementations.Storage
                     StructuredData TEXT
                 );
                 CREATE TABLE IF NOT EXISTS FilteredResults (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    {idCol},
                     LogTime TEXT,
                     MachineName TEXT,
                     Level INTEGER,
@@ -281,12 +289,15 @@ namespace FindPluginCore.Implementations.Storage
                     ProcessName TEXT,
                     StructuredData TEXT
                 );
-                -- Indexes for the result viewer's most common filter/sort columns.
-                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Level    ON FilteredResults(Level);
-                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Source   ON FilteredResults(Source);
-                CREATE INDEX IF NOT EXISTS IX_FilteredResults_LogTime  ON FilteredResults(LogTime);
             ";
             cmd.ExecuteNonQuery();
+
+            // The FilteredResults secondary indexes (viewer filter/sort columns). With FastBulkIngest they
+            // are deferred to EnsureSecondaryIndexes() at index-build time — building them per-row during
+            // ingest makes every insert maintain four B-trees. With the flag off, create them eagerly here
+            // (original behavior, so a live streaming viewer has them from the first row).
+            if (!FastBulkIngest)
+                EnsureSecondaryIndexes();
 
             // Migrate older cache DBs in place: CREATE TABLE IF NOT EXISTS leaves a pre-existing table's
             // columns untouched, so a warm cache from before a column was added is missing it and inserts
@@ -317,6 +328,24 @@ namespace FindPluginCore.Implementations.Storage
                 a.CommandText = $"ALTER TABLE {table} ADD COLUMN {col} TEXT;";
                 a.ExecuteNonQuery();
             }
+        }
+
+        /// <summary>
+        /// Create the FilteredResults secondary indexes (Level / Source / LogTime) the result viewer's
+        /// filter and sort use. Idempotent (CREATE INDEX IF NOT EXISTS): under FastBulkIngest this runs
+        /// once after ingest (from <see cref="BuildSearchIndex"/>) as a single sorted bulk build — far
+        /// cheaper than maintaining three B-trees per inserted row; with the flag off the indexes already
+        /// exist (created in <see cref="InitializeSchema"/>) so this is a no-op. Held under _sync by the
+        /// caller when a concurrent reader is possible.
+        /// </summary>
+        private void EnsureSecondaryIndexes()
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = @"
+                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Level    ON FilteredResults(Level);
+                CREATE INDEX IF NOT EXISTS IX_FilteredResults_Source   ON FilteredResults(Source);
+                CREATE INDEX IF NOT EXISTS IX_FilteredResults_LogTime  ON FilteredResults(LogTime);";
+            cmd.ExecuteNonQuery();
         }
 
         /// <summary>
@@ -353,6 +382,48 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         public static bool IndexLogTimeInFts { get; set; } =
             !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_FTS_INDEX_LOGTIME"));
+
+        /// <summary>
+        /// Fast bulk-ingest optimizations (default ON). Two changes that shrink per-row insert cost, both
+        /// measured via the PerfBench engine ingest metric:
+        ///  • The three secondary indexes on FilteredResults (Level / Source / LogTime) are NOT created
+        ///    up front, so each row's <c>sqlite3_step</c> maintains only the table B-tree instead of four.
+        ///    They are built once, in a single sorted bulk pass, at index-build time
+        ///    (<see cref="EnsureSecondaryIndexes"/>, invoked from <see cref="BuildSearchIndex"/>) — the same
+        ///    "after all rows are in" point the FTS index already uses.
+        ///  • The Id columns are a plain <c>INTEGER PRIMARY KEY</c> (rowid alias) instead of
+        ///    <c>AUTOINCREMENT</c>, so inserts skip the per-row <c>sqlite_sequence</c> read/update. Auto-Id
+        ///    assignment and the fan-out's explicit-Id path both still work.
+        /// Turn OFF (app can set it, or FINDNEEDLE_FAST_INGEST=0/false/off) to restore the eager-index +
+        /// AUTOINCREMENT behavior for A/B measurement or troubleshooting. Only affects freshly created cache
+        /// DBs (an existing warm cache keeps whatever schema it was built with).
+        /// </summary>
+        public static bool FastBulkIngest { get; set; } =
+            !IsEnvFalse(Environment.GetEnvironmentVariable("FINDNEEDLE_FAST_INGEST"));
+
+        /// <summary>
+        /// Default ON. At ingest, when a row's SearchableData equals its Message (the common case), store
+        /// NULL for SearchableData instead of a duplicate copy — otherwise the largest text column is bound +
+        /// stored twice per row. On realistic ~200-char lines this measured ~12% faster ingest and ~40%
+        /// smaller cache DB (256→147 MB / 500k rows); the win scales with message length. Read is
+        /// reconstructed unconditionally (a NULL SearchableData reads back as Message), and a genuinely-empty
+        /// SearchableData is stored as "" (not NULL), so it's lossless. The FTS index already blanks the same
+        /// duplicate (schema v6); this extends it to the base-table insert. Disable via
+        /// FINDNEEDLE_BLANK_SEARCHABLE=0/false/off.
+        /// </summary>
+        public static bool BlankRedundantSearchableData { get; set; } =
+            !IsEnvFalse(Environment.GetEnvironmentVariable("FINDNEEDLE_BLANK_SEARCHABLE"));
+
+        /// <summary>
+        /// Default ON. When a row has no extended ETW/EventLog fields (the case for plain-text / CSV / JSON
+        /// logs), insert it via a 10-column statement instead of 21 — the per-row parameter-bind machinery is
+        /// a large share of ingest, so this measured <b>~43% faster ingest on 1M plain-text rows</b>. Rows
+        /// that DO carry extended fields still take the 21-column insert, so it's lossless; a plain row's
+        /// omitted extended columns default to NULL and read back as "" (readers already guard with IsDBNull,
+        /// so no cache-schema bump). Disable via FINDNEEDLE_NARROW_INSERT=0/false/off.
+        /// </summary>
+        public static bool UseNarrowInsertForPlainRows { get; set; } =
+            !IsEnvFalse(Environment.GetEnvironmentVariable("FINDNEEDLE_NARROW_INSERT"));
 
         /// <summary>
         /// When the filtered row count is at least this, the FTS index is built as N parallel shards
@@ -528,6 +599,12 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         public void BuildSearchIndex(CancellationToken cancellationToken = default, Action<long, long> onProgress = null)
         {
+            // FastBulkIngest defers the FilteredResults secondary indexes to here (one sorted bulk build
+            // instead of per-row B-tree maintenance during ingest). Runs BEFORE the FTS-availability guard
+            // so the viewer's filter/sort indexes exist even when FTS is disabled/unavailable. No-op when
+            // the flag is off (they were created in InitializeSchema).
+            lock (_sync) { EnsureSecondaryIndexes(); }
+
             if (!_ftsAvailable) { _ftsIndexBuilt = false; return; }
 
             // Large logs: build the index as parallel shards (the trigram build is the dominant
@@ -1312,10 +1389,13 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         /// <summary>
-        /// Bulk-insert path used by both AddRawBatch and AddFilteredBatch. Accumulates rows up to
-        /// <see cref="InsertChunkRows"/>, flushes via a single multi-row <c>INSERT … VALUES (…),(…)</c>
-        /// statement, then drains any tail through the single-row prepared command. Both commands
-        /// are constructed and prepared exactly once per call.
+        /// Bulk-insert path used by both AddRawBatch and AddFilteredBatch. Inserts rows one at a time
+        /// through a single prepared <c>INSERT … VALUES (…)</c> command that is constructed and prepared
+        /// exactly once per call, then reused for every row by mutating its cached parameter values (see
+        /// <see cref="CreatePreparedInsert"/> / <see cref="InsertParams"/>). This single-row-reused path
+        /// benchmarks ~28× faster than a 500-row multi-VALUES statement under Microsoft.Data.Sqlite,
+        /// whose per-parameter bind cost dominates a wide multi-row chunk (see SqliteInsertBenchmark).
+        /// <see cref="InsertChunkRows"/> is only the progress-callback cadence, not a SQL batch size.
         /// </summary>
         private void BulkInsert(
             string table,
@@ -1339,18 +1419,32 @@ namespace FindPluginCore.Implementations.Storage
             // its GLOBAL scan position, so the merged DB's default ORDER BY Id ASC = true scan order.
             bool trackLevels = string.Equals(table, "FilteredResults", StringComparison.Ordinal);
             bool withId = baseId.HasValue;
-            using var cmd = CreatePreparedInsert(table, tx, out var p, withId);
-            foreach (var result in batch)
+            bool useNarrow = UseNarrowInsertForPlainRows;
+
+            // Wide command (all 21 columns) is always available; the narrow (10-column) one is only prepared
+            // when the optimization is on and is used per-row for rows with no extended ETW/EventLog fields.
+            using var wideCmd = CreatePreparedInsert(table, tx, out var wideP, withId, narrow: false);
+            SqliteCommand narrowCmd = null;
+            InsertParams narrowP = default;
+            if (useNarrow) narrowCmd = CreatePreparedInsert(table, tx, out narrowP, withId, narrow: true);
+            try
             {
-                if (cancellationToken.IsCancellationRequested) break;
-                if (withId) p.Id.Value = baseId.Value + inserted;
-                BindAndExecute(cmd, p, result);
-                if (trackLevels) BumpLevelCount(p.Level.Value);
-                inserted++;
-                // Fire progress mid-transaction so the caller can update status text. The lock is
-                // still held; subscribers must not call back into storage (the contract is: count only).
-                if (inserted % InsertChunkRows == 0) onProgress?.Invoke(inserted);
+                foreach (var result in batch)
+                {
+                    if (cancellationToken.IsCancellationRequested) break;
+                    bool wide = !useNarrow || HasExtended(result);
+                    var cmd = wide ? wideCmd : narrowCmd;
+                    var p = wide ? wideP : narrowP;
+                    if (withId) p.Id.Value = baseId.Value + inserted;
+                    BindAndExecute(cmd, p, result);
+                    if (trackLevels) BumpLevelCount(p.Level.Value);
+                    inserted++;
+                    // Fire progress mid-transaction so the caller can update status text. The lock is
+                    // still held; subscribers must not call back into storage (the contract is: count only).
+                    if (inserted % InsertChunkRows == 0) onProgress?.Invoke(inserted);
+                }
             }
+            finally { narrowCmd?.Dispose(); }
             if (inserted % InsertChunkRows != 0) onProgress?.Invoke(inserted);
         }
 
@@ -1374,7 +1468,13 @@ namespace FindPluginCore.Implementations.Storage
         /// it across all rows in one batch by mutating the returned <see cref="InsertParams"/>
         /// values and calling <c>ExecuteNonQuery</c> per row.
         /// </summary>
-        private SqliteCommand CreatePreparedInsert(string table, SqliteTransaction tx, out InsertParams p, bool withId = false)
+        // The 11 ETW/EventLog "extended" columns — empty for plain-text logs. A narrow insert omits them,
+        // so a plain-text row binds 10 params instead of 21 (the per-param bind machinery was ~14.5% of the
+        // ingest+index workload in a CPU profile). Omitted columns default to NULL and read back as "".
+        private const string ExtendedCols = "ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData";
+        private const string ExtendedVals = "@ProcessId, @ThreadId, @ActivityId, @EventId, @Keywords, @RelatedActivityId, @Channel, @ProviderGuid, @RecordId, @ProcessName, @StructuredData";
+
+        private SqliteCommand CreatePreparedInsert(string table, SqliteTransaction tx, out InsertParams p, bool withId = false, bool narrow = false)
         {
             var cmd = _connection.CreateCommand();
             cmd.Transaction = tx;
@@ -1383,8 +1483,8 @@ namespace FindPluginCore.Implementations.Storage
             string idVal = withId ? "@Id, " : "";
             cmd.CommandText = $@"
                 INSERT INTO {table}
-                ({idCol}LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData)
-                VALUES ({idVal}@LogTime, @MachineName, @Level, @Username, @TaskName, @OpCode, @Source, @SearchableData, @Message, @ResultSource, @ProcessId, @ThreadId, @ActivityId, @EventId, @Keywords, @RelatedActivityId, @Channel, @ProviderGuid, @RecordId, @ProcessName, @StructuredData)";
+                ({idCol}LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource{(narrow ? "" : ", " + ExtendedCols)})
+                VALUES ({idVal}@LogTime, @MachineName, @Level, @Username, @TaskName, @OpCode, @Source, @SearchableData, @Message, @ResultSource{(narrow ? "" : ", " + ExtendedVals)})";
 
             p = new InsertParams
             {
@@ -1398,18 +1498,21 @@ namespace FindPluginCore.Implementations.Storage
                 SearchableData = cmd.Parameters.Add("@SearchableData", SqliteType.Text),
                 Message        = cmd.Parameters.Add("@Message",        SqliteType.Text),
                 ResultSource   = cmd.Parameters.Add("@ResultSource",   SqliteType.Text),
-                ProcessId      = cmd.Parameters.Add("@ProcessId",      SqliteType.Text),
-                ThreadId       = cmd.Parameters.Add("@ThreadId",       SqliteType.Text),
-                ActivityId     = cmd.Parameters.Add("@ActivityId",     SqliteType.Text),
-                EventId           = cmd.Parameters.Add("@EventId",           SqliteType.Text),
-                Keywords          = cmd.Parameters.Add("@Keywords",          SqliteType.Text),
-                RelatedActivityId = cmd.Parameters.Add("@RelatedActivityId", SqliteType.Text),
-                Channel           = cmd.Parameters.Add("@Channel",           SqliteType.Text),
-                ProviderGuid      = cmd.Parameters.Add("@ProviderGuid",      SqliteType.Text),
-                RecordId          = cmd.Parameters.Add("@RecordId",          SqliteType.Text),
-                ProcessName       = cmd.Parameters.Add("@ProcessName",       SqliteType.Text),
-                StructuredData    = cmd.Parameters.Add("@StructuredData",    SqliteType.Text),
             };
+            if (!narrow)
+            {
+                p.ProcessId      = cmd.Parameters.Add("@ProcessId",      SqliteType.Text);
+                p.ThreadId       = cmd.Parameters.Add("@ThreadId",       SqliteType.Text);
+                p.ActivityId     = cmd.Parameters.Add("@ActivityId",     SqliteType.Text);
+                p.EventId           = cmd.Parameters.Add("@EventId",           SqliteType.Text);
+                p.Keywords          = cmd.Parameters.Add("@Keywords",          SqliteType.Text);
+                p.RelatedActivityId = cmd.Parameters.Add("@RelatedActivityId", SqliteType.Text);
+                p.Channel           = cmd.Parameters.Add("@Channel",           SqliteType.Text);
+                p.ProviderGuid      = cmd.Parameters.Add("@ProviderGuid",      SqliteType.Text);
+                p.RecordId          = cmd.Parameters.Add("@RecordId",          SqliteType.Text);
+                p.ProcessName       = cmd.Parameters.Add("@ProcessName",       SqliteType.Text);
+                p.StructuredData    = cmd.Parameters.Add("@StructuredData",    SqliteType.Text);
+            }
             if (withId) p.Id = cmd.Parameters.Add("@Id", SqliteType.Integer);
             cmd.Prepare();
             return cmd;
@@ -1424,22 +1527,41 @@ namespace FindPluginCore.Implementations.Storage
             p.TaskName.Value       = r.GetTaskName() ?? "";
             p.OpCode.Value         = r.GetOpCode() ?? "";
             p.Source.Value         = r.GetSource() ?? "";
-            p.SearchableData.Value = r.GetSearchableData() ?? "";
-            p.Message.Value        = r.GetMessage() ?? "";
+            var msg                = r.GetMessage() ?? "";
+            var sd                 = r.GetSearchableData() ?? "";
+            // BlankRedundantSearchableData: store NULL when SearchableData duplicates Message (the common
+            // case) — skips the second bind_text of the largest field. Read reconstructs NULL -> Message.
+            p.SearchableData.Value = (BlankRedundantSearchableData && sd == msg) ? (object)DBNull.Value : sd;
+            p.Message.Value        = msg;
             p.ResultSource.Value   = r.GetResultSource() ?? "";
-            p.ProcessId.Value      = r.GetProcessId() ?? "";
-            p.ThreadId.Value       = r.GetThreadId() ?? "";
-            p.ActivityId.Value     = r.GetActivityId() ?? "";
-            p.EventId.Value           = r.GetEventId() ?? "";
-            p.Keywords.Value          = r.GetKeywords() ?? "";
-            p.RelatedActivityId.Value = r.GetRelatedActivityId() ?? "";
-            p.Channel.Value           = r.GetChannel() ?? "";
-            p.ProviderGuid.Value      = r.GetProviderGuid() ?? "";
-            p.RecordId.Value          = r.GetRecordId() ?? "";
-            p.ProcessName.Value       = r.GetProcessName() ?? "";
-            p.StructuredData.Value    = r.GetStructuredData() ?? "";
+            // Extended columns are only present on a WIDE command (p.ProcessId != null). A narrow command
+            // omits them; the row's extended columns default to NULL and read back as "".
+            if (p.ProcessId != null)
+            {
+                p.ProcessId.Value      = r.GetProcessId() ?? "";
+                p.ThreadId.Value       = r.GetThreadId() ?? "";
+                p.ActivityId.Value     = r.GetActivityId() ?? "";
+                p.EventId.Value           = r.GetEventId() ?? "";
+                p.Keywords.Value          = r.GetKeywords() ?? "";
+                p.RelatedActivityId.Value = r.GetRelatedActivityId() ?? "";
+                p.Channel.Value           = r.GetChannel() ?? "";
+                p.ProviderGuid.Value      = r.GetProviderGuid() ?? "";
+                p.RecordId.Value          = r.GetRecordId() ?? "";
+                p.ProcessName.Value       = r.GetProcessName() ?? "";
+                p.StructuredData.Value    = r.GetStructuredData() ?? "";
+            }
             cmd.ExecuteNonQuery();
         }
+
+        /// <summary>True when a row has any non-empty extended (ETW/EventLog) field — i.e. it needs the wide
+        /// insert. Plain-text rows return false and take the 10-column narrow path.</summary>
+        private static bool HasExtended(ISearchResult r) =>
+            !(string.IsNullOrEmpty(r.GetProcessId()) && string.IsNullOrEmpty(r.GetThreadId())
+              && string.IsNullOrEmpty(r.GetActivityId()) && string.IsNullOrEmpty(r.GetEventId())
+              && string.IsNullOrEmpty(r.GetKeywords()) && string.IsNullOrEmpty(r.GetRelatedActivityId())
+              && string.IsNullOrEmpty(r.GetChannel()) && string.IsNullOrEmpty(r.GetProviderGuid())
+              && string.IsNullOrEmpty(r.GetRecordId()) && string.IsNullOrEmpty(r.GetProcessName())
+              && string.IsNullOrEmpty(r.GetStructuredData()));
 
         /// <summary>Increment the running level map for one just-inserted filtered row. Called under
         /// _sync (inside BulkInsert). A level outside the array invalidates the map so reads fall back
@@ -2145,8 +2267,11 @@ namespace FindPluginCore.Implementations.Storage
                 _taskName = record.GetString(4);
                 _opCode = record.GetString(5);
                 _source = record.GetString(6);
-                _searchableData = record.GetString(7);
                 _message = record.GetString(8);
+                // A NULL SearchableData means it duplicated Message at ingest (BlankRedundantSearchableData)
+                // — reconstruct it. Unconditional so a cache written with the flag on reads back correctly
+                // regardless of the current flag; genuinely-empty SearchableData is stored as "" (not NULL).
+                _searchableData = record.IsDBNull(7) ? _message : record.GetString(7);
                 _resultSource = record.GetString(9);
                 // Id then ProcessId/ThreadId/ActivityId are appended after the base columns. Guard each
                 // by FieldCount so a reader from an older SELECT still constructs (id stays -1, ids "").

@@ -476,6 +476,16 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ReloadFromSource();
     }
 
+    /// <summary>Set the sort state WITHOUT reloading — for callers that immediately trigger their own
+    /// reload (e.g. "Follow this activity" sets the sort then runs a search), so the grid re-pages once
+    /// with both the new filter and the new sort instead of twice.</summary>
+    public void SetSortState(string column, bool descending)
+    {
+        _sortColumn = string.IsNullOrEmpty(column) ? null : column;
+        _sortDescending = descending;
+        _currentPage = 1;
+    }
+
     /// <summary>
     /// Seed the initial sort from the persisted <see cref="ResultsViewerSettings.DefaultSort"/> setting.
     /// Sets the sort state WITHOUT reloading (a fresh LoadResultsAsync queries with it anyway). Called at

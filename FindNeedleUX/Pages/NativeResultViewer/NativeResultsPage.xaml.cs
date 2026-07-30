@@ -518,7 +518,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             : $"Missing TMF GUIDs: {warn.Value.missingTmfs}\n\n{warn.Value.detail}";
         // "Symbol details" opens the per-file resolution log (what was tried / resolved / missing).
         _resolveLogPaths = MiddleLayerService.GetResolveLogPaths();
-        DecodeBannerResolve.Visibility = _resolveLogPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DecodeBannerResolveItem.Visibility = _resolveLogPaths.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         DecodeBanner.Visibility = Visibility.Visible;
         DecodeBanner.IsOpen = true;
     }
@@ -554,8 +554,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void DecodeBannerAction_Click(object sender, RoutedEventArgs e)
     {
-        // Jump straight to the WPP symbol settings so the fix is one click away.
-        MainWindowActions.NavigateToResultsViewerSettings();
+        // Open the dedicated WPP symbol-resolution page (per-binary status + one-by-one resolution).
+        MainWindowActions.NavigateToWppSymbols();
     }
 
     private void DecodeAnyway_Click(object sender, RoutedEventArgs e)
@@ -1188,7 +1188,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             _suppressKnownCombo = false;
             ApplyKnownFilterVisibility(ResultsViewerSettings.ShowKnownValues);
         }
-        if (TimeStripToggle != null) TimeStripToggle.IsChecked = ResultsViewerSettings.ShowTimeStrip;
+        _suppressTimeStripSync = true;
+        if (TimeStripColumnCheck != null) TimeStripColumnCheck.IsChecked = ResultsViewerSettings.ShowTimeStrip;
+        _suppressTimeStripSync = false;
         ApplyToolbarVisibility();
     }
 
@@ -2058,6 +2060,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     // ----- Keyboard shortcuts -----
     private void OnPageKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
+        // Master hotkey switch — Ctrl+F (and any future page shortcut) is inert when shortcuts are off.
+        if (!FindNeedleUX.Services.ResultsViewerSettings.HotkeysEnabled) return;
         var ctrl = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(global::Windows.System.VirtualKey.Control)
                     & global::Windows.UI.Core.CoreVirtualKeyStates.Down)
                     == global::Windows.UI.Core.CoreVirtualKeyStates.Down;
@@ -2778,19 +2782,28 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ViewModel.ToDate = null;
     }
 
-    private void TimeStripHide_Click(object sender, RoutedEventArgs e)
-    {
-        ResultsViewerSettings.ShowTimeStrip = false;
-        if (TimeStripHost != null) TimeStripHost.Visibility = Visibility.Collapsed;
-        if (TimeStripToggle != null) TimeStripToggle.IsChecked = false;
-    }
+    // Guards the programmatic IsChecked writes below from re-entering the Checked/Unchecked handler.
+    private bool _suppressTimeStripSync;
 
-    private void TimeStripToggle_Click(object sender, RoutedEventArgs e)
+    /// <summary>Single source of truth for turning the time strip on/off: persists the setting, keeps
+    /// every control that mirrors it in sync (the Columns-flyout checkbox), and shows/hides the strip.</summary>
+    private void SetTimeStripEnabled(bool on)
     {
-        bool on = TimeStripToggle?.IsChecked ?? true;
         ResultsViewerSettings.ShowTimeStrip = on;
+        _suppressTimeStripSync = true;
+        if (TimeStripColumnCheck != null) TimeStripColumnCheck.IsChecked = on;
+        _suppressTimeStripSync = false;
         if (on) ScheduleTimeStrip();
         else if (TimeStripHost != null) TimeStripHost.Visibility = Visibility.Collapsed;
+    }
+
+    // The strip's own "✕" is a quick hide; it flows through the same helper so the checkbox updates too.
+    private void TimeStripHide_Click(object sender, RoutedEventArgs e) => SetTimeStripEnabled(false);
+
+    private void TimeStripColumnCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressTimeStripSync) return;
+        SetTimeStripEnabled(TimeStripColumnCheck?.IsChecked == true);
     }
 
     /// <summary>Click-to-zoom: set the From/To window to a bucket and reflect it in the time UI.</summary>
@@ -3211,10 +3224,29 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
-        // ----- Follow the ActivityId → reconstruct that one activity as a sequence diagram -----
+        // ----- Follow the ActivityId → reconstruct that one activity as a sequence -----
         if (HasActivity(row.ActivityId))
         {
             var aid = row.ActivityId;
+
+            // Filter the grid to this activity's causal sequence: every event in the activity, PLUS the
+            // start events of the child activities it spawned (which carry it as RelatedActivityId), in
+            // time order. Uses the structured query DSL — no capped in-memory gather, so it works across
+            // the full paged result set.
+            var followAct = new MenuFlyoutItem { Text = "Follow this activity (filter to sequence)", Icon = new SymbolIcon(Symbol.Link) };
+            followAct.Click += async (_, __) =>
+            {
+                var q = $"activityid == \"{aid}\" OR relatedactivityid == \"{aid}\"";
+                ViewModel.SetSortState("Time", false); // chronological, without a separate reload
+                SearchBox.Text = q;
+                SearchBox.Focus(FocusState.Programmatic);
+                try { SearchBox.SelectionStart = q.Length; } catch { /* cursor position is best-effort */ }
+                _searchDebounceTimer.Stop();
+                await RunSearchAsync();                 // one reload: this filter + the Time sort
+                SyncSortArrowsFromViewModel();
+            };
+            flyout.Items.Add(followAct);
+
             var diagAct = new MenuFlyoutItem { Text = "Diagram this activity (ActivityId)", Icon = new SymbolIcon(Symbol.View) };
             diagAct.Click += (_, __) =>
             {
