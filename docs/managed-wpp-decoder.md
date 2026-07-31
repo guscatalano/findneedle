@@ -74,6 +74,25 @@ If completed, this removes the last hard native/WDK dependency on the WPP decode
 reader + this code. The heavy lift left is the long tail of WPP type/spec coverage, not the core mechanism
 (which is proven).
 
+- **`ManagedDecode_CountedStringsSidAndMore_MatchesTracefmt`** — round 2 (`tools/WppTypes2Emitter`): counted
+  strings (`ItemPString`/`ItemPWString` — `ANSI_STRING`/`UNICODE_STRING`/`std::string`), `ItemSid`, GUID
+  aliases (`ItemCLSID`/`ItemIID`), `ItemWINERROR`, `ItemIPAddr`, `ItemPort`, `ItemLongLongXX`/`ItemLongLongO`.
+  All vs tracefmt (one deliberate divergence: SID → canonical `S-1-5-18`, not tracefmt's account-name lookup).
+
+## WPP type coverage (from the WDK `defaultwpp.ini` — the authoritative list)
+
+**Handled + capture-validated:** `ItemLong` (SINT/UINT/SLONG/ULONG), `ItemShort`, `ItemChar`, `ItemLongLong`,
+`ItemULongLong`, `ItemLongLongX` (`%I64x`), `ItemLongLongXX` (`%I64X`), `ItemLongLongO` (`%I64o`), `ItemPtr`
+(`%p`), `ItemString`/`ItemWString` (NUL-term), `ItemPString`/`ItemPWString` (counted), `ItemHRESULT`,
+`ItemNTSTATUS`, `ItemWINERROR`, `ItemGuid`/`ItemCLSID`/`ItemIID`/`ItemLIBID`, `ItemSid`, `ItemIPAddr`, `ItemPort`.
+
+**Implemented, not capture-validated:** `ItemDouble`, `ItemRString`/`ItemRWString` (raw LPCSTR/LPCWSTR variants).
+
+**Not yet handled (rarer / need embedded tables or structure):** `ItemEnum`/`ItemFlagsEnum` (symbolic enum
+tables), `ItemHexDump` (BIN), `ItemList*`/`ItemSet*` (arrays/bitsets), `ItemTimestamp`/`ItemTimeDelta`/
+`ItemWaitTime` (time), `ItemNDIS`, `ItemChar4` (FourCC). Partial: HRESULT/NTSTATUS/WINERROR symbol tables carry
+common codes only (full tables live in the WDK config).
+
 ## Real-world coverage run (throwing random machine WPP at it)
 
 Captured 456 MB of real activity (`wpr -start GeneralProfile`, ~2.5M events) and ran the decoder over all

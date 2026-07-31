@@ -94,6 +94,26 @@ public sealed class ManagedWppEndToEndTests
         CollectionAssert.Contains(messages,
             "hr=0x80070005(ERROR_ACCESS_DENIED) st=0xc0000022(STATUS_ACCESS_DENIED) guid=11223344-5566-7788-99aa-bbccddeeff00");
     }
+
+    [TestMethod]
+    public void ManagedDecode_CountedStringsSidAndMore_MatchesTracefmt()
+    {
+        // Round 2 (tools/WppTypes2Emitter): counted strings, SID, GUID aliases, WINERROR, IP/port, i64 hex/octal.
+        // Verified vs tracefmt. NOTE the one deliberate divergence: SID renders as the canonical, portable
+        // "S-1-5-18"; tracefmt resolves it to a locale/machine-dependent account name (\\NT AUTHORITY\SYSTEM).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wpptypes2-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "counted a=CountedAnsi w=CountedWide");           // ItemPString/ItemPWString (counted)
+        CollectionAssert.Contains(messages, "sid=S-1-5-18");                                   // ItemSid (canonical)
+        CollectionAssert.Contains(messages,
+            "clsid=aabbccdd-eeff-1122-3344-556677889900 iid=aabbccdd-eeff-1122-3344-556677889900"); // ItemCLSID/ItemIID
+        CollectionAssert.Contains(messages, "werr=2(ERROR_FILE_NOT_FOUND) i64X=0xABCDEF i64o=777");  // WINERROR/XX/O
+        CollectionAssert.Contains(messages, "ip=127.0.0.1 port=80");                           // ItemIPAddr/ItemPort
+    }
 }
 
 /// <summary>

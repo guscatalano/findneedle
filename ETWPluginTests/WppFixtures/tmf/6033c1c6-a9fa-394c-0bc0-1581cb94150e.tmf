@@ -1,0 +1,28 @@
+// PDB:  C:\Users\crimson\AppData\Local\Temp\claude\C--Users-crimson-source-repos-guscatalano-findneedle\d76ed639-cfd9-4e2f-8d19-e0419c9bb951\scratchpad\types2\WppTypes2Emitter.pdb
+// PDB:  Last Updated :2026-07-31:09:18:06:872 (UTC) [tracepdb]
+6033c1c6-a9fa-394c-0bc0-1581cb94150e findneedle // SRC=WppTypes2Emitter.cpp MJ= MN=
+#typev WppTypes2Emitter_cpp33 14 "%0ip=%10!s! port=%11!s!" //   LEVEL=T2 FUNC=main
+{
+(ULONG)0x0100007F, ItemIPAddr -- 10
+(USHORT)0x5000, ItemPort -- 11
+}
+#typev WppTypes2Emitter_cpp32 13 "%0werr=%10!s! i64X=0x%11!I64X! i64o=%12!I64o!" //   LEVEL=T2 FUNC=main
+{
+(DWORD)ERROR_FILE_NOT_FOUND, ItemWINERROR -- 10
+(unsigned long long)0xABCDEF, ItemLongLongXX -- 11
+(unsigned long long)0x1FF, ItemLongLongO -- 12
+}
+#typev WppTypes2Emitter_cpp30 12 "%0clsid=%10!s! iid=%11!s!" //   LEVEL=T2 FUNC=main
+{
+&clsid, ItemCLSID -- 10
+&clsid, ItemIID -- 11
+}
+#typev WppTypes2Emitter_cpp27 11 "%0sid=%10!s!" //   LEVEL=T2 FUNC=main
+{
+(PSID)sidbuf, ItemSid -- 10
+}
+#typev WppTypes2Emitter_cpp23 10 "%0counted a=%10!s! w=%11!s!" //   LEVEL=T2 FUNC=main
+{
+&as, ItemPString -- 10
+&us, ItemPWString -- 11
+}

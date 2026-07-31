@@ -81,12 +81,32 @@ public static class WppMessageFormatter
             case "ItemDouble":
                 if (off + 8 > b.Length) return null;
                 var d = BitConverter.ToDouble(b.Slice(off, 8)); off += 8; return d;
-            case "ItemString":   // ANSI, NUL-terminated (validated against a real WppEmitter-style capture)
-            case "ItemPString":
+            case "ItemString":   // ANSI, NUL-terminated (LPCSTR / %s) — validated against a real capture
                 return ReadNulTerminatedString(b, ref off, wide: false);
-            case "ItemWString":  // UTF-16, double-NUL-terminated (validated against a real capture)
-            case "ItemPWString":
+            case "ItemWString":  // UTF-16, NUL-terminated (LPCWSTR)
                 return ReadNulTerminatedString(b, ref off, wide: true);
+            case "ItemPString":  // COUNTED ANSI (ANSI_STRING / std::string): USHORT byte-length + bytes, no NUL
+                return ReadCountedString(b, ref off, wide: false);
+            case "ItemPWString": // COUNTED UTF-16 (UNICODE_STRING / std::wstring)
+                return ReadCountedString(b, ref off, wide: true);
+            case "ItemCLSID":    // GUID aliases — 16 inline bytes, same layout as ItemGuid
+            case "ItemIID":
+            case "ItemLIBID":
+                if (off + 16 > b.Length) { off = b.Length; return null; }
+                var g2 = new Guid(b.Slice(off, 16)); off += 16; return g2.ToString("D");
+            case "ItemLongLongXX": // %I64X — int64, spec renders upper-hex
+            case "ItemLongLongO":  // %I64o — int64, spec renders octal
+                return TryLong(b, ref off, signed: true, out var llx) ? (object)llx : null;
+            case "ItemWINERROR":   // Win32 DWORD error — tracefmt: "{decimal}(SYMBOL)"
+                return TryInt(b, ref off, 4, signed: false, out var we) ? FormatWinError((uint)we) : null;
+            case "ItemSid":        // binary SID → canonical "S-1-5-18" (tracefmt resolves to an account name)
+                return ReadSid(b, ref off);
+            case "ItemIPAddr":     // 4 bytes, a.b.c.d in wire order
+                if (off + 4 > b.Length) { off = b.Length; return null; }
+                var ip = $"{b[off]}.{b[off + 1]}.{b[off + 2]}.{b[off + 3]}"; off += 4; return ip;
+            case "ItemPort":       // 2 bytes, network (big-endian) order
+                if (off + 2 > b.Length) { off = b.Length; return null; }
+                int port = (b[off] << 8) | b[off + 1]; off += 2; return port.ToString();
             default:
                 // Unknown item type: we can't know its width, so stop consuming (further args unreadable).
                 off = b.Length;
@@ -113,6 +133,52 @@ public static class WppMessageFormatter
     }
     private static bool TryLong(ReadOnlySpan<byte> b, ref int off, bool signed, out long v)
         => TryInt(b, ref off, 8, signed, out v);
+
+    // Counted strings (ItemPString/ItemPWString ← ANSI_STRING/UNICODE_STRING/std::string): a USHORT byte
+    // count then the raw bytes, NO NUL terminator — confirmed against a real capture ("\x0B\x00CountedAnsi").
+    private static string ReadCountedString(ReadOnlySpan<byte> b, ref int off, bool wide)
+    {
+        if (off + 2 > b.Length) { off = b.Length; return ""; }
+        int byteCount = b[off] | (b[off + 1] << 8);
+        off += 2;
+        if (byteCount < 0 || off + byteCount > b.Length) { off = b.Length; return ""; }
+        var s = wide ? Encoding.Unicode.GetString(b.Slice(off, byteCount))
+                     : Encoding.ASCII.GetString(b.Slice(off, byteCount));
+        off += byteCount;
+        return s;
+    }
+
+    // Binary SID → canonical string form "S-<rev>-<idauth>-<sub0>-<sub1>-…" (e.g. S-1-5-18). tracefmt instead
+    // resolves it to an account display name via LookupAccountSid (locale/machine-dependent); we render the
+    // stable, portable SID string. Layout: Revision, SubAuthorityCount, 6-byte big-endian IdentifierAuthority,
+    // then SubAuthorityCount little-endian DWORDs.
+    private static string ReadSid(ReadOnlySpan<byte> b, ref int off)
+    {
+        if (off + 8 > b.Length) { off = b.Length; return ""; }
+        int rev = b[off];
+        int subCount = b[off + 1];
+        long idAuth = 0;
+        for (int i = 0; i < 6; i++) idAuth = (idAuth << 8) | b[off + 2 + i];
+        int len = 8 + 4 * subCount;
+        if (subCount < 0 || off + len > b.Length) { off = b.Length; return ""; }
+        var sb = new StringBuilder();
+        sb.Append("S-").Append(rev).Append('-').Append(idAuth);
+        for (int i = 0; i < subCount; i++)
+            sb.Append('-').Append(BitConverter.ToUInt32(b.Slice(off + 8 + 4 * i, 4)));
+        off += len;
+        return sb.ToString();
+    }
+
+    // Common Win32 error codes (ItemWINERROR). Partial — the full table is in the WDK config; unknowns render
+    // as the bare decimal, matching tracefmt's "{n}(SYMBOL)" shape for known codes.
+    private static readonly Dictionary<uint, string> _winErrNames = new()
+    {
+        [0] = "ERROR_SUCCESS", [2] = "ERROR_FILE_NOT_FOUND", [3] = "ERROR_PATH_NOT_FOUND",
+        [5] = "ERROR_ACCESS_DENIED", [6] = "ERROR_INVALID_HANDLE", [8] = "ERROR_NOT_ENOUGH_MEMORY",
+        [87] = "ERROR_INVALID_PARAMETER", [122] = "ERROR_INSUFFICIENT_BUFFER", [1168] = "ERROR_NOT_FOUND",
+    };
+    private static string FormatWinError(uint code)
+        => _winErrNames.TryGetValue(code, out var n) ? $"{code}({n})" : code.ToString();
 
     // WPP %s args are logged NUL-terminated inline (no length prefix) — confirmed by capturing a real WPP
     // trace with string args and dumping the wire bytes: ItemString = "alpha\0", ItemWString = "root\0\0"

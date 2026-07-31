@@ -134,6 +134,13 @@
     <None Update="WppFixtures\tmf\4857fab7-1162-3184-360b-cdd863ddf4ea.tmf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Round 2: counted strings, SID, GUID aliases, WINERROR, IP/port, i64 hex/octal. -->
+    <None Update="WppFixtures\wpptypes2-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\6033c1c6-a9fa-394c-0bc0-1581cb94150e.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 
