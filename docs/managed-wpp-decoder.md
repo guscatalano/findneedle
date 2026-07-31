@@ -100,9 +100,12 @@ out of the TMF TypeName (`ItemListByte(Low,APC,DPC)`).
 **2,843 NTSTATUS + 2,857 Win32 + 3,602 HRESULT = 9,302 codes.** A FACILITY_WIN32 HRESULT (`0x8007xxxx`) renders
 the Win32 name like tracefmt (`0x80070005 → ERROR_ACCESS_DENIED`). Unknown codes fall back to the bare hex/decimal.
 
-**Not yet handled (rarer / need structure or the PDB):** `ItemEnum`/`ItemFlagsEnum` (PDB-symbol-resolved enums —
-distinct from the TMF-embedded `ItemList*`/`ItemSet*` we do handle), `ItemHexDump` (BIN buffer dump — needs a
-user-defined length+buffer macro), `ItemWaitTime`, `ItemNDIS`.
+**Handled + capture-validated (cont.):** `ItemEnum(Name)` (PDB-resolved C enum → symbol, e.g. `StateActive`)
+and `ItemFlagsEnum(Name)` (→ `FlagRead | FlagExec(0x5)`). Their value→name tables come from the TMF's
+`#enumv` blocks (tracepdb reads the enum from the PDB); the parser reads those blocks into a shared registry.
+
+**Not yet handled (rarest):** `ItemHexDump` (BIN buffer dump — needs a user-defined length+buffer macro to emit),
+`ItemWaitTime`, `ItemNDIS` (NDIS status; needs NDIS headers to emit a fixture).
 
 **Deliberate divergences from tracefmt** (chosen for portability/determinism): `ItemSid` → canonical `S-1-5-18`
 (not account-name lookup); `ItemTimestamp` → UTC (not local time). Both are TZ/locale/machine-independent.

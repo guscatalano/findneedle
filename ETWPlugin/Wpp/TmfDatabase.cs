@@ -39,6 +39,10 @@ public sealed class TmfEntry
 
     /// <summary>Component name from the GUID header line (e.g. <c>findneedle</c>).</summary>
     public string Component { get; init; } = "";
+
+    /// <summary>The TMF's enum tables (from <c>#enumv</c> blocks), keyed by enum name → (value → symbol).
+    /// Used to render <c>ItemEnum(Name)</c> / <c>ItemFlagsEnum(Name)</c> args. Shared across the file's entries.</summary>
+    public IReadOnlyDictionary<string, Dictionary<uint, string>> Enums { get; init; }
 }
 
 /// <summary>One argument slot in a <see cref="TmfEntry"/>: its position (the <c>-- N</c>) and WPP type name.</summary>
@@ -101,6 +105,13 @@ public sealed class TmfDatabase
     private static readonly Regex ArgLine = new(
         @"^.*?,\s*(\w+(?:\([^)]*\))?)\s*--\s*(\d+)\s*$", RegexOptions.Compiled);
 
+    // #enumv <EnumName>  — starts a block of "SYMBOL,0xVALUE" lines defining a C enum (for ItemEnum/ItemFlagsEnum).
+    private static readonly Regex EnumvLine = new(@"^#enumv\s+(\S+)", RegexOptions.Compiled);
+
+    // Shared across the whole database: enum name → (value → symbol). Entries reference this; it's fully
+    // populated by end of parse, so a #typev that precedes its #enumv still resolves at decode time.
+    private readonly Dictionary<string, Dictionary<uint, string>> _enums = new(StringComparer.Ordinal);
+
     /// <summary>Parse one TMF's text and merge its entries. Public so the parser is unit-testable directly.</summary>
     public void AddText(string text)
     {
@@ -118,6 +129,32 @@ public sealed class TmfDatabase
             {
                 currentGuid = g;
                 currentComponent = gh.Groups[2].Value;
+                continue;
+            }
+
+            var ev = EnumvLine.Match(trimmed);
+            if (ev.Success)
+            {
+                var enumName = ev.Groups[1].Value;
+                var map = _enums.TryGetValue(enumName, out var existing) ? existing : new Dictionary<uint, string>();
+                string el;
+                while ((el = reader.ReadLine()) != null)
+                {
+                    var t = el.Trim();
+                    if (t == "{") continue;
+                    if (t.StartsWith("}")) break;
+                    if (t.Length == 0) continue;
+                    // "SYMBOL,0xVALUE" (value may be hex 0x… or decimal).
+                    int comma = t.LastIndexOf(',');
+                    if (comma <= 0) continue;
+                    var sym = t.Substring(0, comma).Trim();
+                    var vs = t.Substring(comma + 1).Trim();
+                    uint val;
+                    try { val = vs.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? Convert.ToUInt32(vs.Substring(2), 16) : uint.Parse(vs, CultureInfo.InvariantCulture); }
+                    catch { continue; }
+                    if (!map.ContainsKey(val)) map[val] = sym; // first symbol wins for a given value
+                }
+                _enums[enumName] = map;
                 continue;
             }
 
@@ -155,6 +192,7 @@ public sealed class TmfDatabase
                     Component = currentComponent,
                     Level = ExtractTag(trailing, "LEVEL"),
                     Func = ExtractTag(trailing, "FUNC"),
+                    Enums = _enums, // shared reference; fully populated by end of parse
                 };
                 _entries[(currentGuid, msgNum)] = entry; // last definition wins
             }

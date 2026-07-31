@@ -162,6 +162,13 @@
     <None Update="WppFixtures\tmf\2363c985-9b6e-3283-34a7-e8c27a60b889.tmf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- PDB-resolved ItemEnum / ItemFlagsEnum (#enumv tables). -->
+    <None Update="WppFixtures\wppenum2-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\035fd70f-a54a-3c13-f6c5-f7f2b19c92ec.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 

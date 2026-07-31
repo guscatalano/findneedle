@@ -33,19 +33,24 @@ public static class WppMessageFormatter
         int off = 0;
         foreach (var arg in entry.Args)
         {
-            object value = ReadOne(arg.TypeName, blob, ref off, pointerSize);
+            object value = ReadOne(arg.TypeName, blob, ref off, pointerSize, entry.Enums);
             result[arg.ArgNumber] = value;
         }
         return result;
     }
 
     // Read a single WPP-typed argument, advancing off. Unknown/over-run types yield null (rendered as "").
-    private static object ReadOne(string type, ReadOnlySpan<byte> b, ref int off, int pointerSize)
+    private static object ReadOne(string type, ReadOnlySpan<byte> b, ref int off, int pointerSize,
+        IReadOnlyDictionary<string, Dictionary<uint, string>> enums = null)
     {
         // Enum/flags types carry their value→name table inline, e.g. ItemListByte(Low,APC,DPC) /
         // ItemSetLong(1,2,…). The format spec is %s, so return the rendered string directly.
         if (type.StartsWith("ItemList", StringComparison.Ordinal) || type.StartsWith("ItemSet", StringComparison.Ordinal))
             return ReadListOrSet(type, b, ref off);
+
+        // ItemEnum(Name) / ItemFlagsEnum(Name) reference a #enumv table by name (parsed into `enums`).
+        if (type.StartsWith("ItemEnum(", StringComparison.Ordinal) || type.StartsWith("ItemFlagsEnum(", StringComparison.Ordinal))
+            return ReadEnum(type, b, ref off, enums);
 
         switch (type)
         {
@@ -164,6 +169,32 @@ public static class WppMessageFormatter
                      : Encoding.ASCII.GetString(b.Slice(off, byteCount));
         off += byteCount;
         return s;
+    }
+
+    // ItemEnum(Name) → the symbol for the value; ItemFlagsEnum(Name) → matching flags joined " | " with a
+    // trailing "(0x{value:x})". The name table comes from the TMF's #enumv blocks. Value is a 4-byte ULONG.
+    private static string ReadEnum(string type, ReadOnlySpan<byte> b, ref int off,
+        IReadOnlyDictionary<string, Dictionary<uint, string>> enums)
+    {
+        bool isFlags = type.StartsWith("ItemFlagsEnum", StringComparison.Ordinal);
+        int paren = type.IndexOf('(');
+        int close = type.LastIndexOf(')');
+        string enumName = (paren >= 0 && close > paren) ? type.Substring(paren + 1, close - paren - 1).Trim() : "";
+        if (off + 4 > b.Length) { off = b.Length; return ""; }
+        uint val = BitConverter.ToUInt32(b.Slice(off, 4)); off += 4;
+
+        Dictionary<uint, string> map = null;
+        enums?.TryGetValue(enumName, out map);
+
+        if (isFlags)
+        {
+            if (map == null) return $"0x{val:x}";
+            var parts = new List<string>();
+            foreach (var kv in map.OrderBy(k => k.Key))
+                if (kv.Key != 0 && (val & kv.Key) == kv.Key) parts.Add(kv.Value);
+            return parts.Count > 0 ? $"{string.Join(" | ", parts)}(0x{val:x})" : $"0x{val:x}";
+        }
+        return map != null && map.TryGetValue(val, out var name) ? name : $"0x{val:x}";
     }
 
     // ItemList*/ItemSet* — the name table is embedded in the type, e.g. "ItemListByte(Low,APC,DPC)" or

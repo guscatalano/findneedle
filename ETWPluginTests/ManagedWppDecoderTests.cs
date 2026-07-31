@@ -162,6 +162,22 @@ public sealed class ManagedWppEndToEndTests
         CollectionAssert.Contains(messages, "dbl=3.14062 delta=5.000s");   // ItemDouble (%g) + ItemTimeDelta
         CollectionAssert.Contains(messages, "raw a=RawAnsi w=RawWide");    // ItemRString / ItemRWString
     }
+
+    [TestMethod]
+    public void ManagedDecode_PdbResolvedEnums_MatchesTracefmt()
+    {
+        // ItemEnum(_MYSTATE) / ItemFlagsEnum(_MYFLAGS): the value→name table comes from the TMF's #enumv
+        // blocks (tracepdb reads the C enum from the PDB). tools/WppEnum2Emitter. Vs tracefmt:
+        //   ItemEnum value 1      -> "StateActive"
+        //   ItemFlagsEnum 0x5     -> "FlagRead | FlagExec(0x5)"
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppenum2-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "state=StateActive flags=FlagRead | FlagExec(0x5)");
+    }
 }
 
 /// <summary>
