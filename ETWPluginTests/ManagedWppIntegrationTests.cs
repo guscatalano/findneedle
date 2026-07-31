@@ -50,6 +50,43 @@ public sealed class ManagedWppIntegrationTests
         return new TraceFmtResult { outputfile = f, TotalEventsProcessed = lineCount, TotalFormatsUnknown = 0 };
     }
 
+    // Parity: decode the SAME real fixture through BOTH live decoders (tracefmt + managed) via ETLProcessor
+    // and assert the decoded messages match. Only fixtures WITHOUT a deliberate divergence are used
+    // (SID → S-1-5-18, timestamps → UTC, hexdump → hex bytes intentionally differ from tracefmt). Needs a
+    // real/WDK tracefmt; skips (Inconclusive) where it isn't available.
+    [DataTestMethod]
+    [DataRow("wppstr-sample.etl")]
+    [DataRow("wpptypes-sample.etl")]
+    [DataRow("wppenum-sample.etl")]
+    [DataRow("wppenum2-sample.etl")]
+    [DataRow("wppmisc-sample.etl")]
+    [DataRow("wppndis-sample.etl")]
+    [DataRow("wppemitter-sample.etl")]
+    public void Parity_ManagedMatchesTracefmt_ThroughEtlProcessor(string fixture)
+    {
+        if (!TraceFmt.IsAvailable()) Assert.Inconclusive("tracefmt (WDK) not available — parity needs both decoders");
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", fixture);
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+        // Both TMF locations on the search path (WppEmitter's TMF lives under tools/, the rest under WppFixtures/tmf).
+        Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", TmfDir + ";" + MixedFilterFixtureGenerator.WppEmitterTmfDir());
+
+        var viaTracefmt = DecodeMessages(etl, WppDecoder.Tracefmt);
+        var viaManaged = DecodeMessages(etl, WppDecoder.Managed);
+
+        Assert.IsTrue(viaManaged.Count > 0, $"managed decoded nothing for {fixture}");
+        CollectionAssert.AreEquivalent(viaTracefmt, viaManaged,
+            $"managed vs tracefmt message parity for {fixture} (tracefmt={viaTracefmt.Count}, managed={viaManaged.Count})");
+    }
+
+    private static System.Collections.Generic.List<string> DecodeMessages(string etl, WppDecoder mode)
+    {
+        DecodeOptions.WppDecoder = mode;
+        using var p = new ETLProcessor();
+        p.OpenFile(etl);
+        p.DoPreProcessing();
+        return p.GetResults().Select(r => r.GetMessage()).OrderBy(x => x, StringComparer.Ordinal).ToList();
+    }
+
     [TestMethod]
     public void CompareMode_KeepsManaged_WhenItDecodesMore()
     {
