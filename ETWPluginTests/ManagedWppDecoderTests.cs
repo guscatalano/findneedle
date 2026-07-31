@@ -194,6 +194,21 @@ public sealed class ManagedWppEndToEndTests
         CollectionAssert.Contains(messages, "hex=DEADBEEF00112233");        // ItemHexDump (bytes; tracefmt: empty)
         CollectionAssert.Contains(messages, "due=2020-01-01 00:00:00.000Z"); // ItemWaitTime (UTC)
     }
+
+    [TestMethod]
+    public void ManagedDecode_NdisStatusAndOid_MatchesTracefmt()
+    {
+        // ItemNDIS_STATUS / ItemNDIS_OID: "0x{hex}(SYMBOL)" from complete tables generated from km/ndis.h +
+        // ntddndis.h. tools/WppNdisEmitter. Byte-for-byte vs tracefmt.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppndis-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages,
+            "nst=0x4001000b(NDIS_STATUS_MEDIA_CONNECT) noid=0x00010101(OID_GEN_SUPPORTED_LIST)");
+    }
 }
 
 /// <summary>

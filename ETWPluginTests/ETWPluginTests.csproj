@@ -176,6 +176,13 @@
     <None Update="WppFixtures\tmf\4305d668-552d-302b-a84c-fbcf09373bf6.tmf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- ItemNDIS_STATUS / ItemNDIS_OID. -->
+    <None Update="WppFixtures\wppndis-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\4bfa7244-5583-3195-181b-88348eb33cdb.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 

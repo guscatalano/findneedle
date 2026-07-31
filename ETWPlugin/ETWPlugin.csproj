@@ -29,6 +29,8 @@
     <EmbeddedResource Include="Wpp\Tables\ntstatus.txt"><LogicalName>wpp.ntstatus.txt</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="Wpp\Tables\win32err.txt"><LogicalName>wpp.win32err.txt</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="Wpp\Tables\hresult.txt"><LogicalName>wpp.hresult.txt</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="Wpp\Tables\ndisstatus.txt"><LogicalName>wpp.ndisstatus.txt</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="Wpp\Tables\ndisoid.txt"><LogicalName>wpp.ndisoid.txt</LogicalName></EmbeddedResource>
   </ItemGroup>
 
 </Project>

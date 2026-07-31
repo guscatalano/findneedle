@@ -108,8 +108,12 @@ and `ItemFlagsEnum(Name)` (→ `FlagRead | FlagExec(0x5)`). Their value→name t
 renders BIN *empty* inline, so we deliberately emit the hex, which is more useful), `ItemWaitTime` (FILETIME →
 UTC, same as `ItemTimestamp`).
 
-**Not yet handled:** `ItemNDIS` (NDIS status enum — needs NDIS/kernel headers to produce a fixture). That's the
-last one; everything else in the WDK's `ItemXxx` list is covered.
+**Handled + capture-validated (cont.):** `ItemNDIS_STATUS` / `ItemNDIS_OID` → `0x{hex}(SYMBOL)`, from complete
+tables generated from `km/ndis.h` (229 NDIS_STATUS) + `ntddndis.h` (746 OID). Byte-for-byte vs tracefmt.
+
+**Every type in the WDK's `ItemXxx` list is now handled.** The status/error/NDIS symbol tables total **10,277
+codes** across five embedded tables (NTSTATUS, Win32, HRESULT, NDIS_STATUS, OID), all generated from the SDK
+headers by `tools/wpp-symbol-tables/gen.py`.
 
 **Deliberate divergences from tracefmt** (chosen for portability/determinism): `ItemSid` → canonical `S-1-5-18`
 (not account-name lookup); `ItemTimestamp` → UTC (not local time). Both are TZ/locale/machine-independent.

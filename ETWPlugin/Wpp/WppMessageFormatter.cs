@@ -112,6 +112,12 @@ public static class WppMessageFormatter
                 return TryLong(b, ref off, signed: true, out var llx) ? (object)llx : null;
             case "ItemWINERROR":   // Win32 DWORD error — tracefmt: "{decimal}(SYMBOL)"
                 return TryInt(b, ref off, 4, signed: false, out var we) ? FormatWinError((uint)we) : null;
+            case "ItemNDIS_STATUS": // NDIS_STATUS — tracefmt: "0x{hex}(NDIS_STATUS_...)"
+                return TryInt(b, ref off, 4, signed: false, out var ns)
+                    ? (NdisStatusTable.TryGetValue((uint)ns, out var nsn) ? $"0x{(uint)ns:x8}({nsn})" : $"0x{(uint)ns:x8}") : null;
+            case "ItemNDIS_OID":    // NDIS OID — tracefmt: "0x{hex}(OID_...)"
+                return TryInt(b, ref off, 4, signed: false, out var oid)
+                    ? (NdisOidTable.TryGetValue((uint)oid, out var on) ? $"0x{(uint)oid:x8}({on})" : $"0x{(uint)oid:x8}") : null;
             case "ItemSid":        // binary SID → canonical "S-1-5-18" (tracefmt resolves to an account name)
                 return ReadSid(b, ref off);
             case "ItemIPAddr":     // 4 bytes, a.b.c.d in wire order
@@ -270,7 +276,7 @@ public static class WppMessageFormatter
     // Complete status/error symbol tables, generated from the SDK ntstatus.h / winerror.h
     // (tools/wpp-symbol-tables/gen.py) and embedded as resources. Loaded once, lazily.
     private static readonly object _tableLock = new();
-    private static Dictionary<uint, string> _ntStatus, _win32Err, _hresult;
+    private static Dictionary<uint, string> _ntStatus, _win32Err, _hresult, _ndisStatus, _ndisOid;
 
     private static Dictionary<uint, string> LoadTable(string logicalName, bool hexKey)
     {
@@ -297,6 +303,8 @@ public static class WppMessageFormatter
     private static Dictionary<uint, string> NtStatusTable { get { if (_ntStatus == null) lock (_tableLock) { _ntStatus ??= LoadTable("wpp.ntstatus.txt", true); } return _ntStatus; } }
     private static Dictionary<uint, string> Win32Table { get { if (_win32Err == null) lock (_tableLock) { _win32Err ??= LoadTable("wpp.win32err.txt", false); } return _win32Err; } }
     private static Dictionary<uint, string> HResultTable { get { if (_hresult == null) lock (_tableLock) { _hresult ??= LoadTable("wpp.hresult.txt", true); } return _hresult; } }
+    private static Dictionary<uint, string> NdisStatusTable { get { if (_ndisStatus == null) lock (_tableLock) { _ndisStatus ??= LoadTable("wpp.ndisstatus.txt", true); } return _ndisStatus; } }
+    private static Dictionary<uint, string> NdisOidTable { get { if (_ndisOid == null) lock (_tableLock) { _ndisOid ??= LoadTable("wpp.ndisoid.txt", true); } return _ndisOid; } }
 
     private static string FormatNtStatus(uint code)
         => NtStatusTable.TryGetValue(code, out var n) ? $"0x{code:x8}({n})" : $"0x{code:x8}";
