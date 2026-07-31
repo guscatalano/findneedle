@@ -233,6 +233,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(TimeFormatCombo, ResultsViewerSettings.TimeFormat);
             UpdateTimeFormatPreview();
 
+            // --- WPP decoder ---
+            SelectComboItemByTag(WppDecoderCombo, ResultsViewerSettings.WppDecoderMode);
+
             // --- Theme ---
             SelectComboItemByTag(ThemeCombo, ResultsViewerSettings.ThemeName);
 
@@ -453,6 +456,14 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (_suppressEvents) return;
         if (TimeFormatCombo.SelectedItem is ComboBoxItem item && item.Tag is string fmt)
             ResultsViewerSettings.TimeFormat = fmt;
+    }
+
+    // ----- WPP decoder -----
+    private void WppDecoderCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (WppDecoderCombo.SelectedItem is ComboBoxItem item && item.Tag is string mode)
+            ResultsViewerSettings.WppDecoderMode = mode;
     }
 
     // ----- Theme -----

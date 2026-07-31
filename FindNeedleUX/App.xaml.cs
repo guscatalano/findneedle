@@ -86,6 +86,15 @@ public partial class App : Application
         }
         catch (Exception ex) { Logger.Instance.Log($"Apply ParallelIngest failed: {ex.Message}"); }
 
+        // Apply the persisted WPP decoder choice (Auto / Managed / Tracefmt) to the ambient decode option the
+        // ETL processor reads, and re-apply on settings change.
+        try
+        {
+            ApplyWppDecoderSetting();
+            FindNeedleUX.Services.ResultsViewerSettings.Changed += ApplyWppDecoderSetting;
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Apply WppDecoder failed: {ex.Message}"); }
+
         // Apply the persisted "fast bulk ingest" preference (default on — defers secondary indexes to a
         // bulk post-pass + drops AUTOINCREMENT, ~29% faster raw ingest). See ResultsViewerSettings.FastBulkIngest.
         try
@@ -143,6 +152,18 @@ public partial class App : Application
         {
             Logger.Instance.Log($"File activation handling failed: {ex.Message}");
         }
+    }
+
+    /// <summary>Map the persisted WPP-decoder string setting to the ambient <see cref="FindNeedlePluginLib.DecodeOptions.WppDecoder"/>.</summary>
+    private static void ApplyWppDecoderSetting()
+    {
+        var mode = FindNeedleUX.Services.ResultsViewerSettings.WppDecoderMode;
+        FindNeedlePluginLib.DecodeOptions.WppDecoder = mode switch
+        {
+            "Managed" => FindNeedlePluginLib.WppDecoder.Managed,
+            "Tracefmt" => FindNeedlePluginLib.WppDecoder.Tracefmt,
+            _ => FindNeedlePluginLib.WppDecoder.Auto,
+        };
     }
 
     /// <summary>

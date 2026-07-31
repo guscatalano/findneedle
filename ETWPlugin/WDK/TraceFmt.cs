@@ -130,6 +130,15 @@ public class TraceFmt
     public static Func<string, string, TraceFmtResult> TEST_ParseSimpleOverride;
     public static void ResetTestOverrides() { TEST_PreScanOverride = null; TEST_ParseSimpleOverride = null; }
 
+    /// <summary>True if tracefmt could run (the WDK is installed, or a test override is active). Used by the
+    /// Auto WPP-decoder mode to prefer tracefmt when present and fall back to the managed decoder otherwise.</summary>
+    public static bool IsAvailable()
+    {
+        if (TEST_ParseSimpleOverride != null || TEST_PreScanOverride != null) return true;
+        try { var p = WDKFinder.GetTraceFmtPath(); return !string.IsNullOrEmpty(p) && File.Exists(p); }
+        catch { return false; }
+    }
+
     /// <summary>
     /// Fast decodability pre-scan: run tracefmt over just the first <paramref name="sampleBytes"/> of
     /// the ETL (a copied prefix) instead of the whole file, to estimate how much is formattable BEFORE

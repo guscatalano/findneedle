@@ -437,6 +437,14 @@ public static class ResultsViewerSettings
         set { Data.SymbolSourcePath = value ?? ""; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>Which WPP decoder to use: "Auto" (tracefmt if the WDK is installed, else the managed decoder),
+    /// "Managed" (always managed — no WDK), or "Tracefmt" (always the WDK's tracefmt). Default Auto.</summary>
+    public static string WppDecoderMode
+    {
+        get => string.IsNullOrWhiteSpace(Data.WppDecoderMode) ? "Auto" : Data.WppDecoderMode;
+        set { Data.WppDecoderMode = value ?? "Auto"; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -878,6 +886,7 @@ public static class ResultsViewerSettings
         public string TraceFormatSearchPath { get; set; }
         public string SymbolPath { get; set; }
         public string SymbolSourcePath { get; set; }
+        public string WppDecoderMode { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }

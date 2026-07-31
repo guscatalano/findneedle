@@ -4,8 +4,23 @@
 `tracefmt.exe`. Same spirit as keeping `PcapPlugin` managed-only. This is the only path that would let
 FindNeedle drop its WDK/tracefmt native dependency for WPP.
 
-**Status: working prototype, validated end-to-end against a real capture.** Not yet wired into the
-`ETLProcessor` decode path — it's a standalone decoder (`ETWPlugin/Wpp/`) plus tests.
+**Status: wired into the decode path, validated end-to-end against real captures.** Selectable via
+`DecodeOptions.WppDecoder` (`Auto` / `Managed` / `Tracefmt`), surfaced as a "WPP decoder" setting in the
+Results-viewer settings. `Auto` (default) uses tracefmt when the WDK is installed and the managed decoder
+otherwise — so existing behavior is unchanged where the WDK exists, and WPP now decodes with no WDK everywhere.
+
+## Wiring into ETLProcessor
+
+`DecodeEtlOnce` routes to `DecodeEtlManaged` when the mode is `Managed` (or `Auto` and `TraceFmt.IsAvailable()`
+is false). The managed decoder writes its output in tracefmt's exact text format, so the existing
+`ParseFormattedOutput` consumes it identically — same `ETLLogLine` rows, same streaming/scope. TMFs are loaded
+from `TRACE_FORMAT_SEARCH_PATH` (the same paths tracefmt reads).
+
+**The ISymbolResolver provisioning seam works for BOTH decoders**, for free: the managed path returns the same
+`MissingSymbols` outcome (with the unresolved message GUIDs) when TMFs are absent, so `DoPreProcessing`'s
+provision-and-retry-once logic (`WppSymbolProvisioning` → the resolver plugins → `BuildTmfs` → refreshed
+`TRACE_FORMAT_SEARCH_PATH`) fires unchanged and the managed decode is retried once symbols land. Covered by
+`ManagedWppIntegrationTests` (both a plain managed decode and the provisioning-retry path).
 
 ## The pieces
 
@@ -63,7 +78,8 @@ tracefmt does three things; we reimplemented all three in managed code:
 - **Floats** (`ItemFloat`/`ItemDouble`) are implemented but not capture-validated (WPP float support is spotty).
 - **Reserved `%1..%9`** (WPP standard fields: sequence, flags, etc.) render empty. WppEmitter doesn't use
   them; some providers do.
-- **Not wired into `ETLProcessor`.** Wiring it in as an alternative to the tracefmt shell-out (behind a flag)
+- ~~Not wired into `ETLProcessor`.~~ **Done** — see "Wiring into ETLProcessor" above.
+- (historical) Wiring it in as an alternative to the tracefmt shell-out (behind a flag)
   is the next step if we want to actually drop the WDK dependency on the WPP path.
 - **Pointer size** is taken from `source.PointerSize`; untested on a 32-bit capture.
 

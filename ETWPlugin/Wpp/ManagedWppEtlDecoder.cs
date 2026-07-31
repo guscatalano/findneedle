@@ -44,21 +44,26 @@ public sealed class ManagedWppEtlDecoder
     /// <summary>Number of events whose (message GUID, number) had no TMF entry — the "missing symbols" tally.</summary>
     public long Unresolved { get; private set; }
 
+    /// <summary>Distinct message GUIDs that had no TMF entry — the "requires symbol XYZ" list.</summary>
+    public HashSet<Guid> UnresolvedGuids { get; } = new();
+
     /// <summary>Decode the WPP events in <paramref name="etlPath"/>, invoking <paramref name="onEvent"/> for each
     /// event that resolves against the TMF. Non-WPP events (kernel headers, etc.) and events with no TMF entry
-    /// are skipped (the latter counted in <see cref="Unresolved"/>).</summary>
-    public void Decode(string etlPath, Action<WppDecodedEvent> onEvent)
+    /// are skipped (the latter counted in <see cref="Unresolved"/> / <see cref="UnresolvedGuids"/>).</summary>
+    public void Decode(string etlPath, Action<WppDecodedEvent> onEvent,
+        System.Threading.CancellationToken cancellationToken = default)
     {
         using var source = new ETWTraceEventSource(etlPath);
         int pointerSize = source.PointerSize > 0 ? source.PointerSize : 8;
         source.AllEvents += ev =>
         {
+            if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
             // WPP classic events carry the message GUID on TaskGuid; anything else (kernel/manifest) has a
             // different or empty TaskGuid and won't match a TMF entry.
             var guid = ev.TaskGuid;
             if (guid == Guid.Empty) return;
             int msgNum = (int)ev.ID;
-            if (!_tmf.TryGet(guid, msgNum, out var entry)) { Unresolved++; return; }
+            if (!_tmf.TryGet(guid, msgNum, out var entry)) { Unresolved++; UnresolvedGuids.Add(guid); return; }
 
             string message;
             try { message = WppMessageFormatter.Format(entry, ev.EventData(), pointerSize); }
