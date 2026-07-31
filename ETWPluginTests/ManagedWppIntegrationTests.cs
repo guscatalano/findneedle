@@ -51,16 +51,20 @@ public sealed class ManagedWppIntegrationTests
     }
 
     // Parity: decode the SAME real fixture through BOTH live decoders (tracefmt + managed) via ETLProcessor
-    // and assert the decoded messages match. Only fixtures WITHOUT a deliberate divergence are used
-    // (SID → S-1-5-18, timestamps → UTC, hexdump → hex bytes intentionally differ from tracefmt). Needs a
-    // real/WDK tracefmt; skips (Inconclusive) where it isn't available.
+    // and assert the decoded messages match. Only STABLE fixtures are used — those whose rendering doesn't
+    // vary with the tracefmt/CRT version. Excluded on purpose:
+    //   • deliberate managed divergences: SID → S-1-5-18, timestamps → UTC, hexdump → hex bytes (wpptypes2/
+    //     wpptime/wppbin);
+    //   • version/alias-sensitive rendering: doubles (%g half-rounding differs by msvcrt version — wppmisc)
+    //     and NDIS OIDs (some values have two equally-valid header names, e.g. OID_GEN_SUPPORTED_LIST vs
+    //     OID_GEN_CO_SUPPORTED_LIST — wppndis). Those are still covered byte-for-byte by the ManagedDecode_*
+    //     tests against captured expected strings.
+    // Needs a real/WDK tracefmt; skips (Inconclusive) where it isn't available.
     [DataTestMethod]
     [DataRow("wppstr-sample.etl")]
     [DataRow("wpptypes-sample.etl")]
     [DataRow("wppenum-sample.etl")]
     [DataRow("wppenum2-sample.etl")]
-    [DataRow("wppmisc-sample.etl")]
-    [DataRow("wppndis-sample.etl")]
     [DataRow("wppemitter-sample.etl")]
     public void Parity_ManagedMatchesTracefmt_ThroughEtlProcessor(string fixture)
     {
