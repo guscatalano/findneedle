@@ -23,7 +23,7 @@ public static class WppMessageFormatter
     public static string Format(TmfEntry entry, ReadOnlySpan<byte> argBlob, int pointerSize = 8)
     {
         var values = DecodeArgs(entry, argBlob, pointerSize);
-        return ApplyFormat(entry.Format, values);
+        return ApplyFormat(entry.Format, values, pointerSize);
     }
 
     /// <summary>Decode the typed arguments off the blob into a map of argNumber → CLR value (in blob order).</summary>
@@ -57,10 +57,18 @@ public static class WppMessageFormatter
                 return TryInt(b, ref off, 4, signed: false, out var ul) ? (object)(uint)ul : null;
             case "ItemLongLong":
             case "ItemQuad":
+            case "ItemLongLongX": // %I64x — int64, the format spec renders it as hex
                 return TryLong(b, ref off, signed: true, out var ll) ? (object)ll : null;
             case "ItemULongLong":
             case "ItemUQuad":
                 return TryLong(b, ref off, signed: false, out var ull) ? (object)(ulong)ull : null;
+            case "ItemHRESULT": // 32-bit status; tracepdb rewrites %!HRESULT! -> %N!s!, so return a ready string
+                return TryInt(b, ref off, 4, signed: true, out var hr) ? FormatStatus((uint)(int)hr) : null;
+            case "ItemNTSTATUS":
+                return TryInt(b, ref off, 4, signed: true, out var nt) ? FormatStatus((uint)(int)nt) : null;
+            case "ItemGuid": // 16 bytes inline, standard GUID binary layout (Data1 LE, Data2 LE, Data3 LE, Data4)
+                if (off + 16 > b.Length) { off = b.Length; return null; }
+                var guid = new Guid(b.Slice(off, 16)); off += 16; return guid.ToString("D");
             case "ItemPtr":
                 if (off + pointerSize > b.Length) return null;
                 ulong p = pointerSize == 8 ? BitConverter.ToUInt64(b.Slice(off, 8))
@@ -128,8 +136,29 @@ public static class WppMessageFormatter
         }
     }
 
-    /// <summary>Apply a WPP printf-style format string with %N!spec! placeholders to the decoded args.</summary>
-    public static string ApplyFormat(string format, IReadOnlyDictionary<int, object> args)
+    // tracefmt renders HRESULT/NTSTATUS as "0x{hex}(SYMBOL)". The symbol table is huge (it comes from the
+    // WDK's WppConfig .ini tables); we carry the common codes and fall back to just the hex — PROTOTYPE gap.
+    private static readonly Dictionary<uint, string> _statusNames = new()
+    {
+        [0x80070005] = "ERROR_ACCESS_DENIED",
+        [0xC0000022] = "STATUS_ACCESS_DENIED",
+        [0x80004005] = "E_FAIL",
+        [0x80004001] = "E_NOTIMPL",
+        [0x8007000E] = "E_OUTOFMEMORY",
+        [0x80070057] = "E_INVALIDARG",
+        [0xC0000005] = "STATUS_ACCESS_VIOLATION",
+        [0xC000000D] = "STATUS_INVALID_PARAMETER",
+    };
+
+    private static string FormatStatus(uint code)
+    {
+        var hex = "0x" + code.ToString("x8");
+        return _statusNames.TryGetValue(code, out var name) ? $"{hex}({name})" : hex;
+    }
+
+    /// <summary>Apply a WPP printf-style format string with %N!spec! placeholders to the decoded args.
+    /// <paramref name="pointerSize"/> sets %p width (uppercase, zero-padded to the pointer width, like tracefmt).</summary>
+    public static string ApplyFormat(string format, IReadOnlyDictionary<int, object> args, int pointerSize = 8)
     {
         if (string.IsNullOrEmpty(format)) return "";
         var sb = new StringBuilder(format.Length + 32);
@@ -160,12 +189,12 @@ public static class WppMessageFormatter
             i = j;
 
             if (argNum == 0) continue; // %0 = WPP prefix (provider/time/pid are separate fields) → nothing here
-            sb.Append(RenderArg(argNum, spec, args));
+            sb.Append(RenderArg(argNum, spec, args, pointerSize));
         }
         return sb.ToString();
     }
 
-    private static string RenderArg(int argNum, string spec, IReadOnlyDictionary<int, object> args)
+    private static string RenderArg(int argNum, string spec, IReadOnlyDictionary<int, object> args, int pointerSize = 8)
     {
         if (!args.TryGetValue(argNum, out var val) || val == null)
             return ""; // reserved %1..%9 or a missing arg → empty (prototype)
@@ -183,7 +212,8 @@ public static class WppMessageFormatter
             'u' => UnsignedOf(val).ToString(CultureInfo.InvariantCulture),
             'x' => UnsignedOf(val).ToString("x"),
             'X' => UnsignedOf(val).ToString("X"),
-            'p' => UnsignedOf(val).ToString("x"),
+            // tracefmt renders %p uppercase, zero-padded to the trace's pointer width (16 hex on x64).
+            'p' => UnsignedOf(val).ToString("X").PadLeft(pointerSize * 2, '0'),
             'o' => Convert.ToString((long)UnsignedOf(val), 8),
             'c' => RenderChar(val),
             's' => val.ToString(),

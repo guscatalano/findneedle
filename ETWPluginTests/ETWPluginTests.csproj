@@ -127,6 +127,13 @@
     <None Update="WppFixtures\tmf\744151fd-b3f4-32e6-38eb-0fd11e3fb62d.tmf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Real WPP capture exercising C++/Win32 + pointer types (int/i64/hex/%p/HRESULT/NTSTATUS/GUID) + its TMF. -->
+    <None Update="WppFixtures\wpptypes-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\4857fab7-1162-3184-360b-cdd863ddf4ea.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 

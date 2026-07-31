@@ -58,8 +58,10 @@ public sealed class ManagedWppEndToEndTests
         var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppstr-sample.etl");
         if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
 
+        // The shared tmf/ dir holds several fixtures' TMFs; lookup is by GUID, so just require ours loaded.
         var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
-        Assert.AreEqual(2, tmf.Count, "the string-emitter TMF should load (2 statements)");
+        Assert.IsTrue(tmf.TryGet(Guid.Parse("744151fd-b3f4-32e6-38eb-0fd11e3fb62d"), 10, out _),
+            "the string-emitter TMF should be loaded");
 
         var events = new ManagedWppEtlDecoder(tmf).DecodeToList(etl);
         var messages = events.Select(e => e.Message).ToList();
@@ -70,6 +72,27 @@ public sealed class ManagedWppEndToEndTests
         CollectionAssert.Contains(messages, "strtrace name=charlie id=2 tag=END");
         // ItemWString (UTF-16, NUL-terminated):
         CollectionAssert.Contains(messages, "widetrace user=root role=admin");
+    }
+
+    [TestMethod]
+    public void ManagedDecode_Win32AndPointerTypes_MatchesTracefmt()
+    {
+        // A real capture exercising the common C++/Win32 + pointer types. Every expected string was verified
+        // byte-for-byte against tracefmt (tools/WppTypesEmitter). Covers: 32/64-bit signed/unsigned/hex ints,
+        // %p pointers (uppercase, pointer-width padded), width/zero-pad, HRESULT + NTSTATUS (hex + symbolic),
+        // and GUID.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wpptypes-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "sint i=42 neg=-1000 i64=-5000000000");
+        CollectionAssert.Contains(messages, "uint u=4000000000 hex=0xabcdef x64=0xdeadbeefcafe");
+        CollectionAssert.Contains(messages, "ptr p=00007FF012345678 null=0000000000000000");
+        CollectionAssert.Contains(messages, "widths z=00042 h=0000beef");
+        CollectionAssert.Contains(messages,
+            "hr=0x80070005(ERROR_ACCESS_DENIED) st=0xc0000022(STATUS_ACCESS_DENIED) guid=11223344-5566-7788-99aa-bbccddeeff00");
     }
 }
 

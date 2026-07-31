@@ -1,0 +1,31 @@
+// PDB:  C:\Users\crimson\AppData\Local\Temp\claude\C--Users-crimson-source-repos-guscatalano-findneedle\d76ed639-cfd9-4e2f-8d19-e0419c9bb951\scratchpad\typesemit\WppTypesEmitter.pdb
+// PDB:  Last Updated :2026-07-31:09:02:22:703 (UTC) [tracepdb]
+4857fab7-1162-3184-360b-cdd863ddf4ea findneedle // SRC=WppTypesEmitter.cpp MJ= MN=
+#typev WppTypesEmitter_cpp28 14 "%0hr=%10!s! st=%11!s! guid=%12!s!" //   LEVEL=T_ALL FUNC=main
+{
+(HRESULT)E_ACCESSDENIED, ItemHRESULT -- 10
+(NTSTATUS)0xC0000022L, ItemNTSTATUS -- 11
+&g, ItemGuid -- 12
+}
+#typev WppTypesEmitter_cpp26 13 "%0widths z=%10!05d! h=%11!08x!" //   LEVEL=T_ALL FUNC=main
+{
+(int)42, ItemLong -- 10
+(unsigned)0xBEEF, ItemLong -- 11
+}
+#typev WppTypesEmitter_cpp25 12 "%0ptr p=%10!p! null=%11!p!" //   LEVEL=T_ALL FUNC=main
+{
+(void*)(ULONG_PTR)0x7ff012345678ULL, ItemPtr -- 10
+(void*)0, ItemPtr -- 11
+}
+#typev WppTypesEmitter_cpp24 11 "%0uint u=%10!u! hex=0x%11!x! x64=0x%12!I64x!" //   LEVEL=T_ALL FUNC=main
+{
+(unsigned)4000000000u, ItemLong -- 10
+(unsigned)0xABCDEF, ItemLong -- 11
+(unsigned long long)0xDEADBEEFCAFEULL, ItemLongLongX -- 12
+}
+#typev WppTypesEmitter_cpp23 10 "%0sint i=%10!d! neg=%11!d! i64=%12!I64d!" //   LEVEL=T_ALL FUNC=main
+{
+(int)42, ItemLong -- 10
+(int)-1000, ItemLong -- 11
+(long long)-5000000000LL, ItemLongLong -- 12
+}

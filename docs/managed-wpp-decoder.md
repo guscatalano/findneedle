@@ -39,6 +39,11 @@ tracefmt does three things; we reimplemented all three in managed code:
 - **`ManagedDecode_RealStringArgs_MatchesTracefmt`** — decodes a real capture with **string args** (committed
   `WppFixtures/wppstr-sample.etl` + its TMF, from `tools/WppStrEmitter`): `ItemString` (ANSI) + `ItemLong`,
   and `ItemWString` (wide). Byte-for-byte vs tracefmt. This is what caught the wire-format bug below.
+- **`ManagedDecode_Win32AndPointerTypes_MatchesTracefmt`** — decodes a real capture (`tools/WppTypesEmitter`)
+  covering the common **C++/Win32 + pointer types**, byte-for-byte vs tracefmt: 32/64-bit signed/unsigned/hex
+  ints (`ItemLong`, `ItemLongLong`, `ItemLongLongX`, `%u`/`%x`/`%I64x`), **`%p` pointers** (uppercase,
+  pointer-width zero-padded), width/zero-pad (`%05d`/`%08x`), **HRESULT** + **NTSTATUS** (`0x…(SYMBOL)`), and
+  **GUID** (`ItemGuid`, 16 inline bytes → standard GUID string).
 - `ApplyFormat_*` / `DecodeArgs_*` — the format engine + arg reader in isolation.
 
 ## What's NOT done / known gaps
@@ -49,8 +54,13 @@ tracefmt does three things; we reimplemented all three in managed code:
   formatter first assumed. A self-referential unit test would have "passed" against the wrong assumption; the
   real capture is what corrected it. Other numeric widths (short/longlong/pointer) are implemented but only
   unit-tested, not capture-validated.
-- **Exotic WPP custom types** — `!STATUS!`, `!HRESULT!`, `!GUID!`, `!TID!`, `!ASSERT!`, SIDs, time — are
-  rendered approximately or as the raw value. Real tracefmt has a big table of these.
+- **HRESULT/NTSTATUS symbolic names are a PARTIAL table.** `ItemHRESULT`/`ItemNTSTATUS` render `0x{hex}(SYMBOL)`
+  exactly like tracefmt for the common codes we carry (ACCESS_DENIED, E_FAIL, …) and fall back to just the hex
+  otherwise. tracefmt's full table comes from the WDK's WppConfig `.ini` files — porting it is the remaining
+  work for exact parity on arbitrary codes. `ItemGuid`, `%p`, and the int/hex types are fully matched.
+- **Other exotic WPP custom types** — `!SID!`, `!TID!`, `!ASSERT!`, `!TIME!`, `!IPADDR!`, etc. — not yet
+  handled (rendered as the raw value or skipped). Same porting approach as the status table.
+- **Floats** (`ItemFloat`/`ItemDouble`) are implemented but not capture-validated (WPP float support is spotty).
 - **Reserved `%1..%9`** (WPP standard fields: sequence, flags, etc.) render empty. WppEmitter doesn't use
   them; some providers do.
 - **Not wired into `ETLProcessor`.** Wiring it in as an alternative to the tracefmt shell-out (behind a flag)
