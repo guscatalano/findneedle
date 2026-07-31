@@ -647,6 +647,17 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        Text="WPP-traced .etl files need TMF format files (from each binary's private PDB) to decode — otherwise events show as 'Unknown'. Point at ready-made TMFs, resolve them from PDBs/symbols, and see per-binary status on the dedicated page."/>
                             <Button Content="Open WPP symbol resolution →" Click="OpenWppSymbols_Click"/>
+
+                            <TextBlock Text="WPP decoder" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="How WPP .etl files are decoded. Auto uses the WDK's tracefmt when installed and the built-in managed decoder otherwise. Force Managed to decode with no WDK / no external process; force tracefmt to always use the WDK. Compare runs both and keeps whichever decoded more (≈2× slower; also flags any divergence). Custom symbol resolvers work with all of them."/>
+                            <ComboBox x:Name="WppDecoderCombo" Width="360" SelectionChanged="WppDecoderCombo_SelectionChanged">
+                                <ComboBoxItem Content="Auto (tracefmt if installed, else managed)" Tag="Auto"/>
+                                <ComboBoxItem Content="Managed (no WDK)"                             Tag="Managed"/>
+                                <ComboBoxItem Content="tracefmt (WDK)"                               Tag="Tracefmt"/>
+                                <ComboBoxItem Content="Compare both, keep the better (~2× slower)"   Tag="Compare"/>
+                            </ComboBox>
                         </StackPanel>
                     </Border>
                 </StackPanel>

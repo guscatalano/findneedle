@@ -1,0 +1,359 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using findneedle.Wpp;
+
+namespace ETWPluginTests;
+
+/// <summary>End-to-end: decode a real WppEmitter .etl in fully managed code (TraceEvent to read the wire +
+/// our TMF/format engine), with NO tracefmt.exe, NO WDK, NO admin. The fixture is a 16 KB capture committed
+/// under WppFixtures/; expected strings are exactly what tracefmt emits for WppEmitter's two statements.</summary>
+[TestClass]
+public sealed class ManagedWppEndToEndTests
+{
+    private static string FixtureEtl()
+        => Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppemitter-sample.etl");
+
+    [TestMethod]
+    public void ManagedDecode_RealWppEmitterEtl_MatchesTracefmt()
+    {
+        var etl = FixtureEtl();
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(MixedFilterFixtureGenerator.WppEmitterTmfDir());
+        Assert.AreEqual(2, tmf.Count, "the WppEmitter TMF should load (2 statements)");
+
+        var decoder = new ManagedWppEtlDecoder(tmf);
+        var events = decoder.DecodeToList(etl);
+
+        // The capture is `WppEmitter.exe 30`: 30 TRACE_GENERAL "work item" (msg 10) + one "detail" (msg 11)
+        // per even i (i=0,2,…,28 → 15). All fully managed-decoded.
+        int workItems = events.Count(e => e.MessageNumber == 10);
+        int details = events.Count(e => e.MessageNumber == 11);
+        Assert.AreEqual(30, workItems, "30 work-item events");
+        Assert.AreEqual(15, details, "15 detail events (one per even i)");
+
+        // Exact-string parity with tracefmt for representative events (incl. hex-formatted status).
+        var messages = new HashSet<string>(events.Select(e => e.Message));
+        Assert.IsTrue(messages.Contains("WppEmitter work item id=0 status=0x0 phase=startup provider=WppEmitter"),
+            "i=0 work item");
+        Assert.IsTrue(messages.Contains("WppEmitter work item id=27 status=0x1b phase=startup provider=WppEmitter"),
+            "i=27 work item — proves %x hex formatting (27 = 0x1b)");
+        Assert.IsTrue(messages.Contains("WppEmitter detail seq=2 note=processing-record value=2 category=Detail"),
+            "i=2 detail");
+
+        // Component + wire fields came through.
+        var any = events.First();
+        Assert.AreEqual("findneedle", any.Component);
+        Assert.AreNotEqual(0, any.ProcessId);
+        Assert.AreNotEqual(default(DateTime), any.TimeStamp);
+    }
+
+    [TestMethod]
+    public void ManagedDecode_RealStringArgs_MatchesTracefmt()
+    {
+        // A real WPP capture with STRING args: msg 10 = "%s (ANSI) + %d", msg 11 = "%ws (wide)". The
+        // fixture's TMF is committed alongside it. Expected strings verified byte-for-byte against tracefmt.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppstr-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        // The shared tmf/ dir holds several fixtures' TMFs; lookup is by GUID, so just require ours loaded.
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        Assert.IsTrue(tmf.TryGet(Guid.Parse("744151fd-b3f4-32e6-38eb-0fd11e3fb62d"), 10, out _),
+            "the string-emitter TMF should be loaded");
+
+        var events = new ManagedWppEtlDecoder(tmf).DecodeToList(etl);
+        var messages = events.Select(e => e.Message).ToList();
+
+        // ItemString (ANSI, NUL-terminated) + ItemLong, three iterations:
+        CollectionAssert.Contains(messages, "strtrace name=alpha id=0 tag=END");
+        CollectionAssert.Contains(messages, "strtrace name=bravo id=1 tag=END");
+        CollectionAssert.Contains(messages, "strtrace name=charlie id=2 tag=END");
+        // ItemWString (UTF-16, NUL-terminated):
+        CollectionAssert.Contains(messages, "widetrace user=root role=admin");
+    }
+
+    [TestMethod]
+    public void ManagedDecode_Win32AndPointerTypes_MatchesTracefmt()
+    {
+        // A real capture exercising the common C++/Win32 + pointer types. Every expected string was verified
+        // byte-for-byte against tracefmt (tools/WppTypesEmitter). Covers: 32/64-bit signed/unsigned/hex ints,
+        // %p pointers (uppercase, pointer-width padded), width/zero-pad, HRESULT + NTSTATUS (hex + symbolic),
+        // and GUID.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wpptypes-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "sint i=42 neg=-1000 i64=-5000000000");
+        CollectionAssert.Contains(messages, "uint u=4000000000 hex=0xabcdef x64=0xdeadbeefcafe");
+        CollectionAssert.Contains(messages, "ptr p=00007FF012345678 null=0000000000000000");
+        CollectionAssert.Contains(messages, "widths z=00042 h=0000beef");
+        CollectionAssert.Contains(messages,
+            "hr=0x80070005(ERROR_ACCESS_DENIED) st=0xc0000022(STATUS_ACCESS_DENIED) guid=11223344-5566-7788-99aa-bbccddeeff00");
+    }
+
+    [TestMethod]
+    public void ManagedDecode_CountedStringsSidAndMore_MatchesTracefmt()
+    {
+        // Round 2 (tools/WppTypes2Emitter): counted strings, SID, GUID aliases, WINERROR, IP/port, i64 hex/octal.
+        // Verified vs tracefmt. NOTE the one deliberate divergence: SID renders as the canonical, portable
+        // "S-1-5-18"; tracefmt resolves it to a locale/machine-dependent account name (\\NT AUTHORITY\SYSTEM).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wpptypes2-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "counted a=CountedAnsi w=CountedWide");           // ItemPString/ItemPWString (counted)
+        CollectionAssert.Contains(messages, "sid=S-1-5-18");                                   // ItemSid (canonical)
+        CollectionAssert.Contains(messages,
+            "clsid=aabbccdd-eeff-1122-3344-556677889900 iid=aabbccdd-eeff-1122-3344-556677889900"); // ItemCLSID/ItemIID
+        CollectionAssert.Contains(messages, "werr=2(ERROR_FILE_NOT_FOUND) i64X=0xABCDEF i64o=777");  // WINERROR/XX/O
+        CollectionAssert.Contains(messages, "ip=127.0.0.1 port=80");                           // ItemIPAddr/ItemPort
+    }
+
+    [TestMethod]
+    public void ManagedDecode_EnumsFlagsAndSets_MatchesTracefmt()
+    {
+        // Enum/list + bitset types whose value→name tables are embedded in the TMF (tools/WppEnumEmitter):
+        //  - ItemListLong(false,true)      -> "0x00000001(true)"
+        //  - ItemListByte(Low,APC,DPC)     -> "0x00000002(DPC)"
+        //  - ItemSetLong(1,2,…,32) bitset  -> "[1,3]" for bits 0+2. All vs tracefmt.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppenum-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "b=0x00000001(true) irql=0x00000002(DPC)");
+        CollectionAssert.Contains(messages, "set=[1,3]");
+    }
+
+    [TestMethod]
+    public void ManagedDecode_TimestampAndFourCC_MatchesTracefmt()
+    {
+        // ItemChar4 (FourCC) matches tracefmt exactly. ItemTimestamp (8-byte FILETIME) is rendered in stable
+        // UTC — tracefmt shows LOCAL time (timezone-dependent), so we deliberately diverge for a portable,
+        // CI-safe result. The fixture's FILETIME is a fixed 2020-01-01T00:00:00Z (tools/WppTimeEmitter).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wpptime-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "cc=RGBA");                         // ItemChar4 (== tracefmt)
+        CollectionAssert.Contains(messages, "ts=2020-01-01 00:00:00.000Z");     // ItemTimestamp (UTC, TZ-independent)
+    }
+
+    [TestMethod]
+    public void ManagedDecode_DoubleDeltaAndRawStrings_MatchesTracefmt()
+    {
+        // ItemDouble (printf %g), ItemTimeDelta (seconds), ItemRString/ItemRWString (raw NUL-term strings).
+        // All vs tracefmt (tools/WppMiscEmitter).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppmisc-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "dbl=3.14062 delta=5.000s");   // ItemDouble (%g) + ItemTimeDelta
+        CollectionAssert.Contains(messages, "raw a=RawAnsi w=RawWide");    // ItemRString / ItemRWString
+    }
+
+    [TestMethod]
+    public void ManagedDecode_PdbResolvedEnums_MatchesTracefmt()
+    {
+        // ItemEnum(_MYSTATE) / ItemFlagsEnum(_MYFLAGS): the value→name table comes from the TMF's #enumv
+        // blocks (tracepdb reads the C enum from the PDB). tools/WppEnum2Emitter. Vs tracefmt:
+        //   ItemEnum value 1      -> "StateActive"
+        //   ItemFlagsEnum 0x5     -> "FlagRead | FlagExec(0x5)"
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppenum2-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "state=StateActive flags=FlagRead | FlagExec(0x5)");
+    }
+
+    [TestMethod]
+    public void ManagedDecode_HexDumpAndWaitTime_Decode()
+    {
+        // ItemHexDump (BIN, USHORT length + bytes) and ItemWaitTime (FILETIME). tools/WppBinEmitter.
+        // Both diverge from tracefmt deliberately: tracefmt renders BIN EMPTY inline (we emit the hex,
+        // which is more useful), and renders ItemWaitTime in LOCAL time (we use UTC, like ItemTimestamp).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppbin-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "hex=DEADBEEF00112233");        // ItemHexDump (bytes; tracefmt: empty)
+        CollectionAssert.Contains(messages, "due=2020-01-01 00:00:00.000Z"); // ItemWaitTime (UTC)
+    }
+
+    [TestMethod]
+    public void ManagedDecode_NdisStatusAndOid_MatchesTracefmt()
+    {
+        // ItemNDIS_STATUS / ItemNDIS_OID: "0x{hex}(SYMBOL)" from complete tables generated from km/ndis.h +
+        // ntddndis.h. tools/WppNdisEmitter. Byte-for-byte vs tracefmt.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppndis-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages,
+            "nst=0x4001000b(NDIS_STATUS_MEDIA_CONNECT) noid=0x00010101(OID_GEN_SUPPORTED_LIST)");
+    }
+}
+
+/// <summary>
+/// Prototype: decode WPP in MANAGED code (no WDK/tracefmt.exe). tracefmt is a thin front-end over the OS
+/// WPP format engine; this exercises a managed reimplementation of the two halves we can test without a
+/// live capture: the TMF parser (<see cref="TmfDatabase"/>) and the arg-decode + printf format engine
+/// (<see cref="WppMessageFormatter"/>). Fixtures are WppEmitter's committed .tmf + its known source, so the
+/// expected strings are exactly what tracefmt emits for those two trace statements. The event→(guid,msgNum,
+/// blob) WIRE read is the remaining (capture-format-dependent) piece and is prototyped/gated separately.
+/// </summary>
+[TestClass]
+public sealed class ManagedWppDecoderTests
+{
+    private static readonly Guid WppEmitterGuid = Guid.Parse("9b93a332-c452-3e71-64f7-55130c7de2e4");
+
+    private static TmfDatabase LoadWppEmitterTmf()
+        => TmfDatabase.LoadDirectory(MixedFilterFixtureGenerator.WppEmitterTmfDir());
+
+    // ---- TMF parser ----
+
+    [TestMethod]
+    public void Tmf_Parses_BothWppEmitterStatements()
+    {
+        var db = LoadWppEmitterTmf();
+        Assert.AreEqual(2, db.Count, "WppEmitter.cpp has two DoTraceMessage statements → two TMF entries");
+
+        Assert.IsTrue(db.TryGet(WppEmitterGuid, 10, out var workItem), "message #10 (the TRACE_GENERAL 'work item')");
+        Assert.AreEqual("WppEmitter_cpp36", workItem.Tag);
+        Assert.AreEqual("findneedle", workItem.Component);
+        CollectionAssert.AreEqual(new[] { 10, 11 }, workItem.Args.Select(a => a.ArgNumber).ToArray());
+        CollectionAssert.AreEqual(new[] { "ItemLong", "ItemLong" }, workItem.Args.Select(a => a.TypeName).ToArray());
+
+        Assert.IsTrue(db.TryGet(WppEmitterGuid, 11, out var detail), "message #11 (the TRACE_DETAIL 'detail')");
+        Assert.AreEqual("WppEmitter_cpp40", detail.Tag);
+    }
+
+    // ---- arg-decode + format engine, end-to-end against the real TMF ----
+
+    private static byte[] TwoInts(int a, int b)
+        => BitConverter.GetBytes(a).Concat(BitConverter.GetBytes(b)).ToArray();
+
+    [TestMethod]
+    public void Format_WorkItem_MatchesTracefmtOutput()
+    {
+        var db = LoadWppEmitterTmf();
+        Assert.IsTrue(db.TryGet(WppEmitterGuid, 10, out var e));
+
+        // WppEmitter.cpp:36 emits (id=i, status=(i & 0xff)). For i=427: id=427, status=0xAB.
+        var msg = WppMessageFormatter.Format(e, TwoInts(427, 0xAB));
+
+        Assert.AreEqual("WppEmitter work item id=427 status=0xab phase=startup provider=WppEmitter", msg);
+    }
+
+    [TestMethod]
+    public void Format_Detail_MatchesTracefmtOutput()
+    {
+        var db = LoadWppEmitterTmf();
+        Assert.IsTrue(db.TryGet(WppEmitterGuid, 11, out var e));
+
+        // WppEmitter.cpp:40 emits (seq=i, value=i % 7919). For i=42: seq=42, value=42.
+        var msg = WppMessageFormatter.Format(e, TwoInts(42, 42));
+
+        Assert.AreEqual("WppEmitter detail seq=42 note=processing-record value=42 category=Detail", msg);
+    }
+
+    // ---- printf-spec engine (isolated) ----
+
+    // Render a single-arg WPP message: one arg of the given item type, value = 4-byte LE code, format "%10!s!".
+    private static string Render1(string itemType, uint code)
+    {
+        var e = new TmfEntry
+        {
+            MessageGuid = WppEmitterGuid, MessageNumber = 1, Format = "%10!s!",
+            Args = new[] { new TmfArg(10, itemType) },
+        };
+        return WppMessageFormatter.Format(e, BitConverter.GetBytes(code));
+    }
+
+    [TestMethod]
+    public void SymbolTables_AreComplete_ResolveDiverseCodes()
+    {
+        // The full NTSTATUS / Win32 / HRESULT tables are generated from the SDK headers and embedded. Prove
+        // they're complete (not a hand-picked subset) by resolving a spread of *uncommon* codes end-to-end.
+        // NTSTATUS (ntstatus.h):
+        Assert.AreEqual("0xc0000005(STATUS_ACCESS_VIOLATION)", Render1("ItemNTSTATUS", 0xC0000005));
+        Assert.AreEqual("0xc0000135(STATUS_DLL_NOT_FOUND)", Render1("ItemNTSTATUS", 0xC0000135));
+        Assert.AreEqual("0xc0000409(STATUS_STACK_BUFFER_OVERRUN)", Render1("ItemNTSTATUS", 0xC0000409));
+        Assert.AreEqual("0xc00000fd(STATUS_STACK_OVERFLOW)", Render1("ItemNTSTATUS", 0xC00000FD));
+        // Win32 (winerror.h), decimal:
+        Assert.AreEqual("32(ERROR_SHARING_VIOLATION)", Render1("ItemWINERROR", 32));
+        Assert.AreEqual("1450(ERROR_NO_SYSTEM_RESOURCES)", Render1("ItemWINERROR", 1450));
+        Assert.AreEqual("1223(ERROR_CANCELLED)", Render1("ItemWINERROR", 1223));
+        // HRESULT (winerror.h) — non-FACILITY_WIN32 use the HRESULT symbol:
+        Assert.AreEqual("0x80004003(E_POINTER)", Render1("ItemHRESULT", 0x80004003));
+        Assert.AreEqual("0x8000ffff(E_UNEXPECTED)", Render1("ItemHRESULT", 0x8000FFFF));
+        // FACILITY_WIN32 HRESULT (0x8007xxxx) renders the Win32 name, like tracefmt:
+        Assert.AreEqual("0x80070005(ERROR_ACCESS_DENIED)", Render1("ItemHRESULT", 0x80070005));
+        Assert.AreEqual("0x8007007b(ERROR_INVALID_NAME)", Render1("ItemHRESULT", 0x8007007B));
+        // Unknown codes fall back to the bare value (never throw):
+        Assert.AreEqual("0x12345678", Render1("ItemNTSTATUS", 0x12345678));
+        Assert.AreEqual("4042322160", Render1("ItemWINERROR", 0xF0F0F0F0));
+    }
+
+    [TestMethod]
+    public void ApplyFormat_HandlesCommonSpecs()
+    {
+        var args = new Dictionary<int, object>
+        {
+            [10] = 255,        // int
+            [11] = (uint)4096, // uint
+            [12] = "hello",    // string
+        };
+        // decimal, lowercase hex, uppercase hex, zero-padded hex, unsigned, string, and %% literal.
+        Assert.AreEqual("255", WppMessageFormatter.ApplyFormat("%10!d!", args));
+        Assert.AreEqual("ff", WppMessageFormatter.ApplyFormat("%10!x!", args));
+        Assert.AreEqual("FF", WppMessageFormatter.ApplyFormat("%10!X!", args));
+        Assert.AreEqual("00ff", WppMessageFormatter.ApplyFormat("%10!04x!", args));
+        Assert.AreEqual("4096", WppMessageFormatter.ApplyFormat("%11!u!", args));
+        Assert.AreEqual("hello", WppMessageFormatter.ApplyFormat("%12!s!", args));
+        Assert.AreEqual("100%", WppMessageFormatter.ApplyFormat("%10!d!%%", new Dictionary<int, object> { [10] = 100 }));
+    }
+
+    [TestMethod]
+    public void ApplyFormat_Prefix_And_MissingArgs_RenderEmpty()
+    {
+        // %0 (WPP prefix) and reserved/missing %1..%9 render as nothing, so the surrounding text still forms.
+        var args = new Dictionary<int, object> { [10] = 7 };
+        Assert.AreEqual("val=7", WppMessageFormatter.ApplyFormat("%0val=%10!d!", args));
+        Assert.AreEqual("a=b=7", WppMessageFormatter.ApplyFormat("a=%3!d!b=%10!d!", args));
+    }
+
+    // ---- arg decoder (isolated) ----
+
+    [TestMethod]
+    public void DecodeArgs_ReadsTypedValuesInBlobOrder()
+    {
+        var e = new TmfEntry
+        {
+            MessageGuid = WppEmitterGuid,
+            MessageNumber = 99,
+            Format = "%10!d! %11!x!",
+            Args = new[] { new TmfArg(10, "ItemLong"), new TmfArg(11, "ItemULong") },
+        };
+        var vals = WppMessageFormatter.DecodeArgs(e, TwoInts(-5, unchecked((int)0xDEADBEEF)));
+        Assert.AreEqual(-5, (int)vals[10]);
+        Assert.AreEqual(0xDEADBEEFu, (uint)vals[11]);
+    }
+}

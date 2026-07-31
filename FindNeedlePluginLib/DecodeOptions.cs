@@ -13,4 +13,21 @@ public static class DecodeOptions
     /// viewer's "Decode anyway" action for ETLs whose WPP symbols (TMFs) are missing.
     /// </summary>
     public static bool ForceFullDecode { get; set; }
+
+    /// <summary>Which WPP decoder the ETL processor uses. Set by the host from user settings.</summary>
+    public static WppDecoder WppDecoder { get; set; } = WppDecoder.Auto;
+}
+
+/// <summary>How a WPP (classic) ETL is decoded.</summary>
+public enum WppDecoder
+{
+    /// <summary>tracefmt if the WDK is available, otherwise the managed decoder (default).</summary>
+    Auto,
+    /// <summary>Always the WDK's tracefmt.exe (today's behavior).</summary>
+    Tracefmt,
+    /// <summary>Always the built-in managed decoder — no WDK / no external process.</summary>
+    Managed,
+    /// <summary>Run BOTH tracefmt and the managed decoder and keep whichever decoded more events (tie →
+    /// tracefmt, the reference). ~2× decode cost; also surfaces any divergence between the two.</summary>
+    Compare,
 }

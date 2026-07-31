@@ -432,6 +432,20 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             return EtlDecodeOutcome.Handled;
         }
 
+        // WPP decoder selection. Managed mode (or Auto when the WDK/tracefmt isn't available) decodes the WPP
+        // trace in-process with no external tools. It returns the same outcomes as the tracefmt path, so the
+        // provision-and-retry-once logic in DoPreProcessing (ISymbolResolver plugins → BuildTmfs → refreshed
+        // TRACE_FORMAT_SEARCH_PATH) wraps it identically — the managed decode is retried after symbols land.
+        if (DecodeOptions.WppDecoder == FindNeedlePluginLib.WppDecoder.Compare)
+        {
+            return DecodeEtlCompare(cancellationToken);
+        }
+        if (DecodeOptions.WppDecoder == FindNeedlePluginLib.WppDecoder.Managed
+            || (DecodeOptions.WppDecoder == FindNeedlePluginLib.WppDecoder.Auto && !TraceFmt.IsAvailable()))
+        {
+            return DecodeEtlManaged(cancellationToken);
+        }
+
         // Fast pre-scan: decode only the first few MB to estimate decodability before the full (slow,
         // processing-bound) run. If the sample is ~all unformattable, it's a missing-symbols problem —
         // report the missing GUIDs instead of grinding the whole file. Skipped for "Decode anyway".
@@ -475,6 +489,158 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         }
 
         return EtlDecodeOutcome.FormattedNeedsParse;
+    }
+
+    /// <summary>
+    /// Decode the WPP .etl in managed code (no WDK / no tracefmt.exe) and write the result in tracefmt's text
+    /// format, so the existing <see cref="ParseFormattedOutput"/> consumes it identically (same ETLLogLine
+    /// objects, same streaming/scope). TMFs come from TRACE_FORMAT_SEARCH_PATH — the same env var tracefmt
+    /// reads, set by the host from the user's symbol settings + the managed TMF cache. Returns the SAME
+    /// outcomes as the tracefmt path, so the missing-symbols fail-fast + the ISymbolResolver provisioning
+    /// retry in DoPreProcessing apply unchanged (the managed decode is simply retried once symbols land).
+    /// </summary>
+    private EtlDecodeOutcome DecodeEtlManaged(CancellationToken cancellationToken)
+    {
+        FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
+        _progressSink?.NotifyProgress(5, "Decoding ETL (managed WPP decoder)…");
+        var outFile = Path.Combine(tempPath, "managed-wpp.fmt.txt");
+        long formatted, unresolved; int tmfCount; HashSet<string> guids;
+        try { (formatted, unresolved, tmfCount, guids) = RunManagedWpp(outFile, cancellationToken); }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"Managed WPP decode failed for {inputfile}: {ex.Message}");
+            _progressSink?.NotifyProgress(100, $"Managed WPP decode failed: {ex.Message}");
+            return EtlDecodeOutcome.Handled;
+        }
+        return FinishManagedResult(outFile, formatted, unresolved, tmfCount, guids, "managed WPP");
+    }
+
+    /// <summary>Run the managed WPP decoder, writing tracefmt-format text to <paramref name="outFile"/>.
+    /// Returns the formatted/unresolved counts, the TMF-entry count, and the distinct unresolved message GUIDs.
+    /// Does NOT touch currentResult — callers decide how to use it (single-decoder vs compare).</summary>
+    private (long formatted, long unresolved, int tmfCount, HashSet<string> guids) RunManagedWpp(string outFile, CancellationToken ct)
+    {
+        var tmf = LoadTmfDatabaseFromSearchPath();
+        var decoder = new findneedle.Wpp.ManagedWppEtlDecoder(tmf);
+        long formatted = 0;
+        using (var w = new StreamWriter(outFile, append: false, Encoding.UTF8))
+        {
+            decoder.Decode(inputfile, ev =>
+            {
+                if (ct.IsCancellationRequested) return;
+                w.WriteLine(ManagedWppLine(ev));
+                formatted++;
+            }, ct);
+        }
+        var guids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var g in decoder.UnresolvedGuids) guids.Add(g.ToString());
+        return (formatted, decoder.Unresolved, tmf.Count, guids);
+    }
+
+    // Set currentResult from a managed decode + apply the shared missing-symbols fail-fast (→ provisioning retry).
+    private EtlDecodeOutcome FinishManagedResult(string outFile, long formatted, long unresolved, int tmfCount,
+        HashSet<string> guids, string methodLabel)
+    {
+        long total = formatted + unresolved;
+        currentResult = new TraceFmtResult
+        {
+            outputfile = outFile,
+            TotalEventsProcessed = (int)Math.Min(total, int.MaxValue),
+            TotalFormatsUnknown = (int)Math.Min(unresolved, int.MaxValue),
+            ConsoleOutput = $"(managed WPP decoder: {formatted:N0} formatted, {unresolved:N0} without TMF; {tmfCount} TMF entries loaded)",
+        };
+        foreach (var g in guids) _missingTmfGuids.Add(g);
+        Logger.Instance.Log($"Managed WPP decode {inputfile}: {formatted} formatted, {unresolved} unresolved, {tmfCount} TMF entries");
+
+        if (!DecodeOptions.ForceFullDecode && total > 0 && unresolved >= total * 0.99)
+        {
+            _decodeMethod = methodLabel + " — symbols missing";
+            _lastDecodeRowCount = 0;
+            return EtlDecodeOutcome.MissingSymbols;
+        }
+        _decodeMethod = methodLabel;
+        return EtlDecodeOutcome.FormattedNeedsParse;
+    }
+
+    /// <summary>
+    /// Compare mode: decode with BOTH tracefmt and the managed decoder, then keep whichever formatted more
+    /// events (tie, or tracefmt-only, → tracefmt as the reference). ~2× decode cost. Also logs any divergence
+    /// between the two — a live check of the managed decoder against tracefmt on real traces. Returns the same
+    /// outcomes as the single-decoder paths, so the missing-symbols → provisioning → retry logic still applies.
+    /// </summary>
+    private EtlDecodeOutcome DecodeEtlCompare(CancellationToken cancellationToken)
+    {
+        FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
+        _progressSink?.NotifyProgress(5, "Decoding ETL (comparing tracefmt vs managed)…");
+
+        // tracefmt (only if the WDK is available).
+        TraceFmtResult tf = null;
+        long tfFormatted = -1, tfUnknown = 0;
+        if (TraceFmt.IsAvailable())
+        {
+            try { tf = TraceFmt.ParseSimpleETL(inputfile, tempPath, _progressSink); }
+            catch (Exception ex) { Logger.Instance.Log($"WPP compare: tracefmt failed for {inputfile}: {ex.Message}"); tf = null; }
+            if (tf != null) { tfUnknown = tf.TotalFormatsUnknown; tfFormatted = Math.Max(0, tf.TotalEventsProcessed - tf.TotalFormatsUnknown); }
+        }
+
+        // managed.
+        var managedOut = Path.Combine(tempPath, "managed-wpp.fmt.txt");
+        long mFormatted = -1, mUnresolved = 0; int mTmf = 0; HashSet<string> mGuids = new(StringComparer.OrdinalIgnoreCase);
+        try { (mFormatted, mUnresolved, mTmf, mGuids) = RunManagedWpp(managedOut, cancellationToken); }
+        catch (Exception ex) { Logger.Instance.Log($"WPP compare: managed failed for {inputfile}: {ex.Message}"); mFormatted = -1; }
+
+        // Winner: more formatted events wins; tie / tracefmt-only → tracefmt (the reference).
+        bool useManaged = tf == null ? mFormatted >= 0 : mFormatted > tfFormatted;
+        bool differ = tf != null && mFormatted >= 0 && mFormatted != tfFormatted;
+        Logger.Instance.Log($"WPP compare {inputfile}: tracefmt formatted={tfFormatted} unknown={tfUnknown}; " +
+            $"managed formatted={mFormatted} unresolved={mUnresolved} (tmf={mTmf}) -> using {(useManaged ? "managed" : "tracefmt")}{(differ ? "  (DIFFER)" : "")}");
+        if (differ)
+            _progressSink?.NotifyProgress($"WPP compare: tracefmt {tfFormatted:N0} vs managed {mFormatted:N0} rows — using {(useManaged ? "managed" : "tracefmt")}");
+
+        if (useManaged)
+            return FinishManagedResult(managedOut, mFormatted, mUnresolved, mTmf, mGuids, "managed WPP (compare)");
+
+        // tracefmt won (or managed failed / both failed).
+        if (tf == null) { _progressSink?.NotifyProgress(100, "Both WPP decoders failed."); return EtlDecodeOutcome.Handled; }
+        currentResult = tf;
+        long total = tf.TotalEventsProcessed;
+        if (!DecodeOptions.ForceFullDecode && total > 0 && tfUnknown >= total * 0.99)
+        {
+            _decodeMethod = "tracefmt (WPP) (compare) — symbols missing";
+            _lastDecodeRowCount = 0;
+            SampleMissingGuids(tf.outputfile, 200_000);
+            return EtlDecodeOutcome.MissingSymbols;
+        }
+        _decodeMethod = "tracefmt (WPP) (compare)";
+        return EtlDecodeOutcome.FormattedNeedsParse;
+    }
+
+    // One decoded WPP event → tracefmt's text line format, so ETLLogLine reparses it exactly like tracefmt output.
+    private static string ManagedWppLine(findneedle.Wpp.WppDecodedEvent e)
+    {
+        var src = string.IsNullOrEmpty(e.Component) ? "WPP" : e.Component;
+        return $"[0]{e.ProcessId:X}.{e.ThreadId:X}::{e.TimeStamp:MM/dd/yyyy-HH:mm:ss.fff} [{src}]{e.Message}";
+    }
+
+    // Load every TMF on TRACE_FORMAT_SEARCH_PATH (the same paths tracefmt searches) into a managed database.
+    private static findneedle.Wpp.TmfDatabase LoadTmfDatabaseFromSearchPath()
+    {
+        var db = new findneedle.Wpp.TmfDatabase();
+        var paths = Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH");
+        if (!string.IsNullOrEmpty(paths))
+        {
+            foreach (var p in paths.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                try
+                {
+                    if (Directory.Exists(p))
+                        foreach (var f in Directory.EnumerateFiles(p, "*.tmf", SearchOption.AllDirectories))
+                            db.AddFile(f);
+                }
+                catch { /* skip an unreadable dir */ }
+            }
+        }
+        return db;
     }
 
     /// <summary>Terminal report for the "≈all events unformattable = missing WPP symbols" case: retain the
@@ -654,6 +820,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     {
         const long probe = 20000;
         long handled = 0, unhandled = 0;
+        // A valid .etl holds at least one ETW buffer + headers; a tiny/garbage/truncated file makes the
+        // ETWTraceEventSource CONSTRUCTOR throw, and TraceEvent's finalizer then NREs (Dispose(false) on a
+        // half-built object) and crashes the whole process on a later GC. Guard the probe: too-small files
+        // aren't a real capture — return false and let the tracefmt/managed path report them.
+        try { if (!File.Exists(etlPath) || new FileInfo(etlPath).Length < 512) return false; }
+        catch { return false; }
         try
         {
             using var source = new Microsoft.Diagnostics.Tracing.ETWTraceEventSource(etlPath);

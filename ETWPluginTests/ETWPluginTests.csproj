@@ -116,6 +116,73 @@
     <None Update="SampleWDK\tracefmt.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Tiny real WppEmitter capture (16 KB) for the managed-WPP-decoder end-to-end test (no WDK/admin needed). -->
+    <None Update="WppFixtures\wppemitter-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Real WPP capture with STRING args (%s ANSI + %ws wide) + its TMF, for the managed string-decode test. -->
+    <None Update="WppFixtures\wppstr-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\744151fd-b3f4-32e6-38eb-0fd11e3fb62d.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Real WPP capture exercising C++/Win32 + pointer types (int/i64/hex/%p/HRESULT/NTSTATUS/GUID) + its TMF. -->
+    <None Update="WppFixtures\wpptypes-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\4857fab7-1162-3184-360b-cdd863ddf4ea.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Round 2: counted strings, SID, GUID aliases, WINERROR, IP/port, i64 hex/octal. -->
+    <None Update="WppFixtures\wpptypes2-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\6033c1c6-a9fa-394c-0bc0-1581cb94150e.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Enum/list + bitset flags (value->name tables embedded in the TMF). -->
+    <None Update="WppFixtures\wppenum-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\d4153fff-ac08-361f-5ed7-af1d38cd1903.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- FILETIME timestamp + FourCC. -->
+    <None Update="WppFixtures\wpptime-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\8ff2a761-4025-3d98-c3fc-1bc40b34330d.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- double (%g), time delta, raw LPCSTR/LPCWSTR strings. -->
+    <None Update="WppFixtures\wppmisc-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\2363c985-9b6e-3283-34a7-e8c27a60b889.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- PDB-resolved ItemEnum / ItemFlagsEnum (#enumv tables). -->
+    <None Update="WppFixtures\wppenum2-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\035fd70f-a54a-3c13-f6c5-f7f2b19c92ec.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- ItemHexDump (BIN) + ItemWaitTime. -->
+    <None Update="WppFixtures\wppbin-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\4305d668-552d-302b-a84c-fbcf09373bf6.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- ItemNDIS_STATUS / ItemNDIS_OID. -->
+    <None Update="WppFixtures\wppndis-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\4bfa7244-5583-3195-181b-88348eb33cdb.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 

@@ -1,0 +1,8 @@
+// PDB:  C:\Users\crimson\AppData\Local\Temp\claude\C--Users-crimson-source-repos-guscatalano-findneedle\d76ed639-cfd9-4e2f-8d19-e0419c9bb951\scratchpad\ndisemit\WppNdisEmitter.pdb
+// PDB:  Last Updated :2026-07-31:10:13:10:938 (UTC) [tracepdb]
+4bfa7244-5583-3195-181b-88348eb33cdb findneedle // SRC=WppNdisEmitter.cpp MJ= MN=
+#typev WppNdisEmitter_cpp14 10 "%0nst=%10!s! noid=%11!s!" //   LEVEL=ND FUNC=main
+{
+(int)0x4001000B, ItemNDIS_STATUS -- 10
+(unsigned)0x00010101, ItemNDIS_OID -- 11
+}

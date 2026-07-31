@@ -1,0 +1,20 @@
+// PDB:  C:\Users\crimson\AppData\Local\Temp\claude\C--Users-crimson-source-repos-guscatalano-findneedle\d76ed639-cfd9-4e2f-8d19-e0419c9bb951\scratchpad\enum2\WppEnum2Emitter.pdb
+// PDB:  Last Updated :2026-07-31:10:01:17:873 (UTC) [tracepdb]
+035fd70f-a54a-3c13-f6c5-f7f2b19c92ec findneedle // SRC=WppEnum2Emitter.cpp MJ= MN=
+#typev WppEnum2Emitter_cpp15 10 "%0state=%10!s! flags=%11!s!" //   LEVEL=E2 FUNC=main
+{
+s, ItemEnum(_MYSTATE) -- 10
+f, ItemFlagsEnum(_MYFLAGS) -- 11
+}
+#enumv _MYSTATE
+{
+StateIdle,0x0
+StateActive,0x1
+StateError,0x2
+}
+#enumv _MYFLAGS
+{
+FlagRead,0x1
+FlagWrite,0x2
+FlagExec,0x4
+}

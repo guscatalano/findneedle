@@ -1,0 +1,12 @@
+// PDB:  C:\Users\crimson\AppData\Local\Temp\claude\C--Users-crimson-source-repos-guscatalano-findneedle\d76ed639-cfd9-4e2f-8d19-e0419c9bb951\scratchpad\stremit\WppStrEmitter.pdb
+// PDB:  Last Updated :2026-07-31:08:50:51:664 (UTC) [tracepdb]
+744151fd-b3f4-32e6-38eb-0fd11e3fb62d findneedle // SRC=WppStrEmitter.cpp MJ= MN=
+#typev WppStrEmitter_cpp29 11 "%0widetrace user=%10!s! role=admin" //   LEVEL=STR_GENERAL FUNC=main
+{
+L'root', ItemWString -- 10
+}
+#typev WppStrEmitter_cpp27 10 "%0strtrace name=%10!s! id=%11!d! tag=END" //   LEVEL=STR_GENERAL FUNC=main
+{
+names[i], ItemString -- 10
+i, ItemLong -- 11
+}

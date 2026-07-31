@@ -1,0 +1,12 @@
+// PDB:  C:\Users\crimson\AppData\Local\Temp\claude\C--Users-crimson-source-repos-guscatalano-findneedle\d76ed639-cfd9-4e2f-8d19-e0419c9bb951\scratchpad\enumemit\WppEnumEmitter.pdb
+// PDB:  Last Updated :2026-07-31:09:29:39:548 (UTC) [tracepdb]
+d4153fff-ac08-361f-5ed7-af1d38cd1903 findneedle // SRC=WppEnumEmitter.cpp MJ= MN=
+#typev WppEnumEmitter_cpp21 11 "%0set=%10!s!" //   LEVEL=EN FUNC=main
+{
+(unsigned long)0x5, ItemSetLong(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32) -- 10
+}
+#typev WppEnumEmitter_cpp20 10 "%0b=%10!s! irql=%11!s!" //   LEVEL=EN FUNC=main
+{
+TRUE, ItemListLong(false,true) -- 10
+2 /*DPC*/, ItemListByte(Low,APC,DPC) -- 11
+}
