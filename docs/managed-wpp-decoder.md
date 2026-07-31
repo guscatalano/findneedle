@@ -59,11 +59,37 @@ If completed, this removes the last hard native/WDK dependency on the WPP decode
 reader + this code. The heavy lift left is the long tail of WPP type/spec coverage, not the core mechanism
 (which is proven).
 
+## Real-world coverage run (throwing random machine WPP at it)
+
+Captured 456 MB of real activity (`wpr -start GeneralProfile`, ~2.5M events) and ran the decoder over all
+of it (`ManagedWppProbe.Probe_CoverageReport`):
+
+- **2,490,652** events total; **191,729** were WPP-shaped (classic/unhandled + a task GUID), across **6**
+  distinct message GUIDs; processed in ~3 s.
+- **Zero decode exceptions** — the arg reader survived every real, varied WPP blob. (Robustness: the point
+  of this run.)
+- **0 decoded** — because those 6 are OS providers' **message GUIDs** (the `.tmf` source-file identity, not
+  control GUIDs — you can't even enable them directly), and their format strings live in the components'
+  **private** PDBs, which we don't have.
+
+Is that a decoder gap, or fundamental? Ran the **real WDK tracefmt with Microsoft's public symbol server**
+(`_NT_SYMBOL_PATH=srv*…msdl`) over an equivalent capture: **every** WPP message GUID it saw
+(`a669021c` ×350K, `def2fe46` ×85K, `3d6fa8d1` ×39K, `e43445e0` ×25K, …) landed in **Unknown/Error**. Not a
+single OS WPP provider formatted — Microsoft strips WPP trace-format data from public symbols. (tracefmt's
+millions of "formatted" lines were **kernel MOF + manifest** events, which TraceEvent/our pipeline already
+decode — not WPP.)
+
+**Conclusion:** random OS WPP is undecodable without the owning component's private PDB — for tracefmt and
+for us alike. The managed decoder's job is to (a) read all WPP robustly [proven at scale] and (b) fully
+decode whatever TMFs the user *can* supply [proven byte-for-byte vs tracefmt]. It is not, and can't be,
+"decode arbitrary OS WPP with no symbols" — nothing can.
+
 ## Files
 
 - `ETWPlugin/Wpp/TmfDatabase.cs` — TMF parser.
 - `ETWPlugin/Wpp/WppMessageFormatter.cs` — arg decode + printf format engine.
 - `ETWPlugin/Wpp/ManagedWppEtlDecoder.cs` — ETL → decoded events (via TraceEvent).
 - `ETWPluginTests/ManagedWppDecoderTests.cs` / `ManagedWppEndToEndTests` — unit + end-to-end tests.
-- `ETWPluginTests/ManagedWppProbe.cs` — the wire-format calibration probe (gated on env vars).
+- `ETWPluginTests/ManagedWppProbe.cs` — the wire-format calibration probe + coverage/robustness report over an
+  arbitrary capture (both gated on env vars).
 - `ETWPluginTests/WppFixtures/wppemitter-sample.etl` — the 16 KB real capture used by the E2E test.
