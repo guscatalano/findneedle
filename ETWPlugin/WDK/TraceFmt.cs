@@ -121,6 +121,15 @@ public class TraceFmtResult
 
 public class TraceFmt
 {
+    // --- Test seam (unit tests only) --- lets a test drive the ETL decode outcome deterministically
+    // without a real WPP capture. WppEmitter traces are self-describing (their format info rides along in
+    // the .etl), so they can't reproduce the "missing symbols / all-unknown" case the on-demand symbol
+    // provisioning exists for; these hooks let ETWPluginTests simulate all-unknown vs formatted output
+    // across a provisioning retry. Null in production. Same public-hook convention as WDKFinder.TEST_MODE.
+    public static Func<string, string, TraceFmtResult> TEST_PreScanOverride;
+    public static Func<string, string, TraceFmtResult> TEST_ParseSimpleOverride;
+    public static void ResetTestOverrides() { TEST_PreScanOverride = null; TEST_ParseSimpleOverride = null; }
+
     /// <summary>
     /// Fast decodability pre-scan: run tracefmt over just the first <paramref name="sampleBytes"/> of
     /// the ETL (a copied prefix) instead of the whole file, to estimate how much is formattable BEFORE
@@ -130,6 +139,7 @@ public class TraceFmt
     /// </summary>
     public static TraceFmtResult PreScan(string etl, string temppath, SearchProgressSink? progressSink = null, long sampleBytes = 8L * 1024 * 1024)
     {
+        if (TEST_PreScanOverride != null) return TEST_PreScanOverride(etl, temppath);
         string traceFmtPath;
         try { traceFmtPath = GetRunnableTracefmt(); } catch { return null!; }
         if (string.IsNullOrEmpty(traceFmtPath) || !File.Exists(traceFmtPath) || !File.Exists(etl)) return null!;
@@ -191,6 +201,7 @@ public class TraceFmt
 
     public static TraceFmtResult ParseSimpleETL(string etl, string temppath, SearchProgressSink? progressSink = null)
     {
+        if (TEST_ParseSimpleOverride != null) return TEST_ParseSimpleOverride(etl, temppath);
         progressSink?.NotifyProgress(0, $"Starting TraceFmt for {etl}");
         string traceFmtPath = string.Empty;
         try

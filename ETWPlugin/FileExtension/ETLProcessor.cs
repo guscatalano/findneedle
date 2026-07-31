@@ -328,8 +328,11 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 if (provisioned)
                 {
                     Logger.Instance.Log($"Symbol provisioner produced new TMFs; retrying decode for {inputfile}");
+                    // Clear the first attempt's missing-symbols state so a successful retry doesn't inherit
+                    // the "symbols missing" method/flags (the shared fall-through only overwrites "(pending)").
                     _missingTmfGuids.Clear();
                     _prescanFailFast = false;
+                    _decodeMethod = "(pending)";
                     outcome = DecodeEtlOnce(cancellationToken);
                 }
                 else
