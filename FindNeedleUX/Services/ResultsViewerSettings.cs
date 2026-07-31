@@ -641,6 +641,14 @@ public static class ResultsViewerSettings
         set { Data.ScrollBarSize = ClampScrollBarSize(value); Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>Keep the results-grid scrollbars always visible (space-reserving) instead of the WinUI
+    /// auto-hiding overlay. On by default.</summary>
+    public static bool AlwaysShowScrollBars
+    {
+        get => Data.AlwaysShowScrollBars ?? true;
+        set { Data.AlwaysShowScrollBars = value; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>
     /// Font size (in px) of the result grid's row text. WinUI's default body size is ~14; this lets
     /// the user shrink it to fit more rows or grow it for readability. Clamped to a sane range so a
@@ -893,6 +901,7 @@ public static class ResultsViewerSettings
         public double? FilterPaneWidth { get; set; }
         public Dictionary<string, bool> ToolbarButtons { get; set; }
         public double? ScrollBarSize { get; set; }
+        public bool? AlwaysShowScrollBars { get; set; }
         public double? RowFontSize { get; set; }
         public double? RowHeightRatio { get; set; }
         public string EtwPayloadFormat { get; set; }

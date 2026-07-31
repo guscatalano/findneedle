@@ -249,6 +249,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Scrollbar size ---
             SelectComboItemByTag(ScrollBarSizeCombo,
                 ((int)ResultsViewerSettings.ScrollBarSize).ToString());
+            AlwaysShowScrollBarsToggle.IsOn = ResultsViewerSettings.AlwaysShowScrollBars;
 
             // --- Default sort ---
             SelectComboItemByTag(DefaultSortCombo, ResultsViewerSettings.DefaultSort.ToString());
@@ -538,6 +539,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (ScrollBarSizeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
             && double.TryParse(tag, out var size))
             ResultsViewerSettings.ScrollBarSize = size;
+    }
+
+    private void AlwaysShowScrollBarsToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        ResultsViewerSettings.AlwaysShowScrollBars = AlwaysShowScrollBarsToggle.IsOn;
     }
 
     // ----- Default sort -----
