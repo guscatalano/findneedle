@@ -5,9 +5,11 @@
 FindNeedle drop its WDK/tracefmt native dependency for WPP.
 
 **Status: wired into the decode path, validated end-to-end against real captures.** Selectable via
-`DecodeOptions.WppDecoder` (`Auto` / `Managed` / `Tracefmt`), surfaced as a "WPP decoder" setting in the
-Results-viewer settings. `Auto` (default) uses tracefmt when the WDK is installed and the managed decoder
+`DecodeOptions.WppDecoder` (`Auto` / `Managed` / `Tracefmt` / `Compare`), surfaced as a "WPP decoder" setting in
+the Results-viewer settings. `Auto` (default) uses tracefmt when the WDK is installed and the managed decoder
 otherwise — so existing behavior is unchanged where the WDK exists, and WPP now decodes with no WDK everywhere.
+`Compare` runs BOTH decoders and keeps whichever formatted more events (tie → tracefmt); it costs ~2× and logs
+any divergence, so it doubles as a live check of the managed decoder against tracefmt on real traces.
 
 ## Wiring into ETLProcessor
 

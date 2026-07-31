@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using findneedle.Implementations.FileExtensions;
+using findneedle.WDK;
 using FindNeedlePluginLib;
 
 namespace ETWPluginTests;
@@ -36,6 +37,54 @@ public sealed class ManagedWppIntegrationTests
         DecodeOptions.WppDecoder = WppDecoder.Auto; // don't leak Managed mode into other test classes
         WppSymbolProvisioning.Handler = null;
         DecodeOptions.ForceFullDecode = false;
+        TraceFmt.ResetTestOverrides();
+    }
+
+    // A fake tracefmt result: a text file with `lineCount` valid tracefmt-format lines + the matching counts.
+    private static TraceFmtResult FakeTracefmt(int lineCount)
+    {
+        var f = Path.Combine(Path.GetTempPath(), $"cmp_tf_{Guid.NewGuid():N}.txt");
+        using (var w = new StreamWriter(f))
+            for (int i = 0; i < lineCount; i++)
+                w.WriteLine($"[0]0ABC.0DEF::06/21/2026-12:00:00.000 [P]tracefmt line {i}");
+        return new TraceFmtResult { outputfile = f, TotalEventsProcessed = lineCount, TotalFormatsUnknown = 0 };
+    }
+
+    [TestMethod]
+    public void CompareMode_KeepsManaged_WhenItDecodesMore()
+    {
+        // Compare runs both; tracefmt is stubbed to format just 1 event, the managed decoder formats the
+        // fixture's 4 → Compare keeps managed's output.
+        if (!File.Exists(Etl)) Assert.Inconclusive($"fixture missing: {Etl}");
+        Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", TmfDir);
+        DecodeOptions.WppDecoder = WppDecoder.Compare;
+        TraceFmt.TEST_ParseSimpleOverride = (_, __) => FakeTracefmt(1);
+
+        using var p = new ETLProcessor();
+        p.OpenFile(Etl);
+        p.DoPreProcessing();
+        var results = p.GetResults();
+
+        Assert.AreEqual(4, results.Count, "managed(4) > tracefmt(1) → keep managed's 4 rows");
+        StringAssert.Contains(p.GetDecodeInfo()["method"], "managed WPP (compare)");
+    }
+
+    [TestMethod]
+    public void CompareMode_KeepsTracefmt_WhenItDecodesMore()
+    {
+        // Same, but tracefmt is stubbed to format 10 (> the managed 4) → Compare keeps tracefmt's output.
+        if (!File.Exists(Etl)) Assert.Inconclusive($"fixture missing: {Etl}");
+        Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", TmfDir);
+        DecodeOptions.WppDecoder = WppDecoder.Compare;
+        TraceFmt.TEST_ParseSimpleOverride = (_, __) => FakeTracefmt(10);
+
+        using var p = new ETLProcessor();
+        p.OpenFile(Etl);
+        p.DoPreProcessing();
+        var results = p.GetResults();
+
+        Assert.AreEqual(10, results.Count, "tracefmt(10) > managed(4) → keep tracefmt's 10 rows");
+        StringAssert.Contains(p.GetDecodeInfo()["method"], "tracefmt (WPP) (compare)");
     }
 
     [TestMethod]

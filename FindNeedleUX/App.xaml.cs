@@ -162,6 +162,7 @@ public partial class App : Application
         {
             "Managed" => FindNeedlePluginLib.WppDecoder.Managed,
             "Tracefmt" => FindNeedlePluginLib.WppDecoder.Tracefmt,
+            "Compare" => FindNeedlePluginLib.WppDecoder.Compare,
             _ => FindNeedlePluginLib.WppDecoder.Auto,
         };
     }

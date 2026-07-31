@@ -27,4 +27,7 @@ public enum WppDecoder
     Tracefmt,
     /// <summary>Always the built-in managed decoder — no WDK / no external process.</summary>
     Managed,
+    /// <summary>Run BOTH tracefmt and the managed decoder and keep whichever decoded more events (tie →
+    /// tracefmt, the reference). ~2× decode cost; also surfaces any divergence between the two.</summary>
+    Compare,
 }
