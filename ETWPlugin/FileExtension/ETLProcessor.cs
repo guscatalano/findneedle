@@ -54,6 +54,14 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private bool _deferredFmtParse = false;
     private bool _fmtParsed = false;
 
+    // Managed WPP decode is deferred + streamed the same way the modern path is: DoPreProcessing does a cheap
+    // sample pre-scan (for the missing-symbols fail-fast), then the real decode runs in GetResults(WithCallback)
+    // emitting rows straight to storage in batches (no in-memory buffering of the whole trace). _managedTmf is
+    // the TMF table loaded during the pre-scan, reused for the full decode.
+    private bool _managedWppDeferred = false;
+    private bool _managedDecoded = false;
+    private findneedle.Wpp.TmfDatabase _managedTmf;
+
     // How this file was decoded + the resulting row count, surfaced via GetDecodeInfo() for the
     // Statistics "Decode by file" breakdown. Set as DoPreProcessing / the decoders run.
     private string _decodeMethod = "(pending)";
@@ -294,6 +302,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         _missingTmfGuids.Clear();
         _deferredFmtParse = false;
         _fmtParsed = false;
+        _managedWppDeferred = false;
+        _managedDecoded = false;
+        _managedTmf = null;
 
         if (inputfile.EndsWith(".txt") || inputfile.EndsWith(".log"))
         {
@@ -347,11 +358,6 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     return; // modern-deferred / tracefmt-unavailable — DecodeEtlOnce already reported.
                 case EtlDecodeOutcome.MissingSymbols:
                     ReportMissingSymbolsAndBail(); // still missing after any provisioning → report + bail.
-                    return;
-                case EtlDecodeOutcome.Materialized:
-                    // Managed decoder already built the rows (with level/activity/cpu). Nothing to parse.
-                    Logger.Instance.Log($"Managed WPP decode complete for {inputfile}: method={_decodeMethod}, rows={_lastDecodeRowCount}");
-                    _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
                     return;
                 case EtlDecodeOutcome.FormattedNeedsParse:
                     break; // tracefmt formatted events → fall through to the shared deferred-parse setup.
@@ -414,9 +420,6 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         MissingSymbols,
         /// <summary>tracefmt formatted events — fall through to the shared deferred-parse setup.</summary>
         FormattedNeedsParse,
-        /// <summary>The managed WPP decoder already built the rows into <c>results</c> (with level/activity/cpu
-        /// the text path can't carry) — DoPreProcessing just returns; GetResults returns the materialized list.</summary>
-        Materialized,
     }
 
     /// <summary>
@@ -510,60 +513,70 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private EtlDecodeOutcome DecodeEtlManaged(CancellationToken cancellationToken)
     {
         FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
-        _progressSink?.NotifyProgress(5, "Decoding ETL (managed WPP decoder)…");
-        results.Clear(); // retry-safe: this can re-run after symbol provisioning
+        _progressSink?.NotifyProgress(5, "Pre-scanning ETL (managed WPP)…");
         var tmf = LoadTmfDatabaseFromSearchPath();
-        var decoder = new findneedle.Wpp.ManagedWppEtlDecoder(tmf);
-        long formatted = 0;
-        try
+
+        // Cheap sample pre-scan (first ~20k events) for the missing-symbols fail-fast — mirrors tracefmt's
+        // PreScan so we can decide to provision symbols BEFORE committing to the full (streamed) decode.
+        if (!DecodeOptions.ForceFullDecode)
         {
-            decoder.Decode(inputfile, e =>
+            var probe = new findneedle.Wpp.ManagedWppEtlDecoder(tmf);
+            long sampleWpp = 0;
+            try { probe.Decode(inputfile, _ => sampleWpp++, cancellationToken, maxEvents: 20_000); }
+            catch (Exception ex) { Logger.Instance.Log($"Managed WPP pre-scan failed for {inputfile}: {ex.Message}"); }
+            long sampleUnresolved = probe.Unresolved;
+            foreach (var g in probe.UnresolvedGuids) _missingTmfGuids.Add(g.ToString());
+
+            // Missing symbols if the sample had WPP events but NONE resolved (≈all unformattable).
+            if (sampleWpp == 0 && sampleUnresolved > 0)
             {
-                if (cancellationToken.IsCancellationRequested) return;
-                // Triage scope filter (mirror the tracefmt parse path): drop out-of-scope rows before building.
-                if (DecodeScope.Current is { } scope)
+                currentResult = new TraceFmtResult
                 {
-                    var t = e.TimeStamp;
-                    DateTime? tsUtc = t == DateTime.MinValue ? (DateTime?)null : t.ToUniversalTime();
-                    if (!scope.Keep(e.Component, tsUtc, e.EventLevel)) return;
-                }
-                var row = BuildWppRow(e);
-                row.PreLoad();
-                if (row.tasktxt == "Badly formatted event") _badlyFormattedCount++;
-                providers[e.Component] = providers.TryGetValue(e.Component, out var c) ? c + 1 : 1;
-                results.Add(row);
-                formatted++;
-            }, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            Logger.Instance.Log($"Managed WPP decode failed for {inputfile}: {ex.Message}");
-            _progressSink?.NotifyProgress(100, $"Managed WPP decode failed: {ex.Message}");
-            return EtlDecodeOutcome.Handled;
+                    TotalEventsProcessed = (int)Math.Min(sampleUnresolved, int.MaxValue),
+                    TotalFormatsUnknown = (int)Math.Min(sampleUnresolved, int.MaxValue),
+                    ConsoleOutput = $"(managed WPP pre-scan: 0 formatted, {sampleUnresolved:N0} without TMF)",
+                };
+                _prescanFailFast = true;
+                _decodeMethod = "managed WPP — symbols missing";
+                _lastDecodeRowCount = 0;
+                return EtlDecodeOutcome.MissingSymbols;
+            }
         }
 
-        long unresolved = decoder.Unresolved;
-        long total = formatted + unresolved;
-        currentResult = new TraceFmtResult
-        {
-            TotalEventsProcessed = (int)Math.Min(total, int.MaxValue),
-            TotalFormatsUnknown = (int)Math.Min(unresolved, int.MaxValue),
-            ConsoleOutput = $"(managed WPP decoder: {formatted:N0} rows, {unresolved:N0} without TMF; {tmf.Count} TMF entries)",
-        };
-        foreach (var g in decoder.UnresolvedGuids) _missingTmfGuids.Add(g.ToString());
-        Logger.Instance.Log($"Managed WPP decode {inputfile}: {formatted} rows, {unresolved} unresolved, {tmf.Count} TMF entries");
-
-        // Same "≈all unformattable = missing symbols" fail-fast → triggers provisioning + retry.
-        if (!DecodeOptions.ForceFullDecode && total > 0 && unresolved >= total * 0.99)
-        {
-            results.Clear();
-            _decodeMethod = "managed WPP — symbols missing";
-            _lastDecodeRowCount = 0;
-            return EtlDecodeOutcome.MissingSymbols;
-        }
+        // Defer the full decode to GetResults(WithCallback), which streams rows straight to storage in batches.
+        _managedTmf = tmf;
+        _managedWppDeferred = true;
         _decodeMethod = "managed WPP";
-        _lastDecodeRowCount = formatted;
-        return EtlDecodeOutcome.Materialized;
+        currentResult = new TraceFmtResult { ConsoleOutput = "(managed WPP decoder — streaming)" };
+        return EtlDecodeOutcome.Handled;
+    }
+
+    // The deferred managed decode: WPP events → rows via BuildWppRow, streamed to <paramref name="emit"/>.
+    // Applies the same triage scope filter + provider counts as the tracefmt parse path. WPP-only (matches
+    // tracefmt). Runs once (guarded by _managedDecoded at the call sites).
+    private void StreamManagedWpp(Action<ISearchResult> emit, CancellationToken ct)
+    {
+        var tmf = _managedTmf ?? LoadTmfDatabaseFromSearchPath();
+        var decoder = new findneedle.Wpp.ManagedWppEtlDecoder(tmf);
+        long rows = 0;
+        decoder.Decode(inputfile, e =>
+        {
+            if (ct.IsCancellationRequested) return;
+            if (DecodeScope.Current is { } scope)
+            {
+                var t = e.TimeStamp;
+                DateTime? tsUtc = t == DateTime.MinValue ? (DateTime?)null : t.ToUniversalTime();
+                if (!scope.Keep(e.Component, tsUtc, e.EventLevel)) return;
+            }
+            var row = BuildWppRow(e);
+            row.PreLoad();
+            if (row.tasktxt == "Badly formatted event") _badlyFormattedCount++;
+            providers[e.Component] = providers.TryGetValue(e.Component, out var c) ? c + 1 : 1;
+            emit(row);
+            rows++;
+        }, ct);
+        _lastDecodeRowCount = rows;
+        Logger.Instance.Log($"Managed WPP stream {inputfile}: {rows} rows, {decoder.Unresolved} WPP without TMF");
     }
 
     // Build one row from a managed-decoded WPP event: reuse the tracefmt-line parse for cpu/pid/tid/time/
@@ -1059,6 +1072,13 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             Logger.Instance.Log($"GetResults: lazily parsing deferred tracefmt/text output into list for {inputfile}");
             ParseFormattedOutput(results.Add, CancellationToken.None);
         }
+        // Likewise for a deferred managed WPP decode: run it into the list on first ask.
+        if (_managedWppDeferred && !_managedDecoded && results.Count == 0)
+        {
+            Logger.Instance.Log($"GetResults: lazily running deferred managed WPP decode into list for {inputfile}");
+            StreamManagedWpp(results.Add, CancellationToken.None);
+            _managedDecoded = true;
+        }
         Logger.Instance.Log($"GetResults called for ETLProcessor, file: {inputfile}, results: {results.Count}");
         return results;
     }
@@ -1085,6 +1105,30 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             {
                 onBatch(streamBatch);
             }
+            await Task.CompletedTask;
+            return;
+        }
+
+        // Streaming path for a deferred managed WPP decode: emit rows straight to batches (→ storage) without
+        // buffering the whole trace. Same memory win as the modern path, now for the managed WPP decoder.
+        if (_managedWppDeferred && !_managedDecoded && results.Count == 0)
+        {
+            var streamBatch = new List<ISearchResult>(batchSize);
+            StreamManagedWpp(row =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                streamBatch.Add(row);
+                if (streamBatch.Count >= batchSize)
+                {
+                    onBatch(streamBatch);
+                    streamBatch = new List<ISearchResult>(batchSize);
+                }
+            }, cancellationToken);
+            if (streamBatch.Count > 0 && !cancellationToken.IsCancellationRequested)
+            {
+                onBatch(streamBatch);
+            }
+            _managedDecoded = true;
             await Task.CompletedTask;
             return;
         }

@@ -52,11 +52,19 @@ public sealed class ManagedWppEtlDecoder
     /// <summary>Distinct message GUIDs that had no TMF entry — the "requires symbol XYZ" list.</summary>
     public HashSet<Guid> UnresolvedGuids { get; } = new();
 
-    /// <summary>Decode the WPP events in <paramref name="etlPath"/>, invoking <paramref name="onEvent"/> for each
-    /// event that resolves against the TMF. Non-WPP events (kernel headers, etc.) and events with no TMF entry
-    /// are skipped (the latter counted in <see cref="Unresolved"/> / <see cref="UnresolvedGuids"/>).</summary>
+    /// <summary>Count of non-WPP (manifest/EventSource) events the trace also contains — surfaced so a caller
+    /// can note a MIXED trace whose modern part the WPP decoder doesn't render. (Excludes ETW session/rundown
+    /// infrastructure, which can't be cleanly told apart from real app events at this layer — see gap #10.)</summary>
+    public long ModernEvents { get; private set; }
+
+    /// <summary>
+    /// Decode the WPP (classic) events in <paramref name="etlPath"/>, handing each resolved event to
+    /// <paramref name="onEvent"/>. Non-WPP events with no TMF entry are counted in <see cref="Unresolved"/> /
+    /// <see cref="UnresolvedGuids"/>. <paramref name="maxEvents"/> caps how many events are processed (for a
+    /// cheap sample pre-scan). WPP-only by design — matches tracefmt, which also renders only WPP.
+    /// </summary>
     public void Decode(string etlPath, Action<WppDecodedEvent> onEvent,
-        System.Threading.CancellationToken cancellationToken = default)
+        System.Threading.CancellationToken cancellationToken = default, long maxEvents = long.MaxValue)
     {
         // A tiny/garbage/truncated .etl makes the ETWTraceEventSource constructor throw, and TraceEvent's
         // finalizer then NREs and crashes the process on a later GC. Guard against it — too-small files hold
@@ -64,9 +72,11 @@ public sealed class ManagedWppEtlDecoder
         if (!System.IO.File.Exists(etlPath) || new System.IO.FileInfo(etlPath).Length < 512) return;
         using var source = new ETWTraceEventSource(etlPath);
         int pointerSize = source.PointerSize > 0 ? source.PointerSize : 8;
+        long seen = 0;
         source.AllEvents += ev =>
         {
             if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
+            if (++seen >= maxEvents) source.StopProcessing();
             // WPP classic events carry the message GUID on TaskGuid; anything else (kernel/manifest) has a
             // different or empty TaskGuid and won't match a TMF entry.
             var guid = ev.TaskGuid;

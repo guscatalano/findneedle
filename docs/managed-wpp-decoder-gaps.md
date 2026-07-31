@@ -33,10 +33,11 @@ fixtures didn't exercise these edges. Status legend: 🔧 fixing now · ⏳ defe
 8. **✅ `ItemFloat` → `%g`** (6 sig figs, like `ItemDouble`). Test `Gap8_Float_FormattedAsG`.
 
 > **Implementation note:** fixing 5/6/7 meant Managed mode now emits `ETLLogLine` rows *directly* (carrying
-> level/cpu/activity) instead of the tracefmt-format text round-trip. That buffers the rows in memory during
-> decode rather than streaming from disk — fine for typical traces; a future optimization could stream. (Auto
-> mode still uses tracefmt where the WDK exists, unaffected. Compare mode's managed side still uses the text
-> path, so its rows carry cpu but not level/activity.)
+> level/cpu/activity) instead of the tracefmt-format text round-trip. It **streams** them: DoPreProcessing does
+> a cheap ~20k-event sample pre-scan (for the missing-symbols fail-fast), then the real decode runs in
+> `GetResults`/`GetResultsWithCallback`, emitting rows straight to storage in batches — same memory profile as
+> the tracefmt/modern paths, no whole-trace buffering. (Auto mode still uses tracefmt where the WDK exists,
+> unaffected. Compare mode's managed side still uses the text path, so its rows carry cpu but not level/activity.)
 
 ## Deferred / inherent
 
@@ -44,9 +45,13 @@ fixtures didn't exercise these edges. Status legend: 🔧 fixing now · ⏳ defe
    other SDK versions fall back to bare hex, and same-value aliases can differ from a given tracefmt
    (e.g. `OID_GEN_SUPPORTED_LIST` vs `OID_GEN_CO_SUPPORTED_LIST`). Graceful, not tracefmt-identical everywhere.
 
-10. **⏳ Mixed WPP + modern traces in Managed mode.** A trace with both WPP *and* manifest/EventSource events:
-    the managed path decodes only the WPP portion and skips the rest (no TMF match), whereas the pipeline can
-    fall back to TraceEvent for modern events. Managed mode would silently drop the modern events — worth at
-    least detecting + logging.
+10. **⛔ Mixed WPP + modern traces in Managed mode** *(investigated → documented limitation).* A trace with
+    both WPP *and* manifest/EventSource events: Managed mode decodes only the WPP portion. **Tried emitting the
+    modern events via TraceEvent's Dynamic parser and reverted it** — ETW session/rundown/header events (which
+    *every* capture has) also come through the Dynamic parser and can't be cleanly separated from real app
+    events at this layer; emitting them broke WPP-parity with tracefmt and corrupted the missing-symbols
+    fail-fast (infrastructure counted as content). Managed mode is therefore intentionally **WPP-only, matching
+    tracefmt** (which also renders only WPP). For a genuinely mixed trace, use **Auto/Compare mode** (tracefmt)
+    or the modern path — `LooksLikeModernTrace` already routes predominantly-modern traces to TraceEvent.
 
 11. **♾ HRESULTs from component-specific facilities** (outside `winerror.h`) → hex fallback (no symbol).
