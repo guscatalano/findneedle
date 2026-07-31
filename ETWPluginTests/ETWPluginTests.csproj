@@ -148,6 +148,13 @@
     <None Update="WppFixtures\tmf\d4153fff-ac08-361f-5ed7-af1d38cd1903.tmf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- FILETIME timestamp + FourCC. -->
+    <None Update="WppFixtures\wpptime-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\8ff2a761-4025-3d98-c3fc-1bc40b34330d.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 

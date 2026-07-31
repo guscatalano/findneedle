@@ -131,6 +131,22 @@ public sealed class ManagedWppEndToEndTests
         CollectionAssert.Contains(messages, "b=0x00000001(true) irql=0x00000002(DPC)");
         CollectionAssert.Contains(messages, "set=[1,3]");
     }
+
+    [TestMethod]
+    public void ManagedDecode_TimestampAndFourCC_MatchesTracefmt()
+    {
+        // ItemChar4 (FourCC) matches tracefmt exactly. ItemTimestamp (8-byte FILETIME) is rendered in stable
+        // UTC — tracefmt shows LOCAL time (timezone-dependent), so we deliberately diverge for a portable,
+        // CI-safe result. The fixture's FILETIME is a fixed 2020-01-01T00:00:00Z (tools/WppTimeEmitter).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wpptime-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "cc=RGBA");                         // ItemChar4 (== tracefmt)
+        CollectionAssert.Contains(messages, "ts=2020-01-01 00:00:00.000Z");     // ItemTimestamp (UTC, TZ-independent)
+    }
 }
 
 /// <summary>

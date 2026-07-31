@@ -90,10 +90,16 @@ out of the TMF TypeName (`ItemListByte(Low,APC,DPC)`).
 
 **Implemented, not capture-validated:** `ItemDouble`, `ItemRString`/`ItemRWString` (raw LPCSTR/LPCWSTR variants).
 
+**Handled + capture-validated (cont.):** `ItemChar4` (FourCC → 4 ASCII bytes, `RGBA`), `ItemTimestamp`
+(FILETIME → **UTC** — deliberately diverges from tracefmt's timezone-dependent LOCAL time, for a portable result).
+
 **Not yet handled (rarer / need structure or the PDB):** `ItemEnum`/`ItemFlagsEnum` (PDB-symbol-resolved enums —
 distinct from the TMF-embedded `ItemList*`/`ItemSet*` we do handle), `ItemHexDump` (BIN buffer dump),
-`ItemTimestamp`/`ItemTimeDelta`/`ItemWaitTime` (FILETIME-based time), `ItemNDIS`, `ItemChar4` (FourCC). Partial:
+`ItemTimeDelta`/`ItemWaitTime` (rendered as a raw TimeSpan, not capture-validated), `ItemNDIS`. Partial:
 HRESULT/NTSTATUS/WINERROR symbol tables carry common codes only (full tables live in the WDK config).
+
+**Deliberate divergences from tracefmt** (chosen for portability/determinism): `ItemSid` → canonical `S-1-5-18`
+(not account-name lookup); `ItemTimestamp` → UTC (not local time). Both are TZ/locale/machine-independent.
 
 ## Real-world coverage run (throwing random machine WPP at it)
 

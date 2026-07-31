@@ -112,6 +112,16 @@ public static class WppMessageFormatter
             case "ItemPort":       // 2 bytes, network (big-endian) order
                 if (off + 2 > b.Length) { off = b.Length; return null; }
                 int port = (b[off] << 8) | b[off + 1]; off += 2; return port.ToString();
+            case "ItemChar4":      // 4-byte FourCC → ASCII chars in wire order (e.g. "RGBA")
+                if (off + 4 > b.Length) { off = b.Length; return null; }
+                var cc = Encoding.ASCII.GetString(b.Slice(off, 4)); off += 4; return cc;
+            case "ItemTimestamp":  // 8-byte FILETIME → UTC (tracefmt renders LOCAL time — TZ-dependent; we use UTC)
+                if (off + 8 > b.Length) { off = b.Length; return null; }
+                var ftv = BitConverter.ToInt64(b.Slice(off, 8)); off += 8; return FormatFileTimeUtc(ftv);
+            case "ItemTimeDelta":  // 8-byte 100ns delta → TimeSpan (not capture-validated)
+                if (off + 8 > b.Length) { off = b.Length; return null; }
+                var dv = BitConverter.ToInt64(b.Slice(off, 8)); off += 8;
+                try { return TimeSpan.FromTicks(dv).ToString(); } catch { return dv.ToString(); }
             default:
                 // Unknown item type: we can't know its width, so stop consuming (further args unreadable).
                 off = b.Length;
@@ -184,6 +194,14 @@ public static class WppMessageFormatter
         }
         // List: index into names.
         return uval < names.Count ? $"0x{uval:x8}({names[(int)uval]})" : $"0x{uval:x8}";
+    }
+
+    // FILETIME (100ns since 1601) → stable UTC string. tracefmt renders LOCAL time in MM/dd/yyyy-HH:mm:ss.fff,
+    // which is timezone-dependent; we deliberately emit UTC ISO-ish for a deterministic, portable result.
+    private static string FormatFileTimeUtc(long fileTime)
+    {
+        try { return DateTime.FromFileTimeUtc(fileTime).ToString("yyyy-MM-dd HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture); }
+        catch { return fileTime.ToString(CultureInfo.InvariantCulture); }
     }
 
     // Binary SID → canonical string form "S-<rev>-<idauth>-<sub0>-<sub1>-…" (e.g. S-1-5-18). tracefmt instead
