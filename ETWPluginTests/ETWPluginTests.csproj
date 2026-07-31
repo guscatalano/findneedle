@@ -116,6 +116,10 @@
     <None Update="SampleWDK\tracefmt.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Tiny real WppEmitter capture (16 KB) for the managed-WPP-decoder end-to-end test (no WDK/admin needed). -->
+    <None Update="WppFixtures\wppemitter-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 
