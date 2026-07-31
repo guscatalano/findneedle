@@ -18,13 +18,28 @@ namespace findneedle.Wpp;
 /// </summary>
 public static class WppMessageFormatter
 {
+    // ANSI strings (ItemString/ItemPString) are decoded with this rather than ASCII, so high-byte chars
+    // (é, ü, ©, … — the 0xA0-0xFF range, identical to Windows-1252) survive instead of becoming '?'. Latin1
+    // is built-in (no CodePages package); it differs from CP-1252 only in 0x80-0x9F (curly quotes/dashes).
+    private static readonly Encoding Ansi = Encoding.Latin1;
     /// <summary>Decode <paramref name="argBlob"/> per the entry's arg list, then render the format string.
     /// <paramref name="pointerSize"/> is the trace's pointer width (4 or 8) for ItemPtr/%p.</summary>
     public static string Format(TmfEntry entry, ReadOnlySpan<byte> argBlob, int pointerSize = 8)
     {
         var values = DecodeArgs(entry, argBlob, pointerSize);
-        return ApplyFormat(entry.Format, values, pointerSize);
+        return ApplyFormat(entry.Format, values, pointerSize, BuildMeta(entry));
     }
+
+    // WPP meta specifiers (%!FUNC!/%!LEVEL!/%!FLAGS!/%!STDPREFIX!) resolve from the TMF/event context, not
+    // from args. FUNC/LEVEL come straight off the TMF entry; FLAGS is the flag name (which the TMF stores in
+    // LEVEL, e.g. TRACE_GENERAL); STDPREFIX is the [cpu]PID.TID::time prefix, added to the row separately → "".
+    private static Dictionary<string, string> BuildMeta(TmfEntry e) => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["FUNC"] = e.Func ?? "",
+        ["LEVEL"] = e.Level ?? "",
+        ["FLAGS"] = e.Level ?? "",
+        ["STDPREFIX"] = "",
+    };
 
     /// <summary>Decode the typed arguments off the blob into a map of argNumber → CLR value (in blob order).</summary>
     public static Dictionary<int, object> DecodeArgs(TmfEntry entry, ReadOnlySpan<byte> blob, int pointerSize = 8)
@@ -85,9 +100,10 @@ public static class WppMessageFormatter
                                            : BitConverter.ToUInt32(b.Slice(off, 4));
                 off += pointerSize;
                 return p;
-            case "ItemFloat":
+            case "ItemFloat":  // printf %g (6 significant figures), like ItemDouble
                 if (off + 4 > b.Length) return null;
-                var f = BitConverter.ToSingle(b.Slice(off, 4)); off += 4; return f;
+                var f = BitConverter.ToSingle(b.Slice(off, 4)); off += 4;
+                return ((double)f).ToString("G6", CultureInfo.InvariantCulture);
             case "ItemDouble":  // tracefmt uses printf %g (6 significant figures)
                 if (off + 8 > b.Length) return null;
                 var d = BitConverter.ToDouble(b.Slice(off, 8)); off += 8;
@@ -180,7 +196,7 @@ public static class WppMessageFormatter
         off += 2;
         if (byteCount < 0 || off + byteCount > b.Length) { off = b.Length; return ""; }
         var s = wide ? Encoding.Unicode.GetString(b.Slice(off, byteCount))
-                     : Encoding.ASCII.GetString(b.Slice(off, byteCount));
+                     : Ansi.GetString(b.Slice(off, byteCount));
         off += byteCount;
         return s;
     }
@@ -337,7 +353,7 @@ public static class WppMessageFormatter
         else
         {
             while (off < b.Length && b[off] != 0) off++;
-            var s = Encoding.ASCII.GetString(b.Slice(start, off - start));
+            var s = Ansi.GetString(b.Slice(start, off - start));
             if (off < b.Length) off++; // consume the NUL
             return s;
         }
@@ -345,7 +361,8 @@ public static class WppMessageFormatter
 
     /// <summary>Apply a WPP printf-style format string with %N!spec! placeholders to the decoded args.
     /// <paramref name="pointerSize"/> sets %p width (uppercase, zero-padded to the pointer width, like tracefmt).</summary>
-    public static string ApplyFormat(string format, IReadOnlyDictionary<int, object> args, int pointerSize = 8)
+    public static string ApplyFormat(string format, IReadOnlyDictionary<int, object> args, int pointerSize = 8,
+        IReadOnlyDictionary<string, string> meta = null)
     {
         if (string.IsNullOrEmpty(format)) return "";
         var sb = new StringBuilder(format.Length + 32);
@@ -357,6 +374,20 @@ public static class WppMessageFormatter
 
             // "%%" → literal percent.
             if (i + 1 < format.Length && format[i + 1] == '%') { sb.Append('%'); i += 2; continue; }
+
+            // "%!NAME!" meta specifier (FUNC/LEVEL/FLAGS/STDPREFIX) — resolved from the TMF/event context.
+            // (Arg types are "%N!spec!" with a digit, so they don't collide with this "% then !" form.)
+            if (i + 1 < format.Length && format[i + 1] == '!')
+            {
+                int metaClose = format.IndexOf('!', i + 2);
+                if (metaClose > i + 1)
+                {
+                    var name = format.Substring(i + 2, metaClose - i - 2);
+                    if (meta != null && meta.TryGetValue(name, out var mv)) sb.Append(mv);
+                    i = metaClose + 1;
+                    continue;
+                }
+            }
 
             // "%" + digits = arg number.
             int j = i + 1;

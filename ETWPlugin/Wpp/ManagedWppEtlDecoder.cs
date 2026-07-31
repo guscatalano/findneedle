@@ -11,10 +11,15 @@ public sealed class WppDecodedEvent
     public DateTime TimeStamp { get; init; }
     public int ProcessId { get; init; }
     public int ThreadId { get; init; }
+    public int Cpu { get; init; }                    // processor number (was hardcoded 0 in the row)
+    public int EventLevel { get; init; } = -1;        // ETW severity (1=Critical..5=Verbose); -1 = unknown
+    public Guid ActivityId { get; init; }             // for causal-sequence correlation
+    public Guid RelatedActivityId { get; init; }
+    public Guid ProviderGuid { get; init; }
     public Guid MessageGuid { get; init; }
     public int MessageNumber { get; init; }
     public string Component { get; init; } = "";
-    public string Level { get; init; } = "";
+    public string Level { get; init; } = "";          // TMF flag/level name (e.g. TRACE_GENERAL)
     public string Func { get; init; } = "";
     public string Message { get; init; } = "";
 }
@@ -78,6 +83,11 @@ public sealed class ManagedWppEtlDecoder
                 TimeStamp = ev.TimeStamp,
                 ProcessId = ev.ProcessID,
                 ThreadId = ev.ThreadID,
+                Cpu = SafeInt(() => ev.ProcessorNumber),
+                EventLevel = SafeInt(() => (int)ev.Level, -1),
+                ActivityId = SafeGuid(() => ev.ActivityID),
+                RelatedActivityId = SafeGuid(() => ev.RelatedActivityID),
+                ProviderGuid = SafeGuid(() => ev.ProviderGuid),
                 MessageGuid = guid,
                 MessageNumber = msgNum,
                 Component = entry.Component,
@@ -88,6 +98,10 @@ public sealed class ManagedWppEtlDecoder
         };
         source.Process();
     }
+
+    // TraceEvent property access is best-effort — a few can throw on odd events; never let that drop a row.
+    private static int SafeInt(Func<int> f, int fallback = 0) { try { return f(); } catch { return fallback; } }
+    private static Guid SafeGuid(Func<Guid> f) { try { return f(); } catch { return Guid.Empty; } }
 
     /// <summary>Convenience: decode into a list.</summary>
     public List<WppDecodedEvent> DecodeToList(string etlPath)

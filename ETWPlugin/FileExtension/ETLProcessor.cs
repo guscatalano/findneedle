@@ -348,6 +348,11 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 case EtlDecodeOutcome.MissingSymbols:
                     ReportMissingSymbolsAndBail(); // still missing after any provisioning → report + bail.
                     return;
+                case EtlDecodeOutcome.Materialized:
+                    // Managed decoder already built the rows (with level/activity/cpu). Nothing to parse.
+                    Logger.Instance.Log($"Managed WPP decode complete for {inputfile}: method={_decodeMethod}, rows={_lastDecodeRowCount}");
+                    _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
+                    return;
                 case EtlDecodeOutcome.FormattedNeedsParse:
                     break; // tracefmt formatted events → fall through to the shared deferred-parse setup.
             }
@@ -409,6 +414,9 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         MissingSymbols,
         /// <summary>tracefmt formatted events — fall through to the shared deferred-parse setup.</summary>
         FormattedNeedsParse,
+        /// <summary>The managed WPP decoder already built the rows into <c>results</c> (with level/activity/cpu
+        /// the text path can't carry) — DoPreProcessing just returns; GetResults returns the materialized list.</summary>
+        Materialized,
     }
 
     /// <summary>
@@ -503,16 +511,73 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     {
         FindNeedlePluginLib.FlowProgress.Begin(FindNeedlePluginLib.FlowPhase.DecodeEtl);
         _progressSink?.NotifyProgress(5, "Decoding ETL (managed WPP decoder)…");
-        var outFile = Path.Combine(tempPath, "managed-wpp.fmt.txt");
-        long formatted, unresolved; int tmfCount; HashSet<string> guids;
-        try { (formatted, unresolved, tmfCount, guids) = RunManagedWpp(outFile, cancellationToken); }
+        results.Clear(); // retry-safe: this can re-run after symbol provisioning
+        var tmf = LoadTmfDatabaseFromSearchPath();
+        var decoder = new findneedle.Wpp.ManagedWppEtlDecoder(tmf);
+        long formatted = 0;
+        try
+        {
+            decoder.Decode(inputfile, e =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                // Triage scope filter (mirror the tracefmt parse path): drop out-of-scope rows before building.
+                if (DecodeScope.Current is { } scope)
+                {
+                    var t = e.TimeStamp;
+                    DateTime? tsUtc = t == DateTime.MinValue ? (DateTime?)null : t.ToUniversalTime();
+                    if (!scope.Keep(e.Component, tsUtc, e.EventLevel)) return;
+                }
+                var row = BuildWppRow(e);
+                row.PreLoad();
+                if (row.tasktxt == "Badly formatted event") _badlyFormattedCount++;
+                providers[e.Component] = providers.TryGetValue(e.Component, out var c) ? c + 1 : 1;
+                results.Add(row);
+                formatted++;
+            }, cancellationToken);
+        }
         catch (Exception ex)
         {
             Logger.Instance.Log($"Managed WPP decode failed for {inputfile}: {ex.Message}");
             _progressSink?.NotifyProgress(100, $"Managed WPP decode failed: {ex.Message}");
             return EtlDecodeOutcome.Handled;
         }
-        return FinishManagedResult(outFile, formatted, unresolved, tmfCount, guids, "managed WPP");
+
+        long unresolved = decoder.Unresolved;
+        long total = formatted + unresolved;
+        currentResult = new TraceFmtResult
+        {
+            TotalEventsProcessed = (int)Math.Min(total, int.MaxValue),
+            TotalFormatsUnknown = (int)Math.Min(unresolved, int.MaxValue),
+            ConsoleOutput = $"(managed WPP decoder: {formatted:N0} rows, {unresolved:N0} without TMF; {tmf.Count} TMF entries)",
+        };
+        foreach (var g in decoder.UnresolvedGuids) _missingTmfGuids.Add(g.ToString());
+        Logger.Instance.Log($"Managed WPP decode {inputfile}: {formatted} rows, {unresolved} unresolved, {tmf.Count} TMF entries");
+
+        // Same "≈all unformattable = missing symbols" fail-fast → triggers provisioning + retry.
+        if (!DecodeOptions.ForceFullDecode && total > 0 && unresolved >= total * 0.99)
+        {
+            results.Clear();
+            _decodeMethod = "managed WPP — symbols missing";
+            _lastDecodeRowCount = 0;
+            return EtlDecodeOutcome.MissingSymbols;
+        }
+        _decodeMethod = "managed WPP";
+        _lastDecodeRowCount = formatted;
+        return EtlDecodeOutcome.Materialized;
+    }
+
+    // Build one row from a managed-decoded WPP event: reuse the tracefmt-line parse for cpu/pid/tid/time/
+    // provider/message, then set the fields the text format can't carry — level, activity IDs, provider GUID —
+    // which the managed decoder DOES have (so the managed path is actually richer than tracefmt's text output).
+    private ETLLogLine BuildWppRow(findneedle.Wpp.WppDecodedEvent e)
+    {
+        var line = new ETLLogLine(ManagedWppLine(e), inputfile);
+        line.eventLevel = e.EventLevel;
+        line.activityId = e.ActivityId == Guid.Empty ? "" : e.ActivityId.ToString();
+        line.relatedActivityId = e.RelatedActivityId == Guid.Empty ? "" : e.RelatedActivityId.ToString();
+        var pg = e.ProviderGuid != Guid.Empty ? e.ProviderGuid : e.MessageGuid;
+        line.providerGuid = pg == Guid.Empty ? "" : pg.ToString();
+        return line;
     }
 
     /// <summary>Run the managed WPP decoder, writing tracefmt-format text to <paramref name="outFile"/>.
@@ -619,7 +684,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     private static string ManagedWppLine(findneedle.Wpp.WppDecodedEvent e)
     {
         var src = string.IsNullOrEmpty(e.Component) ? "WPP" : e.Component;
-        return $"[0]{e.ProcessId:X}.{e.ThreadId:X}::{e.TimeStamp:MM/dd/yyyy-HH:mm:ss.fff} [{src}]{e.Message}";
+        return $"[{e.Cpu}]{e.ProcessId:X}.{e.ThreadId:X}::{e.TimeStamp:MM/dd/yyyy-HH:mm:ss.fff} [{src}]{e.Message}";
     }
 
     // Load every TMF on TRACE_FORMAT_SEARCH_PATH (the same paths tracefmt searches) into a managed database.

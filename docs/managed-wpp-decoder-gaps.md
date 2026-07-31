@@ -4,36 +4,39 @@ Honest inventory of what the managed WPP decoder (`ETWPlugin/Wpp/`) may miss. Th
 exhaustively covered and validated byte-for-byte against tracefmt (see `managed-wpp-decoder.md`), but the
 fixtures didn't exercise these edges. Status legend: 🔧 fixing now · ⏳ deferred · ♾ inherent limitation.
 
-## Being fixed (1–8)
+## Fixed (1–8)
 
-1. **🔧 ANSI strings decode as ASCII, not the ANSI code page.** `ItemString`/`ItemPString` used
-   `Encoding.ASCII`, so any high-byte char (é, ü, ©, … in CP-1252) came out wrong/`?`. tracefmt uses the
-   system ANSI code page. → decode with the ANSI code page (1252 / `Encoding.Default`).
+1. **✅ ANSI code page.** `ItemString`/`ItemPString` now decode with `Encoding.Latin1` (0xA0–0xFF identical to
+   CP-1252, no `CodePages` dependency) instead of ASCII, so high-byte chars survive. Test:
+   `Gap1_AnsiString_DecodesHighBytes_NotAscii`. (Only 0x80–0x9F — curly quotes/dashes — differs from CP-1252.)
 
-2. **🔧 32-bit captures untested.** Pointer width comes from `source.PointerSize`, but every fixture is x64.
-   `ItemPtr`/`%p`/`%Iu` on a 32-bit trace (4-byte pointers) was unproven. → add a 32-bit-pointer test of the
-   format engine.
+2. **✅ 32-bit captures.** Pointer width is threaded through read + format; `%p` pads to the pointer width.
+   Test `Gap2_Pointer_32bit_ReadsAndPadsToPointerWidth` proves `ItemPtr` consumes 4 bytes and `%p`→8 hex on a
+   32-bit trace.
 
-3. **🔧 Truncated / oversized messages.** WPP caps a single message to the buffer size; there's no cross-event
-   reassembly (each `DoTraceMessage` is one event), and an over-run arg blob must degrade gracefully rather
-   than throw. → confirm the bounds-checked readers return empty on a short blob (test) + document.
+3. **✅ Truncated messages degrade gracefully.** Bounds-checked readers return empty on an over-run blob rather
+   than throw (no cross-event reassembly — each `DoTraceMessage` is one event). Test
+   `Gap3_TruncatedBlob_DegradesGracefully_NoThrow`.
 
-4. **🔧 WPP meta specifiers in the message body render wrong.** `%!FUNC!`, `%!LEVEL!`, `%!FLAGS!`,
-   `%!STDPREFIX!` (not arg types — resolved from event/TMF context) were emitted literally. → substitute from
-   the TMF entry (`Func`, `Level`) in the format engine.
+4. **✅ Meta specifiers.** `%!FUNC!`/`%!LEVEL!`/`%!FLAGS!`/`%!STDPREFIX!` are substituted from the TMF entry.
+   Test `Gap4_MetaSpecifiers_SubstituteFromTmfEntry`.
 
-5. **🔧 WPP level/severity not carried through.** The decoded rows didn't set the event level, so viewer
-   level-filtering treated them as unknown. The managed decoder has the level in hand (event + TMF `LEVEL=`).
-   → carry it onto the row.
+5. **✅ Level carried (when present).** Managed mode now builds `ETLLogLine` rows directly and sets
+   `eventLevel` from `ev.Level` (was `-1`/unknown). NOTE: WPP doesn't always populate a severity — WppEmitter
+   logs at level 0/Always — so the value is whatever the provider set; the *plumbing* now carries it.
 
-6. **🔧 CPU number hardcoded to `[0]`.** The synthesized row used cpu 0; the real processor number is
-   available. → carry the real CPU.
+6. **✅ Real CPU.** The row uses `ev.ProcessorNumber` (was hardcoded `[0]`).
 
-7. **🔧 Activity IDs not captured.** `ActivityID` / `RelatedActivityID` (key for causal-sequence correlation)
-   weren't surfaced. → carry both onto the row.
+7. **✅ Activity IDs.** `ActivityID` / `RelatedActivityID` (+ the message/provider GUID) are set on every
+   managed row. Test `ManagedMode_RowsCarryEventFields`.
 
-8. **🔧 `ItemFloat` unformatted.** Returned the raw float instead of printf `%g` (rare — WPP promotes
-   float→double). → format like `ItemDouble`.
+8. **✅ `ItemFloat` → `%g`** (6 sig figs, like `ItemDouble`). Test `Gap8_Float_FormattedAsG`.
+
+> **Implementation note:** fixing 5/6/7 meant Managed mode now emits `ETLLogLine` rows *directly* (carrying
+> level/cpu/activity) instead of the tracefmt-format text round-trip. That buffers the rows in memory during
+> decode rather than streaming from disk — fine for typical traces; a future optimization could stream. (Auto
+> mode still uses tracefmt where the WDK exists, unaffected. Compare mode's managed side still uses the text
+> path, so its rows carry cpu but not level/activity.)
 
 ## Deferred / inherent
 
