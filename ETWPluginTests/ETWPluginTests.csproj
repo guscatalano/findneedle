@@ -120,6 +120,13 @@
     <None Update="WppFixtures\wppemitter-sample.etl">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Real WPP capture with STRING args (%s ANSI + %ws wide) + its TMF, for the managed string-decode test. -->
+    <None Update="WppFixtures\wppstr-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\744151fd-b3f4-32e6-38eb-0fd11e3fb62d.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 

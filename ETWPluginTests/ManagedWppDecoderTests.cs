@@ -49,6 +49,28 @@ public sealed class ManagedWppEndToEndTests
         Assert.AreNotEqual(0, any.ProcessId);
         Assert.AreNotEqual(default(DateTime), any.TimeStamp);
     }
+
+    [TestMethod]
+    public void ManagedDecode_RealStringArgs_MatchesTracefmt()
+    {
+        // A real WPP capture with STRING args: msg 10 = "%s (ANSI) + %d", msg 11 = "%ws (wide)". The
+        // fixture's TMF is committed alongside it. Expected strings verified byte-for-byte against tracefmt.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppstr-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        Assert.AreEqual(2, tmf.Count, "the string-emitter TMF should load (2 statements)");
+
+        var events = new ManagedWppEtlDecoder(tmf).DecodeToList(etl);
+        var messages = events.Select(e => e.Message).ToList();
+
+        // ItemString (ANSI, NUL-terminated) + ItemLong, three iterations:
+        CollectionAssert.Contains(messages, "strtrace name=alpha id=0 tag=END");
+        CollectionAssert.Contains(messages, "strtrace name=bravo id=1 tag=END");
+        CollectionAssert.Contains(messages, "strtrace name=charlie id=2 tag=END");
+        // ItemWString (UTF-16, NUL-terminated):
+        CollectionAssert.Contains(messages, "widetrace user=root role=admin");
+    }
 }
 
 /// <summary>

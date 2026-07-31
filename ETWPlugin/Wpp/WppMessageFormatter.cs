@@ -11,10 +11,10 @@ namespace findneedle.Wpp;
 /// argument blob, it decodes each typed argument off the blob and applies the printf-style format string.
 ///
 /// PROTOTYPE scope: implements the numeric/pointer/char/string WPP item types and the common printf
-/// conversions (d/i/u/x/X/p/c/s with width + zero-pad) — enough to render the WppEmitter fixture and typical
-/// integer/hex/string traces. Exotic WPP custom types (!STATUS!, !HRESULT!, !GUID!, !TID!, …) and float
-/// specifiers are recognized-but-approximate; see the notes inline. The event→(guid,msgNum,blob) wire read
-/// lives elsewhere (that is the genuinely hard, capture-format-dependent part).
+/// conversions (d/i/u/x/X/p/c/s with width + zero-pad). Integer/hex args (ItemLong…) AND string args
+/// (ItemString = NUL-terminated ANSI, ItemWString = NUL-terminated UTF-16) are validated end-to-end against
+/// real captures. Exotic WPP custom types (!STATUS!, !HRESULT!, !GUID!, !TID!, …) and float specifiers are
+/// recognized-but-approximate; see the notes inline. The event→(guid,msgNum,blob) wire read lives elsewhere.
 /// </summary>
 public static class WppMessageFormatter
 {
@@ -73,12 +73,12 @@ public static class WppMessageFormatter
             case "ItemDouble":
                 if (off + 8 > b.Length) return null;
                 var d = BitConverter.ToDouble(b.Slice(off, 8)); off += 8; return d;
-            case "ItemString":   // ANSI, USHORT byte-count prefix (best-effort — see class note)
+            case "ItemString":   // ANSI, NUL-terminated (validated against a real WppEmitter-style capture)
             case "ItemPString":
-                return ReadCountedString(b, ref off, wide: false);
-            case "ItemWString":  // UTF-16, USHORT byte-count prefix
+                return ReadNulTerminatedString(b, ref off, wide: false);
+            case "ItemWString":  // UTF-16, double-NUL-terminated (validated against a real capture)
             case "ItemPWString":
-                return ReadCountedString(b, ref off, wide: true);
+                return ReadNulTerminatedString(b, ref off, wide: true);
             default:
                 // Unknown item type: we can't know its width, so stop consuming (further args unreadable).
                 off = b.Length;
@@ -106,16 +106,26 @@ public static class WppMessageFormatter
     private static bool TryLong(ReadOnlySpan<byte> b, ref int off, bool signed, out long v)
         => TryInt(b, ref off, 8, signed, out v);
 
-    private static string ReadCountedString(ReadOnlySpan<byte> b, ref int off, bool wide)
+    // WPP %s args are logged NUL-terminated inline (no length prefix) — confirmed by capturing a real WPP
+    // trace with string args and dumping the wire bytes: ItemString = "alpha\0", ItemWString = "root\0\0"
+    // (UTF-16). Read up to the terminator and consume it.
+    private static string ReadNulTerminatedString(ReadOnlySpan<byte> b, ref int off, bool wide)
     {
-        if (off + 2 > b.Length) { off = b.Length; return ""; }
-        int byteCount = b[off] | (b[off + 1] << 8);
-        off += 2;
-        if (byteCount < 0 || off + byteCount > b.Length) { off = b.Length; return ""; }
-        var slice = b.Slice(off, byteCount);
-        off += byteCount;
-        var s = wide ? Encoding.Unicode.GetString(slice) : Encoding.ASCII.GetString(slice);
-        return s.TrimEnd('\0');
+        int start = off;
+        if (wide)
+        {
+            while (off + 1 < b.Length && !(b[off] == 0 && b[off + 1] == 0)) off += 2;
+            var s = Encoding.Unicode.GetString(b.Slice(start, off - start));
+            off = off + 1 < b.Length ? off + 2 : b.Length; // consume the wide NUL
+            return s;
+        }
+        else
+        {
+            while (off < b.Length && b[off] != 0) off++;
+            var s = Encoding.ASCII.GetString(b.Slice(start, off - start));
+            if (off < b.Length) off++; // consume the NUL
+            return s;
+        }
     }
 
     /// <summary>Apply a WPP printf-style format string with %N!spec! placeholders to the decoded args.</summary>

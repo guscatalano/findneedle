@@ -36,14 +36,19 @@ tracefmt does three things; we reimplemented all three in managed code:
   capture** (committed at `ETWPluginTests/WppFixtures/wppemitter-sample.etl`) fully managed, and asserts the
   exact per-event strings (30 work-item + 15 detail events, including `%x` hex: `27 → 0x1b`). No tracefmt,
   no WDK, no admin — runs in CI.
+- **`ManagedDecode_RealStringArgs_MatchesTracefmt`** — decodes a real capture with **string args** (committed
+  `WppFixtures/wppstr-sample.etl` + its TMF, from `tools/WppStrEmitter`): `ItemString` (ANSI) + `ItemLong`,
+  and `ItemWString` (wide). Byte-for-byte vs tracefmt. This is what caught the wire-format bug below.
 - `ApplyFormat_*` / `DecodeArgs_*` — the format engine + arg reader in isolation.
 
 ## What's NOT done / known gaps
 
-- **Only integer/hex args are validated against a capture.** WppEmitter only uses `%d`/`%x` (`ItemLong`).
-  The formatter *implements* strings and other numeric types, but they're unproven against a real trace that
-  uses them. String item framing (`ItemString`/`ItemWString` counted-length prefix) is a best-effort guess —
-  needs a capture with `%s` args to confirm.
+- **Integer/hex AND string args are validated against real captures.** `ItemLong` (`%d`/`%x`) via WppEmitter;
+  `ItemString` (NUL-terminated ANSI) + `ItemWString` (NUL-terminated UTF-16) via WppStrEmitter. NOTE: the
+  string test caught a real bug — the framing is **NUL-terminated inline**, not the USHORT-length-prefix the
+  formatter first assumed. A self-referential unit test would have "passed" against the wrong assumption; the
+  real capture is what corrected it. Other numeric widths (short/longlong/pointer) are implemented but only
+  unit-tested, not capture-validated.
 - **Exotic WPP custom types** — `!STATUS!`, `!HRESULT!`, `!GUID!`, `!TID!`, `!ASSERT!`, SIDs, time — are
   rendered approximately or as the raw value. Real tracefmt has a big table of these.
 - **Reserved `%1..%9`** (WPP standard fields: sequence, flags, etc.) render empty. WppEmitter doesn't use
