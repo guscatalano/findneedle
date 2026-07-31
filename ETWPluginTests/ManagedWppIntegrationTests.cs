@@ -148,6 +148,32 @@ public sealed class ManagedWppIntegrationTests
     }
 
     [TestMethod]
+    public void ManagedMode_RowsCarryEventFields()
+    {
+        // The managed path now builds ETLLogLine rows directly, carrying fields the tracefmt text round-trip
+        // dropped: the event level (gap 5 — captured from ev.Level, whatever the provider set) and the
+        // provider GUID. (WppEmitter itself logs at level 0/Always and sets no activity ID, so those specific
+        // values are 0/empty here — the point is the plumbing carries them.)
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppemitter-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+        Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", MixedFilterFixtureGenerator.WppEmitterTmfDir());
+        DecodeOptions.WppDecoder = WppDecoder.Managed;
+
+        using var p = new ETLProcessor();
+        p.OpenFile(etl);
+        p.DoPreProcessing();
+        var rows = p.GetResults().OfType<ETLLogLine>().ToList();
+
+        Assert.IsTrue(rows.Count > 0, "managed decode should produce rows");
+        StringAssert.Contains(p.GetDecodeInfo()["method"], "managed WPP");
+        // Level is captured from the event (not the -1 "unknown" the text path left behind).
+        Assert.IsTrue(rows.All(r => r.eventLevel != -1), "managed rows should carry the event level (gap 5)");
+        // The message/provider GUID is now on every row — the text round-trip carried none.
+        Assert.IsTrue(rows.All(r => !string.IsNullOrEmpty(r.GetProviderGuid())),
+            "managed rows should carry the provider GUID");
+    }
+
+    [TestMethod]
     public void ManagedMode_MissingTmfs_UsesProvisioningSeam_ThenDecodes()
     {
         // Proves the managed decoder goes through the SAME ISymbolResolver provisioning path as tracefmt:

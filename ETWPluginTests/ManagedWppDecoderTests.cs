@@ -312,6 +312,58 @@ public sealed class ManagedWppDecoderTests
         Assert.AreEqual("4042322160", Render1("ItemWINERROR", 0xF0F0F0F0));
     }
 
+    // ----- gap fixes (1,2,3,4,8) -----
+
+    [TestMethod]
+    public void Gap1_AnsiString_DecodesHighBytes_NotAscii()
+    {
+        // ItemString "caf\xE9" (0xE9 = 'é' in CP-1252/Latin1) + NUL. ASCII would have dropped it to '?'.
+        var e = new TmfEntry { Format = "%10!s!", Args = new[] { new TmfArg(10, "ItemString") } };
+        var blob = new byte[] { 0x63, 0x61, 0x66, 0xE9, 0x00 };
+        Assert.AreEqual("café", WppMessageFormatter.Format(e, blob));
+    }
+
+    [TestMethod]
+    public void Gap2_Pointer_32bit_ReadsAndPadsToPointerWidth()
+    {
+        // 4-byte pointer 0x00001234 then an int32 — proves ItemPtr consumes only 4 bytes on a 32-bit trace,
+        // and %p pads to the pointer width (8 hex digits, uppercase).
+        var e = new TmfEntry { Format = "p=%10!p! x=%11!d!", Args = new[] { new TmfArg(10, "ItemPtr"), new TmfArg(11, "ItemLong") } };
+        var blob = new byte[] { 0x34, 0x12, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00 };
+        Assert.AreEqual("p=00001234 x=42", WppMessageFormatter.Format(e, blob, pointerSize: 4));
+        // and 64-bit pads to 16
+        Assert.AreEqual("0000000000001234",
+            WppMessageFormatter.ApplyFormat("%10!p!", new Dictionary<int, object> { [10] = (uint)0x1234 }, pointerSize: 8));
+    }
+
+    [TestMethod]
+    public void Gap3_TruncatedBlob_DegradesGracefully_NoThrow()
+    {
+        // Second arg's bytes run past the blob — must render empty, not throw.
+        var e = new TmfEntry { Format = "a=%10!d! b=%11!d!", Args = new[] { new TmfArg(10, "ItemLong"), new TmfArg(11, "ItemLong") } };
+        var blob = new byte[] { 0x2A, 0x00, 0x00, 0x00, 0x01 }; // a=42, b truncated
+        Assert.AreEqual("a=42 b=", WppMessageFormatter.Format(e, blob));
+    }
+
+    [TestMethod]
+    public void Gap4_MetaSpecifiers_SubstituteFromTmfEntry()
+    {
+        var e = new TmfEntry
+        {
+            Format = "fn=%!FUNC! lvl=%!LEVEL! id=%10!d!",
+            Args = new[] { new TmfArg(10, "ItemLong") },
+            Func = "main", Level = "TRACE_GENERAL",
+        };
+        Assert.AreEqual("fn=main lvl=TRACE_GENERAL id=7", WppMessageFormatter.Format(e, BitConverter.GetBytes(7)));
+    }
+
+    [TestMethod]
+    public void Gap8_Float_FormattedAsG()
+    {
+        var e = new TmfEntry { Format = "f=%10!s!", Args = new[] { new TmfArg(10, "ItemFloat") } };
+        StringAssert.StartsWith(WppMessageFormatter.Format(e, BitConverter.GetBytes(3.14f)), "f=3.14");
+    }
+
     [TestMethod]
     public void ApplyFormat_HandlesCommonSpecs()
     {

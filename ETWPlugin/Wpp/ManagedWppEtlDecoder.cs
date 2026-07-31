@@ -11,10 +11,15 @@ public sealed class WppDecodedEvent
     public DateTime TimeStamp { get; init; }
     public int ProcessId { get; init; }
     public int ThreadId { get; init; }
+    public int Cpu { get; init; }                    // processor number (was hardcoded 0 in the row)
+    public int EventLevel { get; init; } = -1;        // ETW severity (1=Critical..5=Verbose); -1 = unknown
+    public Guid ActivityId { get; init; }             // for causal-sequence correlation
+    public Guid RelatedActivityId { get; init; }
+    public Guid ProviderGuid { get; init; }
     public Guid MessageGuid { get; init; }
     public int MessageNumber { get; init; }
     public string Component { get; init; } = "";
-    public string Level { get; init; } = "";
+    public string Level { get; init; } = "";          // TMF flag/level name (e.g. TRACE_GENERAL)
     public string Func { get; init; } = "";
     public string Message { get; init; } = "";
 }
@@ -47,11 +52,19 @@ public sealed class ManagedWppEtlDecoder
     /// <summary>Distinct message GUIDs that had no TMF entry — the "requires symbol XYZ" list.</summary>
     public HashSet<Guid> UnresolvedGuids { get; } = new();
 
-    /// <summary>Decode the WPP events in <paramref name="etlPath"/>, invoking <paramref name="onEvent"/> for each
-    /// event that resolves against the TMF. Non-WPP events (kernel headers, etc.) and events with no TMF entry
-    /// are skipped (the latter counted in <see cref="Unresolved"/> / <see cref="UnresolvedGuids"/>).</summary>
+    /// <summary>Count of non-WPP (manifest/EventSource) events the trace also contains — surfaced so a caller
+    /// can note a MIXED trace whose modern part the WPP decoder doesn't render. (Excludes ETW session/rundown
+    /// infrastructure, which can't be cleanly told apart from real app events at this layer — see gap #10.)</summary>
+    public long ModernEvents { get; private set; }
+
+    /// <summary>
+    /// Decode the WPP (classic) events in <paramref name="etlPath"/>, handing each resolved event to
+    /// <paramref name="onEvent"/>. Non-WPP events with no TMF entry are counted in <see cref="Unresolved"/> /
+    /// <see cref="UnresolvedGuids"/>. <paramref name="maxEvents"/> caps how many events are processed (for a
+    /// cheap sample pre-scan). WPP-only by design — matches tracefmt, which also renders only WPP.
+    /// </summary>
     public void Decode(string etlPath, Action<WppDecodedEvent> onEvent,
-        System.Threading.CancellationToken cancellationToken = default)
+        System.Threading.CancellationToken cancellationToken = default, long maxEvents = long.MaxValue)
     {
         // A tiny/garbage/truncated .etl makes the ETWTraceEventSource constructor throw, and TraceEvent's
         // finalizer then NREs and crashes the process on a later GC. Guard against it — too-small files hold
@@ -59,9 +72,11 @@ public sealed class ManagedWppEtlDecoder
         if (!System.IO.File.Exists(etlPath) || new System.IO.FileInfo(etlPath).Length < 512) return;
         using var source = new ETWTraceEventSource(etlPath);
         int pointerSize = source.PointerSize > 0 ? source.PointerSize : 8;
+        long seen = 0;
         source.AllEvents += ev =>
         {
             if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
+            if (++seen >= maxEvents) source.StopProcessing();
             // WPP classic events carry the message GUID on TaskGuid; anything else (kernel/manifest) has a
             // different or empty TaskGuid and won't match a TMF entry.
             var guid = ev.TaskGuid;
@@ -78,6 +93,11 @@ public sealed class ManagedWppEtlDecoder
                 TimeStamp = ev.TimeStamp,
                 ProcessId = ev.ProcessID,
                 ThreadId = ev.ThreadID,
+                Cpu = SafeInt(() => ev.ProcessorNumber),
+                EventLevel = SafeInt(() => (int)ev.Level, -1),
+                ActivityId = SafeGuid(() => ev.ActivityID),
+                RelatedActivityId = SafeGuid(() => ev.RelatedActivityID),
+                ProviderGuid = SafeGuid(() => ev.ProviderGuid),
                 MessageGuid = guid,
                 MessageNumber = msgNum,
                 Component = entry.Component,
@@ -88,6 +108,10 @@ public sealed class ManagedWppEtlDecoder
         };
         source.Process();
     }
+
+    // TraceEvent property access is best-effort — a few can throw on odd events; never let that drop a row.
+    private static int SafeInt(Func<int> f, int fallback = 0) { try { return f(); } catch { return fallback; } }
+    private static Guid SafeGuid(Func<Guid> f) { try { return f(); } catch { return Guid.Empty; } }
 
     /// <summary>Convenience: decode into a list.</summary>
     public List<WppDecodedEvent> DecodeToList(string etlPath)
