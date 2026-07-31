@@ -42,6 +42,11 @@ public static class WppMessageFormatter
     // Read a single WPP-typed argument, advancing off. Unknown/over-run types yield null (rendered as "").
     private static object ReadOne(string type, ReadOnlySpan<byte> b, ref int off, int pointerSize)
     {
+        // Enum/flags types carry their value→name table inline, e.g. ItemListByte(Low,APC,DPC) /
+        // ItemSetLong(1,2,…). The format spec is %s, so return the rendered string directly.
+        if (type.StartsWith("ItemList", StringComparison.Ordinal) || type.StartsWith("ItemSet", StringComparison.Ordinal))
+            return ReadListOrSet(type, b, ref off);
+
         switch (type)
         {
             case "ItemChar":
@@ -146,6 +151,39 @@ public static class WppMessageFormatter
                      : Encoding.ASCII.GetString(b.Slice(off, byteCount));
         off += byteCount;
         return s;
+    }
+
+    // ItemList*/ItemSet* — the name table is embedded in the type, e.g. "ItemListByte(Low,APC,DPC)" or
+    // "ItemSetLong(1,2,…,32)". List: value indexes the names → "0x{value:x8}(name)". Set: each set bit i →
+    // names[i], joined "[a,b,…]". Width from the suffix (Byte=1, Short=2, else Long=4). Matches tracefmt.
+    private static string ReadListOrSet(string type, ReadOnlySpan<byte> b, ref int off)
+    {
+        int paren = type.IndexOf('(');
+        string baseName = paren >= 0 ? type.Substring(0, paren) : type;
+        var names = new List<string>();
+        if (paren >= 0)
+        {
+            int close = type.LastIndexOf(')');
+            var inner = type.Substring(paren + 1, (close > paren ? close : type.Length) - paren - 1);
+            foreach (var n in inner.Split(',')) names.Add(n.Trim());
+        }
+        int width = baseName.EndsWith("Byte", StringComparison.Ordinal) ? 1
+                  : baseName.EndsWith("Short", StringComparison.Ordinal) ? 2 : 4;
+        if (off + width > b.Length) { off = b.Length; return ""; }
+        long val = 0;
+        for (int i = 0; i < width; i++) val |= (long)b[off + i] << (8 * i);
+        off += width;
+        uint uval = (uint)val;
+
+        if (baseName.StartsWith("ItemSet", StringComparison.Ordinal))
+        {
+            var parts = new List<string>();
+            for (int bit = 0; bit < names.Count && bit < 32; bit++)
+                if ((uval & (1u << bit)) != 0) parts.Add(names[bit]);
+            return "[" + string.Join(",", parts) + "]";
+        }
+        // List: index into names.
+        return uval < names.Count ? $"0x{uval:x8}({names[(int)uval]})" : $"0x{uval:x8}";
     }
 
     // Binary SID → canonical string form "S-<rev>-<idauth>-<sub0>-<sub1>-…" (e.g. S-1-5-18). tracefmt instead

@@ -96,8 +96,10 @@ public sealed class TmfDatabase
         "^#typev\\s+(\\S+)\\s+(\\d+)\\s+\"(.*)\"(.*)$", RegexOptions.Compiled);
 
     // Arg line inside { }:  <expr>, <TypeName> -- <argNum>
+    // TypeName may carry an embedded enum/set name list, e.g. ItemListByte(Low,APC,DPC) or
+    // ItemSetLong(1,2,…,32) — capture the whole thing including the parenthesized list.
     private static readonly Regex ArgLine = new(
-        @"^.*?,\s*(\w+)\s*--\s*(\d+)\s*$", RegexOptions.Compiled);
+        @"^.*?,\s*(\w+(?:\([^)]*\))?)\s*--\s*(\d+)\s*$", RegexOptions.Compiled);
 
     /// <summary>Parse one TMF's text and merge its entries. Public so the parser is unit-testable directly.</summary>
     public void AddText(string text)

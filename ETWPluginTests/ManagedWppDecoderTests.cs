@@ -114,6 +114,23 @@ public sealed class ManagedWppEndToEndTests
         CollectionAssert.Contains(messages, "werr=2(ERROR_FILE_NOT_FOUND) i64X=0xABCDEF i64o=777");  // WINERROR/XX/O
         CollectionAssert.Contains(messages, "ip=127.0.0.1 port=80");                           // ItemIPAddr/ItemPort
     }
+
+    [TestMethod]
+    public void ManagedDecode_EnumsFlagsAndSets_MatchesTracefmt()
+    {
+        // Enum/list + bitset types whose value→name tables are embedded in the TMF (tools/WppEnumEmitter):
+        //  - ItemListLong(false,true)      -> "0x00000001(true)"
+        //  - ItemListByte(Low,APC,DPC)     -> "0x00000002(DPC)"
+        //  - ItemSetLong(1,2,…,32) bitset  -> "[1,3]" for bits 0+2. All vs tracefmt.
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppenum-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "b=0x00000001(true) irql=0x00000002(DPC)");
+        CollectionAssert.Contains(messages, "set=[1,3]");
+    }
 }
 
 /// <summary>

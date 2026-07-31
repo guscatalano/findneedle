@@ -84,14 +84,16 @@ reader + this code. The heavy lift left is the long tail of WPP type/spec covera
 **Handled + capture-validated:** `ItemLong` (SINT/UINT/SLONG/ULONG), `ItemShort`, `ItemChar`, `ItemLongLong`,
 `ItemULongLong`, `ItemLongLongX` (`%I64x`), `ItemLongLongXX` (`%I64X`), `ItemLongLongO` (`%I64o`), `ItemPtr`
 (`%p`), `ItemString`/`ItemWString` (NUL-term), `ItemPString`/`ItemPWString` (counted), `ItemHRESULT`,
-`ItemNTSTATUS`, `ItemWINERROR`, `ItemGuid`/`ItemCLSID`/`ItemIID`/`ItemLIBID`, `ItemSid`, `ItemIPAddr`, `ItemPort`.
+`ItemNTSTATUS`, `ItemWINERROR`, `ItemGuid`/`ItemCLSID`/`ItemIID`/`ItemLIBID`, `ItemSid`, `ItemIPAddr`, `ItemPort`,
+**`ItemList*`** (enum → `0x{hex}(name)`) and **`ItemSet*`** (bitset → `[a,b]`) — the value→name tables are parsed
+out of the TMF TypeName (`ItemListByte(Low,APC,DPC)`).
 
 **Implemented, not capture-validated:** `ItemDouble`, `ItemRString`/`ItemRWString` (raw LPCSTR/LPCWSTR variants).
 
-**Not yet handled (rarer / need embedded tables or structure):** `ItemEnum`/`ItemFlagsEnum` (symbolic enum
-tables), `ItemHexDump` (BIN), `ItemList*`/`ItemSet*` (arrays/bitsets), `ItemTimestamp`/`ItemTimeDelta`/
-`ItemWaitTime` (time), `ItemNDIS`, `ItemChar4` (FourCC). Partial: HRESULT/NTSTATUS/WINERROR symbol tables carry
-common codes only (full tables live in the WDK config).
+**Not yet handled (rarer / need structure or the PDB):** `ItemEnum`/`ItemFlagsEnum` (PDB-symbol-resolved enums —
+distinct from the TMF-embedded `ItemList*`/`ItemSet*` we do handle), `ItemHexDump` (BIN buffer dump),
+`ItemTimestamp`/`ItemTimeDelta`/`ItemWaitTime` (FILETIME-based time), `ItemNDIS`, `ItemChar4` (FourCC). Partial:
+HRESULT/NTSTATUS/WINERROR symbol tables carry common codes only (full tables live in the WDK config).
 
 ## Real-world coverage run (throwing random machine WPP at it)
 

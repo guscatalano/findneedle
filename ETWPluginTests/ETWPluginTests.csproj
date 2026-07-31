@@ -141,6 +141,13 @@
     <None Update="WppFixtures\tmf\6033c1c6-a9fa-394c-0bc0-1581cb94150e.tmf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Enum/list + bitset flags (value->name tables embedded in the TMF). -->
+    <None Update="WppFixtures\wppenum-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\d4153fff-ac08-361f-5ed7-af1d38cd1903.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 
