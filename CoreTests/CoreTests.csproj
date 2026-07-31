@@ -33,6 +33,9 @@
     <ProjectReference Include="..\TestProcessorPlugin\TestProcessorPlugin.csproj" />
     <ProjectReference Include="..\BasicTextPlugin\BasicTextPlugin.csproj" />
     <ProjectReference Include="..\Plugins\SymbolResolver\SmbSymbolResolverPlugin\SmbSymbolResolverPlugin.csproj" />
+    <ProjectReference Include="..\Plugins\SymbolResolver\HttpSymbolServerResolverPlugin\HttpSymbolServerResolverPlugin.csproj" />
+    <ProjectReference Include="..\Plugins\SymbolResolver\TmfStoreResolverPlugin\TmfStoreResolverPlugin.csproj" />
+    <ProjectReference Include="..\Plugins\SymbolResolver\RawEventDecoderPlugin\RawEventDecoderPlugin.csproj" />
   </ItemGroup>
 
   <ItemGroup>

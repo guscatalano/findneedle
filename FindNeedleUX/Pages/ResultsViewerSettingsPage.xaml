@@ -254,6 +254,11 @@
                                 <ComboBoxItem Content="Large"         Tag="24"/>
                                 <ComboBoxItem Content="Extra large"   Tag="32"/>
                             </ComboBox>
+                            <ToggleSwitch x:Name="AlwaysShowScrollBarsToggle" Header="Always show scrollbars"
+                                          OnContent="Always visible" OffContent="Auto-hide"
+                                          Toggled="AlwaysShowScrollBarsToggle_Toggled" Margin="0,4,0,0"/>
+                            <TextBlock Text="Keep the grid's scrollbars visible instead of letting them auto-hide until you hover."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
                         </StackPanel>
                     </Border>
 

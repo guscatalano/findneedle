@@ -1149,13 +1149,22 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         double size = ResultsViewerSettings.ScrollBarSize;
         Resources["ScrollBarSize"] = size;
         if (ResultsGrid == null) return;
+
+        // Always-visible (space-reserving) scrollbars vs the WinUI auto-hiding overlay: the DataGrid's own
+        // ScrollBarVisibility is the top-level lever (Visible = always shown, Auto = auto-hide).
+        bool alwaysShow = ResultsViewerSettings.AlwaysShowScrollBars;
+        var vis = alwaysShow ? ScrollBarVisibility.Visible : ScrollBarVisibility.Auto;
+        try { ResultsGrid.VerticalScrollBarVisibility = vis; ResultsGrid.HorizontalScrollBarVisibility = vis; } catch { }
+
         try
         {
             foreach (var sb in FindDescendants<Microsoft.UI.Xaml.Controls.Primitives.ScrollBar>(ResultsGrid))
             {
                 if (sb.Orientation == Orientation.Vertical) { sb.Width = size; sb.MinWidth = size; }
                 else { sb.Height = size; sb.MinHeight = size; }
+                // Keep the live scrollbars shown immediately when the always-visible option is on.
                 sb.IndicatorMode = Microsoft.UI.Xaml.Controls.Primitives.ScrollingIndicatorMode.MouseIndicator;
+                if (alwaysShow) sb.Visibility = Visibility.Visible;
             }
         }
         catch { /* visual tree not realized yet — the resource override covers the next template pass */ }

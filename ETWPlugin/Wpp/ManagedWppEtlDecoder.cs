@@ -57,6 +57,15 @@ public sealed class ManagedWppEtlDecoder
     /// infrastructure, which can't be cleanly told apart from real app events at this layer — see gap #10.)</summary>
     public long ModernEvents { get; private set; }
 
+    /// <summary>Count of events a manual <see cref="FindNeedlePluginLib.IWppEventDecoder"/> plugin formatted
+    /// after the TMF lookup missed — the last-resort decode tier.</summary>
+    public long PluginDecoded { get; private set; }
+
+    // Raw-event decoder plugins (fetched once per Decode) + a per-GUID claim cache: for a given provider GUID,
+    // the decoder that claimed it, or null once we've asked and none did. Keeps CanDecode to one call per GUID.
+    private System.Collections.Generic.IReadOnlyList<FindNeedlePluginLib.IWppEventDecoder> _eventDecoders;
+    private readonly Dictionary<Guid, FindNeedlePluginLib.IWppEventDecoder> _decoderClaims = new();
+
     /// <summary>
     /// Decode the WPP (classic) events in <paramref name="etlPath"/>, handing each resolved event to
     /// <paramref name="onEvent"/>. Non-WPP events with no TMF entry are counted in <see cref="Unresolved"/> /
@@ -72,6 +81,9 @@ public sealed class ManagedWppEtlDecoder
         if (!System.IO.File.Exists(etlPath) || new System.IO.FileInfo(etlPath).Length < 512) return;
         using var source = new ETWTraceEventSource(etlPath);
         int pointerSize = source.PointerSize > 0 ? source.PointerSize : 8;
+        // Manual decoder plugins (if any host registered them) — the last-resort tier below the TMF lookup.
+        _eventDecoders = FindNeedlePluginLib.WppEventDecoding.GetDecoders();
+        _decoderClaims.Clear();
         long seen = 0;
         source.AllEvents += ev =>
         {
@@ -82,31 +94,87 @@ public sealed class ManagedWppEtlDecoder
             var guid = ev.TaskGuid;
             if (guid == Guid.Empty) return;
             int msgNum = (int)ev.ID;
-            if (!_tmf.TryGet(guid, msgNum, out var entry)) { Unresolved++; UnresolvedGuids.Add(guid); return; }
+            if (!_tmf.TryGet(guid, msgNum, out var entry))
+            {
+                // No TMF for this (GUID, msgNum). Before giving up, offer the raw event to a manual decoder
+                // plugin (a provider whose format is known only in code). If one formats it, emit; else count
+                // it as unresolved exactly as before.
+                if (TryPluginDecode(guid, msgNum, ev, pointerSize, out var pluginMsg))
+                {
+                    PluginDecoded++;
+                    onEvent(BuildEvent(ev, guid, msgNum, pluginMsg, component: "", level: "", func: ""));
+                    return;
+                }
+                Unresolved++; UnresolvedGuids.Add(guid); return;
+            }
 
             string message;
             try { message = WppMessageFormatter.Format(entry, ev.EventData(), pointerSize); }
             catch { message = ""; }
 
-            onEvent(new WppDecodedEvent
+            onEvent(BuildEvent(ev, guid, msgNum, message, entry.Component, entry.Level, entry.Func));
+        };
+        source.Process();
+    }
+
+    private WppDecodedEvent BuildEvent(TraceEvent ev, Guid guid, int msgNum, string message,
+        string component, string level, string func) => new()
+    {
+        TimeStamp = ev.TimeStamp,
+        ProcessId = ev.ProcessID,
+        ThreadId = ev.ThreadID,
+        Cpu = SafeInt(() => ev.ProcessorNumber),
+        EventLevel = SafeInt(() => (int)ev.Level, -1),
+        ActivityId = SafeGuid(() => ev.ActivityID),
+        RelatedActivityId = SafeGuid(() => ev.RelatedActivityID),
+        ProviderGuid = SafeGuid(() => ev.ProviderGuid),
+        MessageGuid = guid,
+        MessageNumber = msgNum,
+        Component = component,
+        Level = level,
+        Func = func,
+        Message = message,
+    };
+
+    /// <summary>Ask a manual decoder plugin to format a raw event whose TMF lookup missed. The claiming
+    /// decoder is cached per GUID (CanDecode runs once per GUID), and TryDecode runs on the decode thread —
+    /// a plugin fault never drops the trace, it just falls through to "unresolved".</summary>
+    private bool TryPluginDecode(Guid guid, int msgNum, TraceEvent ev, int pointerSize, out string message)
+    {
+        message = null;
+        if (_eventDecoders == null || _eventDecoders.Count == 0) return false;
+
+        if (!_decoderClaims.TryGetValue(guid, out var decoder))
+        {
+            decoder = null;
+            foreach (var d in _eventDecoders)
             {
+                try { if (d.CanDecode(guid)) { decoder = d; break; } }
+                catch { /* a broken claim must not break decode */ }
+            }
+            _decoderClaims[guid] = decoder; // cache the winner (or null = "asked, nobody claims")
+        }
+        if (decoder == null) return false;
+
+        try
+        {
+            var raw = new FindNeedlePluginLib.WppRawEvent
+            {
+                ProviderGuid = guid,
+                MessageNumber = msgNum,
+                Data = ev.EventData(),
+                PointerSize = pointerSize,
                 TimeStamp = ev.TimeStamp,
                 ProcessId = ev.ProcessID,
                 ThreadId = ev.ThreadID,
                 Cpu = SafeInt(() => ev.ProcessorNumber),
-                EventLevel = SafeInt(() => (int)ev.Level, -1),
-                ActivityId = SafeGuid(() => ev.ActivityID),
-                RelatedActivityId = SafeGuid(() => ev.RelatedActivityID),
-                ProviderGuid = SafeGuid(() => ev.ProviderGuid),
-                MessageGuid = guid,
-                MessageNumber = msgNum,
-                Component = entry.Component,
-                Level = entry.Level,
-                Func = entry.Func,
-                Message = message,
-            });
-        };
-        source.Process();
+                Level = SafeInt(() => (int)ev.Level, -1),
+                Log = m => { try { FindNeedlePluginLib.Logger.Instance.Log($"[wpp-decode {guid:D}] {m}"); } catch { } },
+            };
+            message = decoder.TryDecode(raw);
+            return !string.IsNullOrEmpty(message);
+        }
+        catch { return false; }
     }
 
     // TraceEvent property access is best-effort — a few can throw on odd events; never let that drop a row.

@@ -32,6 +32,7 @@ public sealed class SmbSymbolResolver : ISymbolResolver, IPluginDescription
         {
             // symbol-server (symstore/SSQP) layout — keyed by GUID+age, so a match is always the right PDB.
             var ssqp = Path.Combine(root, request.PdbFileName, request.Key, request.PdbFileName);
+            request.Log($"probing {ssqp}");
             if (SafeExists(ssqp)) return ssqp;
         }
         return null; // nothing here → FindNeedle asks the next resolver, then reports "not found"

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The ONLY dependency a resolver plugin needs — the plugin contract lives here. -->
+    <ProjectReference Include="..\..\..\FindNeedlePluginLib\FindNeedlePluginLib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test seams (ResetForTests / cache-dir override) are internal; the unit tests live in CoreTests. -->
+    <InternalsVisibleTo Include="CoreTests" />
+  </ItemGroup>
+
+</Project>
