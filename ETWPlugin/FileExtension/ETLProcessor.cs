@@ -820,6 +820,12 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
     {
         const long probe = 20000;
         long handled = 0, unhandled = 0;
+        // A valid .etl holds at least one ETW buffer + headers; a tiny/garbage/truncated file makes the
+        // ETWTraceEventSource CONSTRUCTOR throw, and TraceEvent's finalizer then NREs (Dispose(false) on a
+        // half-built object) and crashes the whole process on a later GC. Guard the probe: too-small files
+        // aren't a real capture — return false and let the tracefmt/managed path report them.
+        try { if (!File.Exists(etlPath) || new FileInfo(etlPath).Length < 512) return false; }
+        catch { return false; }
         try
         {
             using var source = new Microsoft.Diagnostics.Tracing.ETWTraceEventSource(etlPath);

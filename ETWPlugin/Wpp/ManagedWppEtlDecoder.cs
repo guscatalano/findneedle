@@ -53,6 +53,10 @@ public sealed class ManagedWppEtlDecoder
     public void Decode(string etlPath, Action<WppDecodedEvent> onEvent,
         System.Threading.CancellationToken cancellationToken = default)
     {
+        // A tiny/garbage/truncated .etl makes the ETWTraceEventSource constructor throw, and TraceEvent's
+        // finalizer then NREs and crashes the process on a later GC. Guard against it — too-small files hold
+        // no decodable events anyway.
+        if (!System.IO.File.Exists(etlPath) || new System.IO.FileInfo(etlPath).Length < 512) return;
         using var source = new ETWTraceEventSource(etlPath);
         int pointerSize = source.PointerSize > 0 ? source.PointerSize : 8;
         source.AllEvents += ev =>
