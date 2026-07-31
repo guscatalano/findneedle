@@ -9,6 +9,18 @@ Make FindNeedle resolve WPP symbols from *your* source automatically, with nothi
    (`<root>\<pdb>\<GUID+age>\<pdb>`). Fork it for anything else — a flat share, a REST/symbol-server call,
    credentials, a local cache copy, a build-drop scheme.
 
+   There are **two** reference resolvers, on purpose — they show the two shapes a resolver takes:
+   - **`SmbSymbolResolver`** (`FINDNEEDLE_SYMBOL_SHARES`) — *stateless*. It probes UNC/SMB share paths with
+     `File.Exists`; the SMB redirector owns the connection, so there's nothing to cache or dispose.
+   - **`HttpSymbolServerResolver`** (`FINDNEEDLE_SYMBOL_SERVERS`) — *stateful network*. It downloads PDBs
+     from an HTTP(S) symbol store (msdl / corporate symsrv layout) into a local cache. Because it owns real
+     network state, it demonstrates what a stateful resolver must get right given the plugin lifetime (a
+     fresh instance per resolution pass): a **`static HttpClient`** reused across instances (never one per
+     call — that leaks sockets); a **two-layer cache** (filesystem short-circuit + an in-memory
+     `Lazy`-in-`ConcurrentDictionary` for single-fetch and negative caching); and a **fail-fast timeout**
+     (`FINDNEEDLE_SYMBOL_HTTP_TIMEOUT_MS`, default 15s) so one dead server can't hang the decode — it falls
+     through to the next. Fork whichever is closer to your source.
+
 2. **`install-symbol-resolver.ps1`** — a per-user script (no admin) that wires it in:
    - optionally `winget install <FindNeedle package>` (`-WingetId`),
    - deploys the resolver DLL to `%LocalAppData%\FindNeedle\plugins\` (a writable folder — see the
