@@ -38,7 +38,7 @@ public static class WppSymbolResolver
     internal static Action<string, string, StringBuilder> RunTracePdbOverride;
     // Inject fake ISymbolResolver plugins without going through PluginManager (which loads DLLs).
     internal static IReadOnlyList<ISymbolResolver> ResolversOverride;
-    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; ResolversOverride = null; }
+    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; ResolversOverride = null; ResolverTimeoutMsForTests = 0; }
 
     /// <summary>The registered symbol-resolver plugins (SMB share / symbol server / …), consulted when the
     /// built-in local + symbol-path lookup misses. Best-effort: an unavailable plugin subsystem = none.</summary>
@@ -49,23 +49,73 @@ public static class WppSymbolResolver
         catch { return Array.Empty<ISymbolResolver>(); }
     }
 
+    /// <summary>Env override for the per-resolver hang backstop, in ms. Generous by default (see
+    /// <see cref="ResolverTimeoutMs"/>).</summary>
+    internal const string ResolverTimeoutEnv = "FINDNEEDLE_SYMBOL_RESOLVER_TIMEOUT_MS";
+    private const int DefaultResolverTimeoutMs = 120_000;
+    // Test hook: >0 overrides env/default so a hang test doesn't have to wait 2 minutes.
+    internal static int ResolverTimeoutMsForTests;
+
+    /// <summary>Per-resolver hang backstop. A third-party <see cref="ISymbolResolver"/> is untrusted code
+    /// doing network I/O; if one never returns (dead socket, deadlock) it must not stall the whole decode.
+    /// Deliberately GENEROUS — this bounds HANGS, not slow-but-progressing downloads (a resolver pulling a
+    /// large PDB over a slow link should still get room; raise it via <see cref="ResolverTimeoutEnv"/>).</summary>
+    private static int ResolverTimeoutMs
+    {
+        get
+        {
+            if (ResolverTimeoutMsForTests > 0) return ResolverTimeoutMsForTests;
+            var v = Environment.GetEnvironmentVariable(ResolverTimeoutEnv);
+            return int.TryParse(v, out var ms) && ms > 0 ? ms : DefaultResolverTimeoutMs;
+        }
+    }
+
     /// <summary>Ask each resolver plugin, in order, to find the PDB for this identity. Returns the first
-    /// non-null path that exists on disk (local or UNC), or null. Plugin exceptions are logged and skipped.</summary>
+    /// non-null path that exists on disk (local or UNC), or null. Plugin exceptions AND hangs are logged
+    /// and skipped — no single resolver can stall or crash the build.</summary>
     private static string TryResolverPlugins(IReadOnlyList<ISymbolResolver> resolvers,
         WppSymbols.PdbIdentity id, string binary, StringBuilder sb)
     {
         if (resolvers == null || resolvers.Count == 0) return null;
         var request = new SymbolLookupRequest(id.PdbFileName, id.Guid, id.Age, binary);
+        int timeoutMs = ResolverTimeoutMs;
         foreach (var r in resolvers)
         {
-            string path;
-            try { path = r.TryResolvePdb(request); }
-            catch (Exception ex) { sb.AppendLine($"symbol resolver {r.GetType().Name} threw: {ex.Message}"); continue; }
+            if (!InvokeResolverBounded(r, request, timeoutMs, out var path, out var error))
+            {
+                sb.AppendLine($"symbol resolver {r.GetType().Name} skipped: {error}");
+                continue;
+            }
             if (string.IsNullOrEmpty(path)) continue;
             if (File.Exists(path)) { sb.AppendLine($"resolved via plugin {r.GetType().Name}: {path}"); return path; }
             sb.AppendLine($"symbol resolver {r.GetType().Name} returned a missing path: {path}");
         }
         return null;
+    }
+
+    /// <summary>Invoke one resolver with a bounded wait. The <see cref="ISymbolResolver"/> contract is
+    /// synchronous and carries no cancellation, so a hung resolver can't be truly cancelled — but we can stop
+    /// WAITING for it: run it on a pool thread and abandon it if it blows the budget. The abandoned task's
+    /// eventual fault is observed so it can never resurface as an unobserved-exception crash. Returns true
+    /// (with <paramref name="path"/>) only when the resolver returned within the budget without throwing.</summary>
+    private static bool InvokeResolverBounded(ISymbolResolver r, SymbolLookupRequest request, int timeoutMs,
+        out string path, out string error)
+    {
+        path = null; error = null;
+        var task = System.Threading.Tasks.Task.Run(() => r.TryResolvePdb(request));
+        bool completed;
+        try { completed = task.Wait(timeoutMs); }
+        catch (Exception ex) { error = $"threw: {(ex is AggregateException ae ? ae.GetBaseException() : ex).Message}"; return false; }
+        if (!completed)
+        {
+            error = $"timed out after {timeoutMs} ms (abandoned)";
+            task.ContinueWith(t => { _ = t.Exception; },
+                System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted |
+                System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously);
+            return false;
+        }
+        path = task.Result;
+        return true;
     }
 
     public static string FindTracePdb()

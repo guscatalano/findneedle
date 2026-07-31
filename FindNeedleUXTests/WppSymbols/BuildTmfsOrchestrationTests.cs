@@ -122,6 +122,34 @@ public class BuildTmfsOrchestrationTests
         StringAssert.Contains(log, "FAILED to resolve", "the binary stays unresolved");
     }
 
+    [TestMethod]
+    public void HangingResolver_IsAbandoned_ByTheFrameworkTimeout()
+    {
+        // A third-party resolver that never returns must not hang the decode: the framework bounds each
+        // resolver call, abandons it, and treats the binary as unresolved — fast, and no crash.
+        var work = NewDir("hang");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "ntdll.dll"), Path.Combine(work, "ntdll.dll"));
+
+        var entered = new System.Threading.ManualResetEventSlim(false);
+        WppSymbolResolver.ResolversOverride = new ISymbolResolver[]
+        {
+            // Blocks far longer than the budget; if abandoned at 300ms the pool thread wakes later and exits.
+            new FakeSymbolResolver(_ => { entered.Set(); System.Threading.Thread.Sleep(10_000); return null; }),
+        };
+        WppSymbolResolver.ResolverTimeoutMsForTests = 300; // bound the hang
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (_, log) = WppSymbolResolver.BuildTmfs(work, symbolPath: ""); // empty symbol path → built-in misses
+        sw.Stop();
+
+        Assert.IsTrue(entered.IsSet, "the resolver was actually invoked");
+        Assert.IsTrue(sw.Elapsed < TimeSpan.FromSeconds(5),
+            $"a hung resolver must not stall the build (took {sw.ElapsedMilliseconds}ms)");
+        Assert.AreEqual(0, _tracepdbCalls.Count, "a hung resolver yields nothing to extract");
+        StringAssert.Contains(log, "timed out", "the abandonment must be logged");
+        StringAssert.Contains(log, "FAILED to resolve", "the binary stays unresolved");
+    }
+
     /// <summary>Test double: an ISymbolResolver whose answer is a supplied function.</summary>
     private sealed class FakeSymbolResolver : ISymbolResolver
     {
