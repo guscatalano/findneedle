@@ -91,12 +91,18 @@ out of the TMF TypeName (`ItemListByte(Low,APC,DPC)`).
 **Implemented, not capture-validated:** `ItemDouble`, `ItemRString`/`ItemRWString` (raw LPCSTR/LPCWSTR variants).
 
 **Handled + capture-validated (cont.):** `ItemChar4` (FourCC → 4 ASCII bytes, `RGBA`), `ItemTimestamp`
-(FILETIME → **UTC** — deliberately diverges from tracefmt's timezone-dependent LOCAL time, for a portable result).
+(FILETIME → **UTC** — deliberately diverges from tracefmt's timezone-dependent LOCAL time, for a portable result),
+`ItemDouble` (printf `%g`), `ItemTimeDelta` (`5.000s`), `ItemRString`/`ItemRWString` (raw LPCSTR/LPCWSTR, NUL-term).
+
+**Status/error symbol tables are COMPLETE**, not a hand-picked subset. `ItemHRESULT`, `ItemNTSTATUS`, and
+`ItemWINERROR` resolve against the full tables **generated from the SDK `ntstatus.h` + `winerror.h`**
+(`tools/wpp-symbol-tables/gen.py` → `ETWPlugin/Wpp/Tables/*.txt`, embedded as resources, loaded lazily):
+**2,843 NTSTATUS + 2,857 Win32 + 3,602 HRESULT = 9,302 codes.** A FACILITY_WIN32 HRESULT (`0x8007xxxx`) renders
+the Win32 name like tracefmt (`0x80070005 → ERROR_ACCESS_DENIED`). Unknown codes fall back to the bare hex/decimal.
 
 **Not yet handled (rarer / need structure or the PDB):** `ItemEnum`/`ItemFlagsEnum` (PDB-symbol-resolved enums —
-distinct from the TMF-embedded `ItemList*`/`ItemSet*` we do handle), `ItemHexDump` (BIN buffer dump),
-`ItemTimeDelta`/`ItemWaitTime` (rendered as a raw TimeSpan, not capture-validated), `ItemNDIS`. Partial:
-HRESULT/NTSTATUS/WINERROR symbol tables carry common codes only (full tables live in the WDK config).
+distinct from the TMF-embedded `ItemList*`/`ItemSet*` we do handle), `ItemHexDump` (BIN buffer dump — needs a
+user-defined length+buffer macro), `ItemWaitTime`, `ItemNDIS`.
 
 **Deliberate divergences from tracefmt** (chosen for portability/determinism): `ItemSid` → canonical `S-1-5-18`
 (not account-name lookup); `ItemTimestamp` → UTC (not local time). Both are TZ/locale/machine-independent.

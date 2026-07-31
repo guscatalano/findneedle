@@ -147,6 +147,21 @@ public sealed class ManagedWppEndToEndTests
         CollectionAssert.Contains(messages, "cc=RGBA");                         // ItemChar4 (== tracefmt)
         CollectionAssert.Contains(messages, "ts=2020-01-01 00:00:00.000Z");     // ItemTimestamp (UTC, TZ-independent)
     }
+
+    [TestMethod]
+    public void ManagedDecode_DoubleDeltaAndRawStrings_MatchesTracefmt()
+    {
+        // ItemDouble (printf %g), ItemTimeDelta (seconds), ItemRString/ItemRWString (raw NUL-term strings).
+        // All vs tracefmt (tools/WppMiscEmitter).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppmisc-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "dbl=3.14062 delta=5.000s");   // ItemDouble (%g) + ItemTimeDelta
+        CollectionAssert.Contains(messages, "raw a=RawAnsi w=RawWide");    // ItemRString / ItemRWString
+    }
 }
 
 /// <summary>
@@ -213,6 +228,42 @@ public sealed class ManagedWppDecoderTests
     }
 
     // ---- printf-spec engine (isolated) ----
+
+    // Render a single-arg WPP message: one arg of the given item type, value = 4-byte LE code, format "%10!s!".
+    private static string Render1(string itemType, uint code)
+    {
+        var e = new TmfEntry
+        {
+            MessageGuid = WppEmitterGuid, MessageNumber = 1, Format = "%10!s!",
+            Args = new[] { new TmfArg(10, itemType) },
+        };
+        return WppMessageFormatter.Format(e, BitConverter.GetBytes(code));
+    }
+
+    [TestMethod]
+    public void SymbolTables_AreComplete_ResolveDiverseCodes()
+    {
+        // The full NTSTATUS / Win32 / HRESULT tables are generated from the SDK headers and embedded. Prove
+        // they're complete (not a hand-picked subset) by resolving a spread of *uncommon* codes end-to-end.
+        // NTSTATUS (ntstatus.h):
+        Assert.AreEqual("0xc0000005(STATUS_ACCESS_VIOLATION)", Render1("ItemNTSTATUS", 0xC0000005));
+        Assert.AreEqual("0xc0000135(STATUS_DLL_NOT_FOUND)", Render1("ItemNTSTATUS", 0xC0000135));
+        Assert.AreEqual("0xc0000409(STATUS_STACK_BUFFER_OVERRUN)", Render1("ItemNTSTATUS", 0xC0000409));
+        Assert.AreEqual("0xc00000fd(STATUS_STACK_OVERFLOW)", Render1("ItemNTSTATUS", 0xC00000FD));
+        // Win32 (winerror.h), decimal:
+        Assert.AreEqual("32(ERROR_SHARING_VIOLATION)", Render1("ItemWINERROR", 32));
+        Assert.AreEqual("1450(ERROR_NO_SYSTEM_RESOURCES)", Render1("ItemWINERROR", 1450));
+        Assert.AreEqual("1223(ERROR_CANCELLED)", Render1("ItemWINERROR", 1223));
+        // HRESULT (winerror.h) — non-FACILITY_WIN32 use the HRESULT symbol:
+        Assert.AreEqual("0x80004003(E_POINTER)", Render1("ItemHRESULT", 0x80004003));
+        Assert.AreEqual("0x8000ffff(E_UNEXPECTED)", Render1("ItemHRESULT", 0x8000FFFF));
+        // FACILITY_WIN32 HRESULT (0x8007xxxx) renders the Win32 name, like tracefmt:
+        Assert.AreEqual("0x80070005(ERROR_ACCESS_DENIED)", Render1("ItemHRESULT", 0x80070005));
+        Assert.AreEqual("0x8007007b(ERROR_INVALID_NAME)", Render1("ItemHRESULT", 0x8007007B));
+        // Unknown codes fall back to the bare value (never throw):
+        Assert.AreEqual("0x12345678", Render1("ItemNTSTATUS", 0x12345678));
+        Assert.AreEqual("4042322160", Render1("ItemWINERROR", 0xF0F0F0F0));
+    }
 
     [TestMethod]
     public void ApplyFormat_HandlesCommonSpecs()

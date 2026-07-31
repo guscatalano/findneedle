@@ -22,4 +22,13 @@
     <ProjectReference Include="..\FindNeedlePluginUtils\FindNeedlePluginUtils.csproj" />
   </ItemGroup>
 
+  <!-- Complete WPP status/error symbol tables (generated from the SDK ntstatus.h / winerror.h by
+       tools/wpp-symbol-tables/gen.py). Loaded lazily by WppMessageFormatter. LogicalName pins the
+       resource id regardless of namespace. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Wpp\Tables\ntstatus.txt"><LogicalName>wpp.ntstatus.txt</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="Wpp\Tables\win32err.txt"><LogicalName>wpp.win32err.txt</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="Wpp\Tables\hresult.txt"><LogicalName>wpp.hresult.txt</LogicalName></EmbeddedResource>
+  </ItemGroup>
+
 </Project>

@@ -68,9 +68,9 @@ public static class WppMessageFormatter
             case "ItemUQuad":
                 return TryLong(b, ref off, signed: false, out var ull) ? (object)(ulong)ull : null;
             case "ItemHRESULT": // 32-bit status; tracepdb rewrites %!HRESULT! -> %N!s!, so return a ready string
-                return TryInt(b, ref off, 4, signed: true, out var hr) ? FormatStatus((uint)(int)hr) : null;
+                return TryInt(b, ref off, 4, signed: true, out var hr) ? FormatHResult((uint)(int)hr) : null;
             case "ItemNTSTATUS":
-                return TryInt(b, ref off, 4, signed: true, out var nt) ? FormatStatus((uint)(int)nt) : null;
+                return TryInt(b, ref off, 4, signed: true, out var nt) ? FormatNtStatus((uint)(int)nt) : null;
             case "ItemGuid": // 16 bytes inline, standard GUID binary layout (Data1 LE, Data2 LE, Data3 LE, Data4)
                 if (off + 16 > b.Length) { off = b.Length; return null; }
                 var guid = new Guid(b.Slice(off, 16)); off += 16; return guid.ToString("D");
@@ -83,12 +83,15 @@ public static class WppMessageFormatter
             case "ItemFloat":
                 if (off + 4 > b.Length) return null;
                 var f = BitConverter.ToSingle(b.Slice(off, 4)); off += 4; return f;
-            case "ItemDouble":
+            case "ItemDouble":  // tracefmt uses printf %g (6 significant figures)
                 if (off + 8 > b.Length) return null;
-                var d = BitConverter.ToDouble(b.Slice(off, 8)); off += 8; return d;
+                var d = BitConverter.ToDouble(b.Slice(off, 8)); off += 8;
+                return d.ToString("G6", CultureInfo.InvariantCulture);
             case "ItemString":   // ANSI, NUL-terminated (LPCSTR / %s) — validated against a real capture
+            case "ItemRString":  // raw LPCSTR variant — same NUL-terminated ANSI on the wire
                 return ReadNulTerminatedString(b, ref off, wide: false);
             case "ItemWString":  // UTF-16, NUL-terminated (LPCWSTR)
+            case "ItemRWString": // raw LPCWSTR variant — NUL-terminated UTF-16
                 return ReadNulTerminatedString(b, ref off, wide: true);
             case "ItemPString":  // COUNTED ANSI (ANSI_STRING / std::string): USHORT byte-length + bytes, no NUL
                 return ReadCountedString(b, ref off, wide: false);
@@ -118,10 +121,10 @@ public static class WppMessageFormatter
             case "ItemTimestamp":  // 8-byte FILETIME → UTC (tracefmt renders LOCAL time — TZ-dependent; we use UTC)
                 if (off + 8 > b.Length) { off = b.Length; return null; }
                 var ftv = BitConverter.ToInt64(b.Slice(off, 8)); off += 8; return FormatFileTimeUtc(ftv);
-            case "ItemTimeDelta":  // 8-byte 100ns delta → TimeSpan (not capture-validated)
+            case "ItemTimeDelta":  // 8-byte 100ns delta → seconds "N.NNNs" (tracefmt form; validated at 5s)
                 if (off + 8 > b.Length) { off = b.Length; return null; }
                 var dv = BitConverter.ToInt64(b.Slice(off, 8)); off += 8;
-                try { return TimeSpan.FromTicks(dv).ToString(); } catch { return dv.ToString(); }
+                return (dv / 10_000_000.0).ToString("0.000", CultureInfo.InvariantCulture) + "s";
             default:
                 // Unknown item type: we can't know its width, so stop consuming (further args unreadable).
                 off = b.Length;
@@ -225,16 +228,51 @@ public static class WppMessageFormatter
         return sb.ToString();
     }
 
-    // Common Win32 error codes (ItemWINERROR). Partial — the full table is in the WDK config; unknowns render
-    // as the bare decimal, matching tracefmt's "{n}(SYMBOL)" shape for known codes.
-    private static readonly Dictionary<uint, string> _winErrNames = new()
+    // Complete status/error symbol tables, generated from the SDK ntstatus.h / winerror.h
+    // (tools/wpp-symbol-tables/gen.py) and embedded as resources. Loaded once, lazily.
+    private static readonly object _tableLock = new();
+    private static Dictionary<uint, string> _ntStatus, _win32Err, _hresult;
+
+    private static Dictionary<uint, string> LoadTable(string logicalName, bool hexKey)
     {
-        [0] = "ERROR_SUCCESS", [2] = "ERROR_FILE_NOT_FOUND", [3] = "ERROR_PATH_NOT_FOUND",
-        [5] = "ERROR_ACCESS_DENIED", [6] = "ERROR_INVALID_HANDLE", [8] = "ERROR_NOT_ENOUGH_MEMORY",
-        [87] = "ERROR_INVALID_PARAMETER", [122] = "ERROR_INSUFFICIENT_BUFFER", [1168] = "ERROR_NOT_FOUND",
-    };
+        var dict = new Dictionary<uint, string>();
+        try
+        {
+            using var s = typeof(WppMessageFormatter).Assembly.GetManifestResourceStream(logicalName);
+            if (s == null) return dict;
+            using var r = new StreamReader(s);
+            string line;
+            while ((line = r.ReadLine()) != null)
+            {
+                int eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var key = line.AsSpan(0, eq);
+                uint v = uint.Parse(key, hexKey ? NumberStyles.HexNumber : NumberStyles.Integer, CultureInfo.InvariantCulture);
+                dict[v] = line.Substring(eq + 1);
+            }
+        }
+        catch { /* table unavailable → codes render as bare hex/decimal */ }
+        return dict;
+    }
+
+    private static Dictionary<uint, string> NtStatusTable { get { if (_ntStatus == null) lock (_tableLock) { _ntStatus ??= LoadTable("wpp.ntstatus.txt", true); } return _ntStatus; } }
+    private static Dictionary<uint, string> Win32Table { get { if (_win32Err == null) lock (_tableLock) { _win32Err ??= LoadTable("wpp.win32err.txt", false); } return _win32Err; } }
+    private static Dictionary<uint, string> HResultTable { get { if (_hresult == null) lock (_tableLock) { _hresult ??= LoadTable("wpp.hresult.txt", true); } return _hresult; } }
+
+    private static string FormatNtStatus(uint code)
+        => NtStatusTable.TryGetValue(code, out var n) ? $"0x{code:x8}({n})" : $"0x{code:x8}";
+
     private static string FormatWinError(uint code)
-        => _winErrNames.TryGetValue(code, out var n) ? $"{code}({n})" : code.ToString();
+        => Win32Table.TryGetValue(code, out var n) ? $"{code}({n})" : code.ToString(CultureInfo.InvariantCulture);
+
+    private static string FormatHResult(uint hr)
+    {
+        // A FACILITY_WIN32 error HRESULT (0x8007xxxx) renders as the Win32 error name — matches tracefmt
+        // (0x80070005 → ERROR_ACCESS_DENIED, not E_ACCESSDENIED). Otherwise use the HRESULT symbol table.
+        if ((hr & 0xFFFF0000) == 0x80070000 && Win32Table.TryGetValue(hr & 0xFFFF, out var we))
+            return $"0x{hr:x8}({we})";
+        return HResultTable.TryGetValue(hr, out var n) ? $"0x{hr:x8}({n})" : $"0x{hr:x8}";
+    }
 
     // WPP %s args are logged NUL-terminated inline (no length prefix) — confirmed by capturing a real WPP
     // trace with string args and dumping the wire bytes: ItemString = "alpha\0", ItemWString = "root\0\0"
@@ -256,26 +294,6 @@ public static class WppMessageFormatter
             if (off < b.Length) off++; // consume the NUL
             return s;
         }
-    }
-
-    // tracefmt renders HRESULT/NTSTATUS as "0x{hex}(SYMBOL)". The symbol table is huge (it comes from the
-    // WDK's WppConfig .ini tables); we carry the common codes and fall back to just the hex — PROTOTYPE gap.
-    private static readonly Dictionary<uint, string> _statusNames = new()
-    {
-        [0x80070005] = "ERROR_ACCESS_DENIED",
-        [0xC0000022] = "STATUS_ACCESS_DENIED",
-        [0x80004005] = "E_FAIL",
-        [0x80004001] = "E_NOTIMPL",
-        [0x8007000E] = "E_OUTOFMEMORY",
-        [0x80070057] = "E_INVALIDARG",
-        [0xC0000005] = "STATUS_ACCESS_VIOLATION",
-        [0xC000000D] = "STATUS_INVALID_PARAMETER",
-    };
-
-    private static string FormatStatus(uint code)
-    {
-        var hex = "0x" + code.ToString("x8");
-        return _statusNames.TryGetValue(code, out var name) ? $"{hex}({name})" : hex;
     }
 
     /// <summary>Apply a WPP printf-style format string with %N!spec! placeholders to the decoded args.
