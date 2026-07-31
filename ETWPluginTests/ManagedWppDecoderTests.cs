@@ -178,6 +178,22 @@ public sealed class ManagedWppEndToEndTests
 
         CollectionAssert.Contains(messages, "state=StateActive flags=FlagRead | FlagExec(0x5)");
     }
+
+    [TestMethod]
+    public void ManagedDecode_HexDumpAndWaitTime_Decode()
+    {
+        // ItemHexDump (BIN, USHORT length + bytes) and ItemWaitTime (FILETIME). tools/WppBinEmitter.
+        // Both diverge from tracefmt deliberately: tracefmt renders BIN EMPTY inline (we emit the hex,
+        // which is more useful), and renders ItemWaitTime in LOCAL time (we use UTC, like ItemTimestamp).
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppbin-sample.etl");
+        if (!File.Exists(etl)) Assert.Inconclusive($"fixture missing: {etl}");
+
+        var tmf = TmfDatabase.LoadDirectory(Path.Combine(AppContext.BaseDirectory, "WppFixtures", "tmf"));
+        var messages = new ManagedWppEtlDecoder(tmf).DecodeToList(etl).Select(e => e.Message).ToList();
+
+        CollectionAssert.Contains(messages, "hex=DEADBEEF00112233");        // ItemHexDump (bytes; tracefmt: empty)
+        CollectionAssert.Contains(messages, "due=2020-01-01 00:00:00.000Z"); // ItemWaitTime (UTC)
+    }
 }
 
 /// <summary>

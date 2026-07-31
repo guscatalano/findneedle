@@ -130,6 +130,14 @@ public static class WppMessageFormatter
                 if (off + 8 > b.Length) { off = b.Length; return null; }
                 var dv = BitConverter.ToInt64(b.Slice(off, 8)); off += 8;
                 return (dv / 10_000_000.0).ToString("0.000", CultureInfo.InvariantCulture) + "s";
+            case "ItemWaitTime":   // 8-byte FILETIME, same as ItemTimestamp → UTC (tracefmt shows LOCAL time)
+                if (off + 8 > b.Length) { off = b.Length; return null; }
+                var wt = BitConverter.ToInt64(b.Slice(off, 8)); off += 8; return FormatFileTimeUtc(wt);
+            case "ItemHexDump":    // USHORT byte-count + raw bytes → hex. (tracefmt renders this empty inline;
+                if (off + 2 > b.Length) { off = b.Length; return null; }  // we emit the hex, which is more useful.)
+                int hlen = b[off] | (b[off + 1] << 8); off += 2;
+                if (hlen < 0 || off + hlen > b.Length) { off = b.Length; return null; }
+                var hex = Convert.ToHexString(b.Slice(off, hlen)); off += hlen; return hex;
             default:
                 // Unknown item type: we can't know its width, so stop consuming (further args unreadable).
                 off = b.Length;

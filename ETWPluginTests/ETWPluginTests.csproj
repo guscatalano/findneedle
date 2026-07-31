@@ -169,6 +169,13 @@
     <None Update="WppFixtures\tmf\035fd70f-a54a-3c13-f6c5-f7f2b19c92ec.tmf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- ItemHexDump (BIN) + ItemWaitTime. -->
+    <None Update="WppFixtures\wppbin-sample.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\tmf\4305d668-552d-302b-a84c-fbcf09373bf6.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 
