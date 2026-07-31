@@ -101,12 +101,13 @@ public sealed class HttpSymbolServerResolver : ISymbolResolver, IPluginDescripti
         foreach (var server in Servers())
         {
             var url = $"{server.TrimEnd('/')}/{req.PdbFileName}/{req.Key}/{req.PdbFileName}";
+            req.Log($"GET {url}");
             try
             {
                 using var msg = new HttpRequestMessage(HttpMethod.Get, url);
                 // ResponseHeadersRead: decide on the status line before streaming a (possibly large) PDB.
                 using var resp = Client.Send(msg, HttpCompletionOption.ResponseHeadersRead);
-                if (!resp.IsSuccessStatusCode) continue; // 404 etc → not on this server, try the next
+                if (!resp.IsSuccessStatusCode) { req.Log($"  {(int)resp.StatusCode} — not here"); continue; } // 404 etc → try next
 
                 Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
                 // Download to a temp file then move: a concurrent reader (or a crash) never sees a
@@ -123,6 +124,7 @@ public sealed class HttpSymbolServerResolver : ISymbolResolver, IPluginDescripti
             {
                 // Timeout (TaskCanceledException from HttpClient.Timeout), transient network error, or a write
                 // race — log quietly and move to the next server. A bad server must not hang or break the decode.
+                req.Log($"  failed: {ex.Message}");
                 LogQuiet($"http symbol probe failed for {url}: {ex.Message}");
             }
         }

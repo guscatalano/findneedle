@@ -36,6 +36,11 @@ public sealed class SymbolLookupRequest
     /// <summary>All-lowercase variant, for case-sensitive SSQP servers.</summary>
     public string KeyLower => Guid.ToString("N") + Age.ToString("x");
 
+    /// <summary>Diagnostic sink — anything the resolver writes here lands in the resolution log FindNeedle
+    /// shows (attributed to the resolver, in context under this PDB). Never null (a no-op when the host wires
+    /// none), so a plugin can call it unconditionally to explain what it probed and why it passed.</summary>
+    public Action<string> Log { get; init; } = _ => { };
+
     public override string ToString() => $"{PdbFileName} {{{Guid}}} age {Age}";
 }
 

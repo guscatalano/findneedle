@@ -38,7 +38,7 @@ public static class WppSymbolResolver
     internal static Action<string, string, StringBuilder> RunTracePdbOverride;
     // Inject fake ISymbolResolver plugins without going through PluginManager (which loads DLLs).
     internal static IReadOnlyList<ISymbolResolver> ResolversOverride;
-    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; ResolversOverride = null; ResolverTimeoutMsForTests = 0; }
+    internal static void ResetOverridesForTests() { FindTracePdbOverride = null; RunTracePdbOverride = null; ResolversOverride = null; TmfResolversOverride = null; ResolverTimeoutMsForTests = 0; }
 
     /// <summary>The registered symbol-resolver plugins (SMB share / symbol server / …), consulted when the
     /// built-in local + symbol-path lookup misses. Best-effort: an unavailable plugin subsystem = none.</summary>
@@ -77,15 +77,16 @@ public static class WppSymbolResolver
         WppSymbols.PdbIdentity id, string binary, StringBuilder sb)
     {
         if (resolvers == null || resolvers.Count == 0) return null;
-        var request = new SymbolLookupRequest(id.PdbFileName, id.Guid, id.Age, binary);
         int timeoutMs = ResolverTimeoutMs;
         foreach (var r in resolvers)
         {
-            if (!InvokeResolverBounded(r, request, timeoutMs, out var path, out var error))
-            {
-                sb.AppendLine($"symbol resolver {r.GetType().Name} skipped: {error}");
-                continue;
-            }
+            // The plugin's own diagnostics go to a per-call queue (the resolver may run on a pool thread under
+            // the timeout, so it can't touch sb directly); we drain it into sb on THIS thread, attributed.
+            var pluginLog = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            var request = new SymbolLookupRequest(id.PdbFileName, id.Guid, id.Age, binary) { Log = pluginLog.Enqueue };
+            bool ok = InvokeResolverBounded(r, request, timeoutMs, out var path, out var error);
+            while (pluginLog.TryDequeue(out var line)) sb.AppendLine($"  [{r.GetType().Name}] {line}");
+            if (!ok) { sb.AppendLine($"symbol resolver {r.GetType().Name} skipped: {error}"); continue; }
             if (string.IsNullOrEmpty(path)) continue;
             if (File.Exists(path)) { sb.AppendLine($"resolved via plugin {r.GetType().Name}: {path}"); return path; }
             sb.AppendLine($"symbol resolver {r.GetType().Name} returned a missing path: {path}");
@@ -93,16 +94,19 @@ public static class WppSymbolResolver
         return null;
     }
 
-    /// <summary>Invoke one resolver with a bounded wait. The <see cref="ISymbolResolver"/> contract is
-    /// synchronous and carries no cancellation, so a hung resolver can't be truly cancelled — but we can stop
-    /// WAITING for it: run it on a pool thread and abandon it if it blows the budget. The abandoned task's
-    /// eventual fault is observed so it can never resurface as an unobserved-exception crash. Returns true
-    /// (with <paramref name="path"/>) only when the resolver returned within the budget without throwing.</summary>
     private static bool InvokeResolverBounded(ISymbolResolver r, SymbolLookupRequest request, int timeoutMs,
         out string path, out string error)
+        => RunBounded(() => r.TryResolvePdb(request), timeoutMs, out path, out error);
+
+    /// <summary>Run a resolver call with a bounded wait. A resolver is synchronous and carries no
+    /// cancellation, so a hung one can't be truly cancelled — but we can stop WAITING for it: run it on a
+    /// pool thread and abandon it if it blows the budget. The abandoned task's eventual fault is observed so
+    /// it can never resurface as an unobserved-exception crash. Returns true (with <paramref name="path"/>)
+    /// only when the call returned within the budget without throwing.</summary>
+    private static bool RunBounded(Func<string> call, int timeoutMs, out string path, out string error)
     {
         path = null; error = null;
-        var task = System.Threading.Tasks.Task.Run(() => r.TryResolvePdb(request));
+        var task = System.Threading.Tasks.Task.Run(call);
         bool completed;
         try { completed = task.Wait(timeoutMs); }
         catch (Exception ex) { error = $"threw: {(ex is AggregateException ae ? ae.GetBaseException() : ex).Message}"; return false; }
@@ -116,6 +120,97 @@ public static class WppSymbolResolver
         }
         path = task.Result;
         return true;
+    }
+
+    // --- GUID-driven TMF resolution (the ETL-only path — no binaries to read a PDB identity from) ---
+
+    /// <summary>Inject fake IWppTmfResolver plugins in tests without going through PluginManager.</summary>
+    internal static IReadOnlyList<IWppTmfResolver> TmfResolversOverride;
+
+    /// <summary>The registered TMF-store resolver plugins, consulted with a missing message GUID when there's
+    /// no binary to drive the PDB path. Best-effort: an unavailable plugin subsystem = none.</summary>
+    private static IReadOnlyList<IWppTmfResolver> GetTmfResolvers()
+    {
+        if (TmfResolversOverride != null) return TmfResolversOverride;
+        try { return PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IWppTmfResolver>(); }
+        catch { return Array.Empty<IWppTmfResolver>(); }
+    }
+
+    /// <summary>For each missing WPP message GUID, ask the <see cref="IWppTmfResolver"/> plugins for a TMF and
+    /// copy the first hit into <paramref name="cacheDir"/> as <c>&lt;guid&gt;.tmf</c>. Keyed purely by GUID —
+    /// no binary, no tracepdb — so it works for captures that ship only ETLs. GUIDs whose TMF is already
+    /// cached are skipped. Each resolver call is bounded by the same hang backstop as the PDB path. Returns
+    /// the number of TMFs newly written.</summary>
+    internal static int ProvisionTmfsByGuid(IReadOnlyCollection<string> missingGuids, string etlPath,
+        string cacheDir, StringBuilder sb)
+    {
+        var resolvers = GetTmfResolvers();
+        if (resolvers.Count == 0 || missingGuids == null || missingGuids.Count == 0) return 0;
+
+        int timeoutMs = ResolverTimeoutMs;
+        int written = 0;
+        try { Directory.CreateDirectory(cacheDir); } catch { return 0; }
+
+        foreach (var gs in missingGuids)
+        {
+            if (!Guid.TryParse(gs, out var guid)) continue;
+            var dest = Path.Combine(cacheDir, guid.ToString("D") + ".tmf");
+            if (File.Exists(dest)) continue; // already provisioned this GUID (GUID-level dedup via the cache)
+
+            foreach (var r in resolvers)
+            {
+                // Per-call log queue drained into sb on THIS thread (the resolver may run on a pool thread
+                // under the timeout). Attributed by resolver name. Drained in finally so every exit path flushes.
+                var pluginLog = new System.Collections.Concurrent.ConcurrentQueue<string>();
+                var request = new WppTmfResolveRequest(guid, etlPath) { Log = pluginLog.Enqueue };
+                bool hit = false;
+                try
+                {
+                    // (a) resolver points at an existing .tmf FILE
+                    if (!RunBounded(() => r.TryResolveTmf(request), timeoutMs, out var path, out var error))
+                    {
+                        sb.AppendLine($"tmf resolver {r.GetType().Name} skipped for {guid:D}: {error}");
+                        continue;
+                    }
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        if (!File.Exists(path)) { sb.AppendLine($"tmf resolver {r.GetType().Name} returned a missing path: {path}"); continue; }
+                        try
+                        {
+                            File.Copy(path, dest, overwrite: true);
+                            written++; hit = true;
+                            sb.AppendLine($"resolved TMF for {guid:D} via plugin {r.GetType().Name}: {path}");
+                        }
+                        catch (Exception ex) { sb.AppendLine($"failed to cache TMF {path}: {ex.Message}"); continue; }
+                    }
+                    else
+                    {
+                        // (b) resolver GENERATES the .tmf text itself (no file on disk)
+                        if (!RunBounded(() => r.TryResolveTmfText(request), timeoutMs, out var text, out var terror))
+                        {
+                            sb.AppendLine($"tmf resolver {r.GetType().Name} (text) skipped for {guid:D}: {terror}");
+                            continue;
+                        }
+                        if (!string.IsNullOrEmpty(text))
+                        {
+                            try
+                            {
+                                File.WriteAllText(dest, text);
+                                written++; hit = true;
+                                sb.AppendLine($"resolved TMF text for {guid:D} via plugin {r.GetType().Name}");
+                            }
+                            catch (Exception ex) { sb.AppendLine($"failed to write TMF text for {guid:D}: {ex.Message}"); }
+                        }
+                    }
+                }
+                finally
+                {
+                    while (pluginLog.TryDequeue(out var line)) sb.AppendLine($"  [{r.GetType().Name}] {line}");
+                }
+                if (hit) break; // first resolver with a hit wins
+            }
+        }
+        return written;
     }
 
     public static string FindTracePdb()
@@ -302,20 +397,32 @@ public static class WppSymbolResolver
 
                 // Only sweep folders we haven't already tried this session (idempotent; skips repeat
                 // network hits when many ETLs share a drop).
+                int before = CountTmfs();
+
+                // 1) Binary-driven sweep: the ETL's folder + configured symbol sources, once per folder/session.
+                //    Reads each binary's PDB identity, resolves it (built-in + ISymbolResolver plugins), extracts
+                //    TMFs with tracepdb. Skipped when a capture ships no binaries — that's what step 2 is for.
                 var fresh = sources.Where(s => _provisionedSources.Add(s)).ToList();
-                if (fresh.Count == 0)
+                if (fresh.Count > 0)
                 {
-                    FindNeedlePluginLib.Logger.Instance.Log(
-                        $"WPP provision: no new symbol sources to sweep for {request.EtlPath} (all seen this session)");
-                    return false;
+                    BuildTmfs(string.Join(";", fresh), ResultsViewerSettings.SymbolPath);
+                    TraceFormatConfig.Apply();
                 }
 
-                int before = CountTmfs();
-                var result = BuildTmfs(string.Join(";", fresh), ResultsViewerSettings.SymbolPath);
-                TraceFormatConfig.Apply(); // put the (now-populated) TMF cache dir on TRACE_FORMAT_SEARCH_PATH
+                // 2) GUID-driven TMF resolution: for the ETL-only case (no binary to read a PDB identity from),
+                //    ask the IWppTmfResolver plugins for each missing message GUID directly. GUID-keyed, so it
+                //    runs every time (not folder-deduped) and needs no binary/tracepdb.
+                var tmfLog = new StringBuilder();
+                int tmfWritten = ProvisionTmfsByGuid(request.MissingMessageGuids, request.EtlPath, TmfCacheDir, tmfLog);
+                if (tmfWritten > 0)
+                {
+                    TraceFormatConfig.Apply(); // put the newly-cached TMFs on TRACE_FORMAT_SEARCH_PATH
+                    FindNeedlePluginLib.Logger.Instance.Log(tmfLog.ToString().TrimEnd());
+                }
+
                 int after = CountTmfs();
                 FindNeedlePluginLib.Logger.Instance.Log(
-                    $"WPP provision for {request.EtlPath}: swept {fresh.Count} folder(s), TMF cache {before}->{after}");
+                    $"WPP provision for {request.EtlPath}: swept {fresh.Count} folder(s), {tmfWritten} TMF(s) via GUID resolvers, TMF cache {before}->{after}");
                 return after > before;
             }
             catch (Exception ex)

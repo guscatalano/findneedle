@@ -65,6 +65,13 @@ public partial class App : Application
             // manual "WPP Symbol Resolution" page. Registered here because ETWPlugin can't reference the UX.
             FindNeedlePluginLib.WppSymbolProvisioning.Handler =
                 FindNeedleUX.Services.WppSymbolResolver.TryProvision;
+
+            // Manual raw-event decoders (IWppEventDecoder): for a provider with no TMF at all, a plugin can
+            // format the raw event itself. The managed WPP decoder consults these at the TMF-miss branch.
+            // Registered here for the same reason — ETWPlugin can't reference the UX or the plugin subsystem.
+            FindNeedlePluginLib.WppEventDecoding.Provider = () =>
+                findneedle.PluginSubsystem.PluginManager.GetSingleton()
+                    .GetAllPluginsInstancesOfAType<FindNeedlePluginLib.IWppEventDecoder>();
         }
         catch (Exception ex) { Logger.Instance.Log($"TraceFormat config init failed: {ex.Message}"); }
 
