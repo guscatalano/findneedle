@@ -556,6 +556,30 @@ jobs:
           **/AppPackages/**/*.msixupload
 
 
+  # Submit the app to the Microsoft Store. Gated on a v*.*.* tag so it NEVER fires on a normal merge —
+  # tag a release (git tag v1.0.x && git push --tags) to publish. Uses the UNSIGNED artifact (the Store
+  # re-signs; the signed one carries CN="" and fails identity). Needs the STORE_* secrets configured.
+  publish-store:
+    needs: [make_msix_unsigned]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+    - name: Download unsigned MSIX
+      uses: actions/download-artifact@v4
+      with:
+        name: FindNeedleUX-MSIX-unsigned
+        path: pkg
+    - name: Set up Microsoft Store CLI
+      uses: microsoft/setup-msstore-cli@v1
+    - name: Configure Store credentials
+      run: msstore reconfigure --tenantId ${{ secrets.STORE_TENANT_ID }} --clientId ${{ secrets.STORE_CLIENT_ID }} --clientSecret ${{ secrets.STORE_CLIENT_SECRET }} --sellerId ${{ secrets.STORE_SELLER_ID }}
+    - name: Submit package to the Store
+      shell: pwsh
+      run: |
+        $msix = (Get-ChildItem -Recurse pkg -Filter *.msix | Select-Object -First 1).FullName
+        Write-Host "Publishing $msix"
+        msstore publish $msix -id 9NWLTBV4NRDL
+
   make_msi:
     needs: [build-release, set-msix-version]
     runs-on: windows-latest
