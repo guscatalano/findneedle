@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading;
 
 namespace FindNeedleCoreUtils;
@@ -317,22 +318,31 @@ public static class PackagedAppCommandRunner
             psi.Environment["PATH"] = string.Join(";", pathAdditions) + ";" + currentPath;
         }
 
-        using var process = Process.Start(psi);
-        if (process == null)
+        using var process = new Process { StartInfo = psi };
+        var outSb = new StringBuilder();
+        var errSb = new StringBuilder();
+        // Drain stdout AND stderr concurrently. Reading them sequentially with ReadToEnd() deadlocks: while
+        // we block on stdout, the child can fill the (~4 KB) stderr pipe buffer, then blocks writing to it —
+        // so it never exits and we hang forever (and the WaitForExit timeout below never even runs).
+        process.OutputDataReceived += (_, e) => { if (e.Data != null) { lock (outSb) outSb.AppendLine(e.Data); } };
+        process.ErrorDataReceived  += (_, e) => { if (e.Data != null) { lock (errSb) errSb.AppendLine(e.Data); } };
+        if (!process.Start())
         {
             return (-1, "Failed to start process");
         }
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        var completed = process.WaitForExit(timeoutMs);
-
-        if (!completed)
+        if (!process.WaitForExit(timeoutMs))
         {
-            try { process.Kill(); } catch { }
+            try { process.Kill(entireProcessTree: true); } catch { }
             return (-1, "Command timed out");
         }
+        process.WaitForExit(); // flush the async readers to EOF
 
+        string stdout, stderr;
+        lock (outSb) stdout = outSb.ToString();
+        lock (errSb) stderr = errSb.ToString();
         var output = !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() : stderr.Trim();
         return (process.ExitCode, output);
     }

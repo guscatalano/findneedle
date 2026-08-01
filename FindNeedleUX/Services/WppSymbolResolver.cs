@@ -654,6 +654,9 @@ public static class WppSymbolResolver
         catch { return 0; }
     }
 
+    /// <summary>Backstop for a wedged tracepdb (runs under the provision lock, so a hang stalls the decode).</summary>
+    private const int TracePdbTimeoutMs = 120_000;
+
     private static void Run(string exe, string args, StringBuilder log)
     {
         if (RunTracePdbOverride != null)
@@ -662,6 +665,7 @@ public static class WppSymbolResolver
             RunTracePdbOverride(exe, args, log);
             return;
         }
+        log.AppendLine($"> tracepdb {args}");
         try
         {
             var psi = new ProcessStartInfo
@@ -673,11 +677,31 @@ public static class WppSymbolResolver
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
-            using var p = Process.Start(psi);
-            string outp = p.StandardOutput.ReadToEnd();
-            string err = p.StandardError.ReadToEnd();
-            p.WaitForExit();
-            log.AppendLine($"> tracepdb {args}");
+            using var p = new Process { StartInfo = psi };
+            var outSb = new StringBuilder();
+            var errSb = new StringBuilder();
+            // Read stdout AND stderr CONCURRENTLY (async, on the thread pool). Reading them sequentially with
+            // ReadToEnd() deadlocks: while we block on stdout, tracepdb can fill the (~4 KB) stderr pipe buffer,
+            // then blocks writing to it — so it never exits, never closes stdout, and we hang forever. The
+            // event-based readers drain both pipes as data arrives, so neither can back up.
+            p.OutputDataReceived += (_, e) => { if (e.Data != null) { lock (outSb) outSb.AppendLine(e.Data); } };
+            p.ErrorDataReceived  += (_, e) => { if (e.Data != null) { lock (errSb) errSb.AppendLine(e.Data); } };
+            p.Start();
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+
+            // Bound the wait so a wedged tracepdb can't hang BuildTmfs (which holds _provisionLock).
+            if (!p.WaitForExit(TracePdbTimeoutMs))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* already gone */ }
+                log.AppendLine($"tracepdb timed out after {TracePdbTimeoutMs} ms — killed");
+                return;
+            }
+            p.WaitForExit(); // parameterless: block until the async output handlers have flushed to EOF
+
+            string outp, err;
+            lock (outSb) outp = outSb.ToString();
+            lock (errSb) err = errSb.ToString();
             if (!string.IsNullOrWhiteSpace(outp)) log.AppendLine(outp.Trim());
             if (!string.IsNullOrWhiteSpace(err)) log.AppendLine(err.Trim());
         }

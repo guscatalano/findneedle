@@ -337,10 +337,24 @@ public sealed class PdbResolver
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
-            using var p = Process.Start(psi);
-            p.StandardOutput.ReadToEnd();
-            var err = p.StandardError.ReadToEnd();
-            p.WaitForExit(60_000);
+            using var p = new Process { StartInfo = psi };
+            var errSb = new StringBuilder();
+            // Drain stdout AND stderr concurrently — sequential ReadToEnd() can deadlock (see the note in
+            // WppSymbolResolver.Run). The stdout handler is empty but still drains the pipe so it can't back up.
+            p.OutputDataReceived += (_, __) => { };
+            p.ErrorDataReceived  += (_, e) => { if (e.Data != null) { lock (errSb) errSb.AppendLine(e.Data); } };
+            p.Start();
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+            if (!p.WaitForExit(60_000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* already gone */ }
+                log.AppendLine($"  expand.exe timed out — killed: {compressedPath}");
+                return null;
+            }
+            p.WaitForExit(); // flush the async readers to EOF
+            string err;
+            lock (errSb) err = errSb.ToString();
             if (p.ExitCode == 0 && File.Exists(targetPath)) return targetPath;
             log.AppendLine($"  expand.exe failed (exit {p.ExitCode}{(string.IsNullOrWhiteSpace(err) ? "" : ": " + err.Trim())}): {compressedPath}");
             return null;
