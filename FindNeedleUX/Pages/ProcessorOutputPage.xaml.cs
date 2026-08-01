@@ -1001,7 +1001,7 @@ public sealed partial class ProcessorOutputPage : Page
             "let s=1,tx=12,ty=12,drag=false,sx=0,sy=0;" +
             "const stage=document.getElementById('stage'),dia=document.getElementById('diagram');" +
             "function apply(){dia.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';}" +
-            "function fit(){const svg=dia.querySelector('svg');if(!svg)return;const w=svg.clientWidth||svg.getBoundingClientRect().width,h=svg.clientHeight||svg.getBoundingClientRect().height;if(!w||!h)return;s=Math.min((stage.clientWidth-24)/w,(stage.clientHeight-24)/h,1);tx=12;ty=12;apply();}" +
+            "function fit(){const svg=dia.querySelector('svg');if(!svg)return;const w=svg.clientWidth||svg.getBoundingClientRect().width,h=svg.clientHeight||svg.getBoundingClientRect().height;if(!w||!h)return;s=Math.min((stage.clientWidth-24)/w,(stage.clientHeight-24)/h);tx=12;ty=12;apply();}" +
             "document.getElementById('zin').onclick=()=>{s=Math.min(s*1.2,8);apply();};" +
             "document.getElementById('zout').onclick=()=>{s=Math.max(s/1.2,0.1);apply();};" +
             "document.getElementById('zfit').onclick=fit;" +
