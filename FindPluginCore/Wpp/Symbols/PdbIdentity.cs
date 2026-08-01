@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Reflection.PortableExecutable;
 
-namespace FindNeedleUX.Services.WppSymbols;
+namespace FindPluginCore.Wpp.Symbols.WppSymbols;
 
 /// <summary>
 /// The PDB a binary was linked against, read from the PE debug directory's CodeView (RSDS) record:

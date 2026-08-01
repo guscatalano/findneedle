@@ -5,7 +5,7 @@ using System.IO;
 using System.Net.Http;
 using System.Text;
 
-namespace FindNeedleUX.Services.WppSymbols;
+namespace FindPluginCore.Wpp.Symbols.WppSymbols;
 
 /// <summary>HTTP GET seam so the resolver's server probing is unit-testable without a network.</summary>
 public interface ISymbolFetcher

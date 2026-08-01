@@ -2,7 +2,8 @@ using System;
 using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FindNeedleUX.Services;
-using FindNeedleUX.Services.WppSymbols;
+using FindPluginCore.Wpp.Symbols;
+using FindPluginCore.Wpp.Symbols.WppSymbols;
 
 namespace FindNeedleUXTests.WppSymbols;
 

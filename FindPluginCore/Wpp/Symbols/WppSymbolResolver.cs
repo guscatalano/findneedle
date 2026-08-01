@@ -9,11 +9,11 @@ using FindNeedlePluginLib;
 using findneedle.PluginSubsystem;
 using Microsoft.Win32;
 
-namespace FindNeedleUX.Services;
+namespace FindPluginCore.Wpp.Symbols;
 
 /// <summary>
-/// Builds WPP TMF files from symbols into a managed cache that <see cref="TraceFormatConfig"/> puts
-/// on <c>TRACE_FORMAT_SEARCH_PATH</c>. PDB DISCOVERY is done in managed code (issue #4): each
+/// Builds WPP TMF files from symbols into a managed cache (<see cref="TmfCacheDir"/>) that provisioning
+/// puts on <c>TRACE_FORMAT_SEARCH_PATH</c>. PDB DISCOVERY is done in managed code (issue #4): each
 /// binary's expected PDB name + GUID + age is read from its PE debug directory
 /// (<see cref="WppSymbols.PdbIdentity"/>) and resolved through loose folders and the user's symbol
 /// path by <see cref="WppSymbols.PdbResolver"/> (symstore/SSQP conventions: two-tier stores,
@@ -376,7 +376,7 @@ public static class WppSymbolResolver
     /// refresh <c>TRACE_FORMAT_SEARCH_PATH</c>. Returns true if NEW TMFs were produced (so the caller
     /// retries the decode). Each source folder is swept at most once per session. Never throws.
     /// </summary>
-    public static bool TryProvision(FindNeedlePluginLib.WppProvisionRequest request)
+    public static bool TryProvision(FindNeedlePluginLib.WppProvisionRequest request, string symbolSourcePath, string symbolPath)
     {
         if (request == null) return false;
         lock (_provisionLock)
@@ -393,7 +393,7 @@ public static class WppSymbolResolver
                     if (!string.IsNullOrEmpty(dir)) sources.Add(dir);
                 }
                 catch { /* bad path — just skip the ETL folder */ }
-                sources.AddRange(SplitFolders(ResultsViewerSettings.SymbolSourcePath));
+                sources.AddRange(SplitFolders(symbolSourcePath));
 
                 // Only sweep folders we haven't already tried this session (idempotent; skips repeat
                 // network hits when many ETLs share a drop).
@@ -405,8 +405,8 @@ public static class WppSymbolResolver
                 var fresh = sources.Where(s => _provisionedSources.Add(s)).ToList();
                 if (fresh.Count > 0)
                 {
-                    BuildTmfs(string.Join(";", fresh), ResultsViewerSettings.SymbolPath);
-                    TraceFormatConfig.Apply();
+                    BuildTmfs(string.Join(";", fresh), symbolPath);
+                    EnsureTmfCacheOnSearchPath();
                 }
 
                 // 2) GUID-driven TMF resolution: for the ETL-only case (no binary to read a PDB identity from),
@@ -416,7 +416,7 @@ public static class WppSymbolResolver
                 int tmfWritten = ProvisionTmfsByGuid(request.MissingMessageGuids, request.EtlPath, TmfCacheDir, tmfLog);
                 if (tmfWritten > 0)
                 {
-                    TraceFormatConfig.Apply(); // put the newly-cached TMFs on TRACE_FORMAT_SEARCH_PATH
+                    EnsureTmfCacheOnSearchPath(); // put the newly-cached TMFs on TRACE_FORMAT_SEARCH_PATH
                     FindNeedlePluginLib.Logger.Instance.Log(tmfLog.ToString().TrimEnd());
                 }
 
@@ -599,6 +599,25 @@ public static class WppSymbolResolver
         (sourceFolders ?? "")
             .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+
+    /// <summary>Make sure the managed TMF cache is on <c>TRACE_FORMAT_SEARCH_PATH</c> so the decode
+    /// retry finds the TMFs we just extracted. Host-agnostic (the GUI additionally layers the user's
+    /// configured TMF folder + ambient path via its own settings exporter); prepending the cache is the
+    /// one thing provisioning must guarantee. Idempotent — no-op if the cache is already on the path.</summary>
+    private static void EnsureTmfCacheOnSearchPath()
+    {
+        try
+        {
+            const string TmfVar = "TRACE_FORMAT_SEARCH_PATH";
+            var cache = TmfCacheDir;
+            var cur = Environment.GetEnvironmentVariable(TmfVar) ?? "";
+            var parts = cur.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Any(p => string.Equals(p.Trim(), cache, StringComparison.OrdinalIgnoreCase))) return;
+            Environment.SetEnvironmentVariable(
+                TmfVar, string.IsNullOrEmpty(cur) ? cache : cache + ";" + cur);
+        }
+        catch { /* env not writable — decode retry will just miss, same as before provisioning */ }
+    }
 
     /// <summary>A fetcher that never touches the network, so <see cref="Diagnose"/>'s HTTP store
     /// probes miss instantly — a diagnosis can't block on a slow/absent symbol server.</summary>

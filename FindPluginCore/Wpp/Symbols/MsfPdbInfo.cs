@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace FindNeedleUX.Services.WppSymbols;
+namespace FindPluginCore.Wpp.Symbols.WppSymbols;
 
 /// <summary>
 /// Minimal reader for a native (MSF 7.0) PDB's identity — the GUID + age in the PDB info stream

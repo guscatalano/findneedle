@@ -86,8 +86,10 @@ public partial class App : Application
             // processor calls this to resolve them (built-in lookup + the ISymbolResolver plugins), extract
             // TMFs, and retry the decode — so custom resolvers now run on the DECODE path, not only the
             // manual "WPP Symbol Resolution" page. Registered here because ETWPlugin can't reference the UX.
+            // The provisioning core moved to FindPluginCore; the UX supplies the user's symbol settings here.
             FindNeedlePluginLib.WppSymbolProvisioning.Handler =
-                FindNeedleUX.Services.WppSymbolResolver.TryProvision;
+                req => FindPluginCore.Wpp.Symbols.WppSymbolResolver.TryProvision(
+                    req, ResultsViewerSettings.SymbolSourcePath, ResultsViewerSettings.SymbolPath);
 
             // Manual raw-event decoders (IWppEventDecoder): for a provider with no TMF at all, a plugin can
             // format the raw event itself. The managed WPP decoder consults these at the TMF-miss branch.

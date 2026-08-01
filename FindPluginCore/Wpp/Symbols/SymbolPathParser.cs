@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace FindNeedleUX.Services.WppSymbols;
+namespace FindPluginCore.Wpp.Symbols.WppSymbols;
 
 /// <summary>One probe target inside a symbol-path chain: a local directory or an HTTP(S) server.</summary>
 public sealed record SymbolStore(string Location, bool IsHttp);

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using FindNeedleUX.Services;
+using FindPluginCore.Wpp.Symbols;
 using FindNeedlePluginLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 

@@ -12,10 +12,20 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.8" />
+    <!-- WPP symbol provisioning (moved from FindNeedleUX): FindTracePdb reads the WDK install root from HKLM. -->
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.1" />
     <!-- PerfBench workload profiler: in-proc EventPipe CPU sampling + trace parsing. -->
     <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.532401" />
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.19" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WppSymbolResolver test seams (ResolversOverride, FindTracePdbOverride, …) are internal. -->
+    <InternalsVisibleTo Include="FindNeedleUX.UnitTests" />
+    <!-- The GUI's WPP Symbol Resolution page consumes internal helpers (SymbolPathText, …) — as it did
+         before the provisioning core moved out of the FindNeedleUX assembly. -->
+    <InternalsVisibleTo Include="FindNeedleUX" />
   </ItemGroup>
 
   <ItemGroup>

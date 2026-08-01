@@ -63,6 +63,55 @@ internal class Program
         }
 
 
+        // --- WPP decode wiring (CLI) ---------------------------------------------------------------
+        // Make custom ISymbolResolver plugins run on the DECODE path exactly as they do in the GUI, so an
+        // external resolver author can hand this tool an ETL and prove it decodes. The provisioning core
+        // lives in FindPluginCore; we register the seam here and feed it the symbol paths from the cmdline.
+        //   --symbols=<_NT_SYMBOL_PATH-style path>     PDB folders / symbol servers to pull PDBs from
+        //   --symbol-source=<folder;folder>            extra folders to sweep for binaries+PDBs
+        var rawCmdArgs = Environment.GetCommandLineArgs();
+        static string ArgVal(string[] a, string name)
+        {
+            foreach (var s in a ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(s)) continue;
+                var t = s.Trim();
+                if (t.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    var v = t.Substring(name.Length).Trim();
+                    if (v.Length >= 2 && v.StartsWith("\"") && v.EndsWith("\"")) v = v.Substring(1, v.Length - 2);
+                    return v;
+                }
+            }
+            return string.Empty;
+        }
+        var symbolPath = ArgVal(rawCmdArgs, "--symbols=");
+        var symbolSourcePath = ArgVal(rawCmdArgs, "--symbol-source=");
+
+        // Managed WPP decoder by default: decodes with no WDK / no tracefmt.exe (tracepdb is still used only
+        // to EXTRACT TMFs from a resolved PDB during provisioning).
+        DecodeOptions.WppDecoder = WppDecoder.Managed;
+
+        // Raw-event decoders (IWppEventDecoder): a provider with no TMF at all can be formatted by a plugin.
+        WppEventDecoding.Provider = () =>
+            PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<IWppEventDecoder>();
+
+        // On-demand provisioning: when a WPP ETL misses TMFs, resolve them (built-in lookup + the
+        // ISymbolResolver plugins), extract TMFs, refresh TRACE_FORMAT_SEARCH_PATH, and retry the decode
+        // once. Wrapped in a counter so the summary below can prove the seam actually ran.
+        int wppProvisionInvocations = 0, wppProvisionSucceeded = 0;
+        var wppMissingGuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        WppSymbolProvisioning.Handler = req =>
+        {
+            wppProvisionInvocations++;
+            if (req?.MissingMessageGuids != null)
+                foreach (var g in req.MissingMessageGuids) wppMissingGuids.Add(g);
+            var made = FindPluginCore.Wpp.Symbols.WppSymbolResolver.TryProvision(req, symbolSourcePath, symbolPath);
+            if (made) wppProvisionSucceeded++;
+            return made;
+        };
+        // -------------------------------------------------------------------------------------------
+
         var x = SearchQueryCmdLine.ParseFromCommandLine(Environment.GetCommandLineArgs(), PluginManager.GetSingleton());
         // Fallback: if parse did not pick up --rules, check raw args and set on query
         try
@@ -531,6 +580,42 @@ internal class Program
                 Console.WriteLine("Searching...");
                 x.RunThrough();
             }
+        // --- Decode-proof summary: records decoded, WPP provisioning + resolvers consulted, and an exit
+        // code an external ISymbolResolver author can assert on (0 = fully decoded). ------------------
+        try
+        {
+            int rowsDecoded = 0;
+            try { rowsDecoded = x.GetSearchStatistics().GetRecordsAtStep(SearchStep.AtSearch); } catch { }
+
+            var resolvers = new List<string>();
+            try
+            {
+                foreach (var r in PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<ISymbolResolver>())
+                    resolvers.Add(r.GetType().FullName ?? r.GetType().Name);
+            }
+            catch { }
+
+            Console.WriteLine();
+            Console.WriteLine("=== WPP decode summary ===");
+            Console.WriteLine($"  Records decoded (matched):           {rowsDecoded}");
+            Console.WriteLine($"  ISymbolResolver plugins consulted:   {resolvers.Count}");
+            foreach (var r in resolvers) Console.WriteLine($"      - {r}");
+            Console.WriteLine($"  WPP symbol provisioning invoked:     {wppProvisionInvocations} time(s), made new symbols {wppProvisionSucceeded} time(s)");
+            Console.WriteLine($"  Distinct missing message GUIDs seen: {wppMissingGuids.Count}");
+
+            int exit;
+            if (rowsDecoded <= 0) exit = 2;                                                            // nothing decoded
+            else if (wppProvisionInvocations > 0 && wppProvisionSucceeded < wppProvisionInvocations) exit = 1; // symbols still missing
+            else exit = 0;                                                                             // fully decoded
+            var verdict = exit == 0 ? "fully decoded"
+                        : exit == 1 ? "decoded WITH UNRESOLVED symbols"
+                        : "no rows decoded";
+            Console.WriteLine($"  Result: {verdict} (exit {exit})");
+            Console.WriteLine("==========================");
+            Environment.ExitCode = exit;
+        }
+        catch { }
+
         Console.WriteLine("Done");
 
         try

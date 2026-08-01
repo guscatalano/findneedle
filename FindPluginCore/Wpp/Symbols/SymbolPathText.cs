@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FindNeedleUX.Services.WppSymbols;
+namespace FindPluginCore.Wpp.Symbols.WppSymbols;
 
 /// <summary>
 /// Pure text helpers for the WPP symbol editors — converting the ';'-joined settings

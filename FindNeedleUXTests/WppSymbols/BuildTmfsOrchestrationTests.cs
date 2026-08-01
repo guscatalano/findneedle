@@ -4,7 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using FindNeedleUX.Services;
-using FindNeedleUX.Services.WppSymbols;
+using FindPluginCore.Wpp.Symbols;
+using FindPluginCore.Wpp.Symbols.WppSymbols;
 using FindNeedlePluginLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
