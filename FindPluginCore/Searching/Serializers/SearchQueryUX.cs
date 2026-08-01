@@ -15,7 +15,17 @@ public class SearchQueryUX
 {
     private ISearchQuery? q = null;
     private PluginManager? pluginManager;
-    private bool initalized = false;
+    private volatile bool initalized = false;
+    private readonly object _initLock = new();
+
+    /// <summary>True once plugins are loaded and the query is created (a search ran, or the background warm
+    /// finished). Lets callers do a pre-search read of <see cref="CurrentQuery"/> without forcing the load.</summary>
+    public bool IsLoaded => initalized;
+
+    /// <summary>Explicit name for <see cref="Initialize"/> — load all plugins + create the query, once. The
+    /// first call pays the ~2s. UI-thread callers must await MiddleLayerService.PluginsReady first so this
+    /// never runs inline on the UI thread (it would freeze the window).</summary>
+    public void EnsureLoaded() => Initialize();
 
     public ISearchQuery? CurrentQuery => q;
 
@@ -42,19 +52,22 @@ public class SearchQueryUX
 
     public SearchQueryUX()
     {
-        Initialize();
+        // Cheap by design: plugin loading (~2s) is DEFERRED to Initialize()/EnsureLoaded, so constructing this
+        // — or reading CurrentQuery for a pre-search status read — never loads plugins on the launch path.
+        // (Was: eager Initialize() here, which made touching MiddleLayerService at launch cost ~2s.)
     }
 
     public void Initialize()
     {
-        if (!initalized)
+        if (initalized) return;
+        // Thread-safe + once: the background warm and a search can both call this; only the first loads.
+        lock (_initLock)
         {
-            pluginManager = PluginManager.GetSingleton(); // Initialize plugin manager if not already done
+            if (initalized) return;
+            pluginManager = PluginManager.GetSingleton();
             pluginManager.LoadAllPlugins(true);
-            q = SearchQueryFactory.CreateSearchQuery(pluginManager); // Initialize 'q' to ensure it is non-null
+            q = SearchQueryFactory.CreateSearchQuery(pluginManager); // create 'q' so CurrentQuery is non-null
             initalized = true;
-
-           
         }
     }
 

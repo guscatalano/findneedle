@@ -492,6 +492,25 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Startup cache cleanup -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Startup cache cleanup" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="When cached searches pile up (over ~10 GB), what happens at launch. Launch never blocks on this — the size check runs in the background, and clearing only removes cached copies (originals are untouched)."/>
+                            <ComboBox x:Name="StartupCacheCleanupCombo" Width="320"
+                                      SelectionChanged="StartupCacheCleanupCombo_SelectionChanged"
+                                      AutomationProperties.Name="Startup cache cleanup">
+                                <ComboBoxItem Content="Ask me after launch (default)"    Tag="Ask"/>
+                                <ComboBoxItem Content="Always clear it at launch"        Tag="Always"/>
+                                <ComboBoxItem Content="Never — leave it to me"           Tag="Never"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Substring-search index -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"

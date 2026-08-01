@@ -282,6 +282,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
 
             // --- Cache reuse ---
             SelectCacheReuseMode();
+            SelectStartupCacheCleanup();
 
             // --- Indexing mode ---
             SelectIndexingMode();
@@ -676,6 +677,27 @@ public sealed partial class ResultsViewerSettingsPage : Page
         {
             ResultsViewerSettings.CacheReuseMode = mode;
         }
+    }
+
+    // ----- Startup cache cleanup -----
+    private void SelectStartupCacheCleanup()
+    {
+        var current = ResultsViewerSettings.StartupCacheCleanup;
+        foreach (var item in StartupCacheCleanupCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            {
+                StartupCacheCleanupCombo.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void StartupCacheCleanupCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        if (StartupCacheCleanupCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            ResultsViewerSettings.StartupCacheCleanup = tag;
     }
 
     // ----- Indexing mode -----

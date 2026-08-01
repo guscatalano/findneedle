@@ -445,6 +445,16 @@ public static class ResultsViewerSettings
         set { Data.WppDecoderMode = value ?? "Auto"; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>What to do about a large cached-search pile-up at launch: "Ask" (default — show a dismissible
+    /// prompt when the cache is over the threshold), "Always" (clear it automatically when over the threshold,
+    /// no prompt), or "Never" (leave it alone, never prompt). Startup never blocks on this — the size check
+    /// runs on a background thread.</summary>
+    public static string StartupCacheCleanup
+    {
+        get => string.IsNullOrWhiteSpace(Data.StartupCacheCleanup) ? "Ask" : Data.StartupCacheCleanup;
+        set { Data.StartupCacheCleanup = value ?? "Ask"; Save(); Changed?.Invoke(); }
+    }
+
     /// <summary>Show the completed-steps checklist above the current step in the search progress
     /// spinner. On by default.</summary>
     public const bool DefaultShowStepHistory = true;
@@ -895,6 +905,7 @@ public static class ResultsViewerSettings
         public string SymbolPath { get; set; }
         public string SymbolSourcePath { get; set; }
         public string WppDecoderMode { get; set; }
+        public string StartupCacheCleanup { get; set; }
         public bool? DetailsPanelVisible { get; set; }
         public string DetailsMode { get; set; }
         public double? DetailsPanelHeight { get; set; }

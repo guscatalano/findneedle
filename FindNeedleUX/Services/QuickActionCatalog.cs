@@ -27,7 +27,7 @@ public static class QuickActionCatalog
         new QuickAction("open_ado",         "Open ADO Work Item",  "🔷"),
         new QuickAction("open_github",      "Open GitHub Issue",   "🐙"),
         new QuickAction("open_kusto",       "Open Kusto Query",    "🔎"),
-        new QuickAction("cached",           "Recent Searches",     "🕑"),
+        new QuickAction("cached",           "Cached Searches",     "🕑"),
         new QuickAction("locations",        "Configure Locations", "📍"),
         new QuickAction("rules_config",     "Configure Rules",     "⚙️"),
         new QuickAction("auto_rules",       "Auto-add Rules",      "✨"),

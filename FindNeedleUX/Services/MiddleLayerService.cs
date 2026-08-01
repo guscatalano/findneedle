@@ -25,7 +25,24 @@ public class MiddleLayerService
 {
     public static List<ISearchLocation> Locations = new();
     public static List<ISearchFilter> Filters = new();
+
+    // Cheap to construct now — LoadAllPlugins (~2s, the old dominant launch cost) is deferred to
+    // SearchQueryUX.EnsureLoaded — so touching this anywhere (e.g. the status strip on launch) is free.
     public static SearchQueryUX SearchQueryUX = new();
+
+    // Plugin loading is warmed in the BACKGROUND at startup (App.OnLaunched → WarmPluginsInBackground) so it's
+    // off the UI-thread launch path. EVERY UI-thread search entry does `await PluginsReady` (with a spinner)
+    // BEFORE search prep, so the load never blocks/freezes the UI. Grep "[plugin-load gate]" for the entries.
+    private static readonly object _pluginsReadyLock = new();
+    private static Task _pluginsReady;
+    public static Task PluginsReady
+    {
+        get { lock (_pluginsReadyLock) { return _pluginsReady ??= Task.Run(() => SearchQueryUX.EnsureLoaded()); } }
+    }
+    /// <summary>Kick off plugin loading in the background (fire-and-forget). Idempotent.</summary>
+    public static void WarmPluginsInBackground() => _ = PluginsReady;
+    /// <summary>True once plugins are loaded (a search ran or the warm finished).</summary>
+    public static bool IsSearchQueryReady => SearchQueryUX.IsLoaded;
 
     /// <summary>
     /// Optional storage-tier override applied to the next search (null = use config/Auto). Set by
@@ -734,7 +751,7 @@ public class MiddleLayerService
 
     /// <summary>Whether the current search has output rules/outputs to generate (drives the UI button).</summary>
     public static bool HasOutputRules =>
-        (SearchQueryUX.CurrentQuery as NuSearchQuery)?.HasOutputRules ?? false;
+        IsSearchQueryReady && (SearchQueryUX.CurrentQuery as NuSearchQuery)?.HasOutputRules == true;
 
     // ----- CSV column remapping support -----
     private static readonly string[] CsvExtensions = { ".csv", ".tsv" };
@@ -1113,7 +1130,9 @@ public class MiddleLayerService
         if (_workspaceCleared) return null; // cleared workspace has no stats — drops the decode banner
         // Prefer the captured run; fall back to the current query (covers legacy SearchQuery and
         // NuSearchQuery — GetSearchStatistics() is on the ISearchQuery interface).
-        return LastStats ?? SearchQueryUX.CurrentQuery?.GetSearchStatistics();
+        // Don't force the lazy plugin load just to answer a pre-search status query — if no search has run,
+        // there are no stats anyway.
+        return LastStats ?? (IsSearchQueryReady ? SearchQueryUX.CurrentQuery?.GetSearchStatistics() : null);
     }
 
     /// <summary>
@@ -1278,7 +1297,9 @@ public class MiddleLayerService
     /// </summary>
     public static ISearchQuery? GetCurrentQuery()
     {
-        return SearchQueryUX?.CurrentQuery;
+        // Don't force the lazy plugin load for a pre-search read (e.g. the status strip on launch) — there's
+        // no current query until a search has run and resolved SearchQueryUX.
+        return IsSearchQueryReady ? SearchQueryUX?.CurrentQuery : null;
     }
 
     /// <summary>
@@ -1306,6 +1327,7 @@ public class MiddleLayerService
     {
         if (_workspaceCleared) return null; // workspace was cleared; don't expose the old query's rows
         if (_overrideStorage != null) return _overrideStorage;
+        if (!IsSearchQueryReady) return null; // no search yet — don't force the lazy plugin load
         // NuSearchQuery exposes ResultStorage; older SearchQuery types don't.
         var query = SearchQueryUX?.CurrentQuery;
         var prop = query?.GetType().GetProperty("ResultStorage");

@@ -601,6 +601,9 @@ public sealed class McpViewerBridge
             {
                 // Fallback: trigger a streaming search directly (no navigation). The active viewer, if
                 // any, picks up the new results on its next load.
+                // [plugin-load gate] RunSearchStreaming's prep loads plugins on the UI thread; await the
+                // launch-warmed load OFF the UI thread first so the RunOnUiAsync call can't freeze the UI.
+                await MiddleLayerService.PluginsReady.ConfigureAwait(false);
                 await RunOnUiAsync(() => { MiddleLayerService.RunSearchStreaming(); }).ConfigureAwait(false);
             }
             // Rebind the (already-open) viewer to this search's new storage — without it, a viewer left

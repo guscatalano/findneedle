@@ -45,6 +45,11 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         this.InitializeComponent();
+        App.Mark("mainwindow_initcomponent");
+        // Subtle content fade-in on first show — NO delay. The content is already loaded; this just eases it
+        // in over ~320ms instead of popping, for a smooth reveal after the OS splash. Runs once.
+        RootGrid.Opacity = 0;
+        RootGrid.Loaded += FadeInContentOnce;
         WindowUtil.TrackWindow(this);
         SetWindowIcon("Assets\\appicon.ico");
         // Hide developer-only affordances from a normal (shipped) run — see AppMode.
@@ -68,11 +73,13 @@ public sealed partial class MainWindow : Window
         FindNeedleUX.Services.QuickActionCatalog.Changed += () => DispatcherQueue.TryEnqueue(BuildQuickMenu);
         ApplyPersistedStatusStripVisibility();
         ApplyTitleBarColor();
+        ApplyCommandPaletteAccelerator();
         // Re-apply status-bar visibility + title-bar color when changed in Preferences.
         ResultsViewerSettings.Changed += () => DispatcherQueue.TryEnqueue(() =>
         {
             ApplyPersistedStatusStripVisibility();
             ApplyTitleBarColor();
+            ApplyCommandPaletteAccelerator();
         });
         InitMcpIndicator();
 
@@ -408,6 +415,11 @@ public sealed partial class MainWindow : Window
             // Nothing loadable on the command line — leave the app on the welcome page.
             return;
         }
+
+        // [plugin-load gate] The CLI auto-run fires at launch, before the background warm finishes, and its
+        // search prep loads plugins synchronously on the UI thread. Await the load here (spinner shows during
+        // the load below) so the auto-search doesn't freeze the window.
+        await MiddleLayerService.PluginsReady;
 
         try
         {
@@ -1123,7 +1135,7 @@ public sealed partial class MainWindow : Window
             Cmd("Open log file…", "Open", "single pick browse", menu("openlogfile")),
             Cmd("Open log folder…", "Open", "directory", menu("openlogfolder")),
             Cmd("Open log with rules…", "Open", "quicklog", menu("openlogwithrules")),
-            Cmd("Cached searches", "Open", "recent history reopen", menu("cached_searches")),
+            Cmd("Cached Searches", "Open", "recent history reopen cache", menu("cached_searches")),
             Cmd("Inspect ETL", "Tools", "providers triage etl", menu("inspect_etl")),
             Cmd("Inspect Binary", "Tools", "pe tracelogging providers dll exe", menu("inspect_binary")),
             Cmd("Diagram Tools", "Tools", "uml plantuml mermaid sequence", menu("diagramtools")),
@@ -1136,6 +1148,106 @@ public sealed partial class MainWindow : Window
             Cmd("About", "Help", "version info", menu("about")),
             Cmd("Welcome", "App", "home start intro", () => { contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage)); return System.Threading.Tasks.Task.CompletedTask; }),
         };
+    }
+
+    // Fade the window content in once, the moment it's first laid out. Pure visual easing — no wait on
+    // anything (plugins keep warming in the background), so it never adds a "fake delay".
+    private void FadeInContentOnce(object sender, RoutedEventArgs e)
+    {
+        RootGrid.Loaded -= FadeInContentOnce;
+        try
+        {
+            var fade = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = new Microsoft.UI.Xaml.Duration(TimeSpan.FromMilliseconds(320)),
+                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase
+                {
+                    EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut,
+                },
+            };
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(fade, RootGrid);
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fade, "Opacity");
+            var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+            sb.Children.Add(fade);
+            sb.Begin();
+        }
+        catch { RootGrid.Opacity = 1; }
+    }
+
+    // ----- "Cached searches are large" startup prompt (raised from App.OnLaunched, Ask mode) -----
+
+    /// <summary>Show the dismissible cache-cleanup prompt. Called once the window exists and only when the
+    /// cache is over the threshold. A non-modal InfoBar — never a startup-blocking or re-entrant dialog.</summary>
+    public void ShowCacheCleanupPrompt(int files, long bytes)
+    {
+        if (CacheCleanupBar == null) return;
+        CacheCleanupBar.Message =
+            $"Cached searches are using {FindNeedleUX.Services.CacheMaintenance.FormatBytes(bytes)} " +
+            $"({files} file{(files == 1 ? "" : "s")}). Clearing frees the space; reopening those logs re-scans them.";
+        CacheCleanupBar.IsOpen = true;
+    }
+
+    private void CacheCleanupBar_Closed(Microsoft.UI.Xaml.Controls.InfoBar sender,
+        Microsoft.UI.Xaml.Controls.InfoBarClosedEventArgs args)
+    { /* dismissed = "not now" — leaves the preference at Ask, so it can surface again next launch. */ }
+
+    private void CacheCleanupNow_Click(object sender, RoutedEventArgs e)
+    {
+        CacheCleanupBar.IsOpen = false;
+        ClearCachedSearchesInBackground();
+    }
+
+    private void CacheCleanupAlways_Click(object sender, RoutedEventArgs e)
+    {
+        FindNeedleUX.Services.ResultsViewerSettings.StartupCacheCleanup = "Always";
+        CacheCleanupBar.IsOpen = false;
+        ClearCachedSearchesInBackground();
+    }
+
+    private void CacheCleanupNever_Click(object sender, RoutedEventArgs e)
+    {
+        FindNeedleUX.Services.ResultsViewerSettings.StartupCacheCleanup = "Never";
+        CacheCleanupBar.IsOpen = false;
+    }
+
+    private void ClearCachedSearchesInBackground() => _ = System.Threading.Tasks.Task.Run(() =>
+    {
+        try
+        {
+            var (cleared, before) = FindNeedleUX.Services.CacheMaintenance.ClearAllCachedSearches();
+            Logger.Instance.Log($"Cleared {cleared} cached searches (~{before / (1024 * 1024)} MB) via the startup prompt");
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Cache clear failed: {ex.Message}"); }
+    });
+
+    // The Ctrl+K accelerator is registered in code, not XAML, so a DISABLED palette leaves nothing in the
+    // visual tree — WinUI then has no accelerator to render a "Ctrl+K" hint for, and no dead key to swallow.
+    private Microsoft.UI.Xaml.Input.KeyboardAccelerator _paletteAccelerator;
+
+    /// <summary>Add the Ctrl+K accelerator when the command palette is enabled, remove it when not. Called at
+    /// startup and whenever settings change, so toggling the palette takes effect live (and stops showing a
+    /// shortcut hint the moment it's turned off).</summary>
+    private void ApplyCommandPaletteAccelerator()
+    {
+        if (RootGrid == null) return;
+        _paletteAccelerator ??= CreatePaletteAccelerator();
+        bool enabled = ResultsViewerSettings.HotkeysEnabled && ResultsViewerSettings.CommandPaletteEnabled;
+        bool present = RootGrid.KeyboardAccelerators.Contains(_paletteAccelerator);
+        if (enabled && !present) RootGrid.KeyboardAccelerators.Add(_paletteAccelerator);
+        else if (!enabled && present) RootGrid.KeyboardAccelerators.Remove(_paletteAccelerator);
+    }
+
+    private Microsoft.UI.Xaml.Input.KeyboardAccelerator CreatePaletteAccelerator()
+    {
+        var accel = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
+        {
+            Modifiers = global::Windows.System.VirtualKeyModifiers.Control,
+            Key = global::Windows.System.VirtualKey.K,
+        };
+        accel.Invoked += CommandPaletteAccelerator_Invoked;
+        return accel;
     }
 
     private void CommandPaletteAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
@@ -1681,6 +1793,9 @@ public sealed partial class MainWindow : Window
             // synchronous step a cache hit instead of a frozen window.
             ShowSpinner(true, label);
             await System.Threading.Tasks.Task.Yield();
+            // [plugin-load gate] Load plugins before the (synchronous, UI-thread) search prep. Warmed at
+            // launch so normally instant; a very fast first search just waits here with the spinner up.
+            await MiddleLayerService.PluginsReady;
             await System.Threading.Tasks.Task.Run(() => MiddleLayerService.WarmMetadataCache());
 
             if (ResultsViewerSettings.StreamWhileLoading)

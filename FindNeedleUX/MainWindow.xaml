@@ -9,11 +9,10 @@
     mc:Ignorable="d"
     Title="FindNeedle">
 
-    <Grid>
-        <Grid.KeyboardAccelerators>
-            <!-- Ctrl+K: open the command palette from anywhere in the window. -->
-            <KeyboardAccelerator Modifiers="Control" Key="K" Invoked="CommandPaletteAccelerator_Invoked"/>
-        </Grid.KeyboardAccelerators>
+    <Grid x:Name="RootGrid">
+        <!-- The Ctrl+K (command palette) accelerator is added in CODE, and ONLY while the palette is enabled
+             (see ApplyCommandPaletteAccelerator). Declaring it here unconditionally left WinUI rendering a
+             "Ctrl+K" shortcut hint even when the palette was off — a shortcut that did nothing. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -126,6 +125,19 @@
         <Grid Grid.Row="2" AllowDrop="True"
               DragOver="Content_DragOver" DragLeave="Content_DragLeave" Drop="Content_Drop">
             <Frame x:Name="contentFrame" />
+            <!-- Dismissible "your cached searches are large" prompt (see App startup + ShowCacheCleanupPrompt).
+                 An InfoBar, NOT a dialog, so it never blocks launch or hits ContentDialog re-entrancy. -->
+            <InfoBar x:Name="CacheCleanupBar" VerticalAlignment="Top" Margin="12,12,12,0"
+                     IsOpen="False" IsClosable="True" Severity="Informational" Canvas.ZIndex="10"
+                     Title="Cached searches are large" Closed="CacheCleanupBar_Closed">
+                <InfoBar.Content>
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
+                        <Button Content="Clean up now" Click="CacheCleanupNow_Click"/>
+                        <Button Content="Always clean up at launch" Click="CacheCleanupAlways_Click"/>
+                        <Button Content="Never ask" Click="CacheCleanupNever_Click"/>
+                    </StackPanel>
+                </InfoBar.Content>
+            </InfoBar>
             <!-- Full-window overlay spinner for ETL inspection and quick actions -->
             <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
                   AutomationProperties.Name="Operation in progress" AutomationProperties.LiveSetting="Polite">

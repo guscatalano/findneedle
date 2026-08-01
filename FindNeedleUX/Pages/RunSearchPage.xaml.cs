@@ -97,6 +97,10 @@ public sealed partial class RunSearchPage : Page
 
         try
         {
+            // [plugin-load gate] The orchestrator's first line (RunStreaming) does synchronous, UI-thread
+            // search prep that loads plugins; await the (launch-warmed) load here so it never freezes the UI.
+            // Gated here rather than in the orchestrator to keep the orchestrator WinUI-free for tests.
+            await MiddleLayerService.PluginsReady;
             // The orchestrator owns the streaming run/grace/cancel flow; the page just supplies
             // the two UI side effects (open viewer, show status). Both callbacks run on the UI
             // thread because RunAsync resumes on the captured WinUI context.

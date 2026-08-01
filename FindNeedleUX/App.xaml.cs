@@ -21,9 +21,27 @@ public partial class App : Application
     /// Initializes the singleton application object.  This is the first line of authored code
     /// executed, and as such is the logical equivalent of main() or WinMain().
     /// </summary>
+    // Startup profiling: a clock that starts as early as managed code runs (this static initializer fires when
+    // the App type is first touched, right after the WinUI bootstrapper). Mark() logs elapsed time at each
+    // startup milestone to the perf log (phase=startup.*), so "what takes time on launch" is measurable.
+    internal static readonly System.Diagnostics.Stopwatch StartupClock = System.Diagnostics.Stopwatch.StartNew();
+    internal static void Mark(string phase)
+    {
+        try { FindPluginCore.Diagnostics.PerfLog.Log("startup." + phase, ("t_ms", StartupClock.ElapsedMilliseconds)); }
+        catch { }
+    }
+
     public App()
     {
+        // Bootstrapper cost: process start → our first managed line (WinUI/CLR init we can't instrument from here).
+        try
+        {
+            var sinceProc = (DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+            FindPluginCore.Diagnostics.PerfLog.Log("startup.app_ctor", ("since_proc_start_ms", (long)sinceProc));
+        }
+        catch { }
         this.InitializeComponent();
+        Mark("app_initcomponent");
 
         // Capture any unhandled UI exception with its full stack (the normal Logger doesn't see UI-
         // thread crashes), and keep the session alive — a transient render/collection exception
@@ -37,6 +55,7 @@ public partial class App : Application
         Logger.Instance.Log("Application launched");
         // Precompute system info at app startup
         _ = SystemInfoMiddleware.GetPanelText();
+        Mark("app_ctor_end");
     }
 
     /// <summary>
@@ -45,12 +64,16 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        Mark("onlaunched_start");
         m_window = new MainWindow();
+        Mark("mainwindow_created"); // includes InitializeComponent + first WelcomePage navigate
         m_window.Activate();
+        Mark("window_activated");
 
         // Start the in-app MCP server if the user enabled it (localhost-only; off by default).
         try { FindNeedleUX.Services.Mcp.McpServerHost.Initialize(); }
         catch (Exception ex) { Logger.Instance.Log($"MCP host init failed: {ex.Message}"); }
+        Mark("mcp_init");
 
         // Feed the user's WPP TMF search path to tracefmt (via TRACE_FORMAT_SEARCH_PATH) so WPP ETLs
         // decode without the user setting the env var by hand. Re-apply when settings change.
@@ -74,6 +97,14 @@ public partial class App : Application
                     .GetAllPluginsInstancesOfAType<FindNeedlePluginLib.IWppEventDecoder>();
         }
         catch (Exception ex) { Logger.Instance.Log($"TraceFormat config init failed: {ex.Message}"); }
+        Mark("traceformat_and_seams");
+
+        // Warm the plugin load (~2s) in the BACKGROUND now that the window is up — it used to run synchronously
+        // during MainWindow construction and was ~85% of launch time. Every search entry awaits PluginsReady
+        // (with a spinner) so a search that beats the warm shows a spinner rather than freezing. See
+        // MiddleLayerService.PluginsReady.
+        try { FindNeedleUX.Services.MiddleLayerService.WarmPluginsInBackground(); } catch { }
+        Mark("plugins_warm_kicked");
 
         // Apply the persisted "index timestamps in search" preference to the storage layer before any
         // search runs (default off — see ResultsViewerSettings.IndexTimestampsInSearch).
@@ -111,23 +142,44 @@ public partial class App : Application
         }
         catch (Exception ex) { Logger.Instance.Log($"Apply FastBulkIngest failed: {ex.Message}"); }
 
-        // Disk hygiene: the result cache had no eviction (it grew into the hundreds of GB) and a
-        // killed/crashed run leaks its %Temp% extraction dir. Prune both on startup, off the UI thread,
-        // and log the outcome so we can prove the cache stays bounded.
+        // Disk hygiene, off the UI thread so it never blocks launch. Two parts, deliberately different:
+        //  • Stale %Temp% session dirs from killed/crashed runs are pure garbage → always swept (cheap, and
+        //    it keeps temp from leaking unbounded).
+        //  • The reopen-cache (cached searches) is the USER's data, and clearing it makes reopens re-scan —
+        //    so it's gated by ResultsViewerSettings.StartupCacheCleanup and only touched when it's genuinely
+        //    large (≥ CacheMaintenance.ThresholdBytes). "Always" clears it silently, "Ask" prompts after the
+        //    window is up (never a startup-blocking dialog), "Never" leaves it alone. This is why launch no
+        //    longer churns an 8 GB cache on every start.
         _ = System.Threading.Tasks.Task.Run(() =>
         {
             try
             {
-                long cacheFreed = FindNeedleCoreUtils.CachedStorage.Prune(FindNeedleCoreUtils.CachedStorage.DefaultMaxCacheBytes);
                 long tempFreed = FindNeedleCoreUtils.TempStorage.CleanupStaleSessions(TimeSpan.FromHours(2));
-                var (files, bytes) = FindNeedleCoreUtils.CachedStorage.GetCacheStats();
+                if (tempFreed > 0)
+                    Logger.Instance.Log($"Startup: swept {tempFreed / (1024 * 1024)} MB stale temp");
+
+                var mode = FindNeedleUX.Services.ResultsViewerSettings.StartupCacheCleanup; // Ask | Always | Never
+                if (string.Equals(mode, "Never", StringComparison.OrdinalIgnoreCase)) return;
+
+                var (files, bytes) = FindNeedleUX.Services.CacheMaintenance.GetStats();
                 FindPluginCore.Diagnostics.PerfLog.Log("cache.maintenance",
-                    ("cache_freed_mb", cacheFreed / (1024 * 1024)), ("temp_freed_mb", tempFreed / (1024 * 1024)),
-                    ("cache_files", files), ("cache_mb", bytes / (1024 * 1024)));
-                Logger.Instance.Log($"Cache maintenance: freed {cacheFreed / (1024 * 1024)} MB cache + " +
-                    $"{tempFreed / (1024 * 1024)} MB temp; cache now {files} files / {bytes / (1024 * 1024)} MB");
+                    ("temp_freed_mb", tempFreed / (1024 * 1024)), ("cache_files", files),
+                    ("cache_mb", bytes / (1024 * 1024)), ("mode", mode));
+                if (bytes < FindNeedleUX.Services.CacheMaintenance.ThresholdBytes) return; // modest cache → leave it
+
+                if (string.Equals(mode, "Always", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (cleared, before) = FindNeedleUX.Services.CacheMaintenance.ClearAllCachedSearches();
+                    Logger.Instance.Log($"Startup cache cleanup (Always): cleared {cleared} cached searches " +
+                        $"(~{before / (1024 * 1024)} MB)");
+                }
+                else // Ask — surface a dismissible prompt once the window exists
+                {
+                    m_window?.DispatcherQueue.TryEnqueue(() =>
+                        (m_window as MainWindow)?.ShowCacheCleanupPrompt(files, bytes));
+                }
             }
-            catch (Exception ex) { Logger.Instance.Log($"Cache maintenance failed: {ex.Message}"); }
+            catch (Exception ex) { Logger.Instance.Log($"Startup cache maintenance failed: {ex.Message}"); }
         });
 
         // GUI equivalent of the findneedle.exe CLI: if a log file/folder was passed on the
