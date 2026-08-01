@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "2.0",
+  "version": "1.0",
+  "title": "Checkout request flow",
+  "description": "Mermaid sequence diagram of a /checkout request reconstructed from the log — auth, cache, and a DB timeout + retry.",
+  "sections": [
+    {
+      "name": "CheckoutDiagram",
+      "description": "Emit a sequence diagram from the checkout trace",
+      "purpose": "output",
+      "providers": [ "*" ],
+      "rules": [
+        {
+          "name": "emit-checkout-sequence",
+          "match": "POST /api/v2/checkout|validating bearer token|token valid|cache MISS|acquired connection|SELECT cart|query TIMEOUT|deadlock retry|committed|write-through key=order|checkout 201",
+          "enabled": true,
+          "action": {
+            "type": "uml",
+            "syntax": "mermaid",
+            "path": "{output}/checkout_flow_{datetime}.mmd",
+            "rulesFile": "checkout-flow.rules.json",
+            "generateImage": true
+          }
+        }
+      ]
+    }
+  ]
+}

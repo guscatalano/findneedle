@@ -1,0 +1,11 @@
+2026-08-01T10:00:00.100Z  INFO   [1A40.2001]  RequestHandler  POST /api/v2/checkout received rid=7f3a user=mchen
+2026-08-01T10:00:00.140Z  DEBUG  [1A40.2001]  AuthService     validating bearer token for user=mchen
+2026-08-01T10:00:00.162Z  INFO   [1A40.2001]  AuthService     token valid user=mchen role=customer
+2026-08-01T10:00:00.181Z  DEBUG  [1A41.2010]  CacheLayer      cache MISS key=cart:mchen
+2026-08-01T10:00:00.205Z  INFO   [1A42.2020]  DbPool          acquired connection pool=primary size=7/32
+2026-08-01T10:00:00.223Z  DEBUG  [1A42.2020]  DbPool          SELECT cart items rid=7f3a
+2026-08-01T10:00:15.231Z  ERROR  [1A42.2020]  DbPool          query TIMEOUT after 15000ms rid=7f3a
+2026-08-01T10:00:15.262Z  WARN   [1A42.2020]  DbPool          deadlock retry attempt 1 rid=7f3a
+2026-08-01T10:00:15.487Z  INFO   [1A42.2020]  DbPool          transaction 7f3a committed rows=3
+2026-08-01T10:00:15.503Z  INFO   [1A41.2010]  CacheLayer      write-through key=order:88213
+2026-08-01T10:00:15.521Z  INFO   [1A40.2001]  RequestHandler  POST /api/v2/checkout 201 rid=7f3a 15421ms

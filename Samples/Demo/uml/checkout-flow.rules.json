@@ -1,0 +1,37 @@
+{
+  "title": "Checkout request flow",
+  "description": "Reconstructs a single /checkout request as a sequence diagram — auth, cache, and a DB timeout + retry.",
+  "participants": [
+    { "id": "Client", "displayName": "Client", "type": "actor" },
+    { "id": "RequestHandler", "displayName": "RequestHandler", "type": "participant" },
+    { "id": "AuthService", "displayName": "AuthService", "type": "participant" },
+    { "id": "CacheLayer", "displayName": "CacheLayer", "type": "participant" },
+    { "id": "DbPool", "displayName": "DbPool", "type": "participant" }
+  ],
+  "rules": [
+    { "name": "r1", "match": "POST /api/v2/checkout received", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "Client", "to": "RequestHandler", "text": "POST /checkout" } },
+    { "name": "r2", "match": "validating bearer token", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "RequestHandler", "to": "AuthService", "text": "validate token" } },
+    { "name": "r3", "match": "token valid", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "AuthService", "to": "RequestHandler", "text": "token OK (customer)" } },
+    { "name": "r4a", "match": "cache MISS key=cart", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "RequestHandler", "to": "CacheLayer", "text": "get cart" } },
+    { "name": "r4b", "match": "cache MISS key=cart", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "CacheLayer", "to": "RequestHandler", "text": "MISS (cold)" } },
+    { "name": "r5", "match": "acquired connection", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "RequestHandler", "to": "DbPool", "text": "acquire connection" } },
+    { "name": "r6", "match": "SELECT cart items", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "RequestHandler", "to": "DbPool", "text": "SELECT cart" } },
+    { "name": "r7", "match": "query TIMEOUT", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "DbPool", "to": "RequestHandler", "text": "TIMEOUT after 15000ms" } },
+    { "name": "r8", "match": "deadlock retry", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "RequestHandler", "to": "DbPool", "text": "retry transaction" } },
+    { "name": "r9", "match": "committed", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "DbPool", "to": "RequestHandler", "text": "committed (3 rows)" } },
+    { "name": "r10", "match": "write-through key=order", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "RequestHandler", "to": "CacheLayer", "text": "cache order" } },
+    { "name": "r11", "match": "checkout 201", "useRegex": false, "enabled": true,
+      "action": { "type": "message", "from": "RequestHandler", "to": "Client", "text": "201 Created" } }
+  ]
+}

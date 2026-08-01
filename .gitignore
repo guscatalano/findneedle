@@ -382,6 +382,11 @@ FmtSum.txt
 # Keep the committed auto-add-rules demo samples (the global *.log ignore would otherwise drop them)
 !Samples/AutoRuleDemo/auto-rule-demo.log
 !Samples/AutoRuleDemo/process-interaction-demo.log
+# Keep the committed demo trace logs (reproducible via Samples/Demo/gen_logs.py) — README screenshots.
+# Note: the generic [Ll]ogs/ rule above excludes the directory, so re-include it before its files.
+!Samples/Demo/logs/
+!Samples/Demo/logs/*.log
+!Samples/Demo/uml/*.log
 
 # Keep the test-data sample logs the RuleDSL tests read (otherwise *.log drops them and CI fails)
 !FindNeedleRuleDSL/Examples/sample.log
