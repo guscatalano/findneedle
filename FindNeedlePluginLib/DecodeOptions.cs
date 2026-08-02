@@ -31,3 +31,27 @@ public enum WppDecoder
     /// tracefmt, the reference). ~2× decode cost; also surfaces any divergence between the two.</summary>
     Compare,
 }
+
+/// <summary>Maps a CLI <c>--wpp-decoder=&lt;value&gt;</c> string to a <see cref="WppDecoder"/>. Pulled out so
+/// the mapping is unit-testable and shared. Unknown/empty falls back to <see cref="WppDecoder.Auto"/> — which
+/// prefers the WDK's tracefmt (the reference decoder) and only uses the managed decoder when tracefmt isn't
+/// installed. The CLI must NOT hard-pin the prototype managed decoder, or a resolver author can't validate
+/// against tracefmt.</summary>
+public static class WppDecoderParsing
+{
+    public static WppDecoder FromArg(string value) => (value ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "tracefmt" => WppDecoder.Tracefmt,
+        "managed" => WppDecoder.Managed,
+        "compare" => WppDecoder.Compare,
+        "auto" => WppDecoder.Auto,
+        _ => WppDecoder.Auto,
+    };
+
+    /// <summary>True if <paramref name="value"/> is a recognized decoder name (for a "did you mean" warning).</summary>
+    public static bool IsKnown(string value)
+    {
+        var v = (value ?? string.Empty).Trim().ToLowerInvariant();
+        return v is "tracefmt" or "managed" or "compare" or "auto";
+    }
+}

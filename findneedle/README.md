@@ -26,6 +26,7 @@ dotnet run --project findneedle.csproj -- --rules my-rules.rules.json C:\Logs
 | `--out-file=<path>` | Override the output path (default `output/findneedle_decoded.<ext>`) | `--out-file=rows.csv` |
 | `--symbols=<path>` | PDB folders / symbol servers for WPP symbol provisioning | `--symbols=C:\syms` |
 | `--symbol-source=<dirs>` | Extra folders to sweep for binaries + PDBs | `--symbol-source=C:\bins` |
+| `--wpp-decoder=<mode>` | WPP decoder: `tracefmt` (WDK reference), `managed`, `auto` (default), `compare` | `--wpp-decoder=tracefmt` |
 | `--verbose`, `-v` | Show detailed output | `--verbose` |
 | `--force`, `-f`, `--yes`, `-y` | Skip confirmation prompts | `--force` |
 | `--clear-output`, `-c` | Clear existing output before running | `--clear-output` |
@@ -45,6 +46,10 @@ authoring a custom `ISymbolResolver` and testing it end-to-end:
 - `2` — no rows decoded
 
 Add `--out=<fmt>` to also write the decoded rows so you can *see* what came out, not just the exit code.
+
+By default (`--wpp-decoder=auto`) the tool uses the WDK's **tracefmt** — the reference WPP decoder — when
+it's installed, falling back to the built-in managed decoder when it isn't. Force one with
+`--wpp-decoder=tracefmt` (validate against the reference) or `--wpp-decoder=managed` (no WDK needed).
 
 ### RuleDSL Rules File
 

@@ -88,9 +88,15 @@ internal class Program
         var symbolPath = ArgVal(rawCmdArgs, "--symbols=");
         var symbolSourcePath = ArgVal(rawCmdArgs, "--symbol-source=");
 
-        // Managed WPP decoder by default: decodes with no WDK / no tracefmt.exe (tracepdb is still used only
-        // to EXTRACT TMFs from a resolved PDB during provisioning).
-        DecodeOptions.WppDecoder = WppDecoder.Managed;
+        // WPP decoder: default Auto — the WDK's tracefmt when installed (the REFERENCE decoder a resolver
+        // author validates against), else the built-in managed decoder (no WDK needed). Override with
+        // --wpp-decoder=tracefmt|managed|auto|compare. (tracepdb is still used only to EXTRACT TMFs from a
+        // resolved PDB during provisioning, regardless of which decoder renders the events.)
+        var wppDecoderArg = ArgVal(rawCmdArgs, "--wpp-decoder=");
+        if (!string.IsNullOrWhiteSpace(wppDecoderArg) && !WppDecoderParsing.IsKnown(wppDecoderArg))
+            Console.WriteLine($"Unknown --wpp-decoder '{wppDecoderArg}'. Using auto. Valid: tracefmt, managed, auto, compare.");
+        DecodeOptions.WppDecoder = WppDecoderParsing.FromArg(wppDecoderArg);
+        Console.WriteLine($"WPP decoder: {DecodeOptions.WppDecoder}");
 
         // Raw-event decoders (IWppEventDecoder): a provider with no TMF at all can be formatted by a plugin.
         WppEventDecoding.Provider = () =>
