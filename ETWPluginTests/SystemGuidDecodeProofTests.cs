@@ -63,13 +63,12 @@ public sealed class SystemGuidDecodeProofTests
 }
 
 /// <summary>
-/// The test the resolver author actually needs: drive the REAL findneedle CLI and prove its decode-proof exit
-/// code TRACKS symbol availability (0 = fully decoded with TMFs, non-zero = symbols missing) rather than
-/// returning "the same result no matter what". Needs the built CLI + plugins, so it's [SkipCI] and goes
-/// Inconclusive if the exe isn't present. This is also the harness an external ISymbolResolver author can copy.
+/// Drives the REAL findneedle CLI end-to-end. The lightweight cases (plain-log decode, --out, bad format)
+/// need only the CLI binary CI already builds, so they run in the pipeline; the WPP-symbol case needs the
+/// committed .etl/TMF fixtures and is [SkipCI]. All go Inconclusive (not red) if the exe isn't found. This is
+/// also the harness an external ISymbolResolver author can copy.
 /// </summary>
 [TestClass]
-[TestCategory("SkipCI")]
 [TestCategory("Integration")]
 public sealed class CliDecodeProofTests
 {
@@ -112,6 +111,7 @@ public sealed class CliDecodeProofTests
     }
 
     [TestMethod]
+    [TestCategory("SkipCI")] // needs the committed WPP .etl/TMF fixtures — kept out of CI
     public void CliDecodeProof_ExitCodeTracksSymbolAvailability()
     {
         var exe = FindCliExe();
