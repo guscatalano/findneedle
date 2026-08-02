@@ -608,7 +608,10 @@ internal class Program
 
                     var outFile = ArgVal(rawCmdArgs, "--out-file=");
                     if (string.IsNullOrWhiteSpace(outFile))
-                        outFile = Path.Combine(AppContext.BaseDirectory, "output",
+                        // Default under the CURRENT WORKING DIRECTORY, not next to the exe: when installed from
+                        // the Store the exe lives in a read-only folder (C:\Program Files\WindowsApps\...), so
+                        // writing beside it fails. The CWD is writable and is where a CLI user expects output.
+                        outFile = Path.Combine(Directory.GetCurrentDirectory(), "output",
                             "findneedle_decoded" + FindPluginCore.Output.ResultOutputWriter.ExtensionFor(outFormat));
                     FindPluginCore.Output.ResultOutputWriter.WriteToFile(rows, outFormat, outFile);
                     Console.WriteLine($"Wrote {rows.Count:N0} decoded rows to {outFile} ({outFormat.Trim().ToLowerInvariant()})");
