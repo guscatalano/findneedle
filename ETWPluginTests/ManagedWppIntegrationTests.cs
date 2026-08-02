@@ -200,4 +200,37 @@ public sealed class ManagedWppIntegrationTests
         Assert.AreEqual(1, invoked, "the ISymbolResolver provisioning seam must be consulted for the managed decoder too");
         Assert.AreEqual(4, results.Count, "after provisioning the TMFs, the retried managed decode should produce rows");
     }
+
+    [TestMethod]
+    public void TracefmtMode_MissingTmfs_ConsultsResolver_UpFront()
+    {
+        // The tracefmt path must ALSO consult the ISymbolResolver seam — via the upfront discovery scan, which
+        // runs regardless of decoder. (The AI reported "managed fixed, tracefmt not"; this pins the seam on the
+        // tracefmt path.) NOTE: these fixtures SELF-RESOLVE under tracefmt (it decodes them with zero external
+        // TMFs), so this proves the resolver is CONSULTED + tracefmt produces rows — it can't prove tracefmt
+        // *consumes* a provisioned TMF, which needs a non-self-resolving trace. Both decoders read the same
+        // TRACE_FORMAT_SEARCH_PATH (managed: LoadTmfDatabaseFromSearchPath; tracefmt: -p), so provisioning that
+        // drops TMFs on that path reaches both.
+        if (!TraceFmt.IsAvailable()) Assert.Inconclusive("tracefmt (WDK) not installed on this machine");
+        if (!File.Exists(Etl)) Assert.Inconclusive($"fixture missing: {Etl}");
+        Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", null);
+        DecodeOptions.WppDecoder = WppDecoder.Tracefmt;
+
+        int invoked = 0;
+        WppSymbolProvisioning.Handler = req =>
+        {
+            invoked++;
+            Assert.IsTrue(req.MissingMessageGuids.Any(), "upfront discovery should name the trace's WPP GUID(s)");
+            Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", TmfDir); // "provision" onto the shared path
+            return true;
+        };
+
+        using var p = new ETLProcessor();
+        p.OpenFile(Etl);
+        p.DoPreProcessing();
+        var results = p.GetResults();
+
+        Assert.AreEqual(1, invoked, "the ISymbolResolver seam MUST be consulted on the tracefmt path (upfront), not only managed");
+        Assert.IsTrue(results.Count > 0, "tracefmt should decode after provisioning ran (here also via self-resolve)");
+    }
 }
