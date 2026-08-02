@@ -233,4 +233,60 @@ public sealed class ManagedWppIntegrationTests
         Assert.AreEqual(1, invoked, "the ISymbolResolver seam MUST be consulted on the tracefmt path (upfront), not only managed");
         Assert.IsTrue(results.Count > 0, "tracefmt should decode after provisioning ran (here also via self-resolve)");
     }
+
+    [TestMethod]
+    public void TracefmtMode_NonSelfDescribing_ConsumesProvisionedTmf()
+    {
+        // The airtight proof that tracefmt actually CONSUMES a resolver-provisioned TMF — not merely that the
+        // seam is consulted. wppemitter-nonselfdesc.etl is a WPP capture whose provider PDB is absent on any
+        // clean machine (the trace only self-resolves where the tool's PDB sits at the build path baked into
+        // it), so tracefmt has NO format for GUID 9b93a332 until one is placed on TRACE_FORMAT_SEARCH_PATH.
+        // Without a resolver it can't decode; a resolver that provisions the committed TMF makes it decode.
+        if (!TraceFmt.IsAvailable()) Assert.Inconclusive("WDK/tracefmt not installed on this machine");
+        var etl = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "wppemitter-nonselfdesc.etl");
+        var tmf = Path.Combine(AppContext.BaseDirectory, "WppFixtures", "provision",
+            "9b93a332-c452-3e71-64f7-55130c7de2e4.tmf");
+        if (!File.Exists(etl) || !File.Exists(tmf)) Assert.Inconclusive($"fixtures missing: {etl} / {tmf}");
+
+        var prevSym = Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH");
+        var provDir = Path.Combine(Path.GetTempPath(), $"FN_prov_{Guid.NewGuid():N}");
+        try
+        {
+            Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", null);
+            Environment.SetEnvironmentVariable("_NT_SYMBOL_PATH", null);
+            DecodeOptions.WppDecoder = WppDecoder.Tracefmt;
+
+            // 1) No resolver, no TMF anywhere → a non-self-describing trace yields no rows. If it DOES decode,
+            //    this machine has the WppEmitter PDB at the build path baked into the trace (you built the
+            //    fixture tool locally) → self-resolution masks the test, so skip. On CI / any clean checkout
+            //    the PDB is absent and this is 0 rows.
+            WppSymbolProvisioning.Handler = null;
+            int baseline;
+            using (var p = new ETLProcessor()) { p.OpenFile(etl); p.DoPreProcessing(); baseline = p.GetResults().Count; }
+            if (baseline > 0)
+                Assert.Inconclusive("trace self-resolves here (WppEmitter PDB present at its build path); the " +
+                    "consumption test is only meaningful where the provider's symbols are absent, e.g. CI");
+
+            // 2) A resolver that provisions the committed TMF onto the search path → tracefmt must consume it.
+            Directory.CreateDirectory(provDir);
+            int invoked = 0;
+            WppSymbolProvisioning.Handler = req =>
+            {
+                invoked++;
+                File.Copy(tmf, Path.Combine(provDir, Path.GetFileName(tmf)), overwrite: true);
+                Environment.SetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH", provDir);
+                return true;
+            };
+            int rows;
+            using (var p = new ETLProcessor()) { p.OpenFile(etl); p.DoPreProcessing(); rows = p.GetResults().Count; }
+
+            Assert.AreEqual(1, invoked, "the resolver seam must fire for the non-self-describing tracefmt decode");
+            Assert.IsTrue(rows > 0, "tracefmt must CONSUME the provisioned TMF and decode the WPP events (got 0 rows)");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("_NT_SYMBOL_PATH", prevSym);
+            try { if (Directory.Exists(provDir)) Directory.Delete(provDir, true); } catch { }
+        }
+    }
 }

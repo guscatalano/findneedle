@@ -120,6 +120,15 @@
     <None Update="WppFixtures\wppemitter-sample.etl">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- NON-self-describing WppEmitter capture + its TMF (in provision\, kept OFF the default search path): the
+         trace can only decode once the TMF is provisioned onto TRACE_FORMAT_SEARCH_PATH — proves tracefmt
+         CONSUMES a provisioned TMF (the other fixtures self-resolve via the PDB baked into the trace). -->
+    <None Update="WppFixtures\wppemitter-nonselfdesc.etl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="WppFixtures\provision\9b93a332-c452-3e71-64f7-55130c7de2e4.tmf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <!-- Real WPP capture with STRING args (%s ANSI + %ws wide) + its TMF, for the managed string-decode test. -->
     <None Update="WppFixtures\wppstr-sample.etl">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
