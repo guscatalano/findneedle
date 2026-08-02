@@ -1,0 +1,21 @@
+{
+  "_comment": "es-es listing (translated from listing.en-us.json for review). Title/DevStudio and technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) kept as-is. Screenshots are shared from en-us by the build script.",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "Búsqueda rápida de registros y trazas para Windows: ETL/WPP, Registro de eventos y más.",
+  "Description": "FindNeedle es una utilidad rápida de búsqueda de registros y trazas para Windows. Abre trazas ETW/ETL, registros de eventos de Windows y archivos .evtx, carpetas, archivos ZIP y .cab, registros de texto plano, CSV y JSON, y capturas de paquetes, todo en un único visor y sin tener que alternar entre herramientas distintas.\n\nDiseñado para capturas grandes: la búsqueda de subcadenas se ejecuta sobre un índice de texto completo de trigramas, de modo que puedes explorar millones de líneas e ir directo a lo importante. Acota los resultados con un lenguaje de consulta sencillo (por nivel, proveedor, intervalo de tiempo o texto libre) y deja que las reglas declarativas resalten y enriquezcan las entradas que te interesan.\n\nLa decodificación WPP/ETL es de primer nivel: FindNeedle resuelve los símbolos TMF automáticamente (con un modelo de resolución ampliable para servidores de símbolos y recursos compartidos SMB), de modo que los mensajes de traza aparecen legibles en lugar de como GUID en bruto. Y cuando reconstruyes lo que ocurrió, puede convertir una traza filtrada en un diagrama de secuencia UML: el flujo de la solicitud, dibujado a partir de tus registros.\n\nDestacados:\n• Un único visor para ETL/WPP, Registro de eventos/.evtx, texto, CSV, JSON, ZIP/.cab y capturas de paquetes\n• Búsqueda rápida de subcadenas en millones de líneas (FTS de trigramas)\n• Lenguaje de consulta: filtra por nivel, proveedor, tiempo y texto\n• Resolución automática de símbolos TMF de WPP, con un modelo de resolución ampliable\n• Resaltado y enriquecimiento basados en reglas (sin recompilar)\n• Reconstruye flujos de solicitudes como diagramas de secuencia UML\n• Gestiona registros muy grandes sin cargarlo todo en memoria",
+  "Keywords": [ "visor de registros", "ETL", "WPP", "traza", "registro de eventos", "depuración", "ETW" ],
+  "Features": [
+    "Un único visor para ETL/WPP, Registro de eventos, texto, CSV, JSON, ZIP/.cab y capturas de paquetes",
+    "Búsqueda rápida de subcadenas en millones de líneas de registro (índice de texto completo de trigramas)",
+    "Lenguaje de consulta: filtra por nivel, proveedor, intervalo de tiempo y texto libre",
+    "Resolución automática de símbolos TMF de WPP con un modelo de resolución ampliable",
+    "Resaltado y enriquecimiento basados en reglas sin recompilar",
+    "Reconstruye flujos de solicitudes como diagramas de secuencia UML a partir de tus registros",
+    "Transmite capturas muy grandes sin mantener todo el conjunto en memoria"
+  ],
+  "ReleaseNotes": "Inicio de la aplicación más rápido, resolución más fiable de símbolos WPP (TMF) en la ruta de decodificación, correcciones de ajuste en el visor de diagramas y una descripción de la Store renovada.",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}

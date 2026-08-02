@@ -1,0 +1,21 @@
+{
+  "_comment": "ja-jp listing (translated from listing.en-us.json for review). Title/DevStudio and technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) kept as-is. Screenshots are shared from en-us by the build script.",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "Windows 向けの高速なログ・トレース検索ツール（ETL/WPP、イベント ログ ほか）。",
+  "Description": "FindNeedle は Windows 向けの高速なログ・トレース検索ユーティリティです。ETW/ETL トレース、Windows イベント ログや .evtx ファイル、フォルダー、ZIP・.cab アーカイブ、プレーン テキスト・CSV・JSON ログ、パケット キャプチャを、ツールを切り替えることなく 1 つのビューアーで開けます。\n\n大規模なキャプチャ向けに設計：部分文字列検索はトライグラム全文インデックスで実行されるため、数百万行をスキャンして必要な箇所へ素早く移動できます。シンプルなクエリ言語（レベル、プロバイダー、期間、フリー テキスト）で結果を絞り込み、宣言的なルールで注目したいエントリを強調・付加情報表示できます。\n\nWPP/ETL のデコードが強力です：FindNeedle は TMF シンボルを自動的に解決し（シンボル サーバーや SMB 共有に対応する差し替え可能なリゾルバー モデルを備えています）、トレース メッセージを生の GUID ではなく読める形で表示します。何が起きたかを再構成する際には、フィルターしたトレースを UML シーケンス図（ログから描き出したリクエストの流れ）に変換できます。\n\n主な特長：\n• ETL/WPP、イベント ログ/.evtx、テキスト、CSV、JSON、ZIP/.cab、パケット キャプチャを 1 つのビューアーで\n• 数百万行にわたる高速な部分文字列検索（トライグラム FTS）\n• クエリ言語：レベル、プロバイダー、時間、テキストで絞り込み\n• WPP TMF シンボルの自動解決と差し替え可能なリゾルバー モデル\n• ルールベースの強調表示と付加情報（再コンパイル不要）\n• リクエストの流れを UML シーケンス図として再構成\n• すべてをメモリに読み込まずに非常に大きなログを処理",
+  "Keywords": [ "ログ ビューアー", "ETL", "WPP", "トレース", "イベント ログ", "デバッグ", "ETW" ],
+  "Features": [
+    "ETL/WPP、イベント ログ、テキスト、CSV、JSON、ZIP/.cab、パケット キャプチャを 1 つのビューアーで",
+    "数百万行のログにわたる高速な部分文字列検索（トライグラム全文インデックス）",
+    "クエリ言語：レベル、プロバイダー、期間、フリー テキストで絞り込み",
+    "差し替え可能なリゾルバー モデルによる WPP TMF シンボルの自動解決",
+    "再コンパイル不要のルールベースの強調表示と付加情報",
+    "ログからリクエストの流れを UML シーケンス図として再構成",
+    "全体をメモリに保持せずに非常に大きなキャプチャをストリーミング処理"
+  ],
+  "ReleaseNotes": "アプリの起動を高速化、デコード経路での WPP シンボル（TMF）解決の信頼性を向上、ダイアグラム ビューアーのフィット表示の不具合を修正、ストアの説明を刷新しました。",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}

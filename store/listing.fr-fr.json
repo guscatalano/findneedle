@@ -1,0 +1,21 @@
+{
+  "_comment": "fr-fr listing (translated from listing.en-us.json for review). Title/DevStudio and technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) kept as-is. Screenshots are shared from en-us by the build script.",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "Recherche rapide de journaux et de traces pour Windows – ETL/WPP, Observateur d'événements et plus.",
+  "Description": "FindNeedle est un utilitaire rapide de recherche de journaux et de traces pour Windows. Ouvrez des traces ETW/ETL, des journaux d'événements Windows et fichiers .evtx, des dossiers, des archives ZIP et .cab, des journaux texte, CSV et JSON, ainsi que des captures de paquets – le tout dans une seule visionneuse, sans jongler entre plusieurs outils.\n\nConçu pour les grandes captures : la recherche de sous-chaînes s'appuie sur un index de texte intégral en trigrammes, ce qui vous permet de parcourir des millions de lignes et d'aller droit à l'essentiel. Affinez les résultats avec un langage de requête simple – par niveau, fournisseur, plage de temps ou texte libre – et laissez des règles déclaratives mettre en évidence et enrichir les entrées qui vous intéressent.\n\nLe décodage WPP/ETL est de premier plan : FindNeedle résout automatiquement les symboles TMF (avec un modèle de résolveur extensible pour les serveurs de symboles et les partages SMB), afin que les messages de trace soient lisibles au lieu d'apparaître sous forme de GUID bruts. Et lorsque vous reconstituez ce qui s'est passé, il peut transformer une trace filtrée en diagramme de séquence UML – le flux d'une requête, dessiné à partir de vos journaux.\n\nPoints forts :\n• Une seule visionneuse pour ETL/WPP, Observateur d'événements/.evtx, texte, CSV, JSON, ZIP/.cab et captures de paquets\n• Recherche rapide de sous-chaînes sur des millions de lignes (FTS en trigrammes)\n• Langage de requête : filtrez par niveau, fournisseur, temps et texte\n• Résolution automatique des symboles TMF WPP, avec un modèle de résolveur extensible\n• Mise en évidence et enrichissement basés sur des règles (sans recompilation)\n• Reconstituez les flux de requêtes en diagrammes de séquence UML\n• Gère de très grands journaux sans tout charger en mémoire",
+  "Keywords": [ "visionneuse de journaux", "ETL", "WPP", "trace", "journal d'événements", "débogage", "ETW" ],
+  "Features": [
+    "Une seule visionneuse pour ETL/WPP, Observateur d'événements, texte, CSV, JSON, ZIP/.cab et captures de paquets",
+    "Recherche rapide de sous-chaînes sur des millions de lignes de journal (index de texte intégral en trigrammes)",
+    "Langage de requête : filtrez par niveau, fournisseur, plage de temps et texte libre",
+    "Résolution automatique des symboles TMF WPP avec un modèle de résolveur extensible",
+    "Mise en évidence et enrichissement basés sur des règles, sans recompilation",
+    "Reconstituez les flux de requêtes en diagrammes de séquence UML à partir de vos journaux",
+    "Diffuse de très grandes captures sans conserver l'ensemble en mémoire"
+  ],
+  "ReleaseNotes": "Démarrage plus rapide de l'application, résolution plus fiable des symboles WPP (TMF) sur le chemin de décodage, corrections d'ajustement dans la visionneuse de diagrammes et une fiche Store actualisée.",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}

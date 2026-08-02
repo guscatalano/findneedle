@@ -1,0 +1,21 @@
+{
+  "_comment": "it-it listing (translated from listing.en-us.json for review). Title/DevStudio and technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) kept as-is. Screenshots are shared from en-us by the build script.",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "Ricerca rapida di log e tracce per Windows: ETL/WPP, Visualizzatore eventi e altro.",
+  "Description": "FindNeedle è una veloce utilità di ricerca di log e tracce per Windows. Apri tracce ETW/ETL, registri eventi di Windows e file .evtx, cartelle, archivi ZIP e .cab, log di testo, CSV e JSON e catture di pacchetti, tutto in un unico visualizzatore, senza dover passare da uno strumento all'altro.\n\nPensato per catture di grandi dimensioni: la ricerca di sottostringhe si basa su un indice full-text a trigrammi, così puoi scorrere milioni di righe e andare dritto a ciò che conta. Restringi i risultati con un semplice linguaggio di query (per livello, provider, intervallo di tempo o testo libero) e lascia che regole dichiarative evidenzino e arricchiscano le voci che ti interessano.\n\nLa decodifica WPP/ETL è di prim'ordine: FindNeedle risolve automaticamente i simboli TMF (con un modello di resolver estensibile per server di simboli e condivisioni SMB), così i messaggi di traccia risultano leggibili anziché come GUID grezzi. E quando ricostruisci ciò che è accaduto, può trasformare una traccia filtrata in un diagramma di sequenza UML: il flusso di una richiesta, disegnato dai tuoi log.\n\nIn evidenza:\n• Un unico visualizzatore per ETL/WPP, Visualizzatore eventi/.evtx, testo, CSV, JSON, ZIP/.cab e catture di pacchetti\n• Ricerca rapida di sottostringhe su milioni di righe (FTS a trigrammi)\n• Linguaggio di query: filtra per livello, provider, tempo e testo\n• Risoluzione automatica dei simboli TMF di WPP, con un modello di resolver estensibile\n• Evidenziazione e arricchimento basati su regole (senza ricompilare)\n• Ricostruisci i flussi delle richieste come diagrammi di sequenza UML\n• Gestisce log molto grandi senza caricare tutto in memoria",
+  "Keywords": [ "visualizzatore log", "ETL", "WPP", "traccia", "registro eventi", "debug", "ETW" ],
+  "Features": [
+    "Un unico visualizzatore per ETL/WPP, Visualizzatore eventi, testo, CSV, JSON, ZIP/.cab e catture di pacchetti",
+    "Ricerca rapida di sottostringhe su milioni di righe di log (indice full-text a trigrammi)",
+    "Linguaggio di query: filtra per livello, provider, intervallo di tempo e testo libero",
+    "Risoluzione automatica dei simboli TMF di WPP con un modello di resolver estensibile",
+    "Evidenziazione e arricchimento basati su regole senza ricompilare",
+    "Ricostruisci i flussi delle richieste come diagrammi di sequenza UML dai tuoi log",
+    "Trasmette catture molto grandi senza tenere l'intero set in memoria"
+  ],
+  "ReleaseNotes": "Avvio dell'app più rapido, risoluzione più affidabile dei simboli WPP (TMF) nel percorso di decodifica, correzioni di adattamento nel visualizzatore di diagrammi e una scheda dello Store rinnovata.",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}

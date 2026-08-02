@@ -9,14 +9,31 @@ text to the Store in a single submission.
 
 ## Files
 
-- **`listing.en-us.json`** — the managed en-us listing fields: `Title`, `ShortDescription`,
-  `Description`, `Features`, `Keywords`, `ReleaseNotes`, etc. CI reads the current submission,
-  overwrites *only* these keys, and pushes it back — so unmanaged fields (pricing, availability,
-  packages, gaming options) are never touched. `Title` must match a reserved app name in Partner
-  Center. Store limits are enforced by `Build-Submission.ps1` (fails the build, not the cert review).
-- **`Build-Submission.ps1`** — merges `listing.en-us.json` into a `msstore submission get` dump and
-  emits the `product.json` for `msstore submission update`. Run it standalone to preview a merge.
+- **`listing.<locale>.json`** — one file per Store locale (`listing.en-us.json`, `listing.de-de.json`,
+  …). Each holds the managed listing fields: `Title`, `ShortDescription`, `Description`, `Features`,
+  `Keywords`, `ReleaseNotes`, etc. CI reads the current submission, overwrites *only* these keys per
+  locale, and pushes it back — so unmanaged fields (pricing, availability, packages, gaming options)
+  are never touched. `Title` must match a reserved app name in Partner Center (keep it identical
+  across locales). Store limits are enforced by `Build-Submission.ps1` (fails the build, not the cert
+  review).
+- **`Build-Submission.ps1`** — merges *all* `listing.*.json` into a `msstore submission get` dump and
+  emits the compact `product.json` for `msstore submission update`. Run it standalone to preview a
+  merge.
 - **`screenshots/`** — the curated screenshot set (see below).
+
+### Locales
+
+- **`en-us` is the default and the template.** It must exist; new locales are created by cloning its
+  BaseListing (structure **and** screenshots) and overwriting the text — so a new locale is never
+  missing required fields or images.
+- **Add a locale:** drop in `listing.<locale>.json` (copy an existing one, translate the text). The
+  next release picks it up automatically — no code change. Use Store locale codes (`de-de`, `fr-fr`,
+  `ja-jp`, `zh-cn`, …).
+- **Keep it under the limit.** `msstore submission update` takes the whole product JSON as one
+  command-line argument, capped at ~32767 chars by Windows. The script emits compact JSON and **fails
+  the build at 30000 chars** — if you hit that, trim text or split the release across fewer locales.
+- Technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) are intentionally left in
+  their original form across all locales.
 
 ## How a release publishes the listing
 

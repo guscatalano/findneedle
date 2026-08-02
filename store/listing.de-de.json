@@ -1,0 +1,21 @@
+{
+  "_comment": "de-de listing (translated from listing.en-us.json for review). Title/DevStudio and technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) kept as-is. Screenshots are shared from en-us by the build script.",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "Schnelle Log- und Trace-Suche für Windows – ETL/WPP, Ereignisprotokoll und mehr.",
+  "Description": "FindNeedle ist ein schnelles Dienstprogramm zur Log- und Trace-Suche für Windows. Öffnen Sie ETW/ETL-Traces, Windows-Ereignisprotokolle und .evtx-Dateien, Ordner, ZIP- und .cab-Archive, Klartext-, CSV- und JSON-Logs sowie Paketmitschnitte – alles in einem Viewer, ohne zwischen verschiedenen Tools wechseln zu müssen.\n\nFür große Mitschnitte gemacht: Die Teilstring-Suche nutzt einen Trigramm-Volltextindex, sodass Sie Millionen von Zeilen durchsuchen und sofort zum Wesentlichen springen können. Grenzen Sie Ergebnisse mit einer einfachen Abfragesprache ein – nach Ebene, Anbieter, Zeitraum oder Freitext – und lassen Sie deklarative Regeln die für Sie wichtigen Einträge hervorheben und anreichern.\n\nWPP/ETL-Dekodierung ist erstklassig: FindNeedle löst TMF-Symbole automatisch auf (mit einem erweiterbaren Resolver-Modell für Symbolserver und SMB-Freigaben), sodass Trace-Meldungen lesbar erscheinen statt als reine GUIDs. Und wenn Sie nachvollziehen, was passiert ist, kann es einen gefilterten Trace in ein UML-Sequenzdiagramm verwandeln – den Ablauf einer Anfrage, gezeichnet aus Ihren Logs.\n\nHighlights:\n• Ein Viewer für ETL/WPP, Ereignisprotokoll/.evtx, Text, CSV, JSON, ZIP/.cab und Paketmitschnitte\n• Schnelle Teilstring-Suche über Millionen von Zeilen (Trigramm-FTS)\n• Abfragesprache: Filtern nach Ebene, Anbieter, Zeit und Text\n• Automatische Auflösung von WPP-TMF-Symbolen mit erweiterbarem Resolver-Modell\n• Regelbasiertes Hervorheben und Anreichern (ohne Neukompilierung)\n• Ablauf von Anfragen als UML-Sequenzdiagramme rekonstruieren\n• Verarbeitet sehr große Logs, ohne alles in den Speicher zu laden",
+  "Keywords": [ "Log-Viewer", "ETL", "WPP", "Trace", "Ereignisprotokoll", "Debugging", "ETW" ],
+  "Features": [
+    "Ein Viewer für ETL/WPP, Ereignisprotokoll, Text, CSV, JSON, ZIP/.cab und Paketmitschnitte",
+    "Schnelle Teilstring-Suche über Millionen von Log-Zeilen (Trigramm-Volltextindex)",
+    "Abfragesprache: Filtern nach Ebene, Anbieter, Zeitraum und Freitext",
+    "Automatische Auflösung von WPP-TMF-Symbolen mit erweiterbarem Resolver-Modell",
+    "Regelbasiertes Hervorheben und Anreichern ohne Neukompilierung",
+    "Anfrageabläufe als UML-Sequenzdiagramme aus Ihren Logs rekonstruieren",
+    "Streamt sehr große Mitschnitte, ohne den gesamten Satz im Speicher zu halten"
+  ],
+  "ReleaseNotes": "Schnellerer App-Start, zuverlässigere Auflösung von WPP-Symbolen (TMF) im Dekodierpfad, Korrekturen an der Einpassung im Diagramm-Viewer und eine überarbeitete Store-Beschreibung.",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}

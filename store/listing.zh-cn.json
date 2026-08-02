@@ -1,0 +1,21 @@
+{
+  "_comment": "zh-cn listing (translated from listing.en-us.json for review). Title/DevStudio and technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) kept as-is. Screenshots are shared from en-us by the build script.",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "适用于 Windows 的快速日志与跟踪搜索工具——ETL/WPP、事件日志等。",
+  "Description": "FindNeedle 是一款适用于 Windows 的快速日志与跟踪搜索工具。可在同一个查看器中打开 ETW/ETL 跟踪、Windows 事件日志和 .evtx 文件、文件夹、ZIP 与 .cab 压缩包、纯文本、CSV 和 JSON 日志以及数据包捕获，无需在多个工具之间来回切换。\n\n专为大型捕获打造：子串搜索基于三元组全文索引，可扫描数百万行并直达关键内容。使用简单的查询语言（按级别、提供程序、时间范围或自由文本）缩小结果范围，并让声明式规则突出显示并丰富你关心的条目。\n\nWPP/ETL 解码是核心能力：FindNeedle 会自动解析 TMF 符号（并提供可插拔的解析器模型，支持符号服务器和 SMB 共享），让跟踪消息以可读形式呈现，而不是原始 GUID。在还原事件经过时，它还能将筛选后的跟踪转换为 UML 时序图——由你的日志绘制出的请求流程。\n\n亮点：\n• 一个查看器搞定 ETL/WPP、事件日志/.evtx、文本、CSV、JSON、ZIP/.cab 和数据包捕获\n• 在数百万行中快速进行子串搜索（三元组全文索引）\n• 查询语言：按级别、提供程序、时间和文本筛选\n• 自动解析 WPP TMF 符号，并支持可插拔的解析器模型\n• 基于规则的高亮与信息丰富（无需重新编译）\n• 将请求流程还原为 UML 时序图\n• 处理超大日志，无需将全部内容载入内存",
+  "Keywords": [ "日志查看器", "ETL", "WPP", "跟踪", "事件日志", "调试", "ETW" ],
+  "Features": [
+    "一个查看器搞定 ETL/WPP、事件日志、文本、CSV、JSON、ZIP/.cab 和数据包捕获",
+    "在数百万行日志中快速进行子串搜索（三元组全文索引）",
+    "查询语言：按级别、提供程序、时间范围和自由文本筛选",
+    "自动解析 WPP TMF 符号，并支持可插拔的解析器模型",
+    "基于规则的高亮与信息丰富，无需重新编译",
+    "从日志中将请求流程还原为 UML 时序图",
+    "流式处理超大捕获，无需将整个数据集保存在内存中"
+  ],
+  "ReleaseNotes": "应用启动更快，解码路径上的 WPP 符号（TMF）解析更可靠，修复了图表查看器的自适应缩放问题，并更新了商店说明。",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}

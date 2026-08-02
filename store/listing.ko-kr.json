@@ -1,0 +1,21 @@
+{
+  "_comment": "ko-kr listing (translated from listing.en-us.json for review). Title/DevStudio and technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) kept as-is. Screenshots are shared from en-us by the build script.",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "Windows용 빠른 로그 및 추적 검색 도구 — ETL/WPP, 이벤트 로그 등.",
+  "Description": "FindNeedle은 Windows용 빠른 로그 및 추적 검색 유틸리티입니다. ETW/ETL 추적, Windows 이벤트 로그 및 .evtx 파일, 폴더, ZIP 및 .cab 아카이브, 일반 텍스트·CSV·JSON 로그, 패킷 캡처를 여러 도구를 오갈 필요 없이 하나의 뷰어에서 엽니다.\n\n대용량 캡처를 위해 설계: 부분 문자열 검색이 트라이그램 전문 인덱스에서 실행되므로 수백만 줄을 훑어보고 중요한 부분으로 바로 이동할 수 있습니다. 간단한 쿼리 언어(수준, 공급자, 기간, 자유 텍스트)로 결과를 좁히고, 선언적 규칙으로 관심 있는 항목을 강조하고 정보를 보강할 수 있습니다.\n\nWPP/ETL 디코딩이 강력합니다: FindNeedle은 TMF 기호를 자동으로 확인하며(기호 서버와 SMB 공유를 지원하는 교체 가능한 확인자 모델 제공), 추적 메시지를 원시 GUID가 아닌 읽을 수 있는 형태로 표시합니다. 무슨 일이 있었는지 재구성할 때는 필터링된 추적을 UML 시퀀스 다이어그램(로그에서 그려낸 요청 흐름)으로 변환할 수 있습니다.\n\n주요 기능:\n• ETL/WPP, 이벤트 로그/.evtx, 텍스트, CSV, JSON, ZIP/.cab, 패킷 캡처를 하나의 뷰어에서\n• 수백만 줄에 걸친 빠른 부분 문자열 검색(트라이그램 FTS)\n• 쿼리 언어: 수준, 공급자, 시간, 텍스트로 필터링\n• 교체 가능한 확인자 모델을 통한 WPP TMF 기호 자동 확인\n• 다시 컴파일하지 않는 규칙 기반 강조 및 정보 보강\n• 요청 흐름을 UML 시퀀스 다이어그램으로 재구성\n• 모든 것을 메모리에 로드하지 않고 매우 큰 로그를 처리",
+  "Keywords": [ "로그 뷰어", "ETL", "WPP", "추적", "이벤트 로그", "디버깅", "ETW" ],
+  "Features": [
+    "ETL/WPP, 이벤트 로그, 텍스트, CSV, JSON, ZIP/.cab, 패킷 캡처를 하나의 뷰어에서",
+    "수백만 줄의 로그에 걸친 빠른 부분 문자열 검색(트라이그램 전문 인덱스)",
+    "쿼리 언어: 수준, 공급자, 기간, 자유 텍스트로 필터링",
+    "교체 가능한 확인자 모델을 통한 WPP TMF 기호 자동 확인",
+    "다시 컴파일하지 않는 규칙 기반 강조 및 정보 보강",
+    "로그에서 요청 흐름을 UML 시퀀스 다이어그램으로 재구성",
+    "전체 집합을 메모리에 보관하지 않고 매우 큰 캡처를 스트리밍"
+  ],
+  "ReleaseNotes": "앱 시작 속도 향상, 디코딩 경로에서 WPP 기호(TMF) 확인 안정성 개선, 다이어그램 뷰어 맞춤 표시 수정, 스토어 설명 갱신.",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}
