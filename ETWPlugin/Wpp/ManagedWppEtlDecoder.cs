@@ -112,7 +112,7 @@ public sealed class ManagedWppEtlDecoder
             // missing WPP symbol, so skip both without counting them unresolved — otherwise the header event
             // pins the decode-proof exit code to "unresolved" no matter what a symbol resolver actually did.
             var guid = ev.TaskGuid;
-            if (guid == Guid.Empty) return;
+            if (guid == Guid.Empty) { ModernEvents++; return; }   // manifest/EventSource — not WPP, not rendered here
             if (WellKnownSystemGuids.Contains(guid)) { SystemEvents++; return; }
             int msgNum = (int)ev.ID;
             if (!_tmf.TryGet(guid, msgNum, out var entry))

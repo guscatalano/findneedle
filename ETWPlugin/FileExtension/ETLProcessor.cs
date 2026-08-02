@@ -451,6 +451,15 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         {
             return DecodeEtlCompare(cancellationToken);
         }
+        // Explicit --wpp-decoder=tracefmt but the WDK/tracefmt.exe isn't installed: the plain tracefmt path
+        // would just return null → 0 rows with only a buried log line ("tracefmt path doesn't reach tracefmt").
+        // Warn loudly and fall back to the managed decoder so the user still gets a decode.
+        if (DecodeOptions.WppDecoder == FindNeedlePluginLib.WppDecoder.Tracefmt && !TraceFmt.IsAvailable())
+        {
+            Logger.Instance.Log("WARNING: --wpp-decoder=tracefmt requested but tracefmt (the Windows Driver Kit) "
+                + "was not found. Install the WDK, or use --wpp-decoder=managed. Falling back to the managed decoder.");
+            return DecodeEtlManaged(cancellationToken);
+        }
         if (DecodeOptions.WppDecoder == FindNeedlePluginLib.WppDecoder.Managed
             || (DecodeOptions.WppDecoder == FindNeedlePluginLib.WppDecoder.Auto && !TraceFmt.IsAvailable()))
         {

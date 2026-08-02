@@ -436,6 +436,14 @@ internal class Program
             || a.Equals("-c", StringComparison.OrdinalIgnoreCase)
         );
 
+        // Did the user ask for anything that WRITES files? A plain decode (no --rules, no --out) produces no
+        // output files by design — so an empty output/ folder is expected, not a problem. Gate the
+        // "no files / folder is empty" chatter on this so it isn't misleading.
+        var outputExpected = cmdArgs != null && cmdArgs.Any(a =>
+            a.StartsWith("--rules", StringComparison.OrdinalIgnoreCase)
+            || a.StartsWith("--out=", StringComparison.OrdinalIgnoreCase)
+            || a.StartsWith("--out-file=", StringComparison.OrdinalIgnoreCase));
+
         if (!force)
         {
             Console.WriteLine("If correct, please enter to search, otherwise ctrl-c to exit");
@@ -506,7 +514,10 @@ internal class Program
                 else
                 {
                     Logger.Instance.Log($"Output folder does not exist (will be created): {outputFolder}");
-                    Console.WriteLine($"Output folder does not exist (will be created): {outputFolder}");
+                    // Only mention the output folder if the user asked for file output — otherwise it's noise
+                    // (a plain decode writes no files, so "will be created" is misleading).
+                    if (outputExpected)
+                        Console.WriteLine($"Output folder does not exist (will be created): {outputFolder}");
                 }
 
                 Console.WriteLine("Searching...");
@@ -544,32 +555,14 @@ internal class Program
                                     }
                                 }
                         }
-                        else
+                        else if (outputExpected)
                         {
+                            // Output WAS requested (--rules / --out) but nothing was written — that's worth flagging.
                             Logger.Instance.Log("No new output files were created.");
-                            Console.WriteLine("No new output files were created.");
-                            // Also print all current files to help user locate outputs
-                                if (afterFiles.Count > 0)
-                                {
-                                    Console.WriteLine("Current output files:");
-                                    foreach (var f in afterFiles)
-                                    {
-                                        try
-                                        {
-                                            var rel = Path.GetRelativePath(outputFolder, f);
-                                            Console.WriteLine(rel);
-                                        }
-                                        catch
-                                        {
-                                            Console.WriteLine(Path.GetFileName(f));
-                                        }
-                                    }
-                                }
-                            else
-                            {
-                                Console.WriteLine("Output folder is empty.");
-                            }
+                            Console.WriteLine("No output files were created — check your --rules / --out arguments.");
                         }
+                        // else: a plain decode with no --rules/--out writes no files by design. Say nothing about
+                        // the output folder (it being empty is expected); the decoded rows are in the summary below.
                     }
                     else
                     {
@@ -665,6 +658,9 @@ internal class Program
                 rowsDecoded, wppProvisionInvocations, wppProvisionSucceeded);
             var verdict = FindPluginCore.Diagnostics.DecodeProof.Describe(exit);
             Console.WriteLine($"  Result: {verdict} (exit {exit})");
+            Console.WriteLine("  Note: this is a WPP-only decode. 'Records decoded' counts WPP events whose symbols");
+            Console.WriteLine("        resolved; manifest/kernel (non-WPP) events in the trace are NOT rendered here,");
+            Console.WriteLine("        so 'fully decoded' means all WPP symbols resolved, not that every event is shown.");
             Console.WriteLine("==========================");
             Environment.ExitCode = exit;
         }
