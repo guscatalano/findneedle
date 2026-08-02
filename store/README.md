@@ -34,6 +34,10 @@ text to the Store in a single submission.
   the build at 30000 chars** — if you hit that, trim text or split the release across fewer locales.
 - Technical acronyms (ETL, WPP, ETW, TMF, UML, SMB, GUID, CSV/JSON/ZIP) are intentionally left in
   their original form across all locales.
+- **Verifying a stored listing:** `msstore submission get` line-wraps its terminal output and a wrap
+  can land *inside* a `\uXXXX` escape (breaks JSON parsers on CJK). This is a display quirk, not
+  corruption — the API rejects malformed escapes, so a successful `submission update` means the data
+  stored correctly. To re-parse the dump, strip raw newlines first (real ones are escaped as `\n`).
 
 ## How a release publishes the listing
 
