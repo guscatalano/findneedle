@@ -1,85 +1,79 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-  Merge the repo's listing-as-code (store/listing.<locale>.json) into a Store submission JSON.
+  Merge the repo's listing-as-code (store/listing.<locale>.json + store/screenshots) into a Store submission.
 
 .DESCRIPTION
-  Takes the CURRENT submission (as returned by `msstore submission get <id>`) and applies every
-  store/listing.*.json file:
-    - en-us always exists in the submission -> its managed BaseListing fields are overwritten.
-    - a NEW locale (no entry yet) -> a full BaseListing is created by cloning en-us (so all
-      structural fields AND the screenshots/Images[] are present), then its text fields are
-      overwritten from the locale file.
-  Only the managed text fields are ever touched; pricing, availability, packages, and the
-  screenshots themselves pass through untouched. Emits the merged product JSON for
-  `msstore submission update` (whose argument is the JSON *content*, not a path).
-
-  `msstore submission get` prints a few human-readable lines before the JSON body; this script
-  tolerates that by slicing from the first '{'.
-
-.EXAMPLE
-  ./Build-Submission.ps1 -CurrentSubmission raw.txt -OutFile product.json
+  Applies every store/listing.*.json to the submission from `msstore submission get`:
+    - en-us always exists; its managed text fields are overwritten.
+    - a NEW locale is created by cloning en-us's structure, then its text is overwritten.
+  Screenshots: if store/screenshots/*.png exist, EVERY locale's Images[] is set to that set, referenced by a
+  per-locale path ("<locale>/<file>.png") with FileStatus=PendingUpload, and a MANIFEST of
+  "<zip-path>|<local-file>" lines is written (-ScreenshotManifest) so Upload-Screenshots.ps1 can put those
+  bytes into the submission's upload zip. Without screenshots, new-locale listings are SKIPPED (a language
+  listing with no screenshots is rejected by the Store as "incomplete").
+  Emits the compact product JSON for `msstore submission update` (whose arg is the JSON content, not a path).
 #>
 [CmdletBinding()]
 param(
-  # File containing `msstore submission get <id>` output (may have preamble lines before the JSON).
   [Parameter(Mandatory)] [string] $CurrentSubmission,
-  # Folder holding listing.<locale>.json files. Defaults to this script's folder.
   [string] $ListingDir = $PSScriptRoot,
+  [string] $ScreenshotDir = (Join-Path $PSScriptRoot 'screenshots'),
   [Parameter(Mandatory)] [string] $OutFile,
-  # Optional: override every locale's ReleaseNotes (e.g. inject the version being shipped).
+  [string] $ScreenshotManifest,
   [string] $ReleaseNotes
 )
 
 $ErrorActionPreference = 'Stop'
 
-# The managed keys — only these are overwritten/copied from a locale file. Images are handled
-# separately (cloned from en-us for new locales, passed through for existing ones).
-$managed = @(
-  'Title','ShortTitle','ShortDescription','Description',
-  'Keywords','Features','ReleaseNotes','CopyrightAndTrademarkInfo','LicenseTerms','DevStudio'
-)
+$managed = @('Title','ShortTitle','ShortDescription','Description',
+             'Keywords','Features','ReleaseNotes','CopyrightAndTrademarkInfo','LicenseTerms','DevStudio')
 
 function Get-JsonBody([string]$path) {
   $text = Get-Content -Raw -LiteralPath $path
-  $start = $text.IndexOf('{')
-  if ($start -lt 0) { throw "No JSON object found in $path" }
+  $start = $text.IndexOf('{'); if ($start -lt 0) { throw "No JSON object in $path" }
   return $text.Substring($start)
 }
-
-function Copy-Json($obj) { $obj | ConvertTo-Json -Depth 50 | ConvertFrom-Json -Depth 50 }
-
+function Copy-Json($o) { $o | ConvertTo-Json -Depth 50 | ConvertFrom-Json -Depth 50 }
 function Set-ManagedFields($base, $listing) {
-  foreach ($key in $managed) {
-    if ($listing.PSObject.Properties.Name -contains $key) { $base.$key = $listing.$key }
-  }
+  foreach ($k in $managed) { if ($listing.PSObject.Properties.Name -contains $k) { $base.$k = $listing.$k } }
   if ($script:ReleaseNotesOverride) { $base.ReleaseNotes = $script:ReleaseNotesOverride }
 }
+function Assert-Limits($loc, $b) {
+  if ($b.Description.Length -gt 10000) { throw "[$loc] Description > 10000" }
+  if ($b.ShortDescription -and $b.ShortDescription.Length -gt 1000) { throw "[$loc] ShortDescription > 1000" }
+  if ($b.ReleaseNotes -and $b.ReleaseNotes.Length -gt 1500) { throw "[$loc] ReleaseNotes > 1500" }
+  if ($b.Keywords.Count -gt 7) { throw "[$loc] > 7 Keywords" }
+  if ($b.Features.Count -gt 20) { throw "[$loc] > 20 Features" }
+  foreach ($f in $b.Features) { if ($f.Length -gt 200) { throw "[$loc] Feature > 200 chars: '$f'" } }
+}
 
-function Assert-Limits($locale, $base) {
-  if ($base.Description.Length -gt 10000) { throw "[$locale] Description exceeds 10000 chars ($($base.Description.Length))." }
-  if ($base.ShortDescription -and $base.ShortDescription.Length -gt 1000) { throw "[$locale] ShortDescription exceeds 1000 chars." }
-  if ($base.ReleaseNotes -and $base.ReleaseNotes.Length -gt 1500) { throw "[$locale] ReleaseNotes exceeds 1500 chars." }
-  if ($base.Keywords.Count -gt 7) { throw "[$locale] More than 7 Keywords ($($base.Keywords.Count))." }
-  if ($base.Features.Count -gt 20) { throw "[$locale] More than 20 Features ($($base.Features.Count))." }
-  foreach ($f in $base.Features) { if ($f.Length -gt 200) { throw "[$locale] Feature exceeds 200 chars: '$f'" } }
+# Screenshots shared across all locales (English UI). Each locale references its OWN copy in the zip.
+$shots = @(Get-ChildItem -LiteralPath $ScreenshotDir -Filter *.png -ErrorAction SilentlyContinue | Sort-Object Name)
+$haveShots = $shots.Count -gt 0
+$manifest = [System.Collections.Generic.List[string]]::new()
+function Set-LocaleImages($base, $locale) {
+  $imgs = @()
+  foreach ($s in $shots) {
+    $zipPath = "$locale/$($s.Name)"   # per-locale path inside the upload zip
+    $imgs += [pscustomobject]@{ FileName = $zipPath; FileStatus = 'PendingUpload'; ImageType = 'Screenshot' }
+    $manifest.Add("$zipPath|$($s.FullName)")
+  }
+  $base.Images = $imgs
 }
 
 $product = Get-JsonBody $CurrentSubmission | ConvertFrom-Json -Depth 50
 $script:ReleaseNotesOverride = if ($PSBoundParameters.ContainsKey('ReleaseNotes') -and $ReleaseNotes) { $ReleaseNotes } else { $null }
 
-# en-us must exist in the submission and is our clone template (it carries the screenshots).
-$enusListing = $product.Listings.'en-us'
-if ($null -eq $enusListing) { throw "Submission has no Listings.en-us to use as the template." }
+$enus = $product.Listings.'en-us'
+if ($null -eq $enus) { throw "Submission has no Listings.en-us to use as the template." }
 
 $files = Get-ChildItem -LiteralPath $ListingDir -Filter 'listing.*.json' | Sort-Object Name
-if (-not $files) { throw "No store/listing.*.json files found in $ListingDir" }
-
-# Apply en-us first so its merged BaseListing (with Images) is the template for new locales.
 $enusFile = $files | Where-Object { $_.Name -eq 'listing.en-us.json' }
-if (-not $enusFile) { throw "listing.en-us.json is required (it's the default locale + clone template)." }
-Set-ManagedFields $enusListing.BaseListing (Get-Content -Raw $enusFile.FullName | ConvertFrom-Json -Depth 50)
-Assert-Limits 'en-us' $enusListing.BaseListing
+if (-not $enusFile) { throw "listing.en-us.json is required." }
+Set-ManagedFields $enus.BaseListing (Get-Content -Raw $enusFile.FullName | ConvertFrom-Json -Depth 50)
+if ($haveShots) { Set-LocaleImages $enus.BaseListing 'en-us' }   # replace en-us's screenshots with the curated set
+Assert-Limits 'en-us' $enus.BaseListing
 
 $applied = @('en-us')
 foreach ($f in ($files | Where-Object { $_.Name -ne 'listing.en-us.json' })) {
@@ -88,24 +82,25 @@ foreach ($f in ($files | Where-Object { $_.Name -ne 'listing.en-us.json' })) {
   $existing = $product.Listings.PSObject.Properties.Name -contains $locale
   if ($existing) {
     Set-ManagedFields $product.Listings.$locale.BaseListing $listing
+    if ($haveShots) { Set-LocaleImages $product.Listings.$locale.BaseListing $locale }
     Assert-Limits $locale $product.Listings.$locale.BaseListing
     $applied += $locale
+  } elseif ($haveShots) {
+    # New locale WITH screenshots available: create it (clone en-us structure, overwrite text + set images).
+    $newListing = Copy-Json $enus
+    Set-ManagedFields $newListing.BaseListing $listing
+    Set-LocaleImages $newListing.BaseListing $locale
+    Assert-Limits $locale $newListing.BaseListing
+    $product.Listings | Add-Member -NotePropertyName $locale -NotePropertyValue $newListing -Force
+    $applied += $locale
   } else {
-    # NEW-LOCALE CREATION IS DISABLED. A new language listing needs its OWN uploaded screenshots — cloning
-    # en-us's Images[] metadata does NOT satisfy the Store: the listing shows "incomplete (missing
-    # screenshots)" and the submission commit hangs (seen on v1.0.232). We can't upload per-locale
-    # screenshots yet (metadata-only, no image bytes). Re-enable this branch once real per-locale
-    # screenshot UPLOAD exists. The translated listing.<locale>.json files stay in the repo, ready.
-    Write-Host "SKIP $locale - a new-locale listing needs its own uploaded screenshots (not yet supported); leaving it out to keep the submission complete."
+    # No screenshots -> a new-locale listing would be "incomplete" and hang the commit. Skip it.
+    Write-Host "SKIP $locale - no screenshots in $ScreenshotDir (a new-locale listing needs them); leaving it out."
   }
 }
 
-# Compress: `submission update` takes the JSON as an inline command-line argument, and Windows caps
-# a command line at ~32767 chars. Compact JSON (no pretty-print whitespace) buys headroom; the guard
-# below fails loudly if a future locale would still overflow it (rather than truncating silently).
 $json = $product | ConvertTo-Json -Depth 50 -Compress
-if ($json.Length -gt 30000) {
-  throw "Merged submission JSON is $($json.Length) chars — too close to the ~32767 command-line limit for 'msstore submission update'. Trim listing text or reduce locales."
-}
+if ($json.Length -gt 30000) { throw "Merged submission JSON is $($json.Length) chars - too close to the ~32767 command-line limit for 'msstore submission update'. Trim text or reduce locales." }
 Set-Content -LiteralPath $OutFile -Value $json -Encoding utf8 -NoNewline
-Write-Host "Merged $($applied.Count) locale(s) -> $OutFile  [$($applied -join ', ')]  ($($json.Length) chars). New-locale listings are skipped until per-locale screenshots can be uploaded."
+if ($ScreenshotManifest) { Set-Content -LiteralPath $ScreenshotManifest -Value ($manifest -join "`n") -Encoding utf8 }
+Write-Host "Merged $($applied.Count) locale(s) -> $OutFile  [$($applied -join ', ')]  ($($json.Length) chars; $($shots.Count) screenshot(s)/locale, $($manifest.Count) image(s) to upload)."

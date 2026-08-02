@@ -23,9 +23,9 @@ text to the Store in a single submission.
 
 ### Locales
 
-- **`en-us` is the default and the template.** It must exist; new locales are created by cloning its
-  BaseListing (structure **and** screenshots) and overwriting the text — so a new locale is never
-  missing required fields or images.
+- **`en-us` is the default and the template.** It must exist; a new locale is created by cloning its
+  BaseListing structure, overwriting the text, and setting its own screenshots (see below) — so a new
+  locale is never missing required fields or images.
 - **Add a locale:** drop in `listing.<locale>.json` (copy an existing one, translate the text). The
   next release picks it up automatically — no code change. Use Store locale codes (`de-de`, `fr-fr`,
   `ja-jp`, `zh-cn`, …).
@@ -44,31 +44,31 @@ text to the Store in a single submission.
 The `publish-store` job (`.github/workflows/dotnet-desktop.yml`) does:
 
 1. `msstore publish <msix> -id 9NWLTBV4NRDL --noCommit` — create the pending draft with the package,
-   don't commit.
-2. `msstore submission get` → `Build-Submission.ps1` → `msstore submission update` — merge this
-   folder's listing into the draft.
-3. `msstore submission publish` — commit the draft (package + listing) into certification.
+   don't commit. (This uploads a zip = {the package} to the submission's `FileUploadUrl`.)
+2. `msstore submission get` → **`Build-Submission.ps1`** — merge this folder's listings (all locales)
+   into the draft and set each locale's `Images[]` to the `screenshots/` set (writes a manifest of
+   `<zip-path>|<file>` lines).
+3. **`Upload-Screenshots.ps1`** — GET that zip, inject the per-locale screenshot copies, PUT it back
+   (preserves the package, adds the images). Legacy API keeps packages + images in ONE zip.
+4. `msstore submission update` (the merged JSON) → `msstore submission publish` — commit into certification.
 
 If a previous run left a **stuck pending submission**, clear it once with
 `msstore submission delete 9NWLTBV4NRDL` before re-tagging.
 
-## Screenshots — managed manually (by design)
+## Screenshots (automated)
 
-The `Images[]` in the submission are **passed through untouched** by the merge, and the release job
-deliberately does **not** upload screenshots. Manage them in Partner Center → your app → the
-submission → Store listings → Screenshots.
+- **`screenshots/*.png`** — the shared screenshot set (English UI). Every locale references its OWN copy
+  in the submission zip (`<locale>/<file>.png`) — the Store requires each language listing to have its
+  own uploaded images; a metadata reference to another locale's image is rejected as "incomplete".
+- **Requirements:** PNG, ≥ 1366×768, ≤ 10 per locale.
+- **`Upload-Screenshots.ps1`** does the actual upload (GET the submission zip → add each `<locale>/<file>`
+  → PUT). It runs in CI between `Build-Submission` and `submission update`.
+- **No screenshots present?** `Build-Submission.ps1` then **skips new-locale listings** (a language with
+  no screenshots hangs the commit as "incomplete") and ships en-us only.
+- **Refresh the set:** run the FlaUI generator (`FindNeedleUX.UITests/GenerateReadmeScreenshots.cs`)
+  over `Samples/Demo/logs`, drop the PNGs in `screenshots/`, commit — the next release uploads them.
 
-This is an intentional decision, not a gap. Automating it would mean a scripted zip upload to the
-pending submission's `FileUploadUrl`, but the legacy submission API bundles the package **and** image
-bytes into that single zip — so every screenshot change would re-upload the ~106 MB package, the
-commit-time image ingestion can't be dry-run (only proven by a real publish), and it leans on the
-CLI's least-reliable output. Screenshots change rarely, so the manual path (a couple of minutes in
-Partner Center) beats the automation's cost and fragility. Text listing-as-code covers everything
-that actually changes per release.
-
-To (re)generate a fresh screenshot set from the committed demo logs, run the FlaUI generator
-(`FindNeedleUX.UITests/GenerateReadmeScreenshots.cs`) locally — it drives the app over
-`Samples/Demo/logs` and writes deterministic PNGs — then upload them in Partner Center.
-
-> If this ever becomes worth automating, do it via the **Store submission REST API directly**
-> (create → update JSON with images → PUT zip → commit → poll), not the CLI.
+> The legacy submission API bundles the package **and** image bytes in the single `FileUploadUrl` zip and
+> has no per-image API, so `Upload-Screenshots.ps1` re-uploads the ~90 MB zip on every release. Commit-time
+> image ingestion is only fully proven by a real publish (the local `--noCommit` dry-run validates the
+> upload + per-locale registration, not the final commit).
