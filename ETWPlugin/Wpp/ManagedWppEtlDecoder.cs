@@ -57,6 +57,23 @@ public sealed class ManagedWppEtlDecoder
     /// infrastructure, which can't be cleanly told apart from real app events at this layer — see gap #10.)</summary>
     public long ModernEvents { get; private set; }
 
+    /// <summary>Count of well-known ETW infrastructure events (the EventTrace header/rundown &amp;c.) that ride
+    /// on TaskGuid but are NOT WPP. They're skipped up front so they never land in <see cref="UnresolvedGuids"/>
+    /// (which would otherwise churn symbol provisioning — and fail the CLI's decode-proof exit code — on a GUID
+    /// that can never resolve).</summary>
+    public long SystemEvents { get; private set; }
+
+    /// <summary>Well-known classic ETW infrastructure GUIDs that appear on <c>TaskGuid</c> but are NOT WPP and
+    /// will never have a TMF. Chief among them is <c>68fdd900-4a3e-11d1-84f4-0000f80464e3</c> — the EventTrace
+    /// header/rundown event, whose OS/build/session metadata we surface via <c>EtlInfoExtractor</c>, not as a
+    /// WPP row. Treating these as "missing symbols" is the bug this set prevents.</summary>
+    private static readonly HashSet<Guid> WellKnownSystemGuids = new()
+    {
+        new Guid("68fdd900-4a3e-11d1-84f4-0000f80464e3"), // EventTraceGuid — trace header / rundown / extension
+        new Guid("9e814aad-3204-11d2-9a82-006008a86939"), // SystemTraceControlGuid — NT Kernel Logger control
+        new Guid("01853a65-418f-4f36-aefc-dc0f1d2fd235"), // EventTraceConfigGuid — system config header records
+    };
+
     /// <summary>Count of events a manual <see cref="FindNeedlePluginLib.IWppEventDecoder"/> plugin formatted
     /// after the TMF lookup missed — the last-resort decode tier.</summary>
     public long PluginDecoded { get; private set; }
@@ -90,9 +107,13 @@ public sealed class ManagedWppEtlDecoder
             if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
             if (++seen >= maxEvents) source.StopProcessing();
             // WPP classic events carry the message GUID on TaskGuid; anything else (kernel/manifest) has a
-            // different or empty TaskGuid and won't match a TMF entry.
+            // different or empty TaskGuid and won't match a TMF entry. Empty = manifest/EventSource; a
+            // well-known infrastructure GUID (the EventTrace header &c.) is system noise. Neither is a
+            // missing WPP symbol, so skip both without counting them unresolved — otherwise the header event
+            // pins the decode-proof exit code to "unresolved" no matter what a symbol resolver actually did.
             var guid = ev.TaskGuid;
             if (guid == Guid.Empty) return;
+            if (WellKnownSystemGuids.Contains(guid)) { SystemEvents++; return; }
             int msgNum = (int)ev.ID;
             if (!_tmf.TryGet(guid, msgNum, out var entry))
             {

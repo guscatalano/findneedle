@@ -585,7 +585,24 @@ internal class Program
         try
         {
             int rowsDecoded = 0;
-            try { rowsDecoded = x.GetSearchStatistics().GetRecordsAtStep(SearchStep.AtSearch); } catch { }
+            try
+            {
+                // The authoritative decoded-row count lives in the RESULT STORAGE. The AtSearch statistic is 0
+                // in the "just decode, no rules" path — the lazy pipeline skips re-materializing filtered
+                // results — which would otherwise pin this to "0 rows / exit 2" no matter what a symbol resolver
+                // actually did, making the tool useless for proving a decode. Read storage first (same source
+                // the GUI uses), and fall back to AtSearch only if there's no storage.
+                var storage = x.GetType().GetProperty("ResultStorage")?.GetValue(x)
+                              as FindNeedlePluginLib.Interfaces.ISearchStorage;
+                if (storage != null)
+                {
+                    var st = storage.GetStatistics();
+                    rowsDecoded = st.rawRecordCount > 0 ? st.rawRecordCount : st.filteredRecordCount;
+                }
+                if (rowsDecoded <= 0)
+                    rowsDecoded = x.GetSearchStatistics().GetRecordsAtStep(SearchStep.AtSearch);
+            }
+            catch { }
 
             var resolvers = new List<string>();
             try
