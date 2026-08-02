@@ -585,7 +585,16 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             rows++;
         }, ct);
         _lastDecodeRowCount = rows;
-        Logger.Instance.Log($"Managed WPP stream {inputfile}: {rows} rows, {decoder.Unresolved} WPP without TMF");
+        // Collect the missing-TMF GUIDs from the FULL streamed decode (not just the pre-scan sample). Without
+        // this, a PARTIAL decode (some TMFs present, many events unresolved) reported "0 missing GUIDs" while
+        // clearly leaving events unformatted — the streamed path was silently dropping decoder.UnresolvedGuids.
+        foreach (var g in decoder.UnresolvedGuids) _missingTmfGuids.Add(g.ToString());
+        // Surface the unresolved (no-TMF) event count so GetDecodeInfo()'s "unknowns" is non-zero too — the
+        // streaming currentResult otherwise carries 0, making the summary look like everything decoded.
+        if (currentResult != null && decoder.Unresolved > 0)
+            currentResult.TotalFormatsUnknown = (int)Math.Min(decoder.Unresolved, int.MaxValue);
+        Logger.Instance.Log($"Managed WPP stream {inputfile}: {rows} rows, {decoder.Unresolved} WPP without TMF, "
+                            + $"{_missingTmfGuids.Count} distinct missing GUID(s)");
     }
 
     // Build one row from a managed-decoded WPP event: reuse the tracefmt-line parse for cpu/pid/tid/time/
