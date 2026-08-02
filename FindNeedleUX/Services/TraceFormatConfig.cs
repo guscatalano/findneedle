@@ -24,21 +24,10 @@ public static class TraceFormatConfig
     private static readonly string _origTmf = Environment.GetEnvironmentVariable(TmfVar) ?? "";
     private static readonly string _origSym = Environment.GetEnvironmentVariable(SymVar) ?? "";
 
+    // Delegates to the shared FindPluginCore.Wpp.Symbols.TraceFormatEnv so the GUI and CLI set up the WDK
+    // trace-tool environment identically (they used to diverge — the CLI didn't do this at all). Passes the
+    // launch-time ambient values so re-applying on a settings change doesn't accumulate paths.
     public static void Apply()
-    {
-        // TRACE_FORMAT_SEARCH_PATH: configured TMF folder, then the managed TMF cache, then ambient.
-        var tmfParts = new List<string>();
-        var tmfFolder = (ResultsViewerSettings.TraceFormatSearchPath ?? "").Trim();
-        if (!string.IsNullOrEmpty(tmfFolder)) tmfParts.Add(tmfFolder);
-        try { if (Directory.Exists(WppSymbolResolver.TmfCacheDir)) tmfParts.Add(WppSymbolResolver.TmfCacheDir); } catch { }
-        if (!string.IsNullOrEmpty(_origTmf)) tmfParts.Add(_origTmf);
-        Environment.SetEnvironmentVariable(TmfVar, string.Join(";", tmfParts.Distinct()));
-
-        // _NT_SYMBOL_PATH: configured symbol path (PDB folders / symbol servers), then ambient.
-        var sym = (ResultsViewerSettings.SymbolPath ?? "").Trim();
-        var symCombined = string.IsNullOrEmpty(sym) ? _origSym
-                        : string.IsNullOrEmpty(_origSym) ? sym
-                        : sym + ";" + _origSym;
-        Environment.SetEnvironmentVariable(SymVar, symCombined);
-    }
+        => FindPluginCore.Wpp.Symbols.TraceFormatEnv.Apply(
+            ResultsViewerSettings.TraceFormatSearchPath, ResultsViewerSettings.SymbolPath, _origTmf, _origSym);
 }
