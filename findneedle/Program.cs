@@ -580,6 +580,37 @@ internal class Program
                 Console.WriteLine("Searching...");
                 x.RunThrough();
             }
+        // --- Optional decoded-record output (--out=csv|json|txt|html; opt-in) ----------------------
+        // Writes the decoded rows to a file so a resolver author can EYEBALL what decoded, not just read
+        // an exit code. Reads from the same ResultStorage the exit-code count uses. --out-file=<path>
+        // overrides the default (output/findneedle_decoded.<ext>).
+        try
+        {
+            var outFormat = ArgVal(rawCmdArgs, "--out=");
+            if (!string.IsNullOrWhiteSpace(outFormat))
+            {
+                if (!FindPluginCore.Output.ResultOutputWriter.IsSupported(outFormat))
+                {
+                    Console.WriteLine($"Unknown --out format '{outFormat}'. Use: {string.Join(", ", FindPluginCore.Output.ResultOutputWriter.SupportedFormats)}");
+                }
+                else
+                {
+                    var rows = new List<FindNeedlePluginLib.ISearchResult>();
+                    var outStorage = x.GetType().GetProperty("ResultStorage")?.GetValue(x)
+                                     as FindNeedlePluginLib.Interfaces.ISearchStorage;
+                    outStorage?.GetFilteredResultsInBatches(b => rows.AddRange(b));
+
+                    var outFile = ArgVal(rawCmdArgs, "--out-file=");
+                    if (string.IsNullOrWhiteSpace(outFile))
+                        outFile = Path.Combine(AppContext.BaseDirectory, "output",
+                            "findneedle_decoded" + FindPluginCore.Output.ResultOutputWriter.ExtensionFor(outFormat));
+                    FindPluginCore.Output.ResultOutputWriter.WriteToFile(rows, outFormat, outFile);
+                    Console.WriteLine($"Wrote {rows.Count:N0} decoded rows to {outFile} ({outFormat.Trim().ToLowerInvariant()})");
+                }
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"--out failed: {ex.Message}"); }
+
         // --- Decode-proof summary: records decoded, WPP provisioning + resolvers consulted, and an exit
         // code an external ISymbolResolver author can assert on (0 = fully decoded). ------------------
         try

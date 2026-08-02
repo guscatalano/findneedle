@@ -22,9 +22,29 @@ dotnet run --project findneedle.csproj -- --rules my-rules.rules.json C:\Logs
 | Option | Description | Example |
 |------|----|----|
 | `--rules=<file>` | Path to RuleDSL rules file | `--rules=my-rules.rules.json` |
+| `--out=<fmt>` | Write decoded records to a file: `csv`, `json`, `txt`, or `html` | `--out=json` |
+| `--out-file=<path>` | Override the output path (default `output/findneedle_decoded.<ext>`) | `--out-file=rows.csv` |
+| `--symbols=<path>` | PDB folders / symbol servers for WPP symbol provisioning | `--symbols=C:\syms` |
+| `--symbol-source=<dirs>` | Extra folders to sweep for binaries + PDBs | `--symbol-source=C:\bins` |
 | `--verbose`, `-v` | Show detailed output | `--verbose` |
 | `--force`, `-f`, `--yes`, `-y` | Skip confirmation prompts | `--force` |
 | `--clear-output`, `-c` | Clear existing output before running | `--clear-output` |
+
+### Decoding a WPP `.etl` and proving it decoded
+
+```bash
+# Decode a WPP trace, resolving symbols from a store, and dump the rows as JSON
+findneedle C:\Traces --symbols=C:\symbols --out=json --force
+```
+
+The tool prints a **decode summary** and sets an **exit code** you can assert on — useful when
+authoring a custom `ISymbolResolver` and testing it end-to-end:
+
+- `0` — fully decoded (no unresolved WPP symbols)
+- `1` — decoded, but symbols are still missing (provisioning ran but couldn't resolve everything)
+- `2` — no rows decoded
+
+Add `--out=<fmt>` to also write the decoded rows so you can *see* what came out, not just the exit code.
 
 ### RuleDSL Rules File
 
