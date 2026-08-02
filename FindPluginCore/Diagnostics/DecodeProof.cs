@@ -8,23 +8,23 @@ namespace FindPluginCore.Diagnostics;
 /// </summary>
 public static class DecodeProof
 {
-    public const int FullyDecoded = 0;      // rows decoded, no unresolved symbols
-    public const int UnresolvedSymbols = 1; // rows decoded, but provisioning ran and couldn't resolve everything
+    public const int FullyDecoded = 0;      // rows decoded, nothing left unformatted
+    public const int UnresolvedSymbols = 1; // rows decoded, but some WPP events remain unformatted (missing TMF)
     public const int NothingDecoded = 2;    // zero rows
 
+    /// <summary>
+    /// The verdict is driven by the ACTUAL decode result, NOT by whether symbol provisioning ran or succeeded.
+    /// Provisioning is now discovery-driven and fires UP FRONT (before the decode) — and it can over-fire on a
+    /// trace tracefmt self-resolves, where the resolver is asked, returns nothing, yet every event still
+    /// decodes. "Provisioning invoked but made 0 symbols" is a resolver diagnostic (reported separately), not
+    /// evidence the output is incomplete. So: rows + events-left-unformatted decide the exit code.
+    /// </summary>
     /// <param name="rowsDecoded">Authoritative decoded-row count (from ResultStorage, NOT the lazy AtSearch stat).</param>
-    /// <param name="provisionInvocations">How many times the WPP symbol-provisioning seam was invoked.</param>
-    /// <param name="provisionSucceeded">How many of those invocations produced new symbols.</param>
-    /// <param name="unresolvedEvents">
-    /// WPP events the decoder saw but could NOT format (missing TMF). Non-zero here means symbols are still
-    /// missing even on a PARTIAL decode that never tripped the all-unknown provisioning fail-fast — so "some
-    /// rows decoded" must report UnresolvedSymbols, not FullyDecoded. This closes the "0 missing / lots
-    /// unformatted / exit 0" contradiction the CLI reported.
-    /// </param>
-    public static int ComputeExitCode(int rowsDecoded, int provisionInvocations, int provisionSucceeded, long unresolvedEvents = 0)
+    /// <param name="unresolvedEvents">WPP events the decoder saw but could NOT format (missing TMF). &gt;0 with
+    /// rows &gt; 0 is a partial decode → UnresolvedSymbols; 0 means everything present was rendered.</param>
+    public static int ComputeExitCode(int rowsDecoded, long unresolvedEvents = 0)
     {
         if (rowsDecoded <= 0) return NothingDecoded;
-        if (provisionInvocations > 0 && provisionSucceeded < provisionInvocations) return UnresolvedSymbols;
         if (unresolvedEvents > 0) return UnresolvedSymbols;
         return FullyDecoded;
     }

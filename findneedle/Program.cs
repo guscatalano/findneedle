@@ -121,8 +121,9 @@ internal class Program
         WppSymbolProvisioning.Handler = req =>
         {
             wppProvisionInvocations++;
-            if (req?.MissingMessageGuids != null)
-                foreach (var g in req.MissingMessageGuids) wppMissingGuids.Add(g);
+            // NOTE: req.MissingMessageGuids is the UPFRONT discovery set (managed), which over-reports GUIDs a
+            // self-resolving tracefmt decode doesn't actually need. So it does NOT seed the summary's "missing"
+            // list — that comes solely from the sink (what the FINAL decode truly left unformatted).
             var made = FindPluginCore.Wpp.Symbols.WppSymbolResolver.TryProvision(req, symbolSourcePath, symbolPath);
             if (made) wppProvisionSucceeded++;
             return made;
@@ -682,10 +683,10 @@ internal class Program
             if (wppMissingGuids.Count > 0)
                 foreach (var g in wppMissingGuids.OrderBy(s => s)) Console.WriteLine($"      - {g}");
 
-            // Events left unformatted mean symbols are still missing even if some rows decoded — a partial
-            // decode must NOT report "fully decoded" (DecodeProof maps leftover unresolved events to exit 1).
-            int exit = FindPluginCore.Diagnostics.DecodeProof.ComputeExitCode(
-                rowsDecoded, wppProvisionInvocations, wppProvisionSucceeded, unresolvedEvents);
+            // Exit reflects the actual decode: rows out + events left unformatted. Provisioning counts above
+            // are a resolver diagnostic, not an input to the verdict — a trace tracefmt self-resolves can have
+            // "provisioning invoked, 0 made" yet be fully decoded (exit 0).
+            int exit = FindPluginCore.Diagnostics.DecodeProof.ComputeExitCode(rowsDecoded, unresolvedEvents);
             var verdict = FindPluginCore.Diagnostics.DecodeProof.Describe(exit);
             Console.WriteLine($"  Result: {verdict} (exit {exit})");
             Console.WriteLine("  Note: this is a WPP-only decode. 'Records decoded' counts WPP events whose symbols");

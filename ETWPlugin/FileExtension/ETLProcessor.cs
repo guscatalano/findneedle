@@ -236,10 +236,30 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 if (!line.StartsWith("Unknown")) continue;
                 var gm = System.Text.RegularExpressions.Regex.Match(line,
                     @"GUID=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
-                if (gm.Success) _missingTmfGuids.Add(gm.Groups[1].Value);
+                // Skip classic-ETW infrastructure GUIDs (trace header, etc.): they're not WPP and never have a
+                // TMF, so listing them as "missing" — or provisioning them — is spurious (same filter as managed).
+                if (gm.Success && !findneedle.Wpp.ManagedWppEtlDecoder.IsWellKnownSystemGuid(gm.Groups[1].Value))
+                    _missingTmfGuids.Add(gm.Groups[1].Value);
             }
         }
         catch (Exception ex) { Logger.Instance.Log($"SampleMissingGuids failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Report what THIS decode actually couldn't format into the process-wide sink the CLI summary reads. The
+    /// sink is the single source of truth for "what did the final decode leave unresolved" across every file —
+    /// the streaming/parse paths feed it as they go; the fail-fast branches (which bail before streaming) call
+    /// this so an all-missing file still counts toward the summary + exit code. <paramref name="unresolved"/>
+    /// is sample-scoped on a fail-fast (a lower bound), which is enough to flag "not fully decoded".
+    /// </summary>
+    private void ReportMissingToSink(long unresolved)
+    {
+        try
+        {
+            FindNeedlePluginLib.WppDecodeReport.AddMissingGuids(_missingTmfGuids);
+            FindNeedlePluginLib.WppDecodeReport.AddUnresolvedEvents(unresolved);
+        }
+        catch { }
     }
 
     public Dictionary<string, int> GetProviderCount()
@@ -316,6 +336,13 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         }
         else
         {
+            // Provision symbols BEFORE decoding: cheaply discover which WPP message GUIDs this trace needs but
+            // the search path lacks, hand the WHOLE set to the resolver so it drops the TMFs on the path, then
+            // decode ONCE. This replaces the old decode → detect-missing → provision → decode-AGAIN loop, which
+            // processed the entire trace twice. The post-decode retry below stays only as a fallback (e.g. a
+            // provider that appears too late for the header scan, or a discovery failure).
+            TryProvisionSymbolsUpfront(cancellationToken);
+
             var outcome = DecodeEtlOnce(cancellationToken);
 
             // On-demand symbol provisioning: if the decode failed ONLY because WPP symbols (TMFs) were
@@ -408,6 +435,52 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         _progressSink?.NotifyProgress(100, $"Preprocessing complete for {inputfile}");
     }
 
+    /// <summary>
+    /// Discover the WPP message GUIDs this trace needs but the search path can't satisfy, and hand the whole
+    /// set to the symbol resolver ONCE — so it provisions the TMFs onto the path and the real decode (managed
+    /// OR tracefmt) runs a single time. The discovery is a format-free header scan (see
+    /// <see cref="findneedle.Wpp.ManagedWppEtlDecoder.CollectMissingMessageGuids"/>): far cheaper than a second
+    /// full decode. No-op when no resolver is registered (nothing could be provisioned) or the trace already
+    /// has every TMF. Marks <see cref="_provisionAttempted"/> so the post-decode retry doesn't provision twice.
+    /// </summary>
+    private void TryProvisionSymbolsUpfront(CancellationToken cancellationToken)
+    {
+        if (_provisionAttempted || !FindNeedlePluginLib.WppSymbolProvisioning.HasHandler) return;
+        if (inputfile.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
+            || inputfile.EndsWith(".log", StringComparison.OrdinalIgnoreCase)) return; // not an ETL
+        if (!File.Exists(inputfile)) return;
+
+        HashSet<Guid> missing;
+        try
+        {
+            var tmf = LoadTmfDatabaseFromSearchPath();
+            var probe = new findneedle.Wpp.ManagedWppEtlDecoder(tmf);
+            missing = probe.CollectMissingMessageGuids(inputfile, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Discovery is best-effort; if it can't scan, fall back to the post-decode provisioning retry.
+            Logger.Instance.Log($"Upfront symbol discovery failed for {inputfile}: {ex.Message}");
+            return;
+        }
+        if (missing.Count == 0) return; // trace fully covered by the current path — decode once, no provisioning
+
+        _provisionAttempted = true;
+        Logger.Instance.Log($"Upfront: {missing.Count} WPP message GUID(s) need symbols for {inputfile}; asking resolver");
+        _progressSink?.NotifyProgress("Resolving WPP symbols before decode…");
+        bool provisioned = FindNeedlePluginLib.WppSymbolProvisioning.TryProvision(
+            new FindNeedlePluginLib.WppProvisionRequest
+            {
+                EtlPath = inputfile,
+                MissingMessageGuids = missing.Select(g => g.ToString()).ToArray(),
+            });
+        Logger.Instance.Log(provisioned
+            ? $"Resolver produced new TMFs for {inputfile}; decoding once with the refreshed path"
+            : $"Resolver produced no new TMFs for {inputfile}; decoding what's available");
+        // Don't seed _missingTmfGuids from discovery: the single decode below re-reports what's ACTUALLY still
+        // unformatted after provisioning (some GUIDs may now resolve), so the summary reflects the final state.
+    }
+
     /// <summary>Outcome of a single <see cref="DecodeEtlOnce"/> attempt.</summary>
     private enum EtlDecodeOutcome
     {
@@ -480,6 +553,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             _decodeMethod = "tracefmt (WPP) — symbols missing";
             _lastDecodeRowCount = 0;
             SampleMissingGuids(pre.outputfile, 200_000);
+            ReportMissingToSink(pre.TotalFormatsUnknown);
             return EtlDecodeOutcome.MissingSymbols;
         }
 
@@ -505,9 +579,15 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
             _decodeMethod = "tracefmt (WPP) — symbols missing";
             _lastDecodeRowCount = 0;
             SampleMissingGuids(currentResult.outputfile, 200_000);
+            ReportMissingToSink(unknown);
             return EtlDecodeOutcome.MissingSymbols;
         }
 
+        // Partial miss (some events formatted, some left "Unknown" for want of a TMF): the missing GUIDs are
+        // collected during the parse (and reported in the summary), but we do NOT provision-and-re-decode here
+        // — symbols were already resolved up front (TryProvisionSymbolsUpfront) before this single decode, so
+        // anything still unformatted is genuinely unavailable. Parse and show what we got.
+        if (unknown > 0) SampleMissingGuids(currentResult.outputfile, 200_000);
         return EtlDecodeOutcome.FormattedNeedsParse;
     }
 
@@ -548,6 +628,7 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                 _prescanFailFast = true;
                 _decodeMethod = "managed WPP — symbols missing";
                 _lastDecodeRowCount = 0;
+                ReportMissingToSink(sampleUnresolved);
                 return EtlDecodeOutcome.MissingSymbols;
             }
         }
@@ -811,7 +892,8 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                             var gm = System.Text.RegularExpressions.Regex.Match(line,
                                 @"GUID=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
                             var guid = gm.Success ? gm.Groups[1].Value : "unknown";
-                            if (gm.Success) _missingTmfGuids.Add(guid);
+                            if (gm.Success && !findneedle.Wpp.ManagedWppEtlDecoder.IsWellKnownSystemGuid(guid))
+                                _missingTmfGuids.Add(guid);
                             // "Decode anyway": de-dupe by GUID — just tally per-GUID event counts here;
                             // one representative row per distinct GUID (with its collapsed count) is
                             // emitted after the read loop.

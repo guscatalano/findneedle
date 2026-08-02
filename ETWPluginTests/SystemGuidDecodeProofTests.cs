@@ -60,6 +60,39 @@ public sealed class SystemGuidDecodeProofTests
         }
         finally { try { Directory.Delete(empty, true); } catch { } }
     }
+
+    [TestMethod]
+    public void CollectMissingMessageGuids_IsTheUpfrontDiscovery()
+    {
+        if (!File.Exists(Etl)) Assert.Inconclusive($"fixture missing: {Etl}");
+
+        // With TMFs present, the format-free discovery scan finds nothing to provision — decode once, no resolver.
+        var withTmf = new ManagedWppEtlDecoder(TmfDatabase.LoadDirectory(TmfDir));
+        Assert.AreEqual(0, withTmf.CollectMissingMessageGuids(Etl).Count,
+            "everything is covered by the path → the upfront resolver call is skipped");
+
+        // With no TMFs, discovery names exactly the real WPP GUID to hand the resolver — never the trace header.
+        var empty = Path.Combine(Path.GetTempPath(), $"FN_disc_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(empty);
+        try
+        {
+            var missing = new ManagedWppEtlDecoder(TmfDatabase.LoadDirectory(empty)).CollectMissingMessageGuids(Etl);
+            Assert.IsTrue(missing.Contains(Guid.Parse(RealWppGuid)), "the real WPP GUID is what the resolver must fetch");
+            Assert.IsFalse(missing.Contains(EventTraceGuid), "the header is never handed to a resolver");
+        }
+        finally { try { Directory.Delete(empty, true); } catch { } }
+    }
+
+    [TestMethod]
+    public void IsWellKnownSystemGuid_FiltersInfraGuids_KeepsRealAndGarbage()
+    {
+        // This is the shared filter the tracefmt path also uses (via SampleMissingGuids) so a partial decode
+        // never asks a resolver to provision the trace header. Guard the contract for both decoders here.
+        Assert.IsTrue(ManagedWppEtlDecoder.IsWellKnownSystemGuid(EventTraceGuid), "header GUID is system");
+        Assert.IsTrue(ManagedWppEtlDecoder.IsWellKnownSystemGuid("68fdd900-4a3e-11d1-84f4-0000f80464e3"), "string overload");
+        Assert.IsFalse(ManagedWppEtlDecoder.IsWellKnownSystemGuid(RealWppGuid), "a real WPP GUID is NOT system — keep it");
+        Assert.IsFalse(ManagedWppEtlDecoder.IsWellKnownSystemGuid("not-a-guid"), "non-GUID input is kept (treated as not-well-known)");
+    }
 }
 
 /// <summary>

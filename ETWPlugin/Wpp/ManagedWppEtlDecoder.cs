@@ -74,6 +74,14 @@ public sealed class ManagedWppEtlDecoder
         new Guid("01853a65-418f-4f36-aefc-dc0f1d2fd235"), // EventTraceConfigGuid — system config header records
     };
 
+    /// <summary>True for classic-ETW infrastructure GUIDs that are NOT WPP and will never have a TMF — so no
+    /// decoder should list them as "missing symbols" or ask a resolver to provision them. Shared with the
+    /// tracefmt path (which samples missing GUIDs from text output) so both decoders filter identically.</summary>
+    public static bool IsWellKnownSystemGuid(Guid g) => WellKnownSystemGuids.Contains(g);
+
+    /// <summary>String overload; non-GUID input is treated as NOT well-known (caller keeps it).</summary>
+    public static bool IsWellKnownSystemGuid(string guid) => Guid.TryParse(guid, out var g) && WellKnownSystemGuids.Contains(g);
+
     /// <summary>Count of events a manual <see cref="FindNeedlePluginLib.IWppEventDecoder"/> plugin formatted
     /// after the TMF lookup missed — the last-resort decode tier.</summary>
     public long PluginDecoded { get; private set; }
@@ -136,6 +144,33 @@ public sealed class ManagedWppEtlDecoder
             onEvent(BuildEvent(ev, guid, msgNum, message, entry.Component, entry.Level, entry.Func));
         };
         source.Process();
+    }
+
+    /// <summary>
+    /// CHEAP discovery pass: return the distinct WPP message GUIDs present in the trace that have NO TMF in the
+    /// current database — WITHOUT formatting a single event (no arg parsing, no rows, no output file). This is
+    /// the "which symbols does this trace need?" list to hand a resolver UP FRONT, so the real decode runs
+    /// exactly once instead of decode → provision → decode-again (which processed the whole trace twice).
+    /// System/manifest GUIDs are filtered (they never have a TMF). Each distinct GUID is checked against the
+    /// TMF database once, so cost is a header-only scan, not O(events) lookups.
+    /// </summary>
+    public HashSet<Guid> CollectMissingMessageGuids(string etlPath,
+        System.Threading.CancellationToken cancellationToken = default)
+    {
+        var missing = new HashSet<Guid>();
+        if (!System.IO.File.Exists(etlPath) || new System.IO.FileInfo(etlPath).Length < 512) return missing;
+        var resolved = new HashSet<Guid>();
+        using var source = new ETWTraceEventSource(etlPath);
+        source.AllEvents += ev =>
+        {
+            if (cancellationToken.IsCancellationRequested) { source.StopProcessing(); return; }
+            var guid = ev.TaskGuid;
+            if (guid == Guid.Empty || WellKnownSystemGuids.Contains(guid)) return; // manifest/system — never WPP
+            if (missing.Contains(guid) || resolved.Contains(guid)) return;         // already classified
+            if (_tmf.TryGet(guid, (int)ev.ID, out _)) resolved.Add(guid); else missing.Add(guid);
+        };
+        source.Process();
+        return missing;
     }
 
     private WppDecodedEvent BuildEvent(TraceEvent ev, Guid guid, int msgNum, string message,

@@ -9,37 +9,29 @@ namespace CoreTests;
 public sealed class DecodeProofTests
 {
     [TestMethod]
-    public void NoRows_IsAlwaysExit2_RegardlessOfProvisioning()
+    public void NoRows_IsAlwaysExit2()
     {
-        Assert.AreEqual(2, DecodeProof.ComputeExitCode(rowsDecoded: 0, provisionInvocations: 0, provisionSucceeded: 0));
-        Assert.AreEqual(2, DecodeProof.ComputeExitCode(0, 3, 3), "0 rows wins even if provisioning 'succeeded'");
-        Assert.AreEqual(2, DecodeProof.ComputeExitCode(-1, 0, 0));
+        Assert.AreEqual(2, DecodeProof.ComputeExitCode(rowsDecoded: 0));
+        Assert.AreEqual(2, DecodeProof.ComputeExitCode(0, unresolvedEvents: 9), "0 rows wins over leftover-unformatted");
+        Assert.AreEqual(2, DecodeProof.ComputeExitCode(-1));
     }
 
     [TestMethod]
-    public void RowsDecoded_NoProvisioning_IsFullyDecoded()
-        => Assert.AreEqual(0, DecodeProof.ComputeExitCode(rowsDecoded: 42, provisionInvocations: 0, provisionSucceeded: 0));
-
-    [TestMethod]
-    public void RowsDecoded_AllProvisioningSucceeded_IsFullyDecoded()
-        => Assert.AreEqual(0, DecodeProof.ComputeExitCode(42, provisionInvocations: 2, provisionSucceeded: 2));
-
-    [TestMethod]
-    public void RowsDecoded_ProvisioningPartlyFailed_IsUnresolved()
+    public void RowsDecoded_NothingUnformatted_IsFullyDecoded()
     {
-        Assert.AreEqual(1, DecodeProof.ComputeExitCode(42, provisionInvocations: 2, provisionSucceeded: 1));
-        Assert.AreEqual(1, DecodeProof.ComputeExitCode(42, provisionInvocations: 1, provisionSucceeded: 0));
+        Assert.AreEqual(0, DecodeProof.ComputeExitCode(rowsDecoded: 42));
+        // The self-resolve case that regressed: the resolver was asked and produced nothing, yet the decoder
+        // rendered every event (0 unformatted). That is FULLY decoded — provisioning bookkeeping is irrelevant.
+        Assert.AreEqual(0, DecodeProof.ComputeExitCode(42, unresolvedEvents: 0));
     }
 
     [TestMethod]
     public void RowsDecoded_ButEventsLeftUnformatted_IsUnresolved()
     {
-        // The partial-decode case: some rows rendered, but WPP events remain unformatted because their TMFs
-        // never showed up (and it never tripped the all-unknown provisioning fail-fast). This must NOT report
-        // "fully decoded" — it's the "0 missing / lots unformatted / exit 0" contradiction the CLI had.
-        Assert.AreEqual(1, DecodeProof.ComputeExitCode(42, provisionInvocations: 0, provisionSucceeded: 0, unresolvedEvents: 7));
-        Assert.AreEqual(0, DecodeProof.ComputeExitCode(42, 0, 0, unresolvedEvents: 0), "no leftovers stays fully decoded");
-        Assert.AreEqual(2, DecodeProof.ComputeExitCode(0, 0, 0, unresolvedEvents: 7), "still nothing decoded wins");
+        // Partial decode: some rows rendered, but WPP events remain unformatted because their TMFs never
+        // showed up. Must NOT report "fully decoded" — the "0 missing / lots unformatted / exit 0" bug.
+        Assert.AreEqual(1, DecodeProof.ComputeExitCode(42, unresolvedEvents: 7));
+        Assert.AreEqual(1, DecodeProof.ComputeExitCode(1, unresolvedEvents: 1));
     }
 
     [TestMethod]
