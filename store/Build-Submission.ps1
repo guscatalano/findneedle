@@ -89,14 +89,15 @@ foreach ($f in ($files | Where-Object { $_.Name -ne 'listing.en-us.json' })) {
   if ($existing) {
     Set-ManagedFields $product.Listings.$locale.BaseListing $listing
     Assert-Limits $locale $product.Listings.$locale.BaseListing
+    $applied += $locale
   } else {
-    # New locale: clone the en-us listing (structure + screenshots), then overwrite text.
-    $newListing = Copy-Json $enusListing
-    Set-ManagedFields $newListing.BaseListing $listing
-    Assert-Limits $locale $newListing.BaseListing
-    $product.Listings | Add-Member -NotePropertyName $locale -NotePropertyValue $newListing -Force
+    # NEW-LOCALE CREATION IS DISABLED. A new language listing needs its OWN uploaded screenshots — cloning
+    # en-us's Images[] metadata does NOT satisfy the Store: the listing shows "incomplete (missing
+    # screenshots)" and the submission commit hangs (seen on v1.0.232). We can't upload per-locale
+    # screenshots yet (metadata-only, no image bytes). Re-enable this branch once real per-locale
+    # screenshot UPLOAD exists. The translated listing.<locale>.json files stay in the repo, ready.
+    Write-Host "SKIP $locale - a new-locale listing needs its own uploaded screenshots (not yet supported); leaving it out to keep the submission complete."
   }
-  $applied += $locale
 }
 
 # Compress: `submission update` takes the JSON as an inline command-line argument, and Windows caps
@@ -107,5 +108,4 @@ if ($json.Length -gt 30000) {
   throw "Merged submission JSON is $($json.Length) chars — too close to the ~32767 command-line limit for 'msstore submission update'. Trim listing text or reduce locales."
 }
 Set-Content -LiteralPath $OutFile -Value $json -Encoding utf8 -NoNewline
-$imgCount = $enusListing.BaseListing.Images.Count
-Write-Host "Merged $($applied.Count) locales -> $OutFile  [$($applied -join ', ')]  ($($json.Length) chars; en-us screenshots shared into new locales: $imgCount)"
+Write-Host "Merged $($applied.Count) locale(s) -> $OutFile  [$($applied -join ', ')]  ($($json.Length) chars). New-locale listings are skipped until per-locale screenshots can be uploaded."
