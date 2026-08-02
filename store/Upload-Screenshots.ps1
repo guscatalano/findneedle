@@ -27,9 +27,10 @@ if (-not $WorkDir) { $WorkDir = [IO.Path]::GetTempPath() }
 $entries = @(Get-Content -LiteralPath $ScreenshotManifest -ErrorAction SilentlyContinue | Where-Object { $_.Trim() })
 if ($entries.Count -eq 0) { Write-Host "No screenshots to upload (empty manifest) - skipping."; return }
 
-# FileUploadUrl from the submission dump (tolerate the CLI's preamble + line-wrapping).
+# FileUploadUrl from the submission dump (tolerate the CLI's preamble + line-wrapping — strip CR/LF plus any
+# continuation indent so a `\uXXXX` escape the CLI wrapped mid-sequence rejoins instead of breaking the parse).
 $text = Get-Content -Raw -LiteralPath $CurrentSubmission
-$text = $text.Substring($text.IndexOf('{')) -replace "`r", '' -replace "`n", ''
+$text = $text.Substring($text.IndexOf('{')) -replace "\r?\n[ \t]*", ''
 $sub = $text | ConvertFrom-Json -Depth 50
 $url = $sub.FileUploadUrl
 if ([string]::IsNullOrWhiteSpace($url)) {

@@ -32,7 +32,14 @@ $managed = @('Title','ShortTitle','ShortDescription','Description',
 function Get-JsonBody([string]$path) {
   $text = Get-Content -Raw -LiteralPath $path
   $start = $text.IndexOf('{'); if ($start -lt 0) { throw "No JSON object in $path" }
-  return $text.Substring($start)
+  # `msstore submission get` console-wraps long JSON values, inserting raw newlines (+ continuation indent)
+  # MID-VALUE — including mid `\uXXXX` escape for CJK listings. A raw newline inside a JSON string is invalid
+  # JSON, so ConvertFrom-Json fails with "Invalid Unicode escape sequence: \u" (the reported space is the raw
+  # newline). Strip CR/LF + any following indent so wrapped escapes/strings rejoin (\u4e<nl>2d -> 中; CJK
+  # has no spaces so this is lossless). The managed text fields are overwritten from the repo's listing.*.json
+  # afterward, so trimming a space from a preserved field can't reach the output. (Upload-Screenshots does the
+  # same normalization.)
+  return ($text.Substring($start)) -replace "\r?\n[ \t]*", ''
 }
 function Copy-Json($o) { $o | ConvertTo-Json -Depth 50 | ConvertFrom-Json -Depth 50 }
 function Set-ManagedFields($base, $listing) {
