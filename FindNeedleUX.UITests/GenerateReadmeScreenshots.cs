@@ -36,7 +36,7 @@ namespace FindNeedleUX.UITests
 
         /// <summary>Launch the viewer over the demo logs with a given color theme, run an optional
         /// interaction (a query), and write a screenshot of the whole window.</summary>
-        private void Capture(string theme, string outName, Action<AutomationElement> interact = null)
+        private void CaptureShot(string theme, string outName, Action<AutomationElement> interact = null)
         {
             if (!Directory.Exists(DemoLogs))
                 Assert.Inconclusive($"demo logs not found: {DemoLogs} — run `python Samples/Demo/gen_logs.py` first.");
@@ -98,14 +98,14 @@ namespace FindNeedleUX.UITests
 
         [TestMethod, Timeout(180_000)]
         public void Gen_01_ResultsOverview()
-            => Capture("Sunset", "01-results-overview.png");
+            => CaptureShot("Sunset", "01-results-overview.png");
 
         [TestMethod, Timeout(180_000)]
         public void Gen_02_QueryLanguage()
-            => Capture("Sunset", "02-query-language.png", w => Query(w, "level == Error OR level == Warning"));
+            => CaptureShot("Sunset", "02-query-language.png", w => Query(w, "level == Error OR level == Warning"));
 
         [TestMethod, Timeout(180_000)]
         public void Gen_03_LevelFilter()
-            => Capture("Sunset", "03-level-filter.png", w => Query(w, "level == Error"));
+            => CaptureShot("Sunset", "03-level-filter.png", w => Query(w, "level == Error"));
     }
 }
