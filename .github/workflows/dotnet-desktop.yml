@@ -556,14 +556,18 @@ jobs:
           **/AppPackages/**/*.msixupload
 
 
-  # Submit the app to the Microsoft Store. Gated on a v*.*.* tag so it NEVER fires on a normal merge —
-  # tag a release (git tag v1.0.x && git push --tags) to publish. Uses the UNSIGNED artifact (the Store
-  # re-signs; the signed one carries CN="" and fails identity). Needs the STORE_* secrets configured.
+  # Submit the app to the Microsoft Store on a v*.*.* tag (NEVER on a normal merge). One submission
+  # carries BOTH the package (unsigned MSIX — the Store re-signs; the signed one has CN="" and fails
+  # identity) AND the listing text from store/listing.en-us.json (listing-as-code). Flow: create a
+  # draft with the package but don't commit -> merge the repo listing into the draft -> commit.
+  # Screenshots are still managed in Partner Center (see store/README.md). Needs the STORE_* secrets.
   publish-store:
     needs: [make_msix_unsigned]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     steps:
+    - name: Checkout (for store/ listing-as-code)
+      uses: actions/checkout@v4
     - name: Download unsigned MSIX
       uses: actions/download-artifact@v4
       with:
@@ -573,12 +577,32 @@ jobs:
       uses: microsoft/setup-msstore-cli@v1
     - name: Configure Store credentials
       run: msstore reconfigure --tenantId ${{ secrets.STORE_TENANT_ID }} --clientId ${{ secrets.STORE_CLIENT_ID }} --clientSecret ${{ secrets.STORE_CLIENT_SECRET }} --sellerId ${{ secrets.STORE_SELLER_ID }}
-    - name: Submit package to the Store
+    - name: Publish package + listing-as-code
       shell: pwsh
       run: |
+        $ErrorActionPreference = 'Stop'
+        $productId = '9NWLTBV4NRDL'
         $msix = (Get-ChildItem -Recurse pkg -Filter *.msix | Select-Object -First 1).FullName
-        Write-Host "Publishing $msix"
-        msstore publish $msix -id 9NWLTBV4NRDL
+        if (-not $msix) { throw "No .msix found under pkg/" }
+        Write-Host "Package: $msix"
+
+        # 1) Create/refresh the pending draft with the package, but DON'T commit yet.
+        msstore publish $msix -id $productId --noCommit
+        if ($LASTEXITCODE -ne 0) { throw "msstore publish (draft) failed ($LASTEXITCODE)" }
+
+        # 2) Pull the pending draft, merge in store/listing.en-us.json, push it back.
+        msstore submission get $productId | Out-File -Encoding utf8 raw.txt
+        $ver = [regex]::Match($msix, '(\d+\.\d+\.\d+\.\d+)').Value
+        $baseNotes = (Get-Content -Raw store/listing.en-us.json | ConvertFrom-Json).ReleaseNotes
+        ./store/Build-Submission.ps1 -CurrentSubmission raw.txt -OutFile product.json -ReleaseNotes "Version $ver. $baseNotes"
+        # `submission update` takes the JSON *content* as the argument, NOT a file path.
+        $productJson = Get-Content -Raw product.json
+        msstore submission update $productId $productJson
+        if ($LASTEXITCODE -ne 0) { throw "msstore submission update failed ($LASTEXITCODE)" }
+
+        # 3) Commit the submission (package + listing) into certification.
+        msstore submission publish $productId
+        if ($LASTEXITCODE -ne 0) { throw "msstore submission publish failed ($LASTEXITCODE)" }
 
   make_msi:
     needs: [build-release, set-msix-version]

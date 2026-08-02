@@ -1,0 +1,29 @@
+{
+  "_comment": "Listing-as-code for the Microsoft Store (product 9NWLTBV4NRDL, language en-us). These are the BaseListing fields the release job manages; CI reads the current submission, overwrites exactly these keys, and pushes it back (so unmanaged fields like pricing/availability are never touched). Store limits: Title<=256, ShortDescription<=1000, Description<=10000, each Feature<=200 (<=20 items), ReleaseNotes<=1500, Keywords<=7 (<=30 each). Title MUST match a reserved app name in Partner Center. Edit this file to change the listing; the next v*.*.* tag publishes it. Screenshots are managed separately (store/screenshots/*.png).",
+  "Title": "Find Needle",
+  "ShortTitle": null,
+  "ShortDescription": "Fast log and trace search for Windows — ETL/WPP, Event Log, and more.",
+  "Description": "FindNeedle is a fast log and trace search utility for Windows. Open ETW/ETL traces, Windows Event Logs and .evtx files, folders, ZIP and .cab archives, plain-text, CSV and JSON logs, and packet captures — all in one viewer, without juggling separate tools.\n\nBuilt for large captures: substring search runs against a trigram full-text index, so you can scan millions of lines and jump to what matters. Narrow results with a simple query language — by level, provider, time range, or free text — and let declarative rules highlight and enrich the entries you care about.\n\nWPP/ETL decoding is first-class: FindNeedle resolves TMF symbols automatically (with a pluggable resolver model for symbol servers and SMB shares) so trace messages come out readable instead of as raw GUIDs. And when you're reconstructing what happened, it can turn a filtered trace into a UML sequence diagram — the request flow, drawn from your logs.\n\nHighlights:\n• One viewer for ETL/WPP, Event Log/.evtx, text, CSV, JSON, ZIP/.cab, and packet captures\n• Fast substring search across millions of lines (trigram FTS)\n• Query language: filter by level, provider, time, and text\n• Automatic WPP TMF symbol resolution, with a pluggable resolver model\n• Rule-based highlighting and enrichment (no recompile)\n• Reconstruct request flows as UML sequence diagrams\n• Handles very large logs without loading everything into memory",
+  "Keywords": [
+    "log viewer",
+    "ETL",
+    "WPP",
+    "trace",
+    "event log",
+    "debugging",
+    "etw"
+  ],
+  "Features": [
+    "One viewer for ETL/WPP, Event Log, text, CSV, JSON, ZIP/.cab, and packet captures",
+    "Fast substring search across millions of log lines (trigram full-text index)",
+    "Query language: filter by level, provider, time range, and free text",
+    "Automatic WPP TMF symbol resolution with a pluggable resolver model",
+    "Rule-based highlighting and enrichment without recompiling",
+    "Reconstruct request flows as UML sequence diagrams from your logs",
+    "Streams very large captures without holding the whole set in memory"
+  ],
+  "ReleaseNotes": "Faster app startup, more reliable WPP symbol (TMF) resolution on the decode path, diagram-viewer fit fixes, and a refreshed Store listing.",
+  "CopyrightAndTrademarkInfo": "",
+  "LicenseTerms": "",
+  "DevStudio": "Gus Catalano"
+}
