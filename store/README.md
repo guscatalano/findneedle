@@ -52,17 +52,23 @@ The `publish-store` job (`.github/workflows/dotnet-desktop.yml`) does:
 If a previous run left a **stuck pending submission**, clear it once with
 `msstore submission delete 9NWLTBV4NRDL` before re-tagging.
 
-## Screenshots (currently manual)
+## Screenshots — managed manually (by design)
 
-The `Images[]` in the submission are **passed through untouched** by the merge — the release job does
-not yet upload screenshots. Manage them in Partner Center → your app → the submission → Store
-listings → Screenshots.
+The `Images[]` in the submission are **passed through untouched** by the merge, and the release job
+deliberately does **not** upload screenshots. Manage them in Partner Center → your app → the
+submission → Store listings → Screenshots.
 
-To (re)generate a fresh set from the committed demo logs, run the FlaUI generator
+This is an intentional decision, not a gap. Automating it would mean a scripted zip upload to the
+pending submission's `FileUploadUrl`, but the legacy submission API bundles the package **and** image
+bytes into that single zip — so every screenshot change would re-upload the ~106 MB package, the
+commit-time image ingestion can't be dry-run (only proven by a real publish), and it leans on the
+CLI's least-reliable output. Screenshots change rarely, so the manual path (a couple of minutes in
+Partner Center) beats the automation's cost and fragility. Text listing-as-code covers everything
+that actually changes per release.
+
+To (re)generate a fresh screenshot set from the committed demo logs, run the FlaUI generator
 (`FindNeedleUX.UITests/GenerateReadmeScreenshots.cs`) locally — it drives the app over
-`Samples/Demo/logs` and writes deterministic PNGs. Generation is intentionally **local and
-human-reviewed** (headless CI can't drive the desktop UI reliably); publishing stays deterministic.
+`Samples/Demo/logs` and writes deterministic PNGs — then upload them in Partner Center.
 
-**Automating screenshot upload is the planned next step** — it needs a scripted zip upload to the
-pending submission's `FileUploadUrl` (the legacy submission API bundles package + image bytes in one
-zip), which warrants its own validation before going live.
+> If this ever becomes worth automating, do it via the **Store submission REST API directly**
+> (create → update JSON with images → PUT zip → commit → poll), not the CLI.
