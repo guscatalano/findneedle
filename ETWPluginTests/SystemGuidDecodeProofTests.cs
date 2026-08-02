@@ -86,7 +86,7 @@ public sealed class CliDecodeProofTests
             .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
     }
 
-    private static (int exit, string stdout) RunCli(string exe, string folder, string tmfSearchPath)
+    private static (int exit, string stdout) RunCli(string exe, string folder, string tmfSearchPath, params string[] extraArgs)
     {
         var psi = new ProcessStartInfo(exe)
         {
@@ -97,6 +97,7 @@ public sealed class CliDecodeProofTests
         };
         psi.ArgumentList.Add(folder);
         psi.ArgumentList.Add("--force");
+        foreach (var a in extraArgs) psi.ArgumentList.Add(a);
         // The managed WPP decoder reads TMFs from TRACE_FORMAT_SEARCH_PATH — set it (or clear it) to model
         // "symbols available" vs "symbols missing" without needing a real resolver plugin.
         psi.EnvironmentVariables["TRACE_FORMAT_SEARCH_PATH"] = tmfSearchPath ?? "";
@@ -136,6 +137,67 @@ public sealed class CliDecodeProofTests
                 $"without TMFs the CLI must NOT report full success — else a resolver can't be tested.\n--- output ---\n{withoutTmf.stdout}");
             StringAssert.Contains(withTmf.stdout, "fully decoded",
                 "the decode-proof summary should say 'fully decoded' when symbols are present");
+        }
+        finally { try { Directory.Delete(work, true); } catch { } }
+    }
+
+    [TestMethod]
+    public void Cli_PlainTextLog_DecodesAndExitsZero()
+    {
+        // A non-ETL log needs no TMFs — this proves the storage-based row count (the exit-code fix) works
+        // generally, not just for WPP. Before the fix this also returned "0 rows / exit 2" with no rules.
+        var exe = FindCliExe();
+        if (exe == null) Assert.Inconclusive("findneedle.exe not built");
+        var work = Path.Combine(Path.GetTempPath(), $"FN_cli_txt_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(work);
+        File.WriteAllLines(Path.Combine(work, "app.log"), new[]
+        {
+            "2026-08-01 12:00:00 INFO service started",
+            "2026-08-01 12:00:01 WARN slow response",
+            "2026-08-01 12:00:02 ERROR connection failed",
+        });
+        try
+        {
+            var r = RunCli(exe, work, null);
+            Assert.AreEqual(0, r.exit, $"a plain 3-line log should decode and exit 0.\n--- output ---\n{r.stdout}");
+            StringAssert.Contains(r.stdout, "fully decoded");
+        }
+        finally { try { Directory.Delete(work, true); } catch { } }
+    }
+
+    [TestMethod]
+    public void Cli_OutJson_WritesDecodedRows()
+    {
+        var exe = FindCliExe();
+        if (exe == null) Assert.Inconclusive("findneedle.exe not built");
+        var work = Path.Combine(Path.GetTempPath(), $"FN_cli_out_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(work);
+        File.WriteAllLines(Path.Combine(work, "app.log"), new[] { "line one", "line two" });
+        // Write OUTSIDE the searched folder so the CLI doesn't try to (re)read its own output file.
+        var outFile = Path.Combine(Path.GetTempPath(), $"FN_out_{Guid.NewGuid():N}.json");
+        try
+        {
+            var r = RunCli(exe, work, null, "--out=json", "--out-file=" + outFile);
+            Assert.AreEqual(0, r.exit, r.stdout);
+            Assert.IsTrue(File.Exists(outFile), $"--out=json should write the file.\n--- output ---\n{r.stdout}");
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(outFile));
+            Assert.IsTrue(doc.RootElement.GetArrayLength() >= 2, "one JSON row per log line");
+        }
+        finally { try { Directory.Delete(work, true); } catch { } try { File.Delete(outFile); } catch { } }
+    }
+
+    [TestMethod]
+    public void Cli_UnknownOutFormat_Warns()
+    {
+        var exe = FindCliExe();
+        if (exe == null) Assert.Inconclusive("findneedle.exe not built");
+        var work = Path.Combine(Path.GetTempPath(), $"FN_cli_badfmt_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(work);
+        File.WriteAllLines(Path.Combine(work, "app.log"), new[] { "hello" });
+        try
+        {
+            var r = RunCli(exe, work, null, "--out=xml");
+            StringAssert.Contains(r.stdout, "Unknown --out format");
         }
         finally { try { Directory.Delete(work, true); } catch { } }
     }

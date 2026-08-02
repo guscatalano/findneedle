@@ -651,13 +651,9 @@ internal class Program
             Console.WriteLine($"  WPP symbol provisioning invoked:     {wppProvisionInvocations} time(s), made new symbols {wppProvisionSucceeded} time(s)");
             Console.WriteLine($"  Distinct missing message GUIDs seen: {wppMissingGuids.Count}");
 
-            int exit;
-            if (rowsDecoded <= 0) exit = 2;                                                            // nothing decoded
-            else if (wppProvisionInvocations > 0 && wppProvisionSucceeded < wppProvisionInvocations) exit = 1; // symbols still missing
-            else exit = 0;                                                                             // fully decoded
-            var verdict = exit == 0 ? "fully decoded"
-                        : exit == 1 ? "decoded WITH UNRESOLVED symbols"
-                        : "no rows decoded";
+            int exit = FindPluginCore.Diagnostics.DecodeProof.ComputeExitCode(
+                rowsDecoded, wppProvisionInvocations, wppProvisionSucceeded);
+            var verdict = FindPluginCore.Diagnostics.DecodeProof.Describe(exit);
             Console.WriteLine($"  Result: {verdict} (exit {exit})");
             Console.WriteLine("==========================");
             Environment.ExitCode = exit;
