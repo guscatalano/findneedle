@@ -173,11 +173,15 @@ public class TraceFmt
             // inherited regardless, so a configured local TMF/symbol path still resolves.
             var sym = Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH");
             var rArg = string.IsNullOrWhiteSpace(sym) ? dir : sym;
+            // Also pass the TMF search path explicitly via -p (see ParseSimpleETL) so a pre-scan finds already-
+            // available TMFs instead of falsely reporting "missing symbols" on env-inheritance quirks.
+            var tmfSearch = Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH");
+            var pArg = string.IsNullOrWhiteSpace(tmfSearch) ? string.Empty : $" -p \"{tmfSearch}\"";
 
             var st = new ProcessStartInfo
             {
                 FileName = traceFmtPath,
-                Arguments = $"\"{sample}\" -r \"{rArg}\"",
+                Arguments = $"\"{sample}\" -r \"{rArg}\"{pArg}",
                 WorkingDirectory = dir,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -234,10 +238,17 @@ public class TraceFmt
             throw new Exception("Cant find etl");
         }
         TraceFmtResult result = new TraceFmtResult();
+        // Pass the TMF search path to tracefmt EXPLICITLY via -p, not only via the inherited env var. This is
+        // more reliable — especially across the provision-and-retry, where the resolver's freshly-extracted
+        // TMFs land in the managed cache on TRACE_FORMAT_SEARCH_PATH; -p takes the same ';'-separated list.
+        // The env var is still inherited too, so if a tracefmt build treats -p as a single path the full list
+        // is still available. (Also quote the ETL path so spaces don't break the command line.)
+        var tmfSearch = Environment.GetEnvironmentVariable("TRACE_FORMAT_SEARCH_PATH");
+        var tfArgs = string.IsNullOrWhiteSpace(tmfSearch) ? $"\"{etl}\"" : $"\"{etl}\" -p \"{tmfSearch}\"";
         ProcessStartInfo st = new ProcessStartInfo
         {
             FileName = traceFmtPath,
-            Arguments = etl,
+            Arguments = tfArgs,
             WorkingDirectory = temppath,
             // Capture tracefmt's narration (which TMF paths it searched, which TMFs it examined/found)
             // for the symbol-resolution log surfaced in the UI.
