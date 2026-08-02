@@ -217,4 +217,25 @@
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
+
+  <!-- Package the command-line tool's apphost inside the MSIX so it can be exposed via the
+       AppExecutionAlias in Package.appxmanifest. findneedle is already a ProjectReference, so findneedle.dll
+       + all the plugin/runtime DLLs are ALREADY in the package at the root — we only add the 3 files that
+       aren't: the apphost (findneedle.exe) and its runtimeconfig/deps.json. (Globbing the CLI's full
+       self-contained output instead would duplicate the .NET runtime and collide with the GUI's copy —
+       NETSDK1152.) Done in a Target, not a static item, because the output doesn't exist at project
+       evaluation on a clean build. -->
+  <Target Name="IncludeCliToolInPackage" BeforeTargets="AssignTargetPaths;ComputeFilesToPublish" DependsOnTargets="ResolveProjectReferences">
+    <PropertyGroup>
+      <_CliOutDir>..\findneedle\bin\$(PlatformTarget)\$(Configuration)\net8.0-windows10.0.19041.0\win-x64\</_CliOutDir>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(_CliOutDir)findneedle.exe')">
+      <Content Include="$(_CliOutDir)findneedle.exe;$(_CliOutDir)findneedle.runtimeconfig.json;$(_CliOutDir)findneedle.deps.json">
+        <Link>%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+    <Warning Text="CLI apphost not found at $(_CliOutDir)findneedle.exe — the alias will NOT work."
+             Condition="!Exists('$(_CliOutDir)findneedle.exe')" />
+  </Target>
 </Project>

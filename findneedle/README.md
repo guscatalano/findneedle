@@ -2,6 +2,19 @@
 
 A fast log search utility for Windows with RuleDSL-based configuration.
 
+## Synopsis
+
+```
+findneedle <folder-or-file> [options]
+```
+
+- **`<folder-or-file>`** (positional, required unless a `--rules` file supplies inputs) — the log source
+  to search: a folder (scanned for supported files) or a single file. Supported inputs include `.etl`
+  (ETW/WPP), `.evtx`/Event Log, `.log`/`.txt`, `.csv`, `.json`, `.zip`, `.cab`, `.pcap`/`.pcapng`.
+- Run from source with `dotnet run --project findneedle.csproj -- <args>`, or invoke the built
+  `findneedle.exe` directly. **When installed from the Microsoft Store, `findneedle` is registered as an
+  app-execution alias**, so it's callable from any terminal.
+
 ## Quick Start
 
 ### Basic Usage
@@ -28,8 +41,15 @@ dotnet run --project findneedle.csproj -- --rules my-rules.rules.json C:\Logs
 | `--symbol-source=<dirs>` | Extra folders to sweep for binaries + PDBs | `--symbol-source=C:\bins` |
 | `--wpp-decoder=<mode>` | WPP decoder: `tracefmt` (WDK reference), `managed`, `auto` (default), `compare` | `--wpp-decoder=tracefmt` |
 | `--verbose`, `-v` | Show detailed output | `--verbose` |
-| `--force`, `-f`, `--yes`, `-y` | Skip confirmation prompts | `--force` |
-| `--clear-output`, `-c` | Clear existing output before running | `--clear-output` |
+| `--force`, `-f`, `--yes`, `-y` | Skip the "press enter to search" confirmation (for scripting) | `--force` |
+| `--clear-output`, `-c` | Clear the `output/` folder before running | `--clear-output` |
+
+**Where output goes:** RuleDSL/UML outputs and `--out` files are written under an **`output/` folder in
+your current working directory** (not next to the exe — the exe's folder is read-only when installed from
+the Store). Use `--out-file=<path>` to write a decoded dump somewhere specific.
+
+**Exit codes** (set from the WPP decode-proof; see below): `0` fully decoded · `1` symbols still missing ·
+`2` nothing decoded. Non-interactive/scripted runs should pass `--force`.
 
 ### Decoding a WPP `.etl` and proving it decoded
 

@@ -419,9 +419,10 @@ internal class Program
         }
         catch { }
 
-        // Prepare output folder path so we can offer to open it later
-        var outputBase = AppDomain.CurrentDomain.BaseDirectory;
-        var outputFolder = Path.Combine(outputBase, "output");
+        // Prepare output folder path so we can offer to open it later. Under the CURRENT WORKING DIRECTORY,
+        // not next to the exe: a Store-installed CLI runs from a read-only folder (C:\Program Files\
+        // WindowsApps\...), so RuleDSL/UML output written beside the exe would fail. Matches --out's default.
+        var outputFolder = Path.Combine(Directory.GetCurrentDirectory(), "output");
 
         // Support a --force / -f flag to skip interactive confirmations (useful for scripting)
         var cmdArgs = Environment.GetCommandLineArgs();

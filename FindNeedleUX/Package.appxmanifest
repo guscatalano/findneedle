@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" xmlns:uap18="http://schemas.microsoft.com/appx/manifest/uap/windows10/18" IgnorableNamespaces="uap rescap uap18">
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5" xmlns:uap18="http://schemas.microsoft.com/appx/manifest/uap/windows10/18" IgnorableNamespaces="uap uap5 rescap uap18">
   <Identity Name="GusCatalano.FindNeedle" Publisher="CN=119E0257-3B74-437C-A728-AC7C50256853" Version="1.0.227.0" />
   <mp:PhoneIdentity PhoneProductId="a03c8d46-df2d-43de-8e1f-59c7f0280eb5" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
@@ -37,6 +37,21 @@
             </uap:SupportedFileTypes>
           </uap:FileTypeAssociation>
         </uap:Extension>
+      </Extensions>
+    </Application>
+    <!-- The command-line tool, exposed as an App Execution Alias so `findneedle …` works from any
+         terminal after install. findneedle.dll + the plugin/runtime DLLs are already in the package (the
+         GUI references the findneedle project); the IncludeCliToolInPackage target in FindNeedleUX.csproj
+         adds only the apphost (findneedle.exe) + its runtimeconfig/deps. AppListEntry="none" keeps it off
+         the Start menu (no second tile). -->
+    <Application Id="Cli" Executable="findneedle.exe" EntryPoint="Windows.FullTrustApplication" uap18:TrustLevel="mediumIL" uap18:RuntimeBehavior="win32App">
+      <uap:VisualElements AppListEntry="none" DisplayName="FindNeedle CLI" Description="FindNeedle command-line tool" BackgroundColor="transparent" Square44x44Logo="Assets\Square44x44Logo.png" Square150x150Logo="Assets\Square150x150Logo.png" />
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="findneedle.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="findneedle.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
       </Extensions>
     </Application>
   </Applications>
