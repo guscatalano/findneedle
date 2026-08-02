@@ -95,14 +95,18 @@ internal class Program
         // (This was the CLI-vs-GUI decode divergence: the GUI ran this at startup, the CLI ran nothing.)
         FindPluginCore.Wpp.Symbols.TraceFormatEnv.Apply(tmfFolder: null, symbolPath: symbolPath);
 
-        // WPP decoder: default Auto — the WDK's tracefmt when installed (the REFERENCE decoder a resolver
-        // author validates against), else the built-in managed decoder (no WDK needed). Override with
-        // --wpp-decoder=tracefmt|managed|auto|compare. (tracepdb is still used only to EXTRACT TMFs from a
-        // resolved PDB during provisioning, regardless of which decoder renders the events.)
+        // WPP decoder DEFAULT = managed (the pre-222 CLI behavior). Managed ALWAYS needs a TMF, so a trace
+        // with missing WPP symbols reliably trips the missing-symbol detection and INVOKES the ISymbolResolver
+        // provisioning seam — which is the whole point of the CLI for a resolver author. tracefmt can
+        // self-resolve some traces (embedded format info) and then SKIP provisioning entirely, so it must not
+        // be the default (that regressed resolver testing after 222). tracefmt is still available on demand:
+        //   --wpp-decoder=tracefmt   (the WDK reference decoder) | auto (tracefmt when present) | compare
         var wppDecoderArg = ArgVal(rawCmdArgs, "--wpp-decoder=");
         if (!string.IsNullOrWhiteSpace(wppDecoderArg) && !WppDecoderParsing.IsKnown(wppDecoderArg))
-            Console.WriteLine($"Unknown --wpp-decoder '{wppDecoderArg}'. Using auto. Valid: tracefmt, managed, auto, compare.");
-        DecodeOptions.WppDecoder = WppDecoderParsing.FromArg(wppDecoderArg);
+            Console.WriteLine($"Unknown --wpp-decoder '{wppDecoderArg}'. Using managed. Valid: tracefmt, managed, auto, compare.");
+        DecodeOptions.WppDecoder = string.IsNullOrWhiteSpace(wppDecoderArg)
+            ? WppDecoder.Managed
+            : WppDecoderParsing.FromArg(wppDecoderArg);
         Console.WriteLine($"WPP decoder: {DecodeOptions.WppDecoder}");
 
         // Raw-event decoders (IWppEventDecoder): a provider with no TMF at all can be formatted by a plugin.
@@ -123,6 +127,10 @@ internal class Program
             if (made) wppProvisionSucceeded++;
             return made;
         };
+        // The provisioning seam above only fires on an ALL-unknown fail-fast, so it can't report a PARTIAL
+        // decode (some TMFs present, many events still unformatted). The ETL processor reports what it
+        // actually found into this ambient sink; reset it before the run and fold it into the summary.
+        FindNeedlePluginLib.WppDecodeReport.Reset();
         // -------------------------------------------------------------------------------------------
 
         var x = SearchQueryCmdLine.ParseFromCommandLine(Environment.GetCommandLineArgs(), PluginManager.GetSingleton());
@@ -653,6 +661,16 @@ internal class Program
             }
             catch { }
 
+            // Fold in what the decoder ACTUALLY saw (partial decodes never hit the provisioning seam above).
+            long unresolvedEvents = 0;
+            try
+            {
+                var (sinkGuids, sinkUnresolved) = FindNeedlePluginLib.WppDecodeReport.Snapshot();
+                foreach (var g in sinkGuids) wppMissingGuids.Add(g);
+                unresolvedEvents = sinkUnresolved;
+            }
+            catch { }
+
             Console.WriteLine();
             Console.WriteLine("=== WPP decode summary ===");
             Console.WriteLine($"  Records decoded (matched):           {rowsDecoded}");
@@ -660,9 +678,14 @@ internal class Program
             foreach (var r in resolvers) Console.WriteLine($"      - {r}");
             Console.WriteLine($"  WPP symbol provisioning invoked:     {wppProvisionInvocations} time(s), made new symbols {wppProvisionSucceeded} time(s)");
             Console.WriteLine($"  Distinct missing message GUIDs seen: {wppMissingGuids.Count}");
+            Console.WriteLine($"  WPP events left unformatted:         {unresolvedEvents}");
+            if (wppMissingGuids.Count > 0)
+                foreach (var g in wppMissingGuids.OrderBy(s => s)) Console.WriteLine($"      - {g}");
 
+            // Events left unformatted mean symbols are still missing even if some rows decoded — a partial
+            // decode must NOT report "fully decoded" (DecodeProof maps leftover unresolved events to exit 1).
             int exit = FindPluginCore.Diagnostics.DecodeProof.ComputeExitCode(
-                rowsDecoded, wppProvisionInvocations, wppProvisionSucceeded);
+                rowsDecoded, wppProvisionInvocations, wppProvisionSucceeded, unresolvedEvents);
             var verdict = FindPluginCore.Diagnostics.DecodeProof.Describe(exit);
             Console.WriteLine($"  Result: {verdict} (exit {exit})");
             Console.WriteLine("  Note: this is a WPP-only decode. 'Records decoded' counts WPP events whose symbols");

@@ -15,10 +15,17 @@ public static class DecodeProof
     /// <param name="rowsDecoded">Authoritative decoded-row count (from ResultStorage, NOT the lazy AtSearch stat).</param>
     /// <param name="provisionInvocations">How many times the WPP symbol-provisioning seam was invoked.</param>
     /// <param name="provisionSucceeded">How many of those invocations produced new symbols.</param>
-    public static int ComputeExitCode(int rowsDecoded, int provisionInvocations, int provisionSucceeded)
+    /// <param name="unresolvedEvents">
+    /// WPP events the decoder saw but could NOT format (missing TMF). Non-zero here means symbols are still
+    /// missing even on a PARTIAL decode that never tripped the all-unknown provisioning fail-fast — so "some
+    /// rows decoded" must report UnresolvedSymbols, not FullyDecoded. This closes the "0 missing / lots
+    /// unformatted / exit 0" contradiction the CLI reported.
+    /// </param>
+    public static int ComputeExitCode(int rowsDecoded, int provisionInvocations, int provisionSucceeded, long unresolvedEvents = 0)
     {
         if (rowsDecoded <= 0) return NothingDecoded;
         if (provisionInvocations > 0 && provisionSucceeded < provisionInvocations) return UnresolvedSymbols;
+        if (unresolvedEvents > 0) return UnresolvedSymbols;
         return FullyDecoded;
     }
 

@@ -593,6 +593,14 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
         // streaming currentResult otherwise carries 0, making the summary look like everything decoded.
         if (currentResult != null && decoder.Unresolved > 0)
             currentResult.TotalFormatsUnknown = (int)Math.Min(decoder.Unresolved, int.MaxValue);
+        // Report to the ambient sink so the CLI decode summary can aggregate the REAL missing GUIDs across
+        // files (the provisioning seam it otherwise reads only fires on an all-unknown fail-fast, not here).
+        try
+        {
+            FindNeedlePluginLib.WppDecodeReport.AddMissingGuids(decoder.UnresolvedGuids.Select(g => g.ToString()));
+            FindNeedlePluginLib.WppDecodeReport.AddUnresolvedEvents(decoder.Unresolved);
+        }
+        catch { }
         Logger.Instance.Log($"Managed WPP stream {inputfile}: {rows} rows, {decoder.Unresolved} WPP without TMF, "
                             + $"{_missingTmfGuids.Count} distinct missing GUID(s)");
     }
@@ -877,6 +885,15 @@ public class ETLProcessor : IFileExtensionProcessor, IPluginDescription, IReport
                     providers["(unformatted WPP)"] = checked((int)Math.Min(int.MaxValue, _forcedGuidCounts.Values.Sum()));
                 }
                 Logger.Instance.Log($"Finished reading output file for {inputfile}, total lines: {lineCount}");
+                // Report tracefmt's missing GUIDs + unformatted-event count to the ambient sink so the CLI
+                // summary aggregates them on a PARTIAL decode too (the provisioning seam only fires on the
+                // all-unknown fail-fast). Managed decode reports the same from StreamManagedWpp.
+                try
+                {
+                    FindNeedlePluginLib.WppDecodeReport.AddMissingGuids(_missingTmfGuids);
+                    FindNeedlePluginLib.WppDecodeReport.AddUnresolvedEvents(corruptCount + (currentResult?.TotalFormatsUnknown ?? 0));
+                }
+                catch { }
                 _progressSink?.NotifyProgress(90, $"Finished reading output file, total lines: {lineCount}");
                 // The WPP/text method was set provisionally in DoPreProcessing; only upgrade the label
                 // for the forced ("Decode anyway") case, which we can't know until we've counted corrupts.

@@ -32,6 +32,17 @@ public sealed class DecodeProofTests
     }
 
     [TestMethod]
+    public void RowsDecoded_ButEventsLeftUnformatted_IsUnresolved()
+    {
+        // The partial-decode case: some rows rendered, but WPP events remain unformatted because their TMFs
+        // never showed up (and it never tripped the all-unknown provisioning fail-fast). This must NOT report
+        // "fully decoded" — it's the "0 missing / lots unformatted / exit 0" contradiction the CLI had.
+        Assert.AreEqual(1, DecodeProof.ComputeExitCode(42, provisionInvocations: 0, provisionSucceeded: 0, unresolvedEvents: 7));
+        Assert.AreEqual(0, DecodeProof.ComputeExitCode(42, 0, 0, unresolvedEvents: 0), "no leftovers stays fully decoded");
+        Assert.AreEqual(2, DecodeProof.ComputeExitCode(0, 0, 0, unresolvedEvents: 7), "still nothing decoded wins");
+    }
+
+    [TestMethod]
     public void Describe_MatchesEachCode()
     {
         Assert.AreEqual("fully decoded", DecodeProof.Describe(0));
