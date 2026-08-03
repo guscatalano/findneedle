@@ -69,4 +69,11 @@ public interface IWppTmfResolver
     /// TMF (a <c>&lt;guid&gt; &lt;component&gt;</c> header + <c>#typev</c> blocks). Default: null (path-only).
     /// </summary>
     string TryResolveTmfText(WppTmfResolveRequest request) => null;
+
+    /// <summary>
+    /// Per-call hang budget in milliseconds — see <see cref="ISymbolResolver.SuggestedTimeoutMs"/>. Return your
+    /// own worst case for a slow store/generator; the host honors the LARGER of this and its configured default.
+    /// Default 0 = use the host default. (A default interface method, so existing resolvers need not implement it.)
+    /// </summary>
+    int SuggestedTimeoutMs => 0;
 }

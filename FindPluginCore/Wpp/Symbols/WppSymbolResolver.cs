@@ -74,6 +74,16 @@ public static class WppSymbolResolver
         }
     }
 
+    /// <summary>The effective per-resolver hang budget: a resolver may declare its own worst case via
+    /// <c>SuggestedTimeoutMs</c>; the host honors the LARGER of that and its configured backstop
+    /// (<see cref="ResolverTimeoutMs"/>) — so a slow resolver gets the room it asked for, but a misbehaving one
+    /// can't shrink the host floor. A non-positive suggestion means "no preference".</summary>
+    internal static int EffectiveTimeoutMs(int suggested)
+        => suggested > 0 ? Math.Max(ResolverTimeoutMs, suggested) : ResolverTimeoutMs;
+
+    /// <summary>Read a resolver's suggested timeout defensively — the getter is untrusted plugin code.</summary>
+    private static int SafeSuggested(Func<int> get) { try { return get(); } catch { return 0; } }
+
     /// <summary>Ask each resolver plugin, in order, to find the PDB for this identity. Returns the first
     /// non-null path that exists on disk (local or UNC), or null. Plugin exceptions AND hangs are logged
     /// and skipped — no single resolver can stall or crash the build.</summary>
@@ -81,9 +91,11 @@ public static class WppSymbolResolver
         WppSymbols.PdbIdentity id, string binary, StringBuilder sb)
     {
         if (resolvers == null || resolvers.Count == 0) return null;
-        int timeoutMs = ResolverTimeoutMs;
         foreach (var r in resolvers)
         {
+            // Per-resolver hang budget: the resolver may declare its own worst case; the host honors the larger
+            // of that and its configured backstop (see EffectiveTimeoutMs).
+            int timeoutMs = EffectiveTimeoutMs(SafeSuggested(() => r.SuggestedTimeoutMs));
             // The plugin's own diagnostics go to a per-call queue (the resolver may run on a pool thread under
             // the timeout, so it can't touch sb directly); we drain it into sb on THIS thread, attributed.
             var pluginLog = new System.Collections.Concurrent.ConcurrentQueue<string>();
@@ -151,7 +163,6 @@ public static class WppSymbolResolver
         var resolvers = GetTmfResolvers();
         if (resolvers.Count == 0 || missingGuids == null || missingGuids.Count == 0) return 0;
 
-        int timeoutMs = ResolverTimeoutMs;
         int written = 0;
         try { Directory.CreateDirectory(cacheDir); } catch { return 0; }
 
@@ -163,6 +174,7 @@ public static class WppSymbolResolver
 
             foreach (var r in resolvers)
             {
+                int timeoutMs = EffectiveTimeoutMs(SafeSuggested(() => r.SuggestedTimeoutMs)); // per-resolver budget
                 // Per-call log queue drained into sb on THIS thread (the resolver may run on a pool thread
                 // under the timeout). Attributed by resolver name. Drained in finally so every exit path flushes.
                 var pluginLog = new System.Collections.Concurrent.ConcurrentQueue<string>();

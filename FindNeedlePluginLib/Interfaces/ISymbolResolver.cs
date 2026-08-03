@@ -64,4 +64,14 @@ public interface ISymbolResolver
 {
     /// <summary>Return a PDB path for <paramref name="request"/>, or null if this resolver can't find it.</summary>
     string TryResolvePdb(SymbolLookupRequest request);
+
+    /// <summary>
+    /// How long, in milliseconds, this resolver may run on a single call before the host abandons it as hung
+    /// and discards its result. Return your own worst-case budget — a resolver that pulls a large PDB over a
+    /// slow link or does symbol-server round trips can legitimately take minutes, and the host must not cut it
+    /// off mid-fetch. The host honors the LARGER of this and its own configured backstop, so a resolver can ask
+    /// for MORE time but can never shrink the host's floor. Default 0 = "no preference, use the host default".
+    /// (A default interface method, so existing resolvers need not implement it.)
+    /// </summary>
+    int SuggestedTimeoutMs => 0;
 }

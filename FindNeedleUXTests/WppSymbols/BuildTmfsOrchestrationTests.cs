@@ -151,12 +151,52 @@ public class BuildTmfsOrchestrationTests
         StringAssert.Contains(log, "FAILED to resolve", "the binary stays unresolved");
     }
 
-    /// <summary>Test double: an ISymbolResolver whose answer is a supplied function.</summary>
+    [TestMethod]
+    public void ResolverDeclaringLongTimeout_IsNotAbandoned_PastTheHostFloor()
+    {
+        // A resolver can declare its OWN budget via SuggestedTimeoutMs (a slow store / big PDB). One that runs
+        // longer than the host's floor but within its declared budget must NOT be abandoned — the host honors
+        // max(host, resolver). Host floor here is 300ms; the resolver runs ~700ms but declares 30s, so it runs
+        // to completion and is never "timed out". (Without the per-resolver honor it'd be cut off at 300ms.)
+        var work = NewDir("slowdeclared");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "ntdll.dll"), Path.Combine(work, "ntdll.dll"));
+
+        var entered = new System.Threading.ManualResetEventSlim(false);
+        WppSymbolResolver.ResolversOverride = new ISymbolResolver[]
+        {
+            new FakeSymbolResolver(_ => { entered.Set(); System.Threading.Thread.Sleep(700); return null; },
+                suggestedTimeoutMs: 30_000),
+        };
+        WppSymbolResolver.ResolverTimeoutMsForTests = 300; // host floor BELOW the resolver's runtime
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (_, log) = WppSymbolResolver.BuildTmfs(work, symbolPath: "");
+        sw.Stop();
+
+        Assert.IsTrue(entered.IsSet, "the resolver was invoked");
+        Assert.IsTrue(sw.Elapsed >= TimeSpan.FromMilliseconds(650),
+            $"the resolver ran to completion (~700ms), not cut off at the 300ms host floor (took {sw.ElapsedMilliseconds}ms)");
+        Assert.IsFalse(log.Contains("timed out"),
+            "a resolver running within its DECLARED budget must not be abandoned");
+    }
+
+    [TestMethod]
+    public void EffectiveTimeout_HonorsTheLargerOfHostAndResolver()
+    {
+        WppSymbolResolver.ResolverTimeoutMsForTests = 100_000; // host floor
+        Assert.AreEqual(300_000, WppSymbolResolver.EffectiveTimeoutMs(300_000), "resolver asks for MORE → granted");
+        Assert.AreEqual(100_000, WppSymbolResolver.EffectiveTimeoutMs(50_000), "resolver asks for LESS → host floor wins");
+        Assert.AreEqual(100_000, WppSymbolResolver.EffectiveTimeoutMs(0), "no preference → host default");
+    }
+
+    /// <summary>Test double: an ISymbolResolver whose answer is a supplied function; may declare a timeout.</summary>
     private sealed class FakeSymbolResolver : ISymbolResolver
     {
         private readonly Func<SymbolLookupRequest, string> _fn;
-        public FakeSymbolResolver(Func<SymbolLookupRequest, string> fn) { _fn = fn; }
+        private readonly int _suggested;
+        public FakeSymbolResolver(Func<SymbolLookupRequest, string> fn, int suggestedTimeoutMs = 0) { _fn = fn; _suggested = suggestedTimeoutMs; }
         public string TryResolvePdb(SymbolLookupRequest request) => _fn(request);
+        public int SuggestedTimeoutMs => _suggested;
     }
 
     [TestMethod]
