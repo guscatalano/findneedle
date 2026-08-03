@@ -532,28 +532,44 @@ jobs:
     - name: Copy and set unsigned namespace in AppxManifest
       shell: pwsh
       run: |
+        # Resolve the release version: from the TAG on a v-tag build so the MSIX == the release tag; else the
+        # computed version. The published MSIX version is the <Identity Version> in Package.appxmanifest — the
+        # SDK's DEFAULT manifest — and /p:AppxManifestFile + /p:AppxPackageVersion do NOT override it (proven:
+        # tag v1.0.245 shipped 1.0.244 = the committed manifest). So set it on Package.appxmanifest itself,
+        # then clone to the unsigned manifest which inherits the version and gets the unsigned Name/Publisher.
+        $version = "${{ needs.set-msix-version.outputs.version }}"
+        if ("${{ github.ref_name }}" -match '^v(\d+\.\d+\.\d+)$') { $version = $Matches[1] }
+        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
+
         $src = "FindNeedleUX/Package.appxmanifest"
+        [xml]$m = Get-Content $src
+        $m.Package.Identity.Version = $version
+        $m.Save($src)
+
         $dst = "FindNeedleUX/Package.unsigned.appxmanifest"
         Copy-Item $src $dst -Force
         [xml]$xml = Get-Content $dst
         $xml.Package.Identity.Publisher = "CN=Unsigned"
         $xml.Package.Identity.Name = $xml.Package.Identity.Name + ".unsigned"
-        # The published MSIX version is the manifest's <Identity Version> — /p:AppxPackageVersion does NOT
-        # override it. On a v-tag release the tag points at a commit whose manifest still holds a stale auto-bump
-        # number, so the MSIX came out mislabeled (tag v1.0.242 -> MSIX 1.0.241). Set it explicitly, and on a
-        # tag build derive it from the TAG so the package version == the release tag.
-        $version = "${{ needs.set-msix-version.outputs.version }}"
-        if ("${{ github.ref_name }}" -match '^v(\d+\.\d+\.\d+)$') { $version = $Matches[1] }
-        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
-        $xml.Package.Identity.Version = $version
         $xml.Save($dst)
         "MSIX_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
-        Write-Host "Unsigned MSIX Identity Version = $version"
+        Write-Host "MSIX Identity Version = $version (set on Package.appxmanifest)"
     - name: Create MSIX package (unsigned)
       run: |
         $version = "$env:MSIX_VERSION"
         dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false /p:AppxPackageVersion=$version /p:AppxManifestFile=FindNeedleUX/Package.unsigned.appxmanifest
       shell: pwsh
+    - name: Verify MSIX version matches the release
+      shell: pwsh
+      run: |
+        $expected = "$env:MSIX_VERSION"
+        $msix = Get-ChildItem -Recurse -Filter *.msix | Where-Object { $_.FullName -match 'AppPackages' } | Select-Object -First 1
+        if (-not $msix) { throw "No .msix produced under AppPackages/" }
+        Write-Host "Built package: $($msix.Name)"
+        if ($msix.Name -notmatch [regex]::Escape($expected)) {
+          throw "MSIX version mismatch: built '$($msix.Name)' does not contain expected version '$expected'. Refusing to publish a mislabeled package."
+        }
+        Write-Host "OK: MSIX version == $expected"
     - name: Upload MSIX artifact (unsigned)
       uses: actions/upload-artifact@v4
       with:
