@@ -320,6 +320,23 @@ jobs:
         run: dotnet restore ${{ env.Solution_Name }}
       - name: Build solution (Release, ${{ matrix.platform }})
         run: dotnet build ${{ env.Solution_Name }} --configuration Release --no-restore /p:Platform=${{ matrix.platform }}
+      # Standalone CLI: a self-contained, drop-and-run findneedle.exe zipped as its OWN artifact, freshly
+      # published from source on every build. This is what a resolver author should grab to test — no 95MB
+      # MSIX, no sideload cert, no Store certification lag. The zip is always the code of this exact commit/tag.
+      - name: Publish standalone CLI (findneedle, self-contained win-x64)
+        if: matrix.platform == 'x64'
+        shell: pwsh
+        run: |
+          dotnet publish findneedle/findneedle.csproj --configuration Release -r win-x64 --self-contained true /p:Platform=x64 --output ${{ github.workspace }}/cli
+          if (-not (Test-Path "${{ github.workspace }}/cli/findneedle.exe")) { throw "CLI publish did not produce findneedle.exe" }
+          Compress-Archive -Path "${{ github.workspace }}/cli/*" -DestinationPath findneedle-cli-win-x64.zip -Force
+      - name: Upload standalone CLI artifact
+        if: matrix.platform == 'x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: findneedle-cli
+          path: findneedle-cli-win-x64.zip
+          retention-days: 30
       - name: Publish FindNeedleUX (Release only, x64)
         if: matrix.platform == 'x64'
         run: dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:Platform=x64
