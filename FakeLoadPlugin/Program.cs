@@ -70,6 +70,16 @@ public class Program
         File.AppendAllText(logPath, text + Environment.NewLine);
     }
 
+    // Per-type / per-interface scan chatter (every class + every System interface it implements + every
+    // non-plugin "no IPluginDescription" skip). This is a huge amount of noise the parent process pipes
+    // straight into the main log. Keep it in THIS subprocess's own log file for debugging, but NOT on the
+    // console — so the parent's log shows only the plugins actually found + real errors.
+    [ExcludeFromCodeCoverage]
+    public static void WriteVerbose(string text)
+    {
+        File.AppendAllText(GetOutputFilePath(), text + Environment.NewLine);
+    }
+
     public static List<PluginDescription> LoadPluginModule(string file)
     {
         WriteToConsoleAndFile("Attempting to load: " + file);
@@ -100,13 +110,13 @@ public class Program
             }
             if (type.IsNested) //callback classes are not plugins
             {
-                WriteToConsoleAndFile("Skipping nested class: " + type.FullName);
+                WriteVerbose("Skipping nested class: " + type.FullName);
                 continue;
             }
 
             List<string> implementedInterfaces = new();
             List<string> implementedInterfacesShort = new();
-            WriteToConsoleAndFile("Found class: " + type.FullName);
+            WriteVerbose("Found class: " + type.FullName);
             foreach (var possibleInterface in type.GetInterfaces())
             {
 
@@ -115,7 +125,7 @@ public class Program
                     continue;
                 }
 
-                WriteToConsoleAndFile("Found interface: " + possibleInterface.FullName + " of type " + possibleInterface.BaseType);
+                WriteVerbose("Found interface: " + possibleInterface.FullName + " of type " + possibleInterface.BaseType);
                 // Match by full name (not typeof) — the plugin is loaded via Assembly.LoadFile, so its
                 // IPluginDescription may be a different Type identity than ours. The interface lives in
                 // namespace FindNeedlePluginLib; the old "…Interfaces.IPluginDescription" string was wrong
@@ -123,7 +133,7 @@ public class Program
                 if (possibleInterface.FullName.Equals("FindNeedlePluginLib.IPluginDescription"))
                 {
                     instantiate = true;
-                    WriteToConsoleAndFile("Found potential plugin, loading...");
+                    WriteVerbose("Found potential plugin, loading...");
                 }
                 implementedInterfaces.Add(possibleInterface.FullName);
                 implementedInterfacesShort.Add(possibleInterface.Name);
@@ -166,7 +176,7 @@ public class Program
             }
             else
             {
-                WriteToConsoleAndFile("Skipping " + type.FullName + " because it has no IPluginDescription");
+                WriteVerbose("Skipping " + type.FullName + " because it has no IPluginDescription");
                 foundTypes.Add(IPluginDescription.GetInvalidPluginDescription(type.FullName, baseType,
                     file, implementedInterfaces, implementedInterfacesShort, "No IPluginDescription"));
             }
