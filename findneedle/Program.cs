@@ -88,6 +88,16 @@ internal class Program
         var symbolPath = ArgVal(rawCmdArgs, "--symbols=");
         var symbolSourcePath = ArgVal(rawCmdArgs, "--symbol-source=");
 
+        // --resolver-timeout=<seconds>: the per-resolver hang backstop. A slow ISymbolResolver (large PDB /
+        // symbol-server round trips) can take minutes; if it exceeds this it's abandoned and its symbols are
+        // dropped. Default is generous (5 min) — raise it for an even slower resolver. Sets the env the core reads.
+        var resolverTimeoutArg = ArgVal(rawCmdArgs, "--resolver-timeout=");
+        if (!string.IsNullOrWhiteSpace(resolverTimeoutArg) && int.TryParse(resolverTimeoutArg, out var rtSec) && rtSec > 0)
+        {
+            Environment.SetEnvironmentVariable(FindPluginCore.Wpp.Symbols.WppSymbolResolver.ResolverTimeoutEnv, (rtSec * 1000).ToString());
+            Console.WriteLine($"Symbol-resolver timeout: {rtSec}s");
+        }
+
         // Set up the WDK trace-tool environment the SAME way the GUI does (shared TraceFormatEnv): put the
         // managed TMF cache on TRACE_FORMAT_SEARCH_PATH and --symbols on _NT_SYMBOL_PATH UP FRONT, so the CLI's
         // first decode behaves like the GUI's — not only after a provisioning miss. The ambient

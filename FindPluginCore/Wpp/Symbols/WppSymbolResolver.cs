@@ -51,8 +51,12 @@ public static class WppSymbolResolver
 
     /// <summary>Env override for the per-resolver hang backstop, in ms. Generous by default (see
     /// <see cref="ResolverTimeoutMs"/>).</summary>
-    internal const string ResolverTimeoutEnv = "FINDNEEDLE_SYMBOL_RESOLVER_TIMEOUT_MS";
-    private const int DefaultResolverTimeoutMs = 120_000;
+    public const string ResolverTimeoutEnv = "FINDNEEDLE_SYMBOL_RESOLVER_TIMEOUT_MS";
+    // 5 minutes. Real resolvers legitimately take >2 min (large PDB over a slow link / symbol-server round
+    // trips), so the old 2-minute default cut them off and silently discarded the symbols they DID fetch.
+    // This bounds a genuine HANG, not a slow-but-progressing fetch; raise further via ResolverTimeoutEnv or
+    // the CLI's --resolver-timeout=<seconds>.
+    private const int DefaultResolverTimeoutMs = 300_000;
     // Test hook: >0 overrides env/default so a hang test doesn't have to wait 2 minutes.
     internal static int ResolverTimeoutMsForTests;
 
