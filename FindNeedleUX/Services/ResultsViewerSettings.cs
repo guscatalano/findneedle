@@ -861,7 +861,9 @@ public static class ResultsViewerSettings
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"ResultsViewerSettings.Save failed: {ex.Message}");
+            // Surface to the app log (not just Debug) — a silently-swallowed write is exactly how "settings
+            // aren't being saved" went undiagnosed. The path tells us WHERE it tried to write.
+            FindNeedlePluginLib.Logger.Instance.Log($"WARNING: ResultsViewerSettings.Save failed ({_settingsPath}): {ex.Message}");
         }
     }
 

@@ -42,7 +42,7 @@ public static class QuickActionCatalog
     public static readonly IReadOnlyList<string> Defaults = new[] { "open_file", "open_folder", "open_rules", "cached" };
 
     private static readonly string DefaultPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "quick-actions.json");
 
     private static string _path = DefaultPath;

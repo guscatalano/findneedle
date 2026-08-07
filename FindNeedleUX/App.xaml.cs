@@ -65,6 +65,9 @@ public partial class App : Application
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         Mark("onlaunched_start");
+        // Bring forward any settings written by an earlier packaged build (which wrote to raw %LocalAppData%)
+        // into the app's own store, BEFORE MainWindow reads any settings. No-op when unpackaged. Best-effort.
+        FindNeedleCoreUtils.PackagedAppPaths.MigrateLegacyPerUserState();
         m_window = new MainWindow();
         Mark("mainwindow_created"); // includes InitializeComponent + first WelcomePage navigate
         m_window.Activate();

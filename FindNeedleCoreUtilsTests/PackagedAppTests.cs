@@ -276,4 +276,118 @@ public class PackagedAppPathsTests
         PackagedAppPaths.LogPathInfo();
         Assert.IsTrue(true);
     }
+
+    // --- Packaged (MSIX) settings persistence. These simulate the packaged runtime via the injectable
+    //     provider (the real OS-level %LocalAppData% virtualization can't be triggered in a unit test, but the
+    //     DESIGN — write to the app's own store, don't trust virtualization — is exactly what these pin). ---
+
+    [TestCleanup]
+    public void ResetProvider() => PackageContextProviderFactory.ResetToProduction();
+
+    [TestMethod]
+    public void Packaged_LocalAppData_IsTheAppStore_NotRawLocalAppData()
+    {
+        // The bug: the packaged app wrote settings to raw %LocalAppData% and trusted MSIX to virtualize it —
+        // which silently failed to persist. The fix: use the app's OWN store (LocalState). Simulate packaged
+        // with an injected store and assert the root is that store, NOT raw %LocalAppData%.
+        var store = Path.Combine(Path.GetTempPath(), "FN_store_" + Guid.NewGuid());
+        Directory.CreateDirectory(store);
+        try
+        {
+            PackageContextProviderFactory.SetTestProvider(
+                new TestPackageContextProvider(isPackagedApp: true, localStatePath: store));
+
+            Assert.AreEqual(store, PackagedAppPaths.LocalAppData,
+                "packaged app must persist to its own store, not rely on %LocalAppData% virtualization");
+            Assert.AreNotEqual(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                PackagedAppPaths.LocalAppData,
+                "packaged app must NOT write settings to raw %LocalAppData%");
+        }
+        finally { try { Directory.Delete(store, true); } catch { } }
+    }
+
+    [TestMethod]
+    public void Packaged_SettingsRoundTrip_PersistToTheAppStore()
+    {
+        // End-to-end reproduction of the FIX: in packaged mode a settings write lands in the app store and a
+        // subsequent (fresh-session) resolve reads it back — persistence no longer depends on virtualization.
+        var store = Path.Combine(Path.GetTempPath(), "FN_store_" + Guid.NewGuid());
+        Directory.CreateDirectory(store);
+        try
+        {
+            PackageContextProviderFactory.SetTestProvider(
+                new TestPackageContextProvider(isPackagedApp: true, localStatePath: store));
+
+            var write = Path.Combine(PackagedAppPaths.LocalAppData, "FindNeedle", "viewer-settings.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(write)!);
+            File.WriteAllText(write, "{\"ThemeName\":\"Dark\"}");
+
+            var read = Path.Combine(PackagedAppPaths.LocalAppData, "FindNeedle", "viewer-settings.json");
+            Assert.IsTrue(read.StartsWith(store), "settings live under the app store, not %LocalAppData%");
+            Assert.IsTrue(File.Exists(read), "settings written in packaged mode must persist");
+            StringAssert.Contains(File.ReadAllText(read), "Dark");
+        }
+        finally { try { Directory.Delete(store, true); } catch { } }
+    }
+
+    [TestMethod]
+    public void Packaged_NoStorePath_FallsBackToLocalAppData()
+    {
+        // If the WinRT store can't be resolved, fall back to %LocalAppData% — never worse than before.
+        PackageContextProviderFactory.SetTestProvider(
+            new TestPackageContextProvider(isPackagedApp: true, localStatePath: null));
+
+        Assert.AreEqual(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            PackagedAppPaths.LocalAppData);
+    }
+
+    [TestMethod]
+    public void Unpackaged_LocalAppData_IsLocalAppData()
+    {
+        PackageContextProviderFactory.SetTestProvider(new TestPackageContextProvider(isPackagedApp: false));
+
+        Assert.AreEqual(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            PackagedAppPaths.LocalAppData);
+    }
+
+    [TestMethod]
+    public void MigrateLegacyPerUserState_CopiesLegacySettingsIntoTheStore()
+    {
+        // Existing packaged users have settings in the legacy real-%LocalAppData%\FindNeedle. Migration must
+        // bring them into the (empty) app store so they aren't lost when the app starts reading from the store.
+        var store = Path.Combine(Path.GetTempPath(), "FN_store_" + Guid.NewGuid());
+        var legacyDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FindNeedle");
+        Directory.CreateDirectory(legacyDir);
+        var marker = Path.Combine(legacyDir, "fn-migrate-test-" + Guid.NewGuid() + ".json");
+        File.WriteAllText(marker, "{\"x\":1}");
+        try
+        {
+            PackageContextProviderFactory.SetTestProvider(
+                new TestPackageContextProvider(isPackagedApp: true, localStatePath: store));
+
+            PackagedAppPaths.MigrateLegacyPerUserState();
+
+            var migrated = Path.Combine(store, "FindNeedle", Path.GetFileName(marker));
+            Assert.IsTrue(File.Exists(migrated), "legacy settings must be copied into the app store");
+            StringAssert.Contains(File.ReadAllText(migrated), "\"x\":1");
+        }
+        finally
+        {
+            try { Directory.Delete(store, true); } catch { }
+            try { File.Delete(marker); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public void MigrateLegacyPerUserState_Unpackaged_IsNoOp()
+    {
+        // Unpackaged: store is the real %LocalAppData% itself — migration must not copy onto itself or throw.
+        PackageContextProviderFactory.SetTestProvider(new TestPackageContextProvider(isPackagedApp: false));
+        PackagedAppPaths.MigrateLegacyPerUserState();   // must simply do nothing
+        Assert.IsTrue(true);
+    }
 }

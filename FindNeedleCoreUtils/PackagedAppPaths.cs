@@ -29,19 +29,67 @@ public static class PackagedAppPaths
     }
 
     /// <summary>
-    /// Gets the local application data directory.
-    /// For both packaged and unpackaged apps, this returns the standard LocalAppData path.
-    /// The file system virtualization layer will transparently redirect to the package-specific
-    /// location (LocalCache\Local) for packaged apps.
-    /// Overridden wholesale by <see cref="DataHomeEnvVar"/> for the new-user-preview profile.
+    /// Root for FindNeedle's per-user state (settings, catalogs, cached-search index, …).
+    /// - PACKAGED (MSIX): the app's OWN persistent store (WinRT LocalState). We do NOT write to raw
+    ///   <c>%LocalAppData%</c> and trust MSIX to virtualize it — that was unreliable and silently lost
+    ///   settings (they landed in the real <c>%LocalAppData%</c> on some machines, nothing in LocalCache).
+    ///   LocalState is guaranteed writable by the packaged app and survives updates.
+    /// - UNPACKAGED (dev): the standard <c>%LocalAppData%</c> (WinRT ApplicationData is unavailable there).
+    /// - Overridden wholesale by <see cref="DataHomeEnvVar"/> for the new-user-preview profile.
+    /// Falls back to <c>%LocalAppData%</c> if the packaged store can't be resolved, so it can never be worse
+    /// than the previous behavior.
     /// </summary>
-    public static string LocalAppData =>
-        DataHomeOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+    public static string LocalAppData
+    {
+        get
+        {
+            if (DataHomeOverride is { } home) return home;
+            var packagedStore = PackageContextProviderFactory.Current.PackagedLocalStatePath;
+            if (!string.IsNullOrEmpty(packagedStore)) return packagedStore;
+            return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+    }
 
     /// <summary>Roaming AppData root (where the cached-search DBs + plugin cache live), honoring the
     /// new-user-preview override so those relocate into the throwaway profile too.</summary>
     public static string AppData =>
         DataHomeOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+    /// <summary>
+    /// One-time migration: earlier packaged builds wrote per-user state to raw <c>%LocalAppData%\FindNeedle</c>
+    /// (trusting MSIX virtualization, which didn't reliably persist). Now packaged state lives in the app's
+    /// LocalState store (see <see cref="LocalAppData"/>). On first launch after the change, copy any existing
+    /// settings JSON from the legacy location(s) into the store so users keep their settings. Best-effort and
+    /// gap-filling only — never clobbers a file already present in the store. No-op when unpackaged.
+    /// </summary>
+    public static void MigrateLegacyPerUserState()
+    {
+        try
+        {
+            var provider = PackageContextProviderFactory.Current;
+            var store = provider.PackagedLocalStatePath;
+            if (string.IsNullOrEmpty(store)) return;   // unpackaged / store unavailable → nothing to migrate
+            var newDir = Path.Combine(store, "FindNeedle");
+            var realLocal = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+            MigrateJsonFrom(Path.Combine(realLocal, "FindNeedle"), newDir);
+            if (!string.IsNullOrEmpty(provider.PackageFamilyName))
+                MigrateJsonFrom(Path.Combine(realLocal, "Packages", provider.PackageFamilyName!,
+                                             "LocalCache", "Local", "FindNeedle"), newDir);
+        }
+        catch { /* best-effort: never let migration break startup */ }
+    }
+
+    private static void MigrateJsonFrom(string oldDir, string newDir)
+    {
+        if (!Directory.Exists(oldDir) || string.Equals(oldDir, newDir, StringComparison.OrdinalIgnoreCase)) return;
+        foreach (var src in Directory.EnumerateFiles(oldDir, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            var dest = Path.Combine(newDir, Path.GetFileName(src));
+            if (File.Exists(dest)) continue;   // store already has (newer) state — don't overwrite
+            try { Directory.CreateDirectory(newDir); File.Copy(src, dest); } catch { }
+        }
+    }
 
     /// <summary>
     /// Gets the base directory for FindNeedle dependencies (Node/Mermaid, PlantUML/Java).

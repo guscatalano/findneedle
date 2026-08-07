@@ -334,7 +334,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             BuildColumnDefaultsCheckboxes();
 
             SettingsPathText.Text = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
                 "FindNeedle", "viewer-settings.json");
 
             LevelEditor.ItemsSource = Levels;

@@ -36,7 +36,7 @@ public static class StatusBarCatalog
         new[] { "locations", "rules", "lastrun", "run_view", "outputfiles" };
 
     private static readonly string DefaultPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "status-bar.json");
 
     private static string _path = DefaultPath;

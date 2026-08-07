@@ -40,7 +40,7 @@ public sealed class MessageReformatResult
 public static class MessageReformatCatalog
 {
     private static readonly string DefaultPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
         "FindNeedle", "message-reformat.json");
 
     private static string _path = DefaultPath;
