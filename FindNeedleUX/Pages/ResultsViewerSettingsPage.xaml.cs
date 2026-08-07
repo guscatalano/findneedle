@@ -283,6 +283,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Cache reuse ---
             SelectCacheReuseMode();
             SelectStartupCacheCleanup();
+            RefreshCacheSize();
 
             // --- Indexing mode ---
             SelectIndexingMode();
@@ -699,6 +700,57 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (StartupCacheCleanupCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
             ResultsViewerSettings.StartupCacheCleanup = tag;
     }
+
+    // ----- Cached searches (size / clear / browse) -----
+
+    /// <summary>Measure the cache off the UI thread (it walks the cache directory) and show the size.</summary>
+    private async void RefreshCacheSize()
+    {
+        try
+        {
+            var (files, bytes) = await System.Threading.Tasks.Task.Run(() => CacheMaintenance.GetStats());
+            CacheSizeText.Text = files == 0
+                ? "Cache size: empty"
+                : $"Cache size: {CacheMaintenance.FormatBytes(bytes)} ({files:N0} file{(files == 1 ? "" : "s")})";
+            CacheClearButton.IsEnabled = files > 0;
+        }
+        catch (Exception ex)
+        {
+            CacheSizeText.Text = "Cache size: unavailable";
+            FindNeedlePluginLib.Logger.Instance.Log($"Cache size read failed: {ex.Message}");
+        }
+    }
+
+    private async void CacheClear_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = new ContentDialog
+        {
+            Title = "Clear all cached searches?",
+            Content = "This deletes every cached search copy. Your original logs are not touched. Reopening a search will rescan it.",
+            PrimaryButtonText = "Clear",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = this.XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        CacheClearButton.IsEnabled = false;
+        try
+        {
+            var (cleared, before) = await System.Threading.Tasks.Task.Run(() => CacheMaintenance.ClearAllCachedSearches());
+            FindNeedlePluginLib.Logger.Instance.Log(
+                $"Cleared {cleared} cached searches (~{CacheMaintenance.FormatBytes(before)}) from Settings");
+        }
+        catch (Exception ex)
+        {
+            FindNeedlePluginLib.Logger.Instance.Log($"Cache clear failed: {ex.Message}");
+        }
+        RefreshCacheSize();
+    }
+
+    /// <summary>Open the full Cached Searches page (same target as the nav's "cached" entry).</summary>
+    private void CacheBrowse_Click(object sender, RoutedEventArgs e)
+        => (WindowUtil.GetMainWindow() as MainWindow)?.RunQuickAction("cached");
 
     // ----- Indexing mode -----
     private void SelectIndexingMode()

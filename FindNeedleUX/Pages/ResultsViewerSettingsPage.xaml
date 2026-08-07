@@ -492,6 +492,26 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Cached searches (size / clear / browse) -->
+                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Cached searches" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Reopened searches are cached on disk so they don't have to rescan. Clearing removes only the cached copies — the original logs are untouched."/>
+                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                <TextBlock x:Name="CacheSizeText" VerticalAlignment="Center"
+                                           Text="Cache size: …"/>
+                                <Button x:Name="CacheClearButton" Content="Clear…" Click="CacheClear_Click"
+                                        ToolTipService.ToolTip="Delete all cached searches"/>
+                                <Button Content="Browse…" Click="CacheBrowse_Click"
+                                        ToolTipService.ToolTip="Open the Cached Searches page"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Startup cache cleanup -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
