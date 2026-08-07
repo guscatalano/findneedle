@@ -19,7 +19,21 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <MenuBar Grid.Row="0">
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <!-- Back navigates the contentFrame's history (disabled when there's nowhere to go back to). -->
+            <Button x:Name="BackButton" Grid.Column="0" Click="BackButton_Click" IsEnabled="False"
+                    Background="Transparent" BorderThickness="0" VerticalAlignment="Stretch" Padding="12,0"
+                    ToolTipService.ToolTip="Back (Alt+Left)" AutomationProperties.Name="Back">
+                <Button.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Menu" Key="Left"/>
+                </Button.KeyboardAccelerators>
+                <FontIcon Glyph="&#xE72B;" FontSize="14"/>
+            </Button>
+        <MenuBar Grid.Column="1">
             <MenuBarItem x:Name="QuickMenu" Title="Quick">
                 <!-- Items are built in code (BuildQuickMenu): Welcome + the welcome-page quick actions. -->
             </MenuBarItem>
@@ -35,8 +49,10 @@
                 <MenuFlyoutItem Text="Clear workspace" Click="MenuFlyoutItem_Click" Name="ClearWorkspace"/>
             </MenuBarItem>
             <MenuBarItem Title="Run &amp; Results">
-                <MenuFlyoutItem Text="Run Search" Click="MenuFlyoutItem_Click" Name="results_get"/>
-                <MenuFlyoutItem Text="Results" Click="MenuFlyoutItem_Click" Name="results_viewnative"/>
+                <MenuFlyoutItem Text="New Search" Click="MenuFlyoutItem_Click" Name="results_get"
+                                ToolTipService.ToolTip="Run a fresh search, then open the results"/>
+                <MenuFlyoutItem Text="View Results" Click="MenuFlyoutItem_Click" Name="results_viewnative"
+                                ToolTipService.ToolTip="View the last results without re-running"/>
                 <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
                 <MenuFlyoutItem x:Name="RemapCsvMenuItem" Text="Remap CSV columns…" Click="RemapCsvMenuItem_Click" Visibility="Collapsed"/>
             </MenuBarItem>
@@ -71,6 +87,7 @@
                 <MenuFlyoutItem Text="About" Click="MenuFlyoutItem_Click" Name="about"/>
             </MenuBarItem>
         </MenuBar>
+        </Grid>
 
         <!-- Top-right: in-app MCP server toggle + config/help popout -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right"

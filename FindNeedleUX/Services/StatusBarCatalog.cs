@@ -22,7 +22,7 @@ public static class StatusBarCatalog
         new StatusBarItem("rules",       "Rules"),
         new StatusBarItem("lastrun",     "Last run"),
         new StatusBarItem("outputfiles", "Output files"),
-        new StatusBarItem("run_view",    "Run → View Results"),
+        new StatusBarItem("run_view",    "Run & View"),
         new StatusBarItem("run",         "Run search"),
         new StatusBarItem("stop",        "Stop"),
         new StatusBarItem("perf",        "Storage & timing"),

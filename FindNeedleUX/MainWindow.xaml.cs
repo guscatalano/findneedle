@@ -59,7 +59,7 @@ public sealed partial class MainWindow : Window
             if (sim_wpp_scale != null) sim_wpp_scale.Visibility = Visibility.Collapsed;
             if (PreviewDevSeparator != null) PreviewDevSeparator.Visibility = Visibility.Collapsed;
         }
-        contentFrame.Navigated += (s, e) => { RefreshStatusStrip(); BuildQuickMenu(); };
+        contentFrame.Navigated += (s, e) => { RefreshStatusStrip(); BuildQuickMenu(); BackButton.IsEnabled = contentFrame.CanGoBack; };
         MiddleLayerService.StateChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         // Unified "Step X of N · phase · detail" status: whenever the spinner is up (search or viewer
         // open), show the current flow phase. Detail (row counts etc.) flows in via FlowProgress.Detail.
@@ -216,6 +216,11 @@ public sealed partial class MainWindow : Window
         // Setter broadcasts Changed → McpServerHost starts/stops the server; RefreshMcpDot follows.
         ResultsViewerSettings.McpServerEnabled = McpToggle.IsChecked == true;
         RefreshMcpDot();
+    }
+
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (contentFrame.CanGoBack) contentFrame.GoBack();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -699,7 +704,7 @@ public sealed partial class MainWindow : Window
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)));
             }
             case "run_view":
-                return MakeStatusActionButton(Symbol.Play, "Run → View Results",
+                return MakeStatusActionButton(Symbol.Play, "Run & View",
                     "Run the search and open the results viewer", () => RunAndViewResults());
             case "run":
                 return MakeStatusActionButton(Symbol.Refresh, "Run search",
@@ -830,7 +835,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>A prominent action button for the status bar (icon + label), distinct from the info
-    /// segments — used for "Run → View Results".</summary>
+    /// segments — used for "Run & View".</summary>
     private Button MakeStatusActionButton(Symbol icon, string label, string tooltip, Action onClick)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
@@ -849,7 +854,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Run the current search (locations/rules) and open the results viewer — the status-bar
-    /// "Run → View Results" action.</summary>
+    /// "Run & View" action.</summary>
     public async void RunAndViewResults()
     {
         if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
