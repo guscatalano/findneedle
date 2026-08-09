@@ -476,13 +476,38 @@ jobs:
         $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
         echo "thumbprint=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       shell: pwsh
+    - name: Set MSIX version on AppxManifest (signed)
+      shell: pwsh
+      run: |
+        # Same fix as make_msix_unsigned: the published MSIX version is the <Identity Version> in
+        # Package.appxmanifest, and /p:AppxPackageVersion does NOT override it (proven: v1.0.245 shipped
+        # 1.0.244). So stamp it onto the manifest directly, else the SIGNED package ships one version behind
+        # the unsigned/Store package. Resolve from the TAG on a v-tag build; else the computed version.
+        $version = "${{ needs.set-msix-version.outputs.version }}"
+        if ("${{ github.ref_name }}" -match '^v(\d+\.\d+\.\d+)$') { $version = $Matches[1] }
+        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
+        $src = "FindNeedleUX/Package.appxmanifest"
+        [xml]$m = Get-Content $src
+        $m.Package.Identity.Version = $version
+        $m.Save($src)
+        "MSIX_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+        Write-Host "MSIX Identity Version = $version (set on Package.appxmanifest)"
     - name: Create MSIX package (signed)
       run: |
-        $version = "${{ needs.set-msix-version.outputs.version }}"
-        # Ensure version ends with .0 for four-segment version
-        if (-not $version.EndsWith('.0')) { $version = "$version.0" }
+        $version = "$env:MSIX_VERSION"
         dotnet publish ${{ env.FindNeedleUX_Project }} --configuration Release --output ${{ github.workspace }}/publish /p:UapAppxPackageBuildMode=StoreUpload /p:GenerateAppxPackageOnBuild=true /p:PackageCertificateThumbprint=${{ steps.import_cert.outputs.thumbprint }} /p:AppxPackageVersion=$version
       shell: pwsh
+    - name: Verify MSIX version matches the release (signed)
+      shell: pwsh
+      run: |
+        $expected = "$env:MSIX_VERSION"
+        $msix = Get-ChildItem -Recurse -Filter *.msix | Where-Object { $_.FullName -match 'AppPackages' } | Select-Object -First 1
+        if (-not $msix) { throw "No signed .msix produced under AppPackages/" }
+        Write-Host "Built package: $($msix.Name)"
+        if ($msix.Name -notmatch [regex]::Escape($expected)) {
+          throw "Signed MSIX version mismatch: built '$($msix.Name)' does not contain expected version '$expected'. Refusing to publish a mislabeled package."
+        }
+        Write-Host "OK: signed MSIX version == $expected"
     - name: Remove signing certificate from cert store
       if: always()
       run: |
@@ -749,15 +774,21 @@ jobs:
       with:
         name: release-bits
 
+    # Signed and unsigned MSIX go into SEPARATE directories. They previously both extracted to the
+    # workspace root (same bin/Release/.../AppPackages tree), so the upload globs below matched BOTH
+    # packages and the action couldn't rename 2 files to one asset name (422 Validation Failed / mislabeled
+    # assets). Distinct paths keep each upload glob down to exactly one file.
     - name: Download signed MSIX artifact
       uses: actions/download-artifact@v4
       with:
         name: FindNeedleUX-MSIX
+        path: signed-msix
 
     - name: Download unsigned MSIX artifact
       uses: actions/download-artifact@v4
       with:
         name: FindNeedleUX-MSIX-unsigned
+        path: unsigned-msix
 
     - name: Download MSI artifact
       uses: actions/download-artifact@v4
@@ -765,26 +796,13 @@ jobs:
         name: FindNeedleUX-MSI
         path: msi-artifact
 
-    # Copy all .msix/.msixbundle files from AppPackages to the root of FindNeedleUX-MSIX-unsigned
-    - name: Copy unsigned MSIX files to artifact root
+    - name: List downloaded MSIX packages
       shell: pwsh
       run: |
-        $srcPattern = Join-Path 'FindNeedleUX-MSIX-unsigned' '*/AppPackages/*/*.msix*'
-        $files = Get-ChildItem -Path $srcPattern -Recurse -ErrorAction SilentlyContinue
-        foreach ($file in $files) {
-          Copy-Item $file.FullName -Destination 'FindNeedleUX-MSIX-unsigned' -Force
-        }
-
-    - name: List all files in FindNeedleUX-MSIX-unsigned after copying
-      shell: pwsh
-      run: |
-        Write-Host "Listing all .msix and .msixbundle files in the entire workspace after copying MSIX files to root of FindNeedleUX-MSIX-unsigned:"
-        Get-ChildItem -Path $env:GITHUB_WORKSPACE -Include *.msix,*.msixbundle -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
-    - name: List all files in FindNeedleUX-MSIX-unsigned after download
-      shell: pwsh
-      run: |
-        Write-Host "Listing all files in FindNeedleUX-MSIX-unsigned after download:"
-        Get-ChildItem -Path FindNeedleUX-MSIX-unsigned -Recurse | ForEach-Object { $_.FullName }
+        Write-Host "Signed MSIX:"
+        Get-ChildItem -Path signed-msix -Recurse -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+        Write-Host "Unsigned MSIX:"
+        Get-ChildItem -Path unsigned-msix -Recurse -Include *.msix,*.msixbundle -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
     - name: Normalize Release Version
       id: normver
       shell: pwsh
@@ -886,13 +904,14 @@ jobs:
         asset_content_type: application/zip
 
    
-    - name: Fail if no unsigned MSIX files found in AppPackages
+    - name: Require exactly one unsigned MSIX
       shell: pwsh
       run: |
-        $files = Get-ChildItem -Path . -Recurse -Include *.msix -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'AppPackages' }
-        Write-Host "Found $($files.Count) unsigned .msix files in AppPackages."
-        if ($files.Count -eq 0) {
-          Write-Host "::error::No unsigned MSIX files found in any AppPackages directory!"
+        $files = Get-ChildItem -Path unsigned-msix -Recurse -Include *.msix -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'AppPackages' }
+        Write-Host "Found $($files.Count) unsigned .msix file(s) under unsigned-msix:"
+        $files | ForEach-Object { Write-Host "  $($_.FullName)" }
+        if ($files.Count -ne 1) {
+          Write-Host "::error::Expected exactly 1 unsigned MSIX under unsigned-msix, found $($files.Count). Refusing to upload an ambiguous asset."
           exit 1
         }
     - name: Upload Unsigned MSIX Artifact
@@ -901,17 +920,18 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: '**/AppPackages/**/*.msix'
+        asset_path: 'unsigned-msix/**/AppPackages/**/*.msix'
         asset_name: FindNeedleUX-unsigned-${{ steps.normver.outputs.version }}.msix
         asset_content_type: application/vnd.ms-appx
 
-    - name: Fail if no signed MSIX files found in AppPackages
+    - name: Require exactly one signed MSIX
       shell: pwsh
       run: |
-        $files = Get-ChildItem -Path . -Recurse -Include *.msix -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'AppPackages' }
-        Write-Host "Found $($files.Count) signed .msix files in AppPackages."
-        if ($files.Count -eq 0) {
-          Write-Host "::error::No signed MSIX files found in any AppPackages directory!"
+        $files = Get-ChildItem -Path signed-msix -Recurse -Include *.msix -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'AppPackages' }
+        Write-Host "Found $($files.Count) signed .msix file(s) under signed-msix:"
+        $files | ForEach-Object { Write-Host "  $($_.FullName)" }
+        if ($files.Count -ne 1) {
+          Write-Host "::error::Expected exactly 1 signed MSIX under signed-msix, found $($files.Count). Refusing to upload an ambiguous asset."
           exit 1
         }
     - name: Upload Signed MSIX Artifact
@@ -920,7 +940,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: '**/AppPackages/**/*.msix'
+        asset_path: 'signed-msix/**/AppPackages/**/*.msix'
         asset_name: FindNeedleUX-signed-${{ steps.normver.outputs.version }}.msix
         asset_content_type: application/vnd.ms-appx
 
