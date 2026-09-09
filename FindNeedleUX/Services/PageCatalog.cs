@@ -38,8 +38,8 @@ public static class PageCatalog
     {
         [P + "WelcomePage"]                          = new(Home, "Home"),
 
-        // Open — get a log in front of you.
-        [P + "QuickLogWithRulesPage"]                = new(Open, "Open with rules"),
+        // Open — get a log in front of you. ("Open log file…", "Open folder…" and "Open with rules…" are
+        // actions, not pages — they run through MainWindow.OpenIntoWorkspaceAsync.)
         [P + "CachedSearchesPage"]                   = new(Open, "Recent searches"),
         [P + "LogFinderPage"]                        = new(Open, "Known logs"),
 

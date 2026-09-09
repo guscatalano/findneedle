@@ -122,6 +122,78 @@ public class MiddleLayerService
         NotifyStateChanged();
     }
 
+    /// <summary>True when there is nothing a user could lose: no sources and no rule files (a loaded
+    /// workspace's rules, or rules added to the current query). <see cref="WorkspaceOpenPolicy"/> never
+    /// prompts for an empty workspace.</summary>
+    public static bool IsWorkspaceEmpty
+    {
+        get
+        {
+            if ((Locations?.Count ?? 0) > 0) return false;
+            if ((WorkspaceRulePaths?.Count ?? 0) > 0) return false;
+            try
+            {
+                // Peek at the existing query only — never force the lazy plugin load for this read.
+                var rules = SearchQueryUX?.IsLoaded == true ? SearchQueryUX.CurrentQuery?.RulesConfigPaths : null;
+                if (rules != null && rules.Count > 0) return false;
+            }
+            catch { /* treat as empty */ }
+            return true;
+        }
+    }
+
+    /// <summary>The rule files the user chose (as opposed to auto-added ones): the durable
+    /// <see cref="WorkspaceRulePaths"/> plus the query's rule paths minus <see cref="LastAutoAddedRules"/>.</summary>
+    public static List<string> UserRulePaths
+    {
+        get
+        {
+            var result = new List<string>();
+            void AddUnique(string p)
+            {
+                if (!string.IsNullOrWhiteSpace(p) && !result.Any(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase)))
+                    result.Add(p);
+            }
+            foreach (var p in WorkspaceRulePaths ?? new List<string>()) AddUnique(p);
+            try
+            {
+                var rules = SearchQueryUX?.IsLoaded == true ? SearchQueryUX.CurrentQuery?.RulesConfigPaths : null;
+                if (rules != null)
+                    foreach (var p in rules)
+                        if (!LastAutoAddedRules.Any(a => string.Equals(a, p, StringComparison.OrdinalIgnoreCase))
+                            && !string.Equals(p, PendingScopeRulePath, StringComparison.OrdinalIgnoreCase))
+                            AddUnique(p);
+            }
+            catch { /* best effort */ }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Apply an already-decided open (see <see cref="WorkspaceOpenPolicy.Decide"/>): Replace starts a fresh
+    /// workspace first, Add keeps everything; then the paths become sources and the rule files become
+    /// durable workspace rules (they survive every query rebuild). Ask must be resolved by the caller
+    /// before calling this — it is treated as Add here so nothing is ever discarded by accident.
+    /// This is the ONE place every open path (pickers, Open with rules, Recent searches, Known logs,
+    /// drag-and-drop, file activation) adds to the workspace.
+    /// </summary>
+    public static void OpenIntoWorkspace(OpenIntoWorkspaceMode decided, IEnumerable<string> paths, IEnumerable<string>? rulePaths = null)
+    {
+        if (decided == OpenIntoWorkspaceMode.Replace) NewWorkspace();
+        foreach (var p in paths ?? Enumerable.Empty<string>())
+            if (!string.IsNullOrWhiteSpace(p)) AddFolderLocation(p); // handles a single file or a folder
+        if (rulePaths != null)
+        {
+            foreach (var r in rulePaths)
+            {
+                if (string.IsNullOrWhiteSpace(r)) continue;
+                if (!WorkspaceRulePaths.Any(x => string.Equals(x, r, StringComparison.OrdinalIgnoreCase)))
+                    WorkspaceRulePaths.Add(r);
+            }
+        }
+        NotifyStateChanged();
+    }
+
     /// <summary>Remove all loaded locations + filters and cancel any in-flight search, so the workspace
     /// starts fresh. Surfaced as the "Clear workspace" button and the MCP clear_workspace tool.</summary>
     public static void ClearWorkspace()
@@ -134,6 +206,7 @@ public class MiddleLayerService
         ViewerQuickRulesStore.Clear(); // session right-click rules don't outlive the workspace
         OutputTimeFrom = OutputTimeTo = null;
         LastRunSummary = null;
+        LastRunCompletedAt = null;
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
         // Drop the previous run's rule-output state so the Processor Output page clears too.
         LastRuleOutputFiles.Clear();
@@ -197,6 +270,10 @@ public class MiddleLayerService
     /// <summary>Human-readable summary of the most recent search (row count + cache/scanned), set on
     /// every search path so the main window status strip's "Last run" is accurate. Null until a run.</summary>
     public static string? LastRunSummary { get; private set; }
+
+    /// <summary>Local time the most recent search finished (null until a run; cleared with the workspace).
+    /// The Home page's "Last run 2 minutes ago · N rows" line reads it.</summary>
+    public static DateTime? LastRunCompletedAt { get; private set; }
 
     /// <summary>The RuleDSL processor instances applied in the most recent search. The "Active rules"
     /// page reads their per-run stats (matched count + tag counts) after the search completes.</summary>
@@ -946,6 +1023,7 @@ public class MiddleLayerService
             LastRunSummary = $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (cached)" : " (scanned)")}";
         }
         catch { LastRunSummary = "done"; }
+        LastRunCompletedAt = DateTime.Now;
 
         // Background mode: Step2 skipped the FTS build so the viewer opens now; kick the batched
         // build off in the background (paging interleaves; substring search uses LIKE until ready).

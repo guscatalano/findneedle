@@ -395,15 +395,19 @@ public static class ResultsViewerSettings
         set { Data.FileContextMenuEnabled = value; Save(); }
     }
 
-    /// <summary>What happens when a file/folder is dropped onto the viewer while a workspace is already
-    /// loaded: Prompt (ask each time, default), ClearAndAdd, or AddToExisting. Applied per-drop (no Changed).</summary>
-    public const DragDropMode DefaultDragDropMode = DragDropMode.Prompt;
-    public static DragDropMode DragDropMode
+    /// <summary>What happens when you open another log (file/folder picker, Open with rules, a Recent
+    /// search, a Known log, or a drop) while a workspace is already loaded: Add (default — sources and
+    /// rule files are kept), Replace, or Ask each time. An empty workspace never prompts (see
+    /// <see cref="WorkspaceOpenPolicy"/>). Generalises the old drag-and-drop-only setting; a persisted
+    /// legacy <c>DragDropMode</c> value is honoured until the user picks a new mode. Broadcasts Changed so
+    /// the Home page and the Settings page stay in sync.</summary>
+    public const OpenIntoWorkspaceMode DefaultOpenIntoWorkspace = OpenIntoWorkspaceMode.Add;
+    public static OpenIntoWorkspaceMode OpenIntoWorkspace
     {
-        get => !string.IsNullOrEmpty(Data.DragDropMode)
-               && Enum.TryParse<DragDropMode>(Data.DragDropMode, ignoreCase: true, out var p)
-            ? p : DefaultDragDropMode;
-        set { Data.DragDropMode = value.ToString(); Save(); }
+        get => WorkspaceOpenPolicy.Parse(Data.OpenIntoWorkspace)
+               ?? WorkspaceOpenPolicy.FromLegacyDragDropValue(Data.DragDropMode)
+               ?? DefaultOpenIntoWorkspace;
+        set { Data.OpenIntoWorkspace = value.ToString(); Save(); Changed?.Invoke(); }
     }
 
     /// <summary>TCP port for the in-app MCP server (bound to 127.0.0.1 only).</summary>
@@ -929,7 +933,8 @@ public static class ResultsViewerSettings
         public int? McpServerPort { get; set; }
         public bool? FileOpenWithEnabled { get; set; }
         public bool? FileContextMenuEnabled { get; set; }
-        public string DragDropMode { get; set; }
+        public string DragDropMode { get; set; }      // legacy (pre-Home) drag-and-drop-only value; read for migration only
+        public string OpenIntoWorkspace { get; set; }
         public bool? EnrichmentEnabled { get; set; }
         public string TraceFormatSearchPath { get; set; }
         public string SymbolPath { get; set; }

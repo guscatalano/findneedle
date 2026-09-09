@@ -37,7 +37,7 @@ public class ResultsViewerDefaultsTests
         Assert.AreEqual("yyyy-MM-dd HH:mm:ss", ResultsViewerSettings.TimeFormat);
         Assert.AreEqual(100, ResultsViewerSettings.PageSize);
         Assert.IsTrue(ResultsViewerSettings.StreamWhileLoading, "progressive loading on by default");
-        Assert.AreEqual(DragDropMode.Prompt, ResultsViewerSettings.DragDropMode);
+        Assert.AreEqual(OpenIntoWorkspaceMode.Add, ResultsViewerSettings.OpenIntoWorkspace, "opening another log adds to the workspace by default");
         Assert.AreEqual(CacheReuseMode.Prompt, ResultsViewerSettings.CacheReuseMode);
         Assert.AreEqual(IndexingMode.Background, ResultsViewerSettings.IndexingMode);
         Assert.AreEqual(SearchSubmitMode.Auto, ResultsViewerSettings.SearchSubmitMode);

@@ -20,7 +20,7 @@ public class PageCatalogTests
     // the Rules hub tabs). Adding a page without registering it here AND in PageCatalog fails the test.
     private static readonly string[] NavigablePages =
     {
-        "WelcomePage", "QuickLogWithRulesPage", "CachedSearchesPage", "LogFinderPage",
+        "WelcomePage", "CachedSearchesPage", "LogFinderPage",
         "SearchLocationsPage", "RulesPage", "SearchRulesPage", "AutoAddRulesPage", "ReformatRulesPage",
         "SearchProcessorsPage", "ConnectionsPage",
         "RunSearchPage", "NativeResultViewer.NativeResultsPage", "ProcessorOutputPage", "SearchStatisticsPage",
@@ -71,7 +71,6 @@ public class PageCatalogTests
         Assert.AreEqual("Search timing", PageCatalog.Find(Pages + "SearchStatisticsPage").Title);
         Assert.AreEqual("App log", PageCatalog.Find(Pages + "LogsPage").Title);
         Assert.AreEqual("Run search", PageCatalog.Find(Pages + "RunSearchPage").Title);
-        Assert.AreEqual("Open with rules", PageCatalog.Find(Pages + "QuickLogWithRulesPage").Title);
         Assert.AreEqual("System check", PageCatalog.Find(Pages + "SystemInfoPage").Title);
         Assert.AreEqual("Settings", PageCatalog.Find(Pages + "ResultsViewerSettingsPage").Title);
 
@@ -92,6 +91,14 @@ public class PageCatalogTests
         Assert.AreEqual("Home", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "WelcomePage")));
         Assert.AreEqual("Settings", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "ResultsViewerSettingsPage")));
         Assert.AreEqual("", PageCatalog.Breadcrumb(null));
+    }
+
+    [TestMethod]
+    public void OpenWithRules_IsAnAction_NotAPage()
+    {
+        // F14: the old QuickLogWithRulesPage was a third search flow. "Open with rules…" now runs through the
+        // same open path as every other open, so it must not be registered as a navigable page.
+        Assert.IsNull(PageCatalog.Find(Pages + "QuickLogWithRulesPage"));
     }
 
     [TestMethod]

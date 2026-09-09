@@ -119,10 +119,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    public void NavigateToQuickLogWithRules()
-    {
-        contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
-    }
+    /// <summary>Home with the Shortcuts tiles already in edit mode (the "Customize…" affordance).</summary>
+    public void NavigateToHomeCustomize()
+        => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage), FindNeedleUX.Pages.WelcomePage.CustomizeParameter);
 
     /// <summary>Menu items that open a page take their label from <see cref="PageCatalog"/>, so the menu,
     /// the breadcrumb, and the page heading are literally the same string. Items that are actions rather
@@ -133,7 +132,6 @@ public sealed partial class MainWindow : Window
         {
             if (item != null) item.Text = FindNeedleUX.Services.PageCatalog.TitleOf(page) + suffix;
         }
-        Label(openlogwithrules, typeof(FindNeedleUX.Pages.QuickLogWithRulesPage), "…");
         Label(cached_searches, typeof(FindNeedleUX.Pages.CachedSearchesPage));
         Label(log_finder, typeof(FindNeedleUX.Pages.LogFinderPage));
         Label(search_location, typeof(FindNeedleUX.Pages.SearchLocationsPage));
@@ -241,7 +239,7 @@ public sealed partial class MainWindow : Window
         {
             case "open_file":         QuickFileOpen(); break;
             case "open_folder":       QuickFolderOpen(); break;
-            case "open_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage)); break;
+            case "open_rules":        OpenWithRules(); break;
             case "log_finder":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.LogFinderPage)); break;
             case "open_ado":          contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "ado"); break;
             case "open_github":       contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "github"); break;
@@ -1162,8 +1160,8 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.CachedSearchesPage));
                 break;
             case "openlogwithrules":
-                Logger.Instance.Log("Navigated: QuickLogWithRulesPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+                Logger.Instance.Log("Opened log + rules pickers");
+                OpenWithRules();
                 break;
             case "inspect_etl":
                 await InspectionService.InspectEtlAsync(this, (show, text) => ShowSpinner(show, text));
@@ -1205,7 +1203,7 @@ public sealed partial class MainWindow : Window
         {
             Cmd("Open log file…", Open, "single pick browse", menu("openlogfile")),
             Cmd("Open folder…", Open, "directory", menu("openlogfolder")),
-            Cmd(T(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage)) + "…", Open, "quicklog rules file", menu("openlogwithrules")),
+            Cmd("Open with rules…", Open, "quicklog rules file", menu("openlogwithrules")),
             Cmd(T(typeof(FindNeedleUX.Pages.CachedSearchesPage)), Open, "recent history reopen cache cached", menu("cached_searches")),
             Cmd(T(typeof(FindNeedleUX.Pages.LogFinderPage)), Open, "catalog predefined well-known finder", menu("log_finder")),
             Cmd("New workspace", Open, "reset fresh clear", menu("newworkspace")),
@@ -1243,6 +1241,8 @@ public sealed partial class MainWindow : Window
                 "preferences options theme viewer colors", menu("settings_resultviewer")),
             Cmd(T(typeof(FindNeedleUX.Pages.WelcomePage)), FindNeedleUX.Services.PageCatalog.Home, "welcome start intro",
                 () => { contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage)); return System.Threading.Tasks.Task.CompletedTask; }),
+            Cmd("Customize shortcuts…", FindNeedleUX.Services.PageCatalog.Home, "quick actions tiles edit home",
+                () => { NavigateToHomeCustomize(); return System.Threading.Tasks.Task.CompletedTask; }),
         };
     }
 
@@ -1667,11 +1667,7 @@ public sealed partial class MainWindow : Window
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var file = Win32FileDialog.OpenFile(hWnd, LogFileFilters());
         if (file != null)
-        {
-            MiddleLayerService.NewWorkspace();
-            MiddleLayerService.AddFolderLocation(file);
-            await OpenWithOptionalStreamingAsync("Opening file...");
-        }
+            await OpenIntoWorkspaceAsync(new[] { file }, label: "Opening file...");
     }
 
     /// <summary>"Open file" dialog filters, built from every registered IFileExtensionProcessor's
@@ -1708,85 +1704,136 @@ public sealed partial class MainWindow : Window
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var folderPath = Win32FileDialog.PickFolder(hWnd);
         if (folderPath != null)
+            await OpenIntoWorkspaceAsync(new[] { folderPath }, label: "Opening folder...");
+    }
+
+    /// <summary>"Open with rules…": pick a log, then a rules file, then open through the SAME path as every
+    /// other open (workspace policy → sources + a durable workspace rule → triage → streaming viewer).
+    /// Replaces the old QuickLogWithRulesPage, which was a third search flow that reset the workspace and
+    /// bypassed triage/streaming.</summary>
+    public async void OpenWithRules()
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var file = Win32FileDialog.OpenFile(hWnd, LogFileFilters());
+        if (file == null) return;
+        var rules = Win32FileDialog.OpenFile(hWnd, new (string, string)[]
         {
-            MiddleLayerService.NewWorkspace();
-            MiddleLayerService.AddFolderLocation(folderPath);
-            await OpenWithOptionalStreamingAsync("Opening folder...");
-        }
+            ("Rule files", "*.rules.json;*.json"),
+            ("All files", "*.*"),
+        });
+        if (rules == null) return;
+        await OpenIntoWorkspaceAsync(new[] { file }, new[] { rules }, "Opening file with rules...");
     }
 
     /// <summary>
     /// Open a single file (or folder) path directly — used by file activation ("Open with → Find
-    /// Needle") and the command line. Mirrors <see cref="QuickFileOpen"/> but takes the path instead
-    /// of prompting. No-op for a missing path.
+    /// Needle") and the command line. Same policy as the pickers. No-op for a missing path.
     /// </summary>
-    public async System.Threading.Tasks.Task OpenPathAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path) || !(System.IO.File.Exists(path) || System.IO.Directory.Exists(path)))
-            return;
-        MiddleLayerService.NewWorkspace();
-        MiddleLayerService.AddFolderLocation(path); // handles a single file or a folder
-        await OpenWithOptionalStreamingAsync("Opening file...");
-    }
+    public Task OpenPathAsync(string path)
+        => OpenIntoWorkspaceAsync(new[] { path }, label: "Opening file...");
 
-    /// <summary>Open one or more dropped paths: new workspace, add each existing file/folder, open the
-    /// viewer once. Shared by drag-and-drop.</summary>
-    public System.Threading.Tasks.Task OpenPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
-        => LoadPathsAsync(paths, clearFirst: true);
+    /// <summary>Open one or more paths (drag-and-drop, automation) through the workspace policy.</summary>
+    public Task OpenPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+        => OpenIntoWorkspaceAsync(paths);
 
-    private async System.Threading.Tasks.Task LoadPathsAsync(
-        System.Collections.Generic.IReadOnlyList<string> paths, bool clearFirst)
+    private Task HandleDroppedPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+        => OpenIntoWorkspaceAsync(paths);
+
+    private bool _openChoiceDialogOpen; // re-entrancy guard — a 2nd ContentDialog.ShowAsync while one is open failfasts
+
+    /// <summary>
+    /// THE open path. Every way of getting a log in front of the user — Open log file…, Open folder…,
+    /// Open with rules…, a Recent search, a Known log, drag-and-drop, file activation — comes through here,
+    /// so they all behave the same: the workspace-open policy decides whether the paths are added to the
+    /// loaded workspace, replace it, or the user is asked (an empty workspace always just adds — never a
+    /// prompt); then the sources/rules are applied and the viewer opens (streaming if enabled), or, for a
+    /// Recent search, the cached results open without a rescan. Returns false when nothing was opened
+    /// (no valid path, or the user cancelled).
+    /// </summary>
+    public async Task<bool> OpenIntoWorkspaceAsync(
+        System.Collections.Generic.IReadOnlyList<string> paths,
+        System.Collections.Generic.IReadOnlyList<string> rulePaths = null,
+        string label = null,
+        string cachedDbPath = null,
+        string displayName = null)
     {
         var valid = new System.Collections.Generic.List<string>();
         if (paths != null)
             foreach (var p in paths)
                 if (!string.IsNullOrWhiteSpace(p) && (System.IO.File.Exists(p) || System.IO.Directory.Exists(p)))
                     valid.Add(p);
-        if (valid.Count == 0) return;
-        if (clearFirst) MiddleLayerService.NewWorkspace();
-        foreach (var p in valid) MiddleLayerService.AddFolderLocation(p);
-        await OpenWithOptionalStreamingAsync(valid.Count == 1 ? "Opening file..." : $"Opening {valid.Count} files...");
-    }
+        var rules = new System.Collections.Generic.List<string>();
+        if (rulePaths != null)
+            foreach (var r in rulePaths)
+                if (!string.IsNullOrWhiteSpace(r) && System.IO.File.Exists(r)) rules.Add(r);
+        if (valid.Count == 0 && cachedDbPath == null) return false;
 
-    /// <summary>Decide what a drop does when a workspace is already loaded: clear-and-open, add-to-existing,
-    /// or ask — per the user's "drag and drop" setting (default: prompt). Empty workspace always just opens.</summary>
-    private async System.Threading.Tasks.Task HandleDroppedPathsAsync(
-        System.Collections.Generic.IReadOnlyList<string> paths)
-    {
-        if (MiddleLayerService.Locations.Count == 0) { await LoadPathsAsync(paths, clearFirst: true); return; }
-
-        var mode = ResultsViewerSettings.DragDropMode;
-        if (mode == DragDropMode.Prompt)
+        var decided = WorkspaceOpenPolicy.Decide(MiddleLayerService.IsWorkspaceEmpty, ResultsViewerSettings.OpenIntoWorkspace);
+        if (decided == OpenIntoWorkspaceMode.Ask)
         {
-            var choice = await PromptDropChoiceAsync(paths.Count);
-            if (choice == null) return; // cancelled
-            mode = choice.Value;
+            // What the dialog calls the thing being opened: the caller's name (a Recent search whose source
+            // may be gone), else the file/folder name, else "N items".
+            string what = displayName;
+            if (string.IsNullOrWhiteSpace(what))
+                what = valid.Count == 1 ? System.IO.Path.GetFileName(valid[0].TrimEnd('\\', '/')) : $"{valid.Count} items";
+            if (string.IsNullOrWhiteSpace(what)) what = cachedDbPath != null ? "these results" : "it";
+            var choice = await PromptOpenChoiceAsync(what);
+            if (choice == null) return false; // cancelled — nothing touched
+            decided = choice.Value;
         }
-        await LoadPathsAsync(paths, clearFirst: mode == DragDropMode.ClearAndAdd);
+        Logger.Instance.Log($"Open into workspace: {decided} ({valid.Count} path(s), {rules.Count} rule file(s)"
+            + (cachedDbPath != null ? ", cached" : "") + ")");
+        MiddleLayerService.OpenIntoWorkspace(decided, valid, rules);
+
+        if (cachedDbPath != null)
+        {
+            // Recent search: show the cached results as they are — no rescan.
+            MiddleLayerService.OpenCachedResult(cachedDbPath);
+            await OpenViewerAsync();
+            return true;
+        }
+        label ??= valid.Count == 1 ? "Opening file..." : $"Opening {valid.Count} files...";
+        await OpenWithOptionalStreamingAsync(label);
+        return true;
     }
 
-    private async System.Threading.Tasks.Task<DragDropMode?> PromptDropChoiceAsync(int count)
+    /// <summary>The "Ask each time" dialog: Add to workspace / Replace workspace / Cancel. Guarded against
+    /// re-entrancy (a second open while the dialog is up is treated as cancelled). A dialog failure also
+    /// counts as Cancel — the workspace is never discarded without an explicit answer.</summary>
+    private async Task<OpenIntoWorkspaceMode?> PromptOpenChoiceAsync(string what)
     {
+        if (_openChoiceDialogOpen) return null;
+        _openChoiceDialogOpen = true;
         try
         {
+            int sources = 0, ruleFiles = 0;
+            try { sources = MiddleLayerService.Locations?.Count ?? 0; } catch { }
+            try { ruleFiles = MiddleLayerService.UserRulePaths.Count; } catch { }
             var dlg = new ContentDialog
             {
-                Title = count == 1 ? "Open dropped file" : $"Open {count} dropped files",
-                Content = "A workspace is already loaded. Add the file(s) to it, or clear it and open fresh?",
+                Title = "Open into the current workspace?",
+                Content = $"The workspace \"{MiddleLayerService.WorkspaceDisplayName}\" has {sources} source{(sources == 1 ? "" : "s")}"
+                        + $" and {ruleFiles} rule file{(ruleFiles == 1 ? "" : "s")}.\n\n"
+                        + $"Add {what} to it, or replace it with just {what}?",
                 PrimaryButtonText = "Add to workspace",
-                SecondaryButtonText = "Clear & open",
+                SecondaryButtonText = "Replace workspace",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = this.Content.XamlRoot,
             };
             return await dlg.ShowAsync() switch
             {
-                ContentDialogResult.Primary => DragDropMode.AddToExisting,
-                ContentDialogResult.Secondary => DragDropMode.ClearAndAdd,
-                _ => (DragDropMode?)null,
+                ContentDialogResult.Primary => OpenIntoWorkspaceMode.Add,
+                ContentDialogResult.Secondary => OpenIntoWorkspaceMode.Replace,
+                _ => (OpenIntoWorkspaceMode?)null,
             };
         }
-        catch { return DragDropMode.ClearAndAdd; } // dialog failed → safe default
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"Open-choice dialog failed: {ex.Message}");
+            return null;
+        }
+        finally { _openChoiceDialogOpen = false; }
     }
 
     // ----- CSV column remapping -----

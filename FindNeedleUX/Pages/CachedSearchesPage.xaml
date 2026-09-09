@@ -68,14 +68,15 @@
                                 </StackPanel>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <!-- Primary action is view-only (doesn't touch the current workspace's
-                                     Sources); the chevron offers the explicit "also add its source" path. -->
+                                <!-- Open = the cached results, no rescan, through the same workspace-open policy as
+                                     every other open (Add / Replace / Ask when a workspace is loaded). The chevron
+                                     offers "Add to workspace": stage the source only, no run. -->
                                 <SplitButton Content="Open" Click="OpenSplit_Click" Tag="{Binding}"
-                                             ToolTipService.ToolTip="View these results (doesn't change your current Sources)">
+                                             ToolTipService.ToolTip="Open these results without rescanning">
                                     <SplitButton.Flyout>
                                         <MenuFlyout>
-                                            <MenuFlyoutItem Text="Open + add to Sources" Click="OpenAndAddSources_Click" Tag="{Binding}"
-                                                            ToolTipService.ToolTip="Also add this search's source to your workspace so you can re-run or modify it."/>
+                                            <MenuFlyoutItem Text="Add to workspace" Click="AddToWorkspace_Click" Tag="{Binding}"
+                                                            ToolTipService.ToolTip="Add this search's source to the workspace without running it"/>
                                         </MenuFlyout>
                                     </SplitButton.Flyout>
                                 </SplitButton>
