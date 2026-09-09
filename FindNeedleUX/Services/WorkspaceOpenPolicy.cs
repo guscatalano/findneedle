@@ -45,7 +45,9 @@ public static class WorkspaceOpenPolicy
         if (string.IsNullOrWhiteSpace(legacy)) return null;
         return legacy.Trim().ToLowerInvariant() switch
         {
-            "prompt" => OpenIntoWorkspaceMode.Ask,
+            // "Prompt" was the legacy DEFAULT, so a saved "Prompt" is not a choice the user made — fall
+            // through to the new default (Add) instead of surprising them with a prompt on every open.
+            "prompt" => null,
             "clearandadd" => OpenIntoWorkspaceMode.Replace,
             "addtoexisting" => OpenIntoWorkspaceMode.Add,
             _ => null,

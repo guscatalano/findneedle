@@ -16,8 +16,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0">
@@ -208,9 +208,9 @@
             </Grid>
         </Border>
 
-        <!-- Status strip: clickable, iconed segments + a hide button. -->
-        <Border x:Name="StatusStripBorder" Grid.Row="2" Background="{ThemeResource SystemControlBackgroundAltHighBrush}"
-                BorderThickness="0,1,0,1" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}" Padding="8,2">
+        <!-- Status strip (bottom of the window): clickable, iconed segments + a hide button. -->
+        <Border x:Name="StatusStripBorder" Grid.Row="3" Background="{ThemeResource SystemControlBackgroundAltHighBrush}"
+                BorderThickness="0,1,0,0" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}" Padding="8,2">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -235,7 +235,7 @@
 
         <!-- Main content area with overlay spinner. AllowDrop here lets you drag log files/folders
              onto the viewer to open them (events bubble up from the hosted page in contentFrame). -->
-        <Grid Grid.Row="3" AllowDrop="True"
+        <Grid Grid.Row="2" AllowDrop="True"
               DragOver="Content_DragOver" DragLeave="Content_DragLeave" Drop="Content_Drop">
             <Frame x:Name="contentFrame" />
             <!-- Dismissible "your cached searches are large" prompt (see App startup + ShowCacheCleanupPrompt).

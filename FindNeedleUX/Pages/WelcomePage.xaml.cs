@@ -129,7 +129,11 @@ public sealed partial class WelcomePage : Page
         if (gen != _recentLoadGeneration || !IsLoaded) return;
 
         RecentHost.Children.Clear();
-        var named = entries.Where(x => !string.IsNullOrEmpty(x.SourcePath)).Take(RecentCount).ToList();
+        // Only sources that still exist: a cache whose log was deleted (temp files, cleaned-up folders) has
+        // nothing to reopen or add, so it would only show as a dead row here. The full Recent searches page
+        // still lists it, marked "source missing", so it can be deleted.
+        var named = entries.Where(x => !string.IsNullOrEmpty(x.SourcePath) && (x.SourceExists || System.IO.Directory.Exists(x.SourcePath)))
+                           .Take(RecentCount).ToList();
         RecentEmpty.Visibility = named.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         var now = DateTime.Now;
         for (int i = 0; i < named.Count; i++)

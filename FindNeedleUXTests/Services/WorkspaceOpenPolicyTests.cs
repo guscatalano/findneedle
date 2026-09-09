@@ -105,7 +105,8 @@ public class WorkspaceOpenPolicyTests
 
         File.WriteAllText(_settingsPath, "{ \"DragDropMode\": \"Prompt\" }");
         ResultsViewerSettings.ReloadFromDiskForTests();
-        Assert.AreEqual(OpenIntoWorkspaceMode.Ask, ResultsViewerSettings.OpenIntoWorkspace, "Prompt → Ask");
+        Assert.AreEqual(OpenIntoWorkspaceMode.Add, ResultsViewerSettings.OpenIntoWorkspace,
+            "legacy Prompt was the old DEFAULT, not a choice — it must fall through to the new default (Add), not migrate to Ask");
 
         File.WriteAllText(_settingsPath, "{ \"DragDropMode\": \"AddToExisting\" }");
         ResultsViewerSettings.ReloadFromDiskForTests();
