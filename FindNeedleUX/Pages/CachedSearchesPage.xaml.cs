@@ -141,27 +141,37 @@ public sealed partial class CachedSearchesPage : Page
         Refilter();
     }
 
-    // Primary (view-only): open the cached results without touching the current workspace's Sources.
-    private void OpenSplit_Click(SplitButton sender, SplitButtonClickEventArgs args)
+    // Primary: open the cached results (no rescan) through the one workspace-open path, so a loaded
+    // workspace is never silently replaced — the Add / Replace / Ask setting decides, exactly like a picker.
+    private async void OpenSplit_Click(SplitButton sender, SplitButtonClickEventArgs args)
     {
-        if (sender.Tag is CachedSearchItem item) OpenCache(item, addSources: false);
+        if (sender.Tag is CachedSearchItem item) await OpenCacheAsync(item);
     }
 
-    // Secondary (explicit): also add this search's source to the workspace, so it can be re-run/modified.
-    private void OpenAndAddSources_Click(object sender, RoutedEventArgs e)
+    // Secondary: only stage this search's source in the workspace (no run, no viewer) — for building a
+    // multi-source workspace from recents, then Run search.
+    private void AddToWorkspace_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is CachedSearchItem item) OpenCache(item, addSources: true);
+        if ((sender as FrameworkElement)?.Tag is not CachedSearchItem item) return;
+        if (!item.Named || string.IsNullOrEmpty(item.SourcePath)) return;
+        try { MiddleLayerService.OpenIntoWorkspace(OpenIntoWorkspaceMode.Add, new[] { item.SourcePath }); }
+        catch (Exception ex) { _ = ShowMessageAsync("Couldn't add to workspace", ex.Message); }
     }
 
-    private void OpenCache(CachedSearchItem item, bool addSources)
+    private async System.Threading.Tasks.Task OpenCacheAsync(CachedSearchItem item)
     {
         try
         {
-            // Only a named cache has a real recorded source path; unnamed caches have a placeholder.
-            if (addSources && item.Named && !string.IsNullOrEmpty(item.SourcePath))
-                MiddleLayerService.AddFolderLocation(item.SourcePath); // handles a single file or a folder
-            MiddleLayerService.OpenCachedResult(item.DbPath);
-            this.Frame?.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
+            // Only a named cache has a real recorded source path; unnamed caches have a placeholder and
+            // are opened view-only (there is no source to add).
+            var sources = item.Named && !string.IsNullOrEmpty(item.SourcePath) ? new[] { item.SourcePath } : Array.Empty<string>();
+            if (WindowUtil.GetMainWindow() is MainWindow main)
+                await main.OpenIntoWorkspaceAsync(sources, cachedDbPath: item.DbPath, displayName: item.SourceName);
+            else
+            {
+                MiddleLayerService.OpenCachedResult(item.DbPath);
+                this.Frame?.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
+            }
         }
         catch (Exception ex)
         {

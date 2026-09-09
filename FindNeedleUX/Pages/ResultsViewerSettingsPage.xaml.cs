@@ -243,8 +243,8 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(TitleBarModeCombo, ResultsViewerSettings.TitleBarColorMode);
             UpdateTitleBarCustomPanel();
 
-            // --- Drag and drop ---
-            SelectComboItemByTag(DragDropModeCombo, ResultsViewerSettings.DragDropMode.ToString());
+            // --- Open into workspace (Add / Replace / Ask) ---
+            SelectOpenIntoWorkspaceRadio();
 
             // --- Scrollbar size ---
             SelectComboItemByTag(ScrollBarSizeCombo,
@@ -305,7 +305,6 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Row tags ---
             ColorTaggedRowsCheck.IsChecked = ResultsViewerSettings.ColorTaggedRows;
             ScrollToTopOnPageChangeCheck.IsChecked = ResultsViewerSettings.ScrollToTopOnPageChange;
-            ShowWelcomeIntroCheck.IsChecked = ResultsViewerSettings.ShowWelcomeIntro;
             ShowStatusBarCheck.IsChecked = ResultsViewerSettings.ShowStatusBar;
 
             // --- MCP server ---
@@ -482,13 +481,25 @@ public sealed partial class ResultsViewerSettingsPage : Page
         }
     }
 
-    // ----- Drag and drop -----
-    private void DragDropModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    // ----- Open into workspace (Add / Replace / Ask) -----
+    private void SelectOpenIntoWorkspaceRadio()
+    {
+        var current = ResultsViewerSettings.OpenIntoWorkspace.ToString();
+        for (int i = 0; i < OpenIntoWorkspaceRadios.Items.Count; i++)
+            if (OpenIntoWorkspaceRadios.Items[i] is RadioButton rb && string.Equals(rb.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            {
+                OpenIntoWorkspaceRadios.SelectedIndex = i;
+                return;
+            }
+    }
+
+    private void OpenIntoWorkspaceRadios_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressEvents) return;
-        if (DragDropModeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
-            && Enum.TryParse<FindNeedleUX.Services.DragDropMode>(tag, out var mode))
-            ResultsViewerSettings.DragDropMode = mode;
+        if (OpenIntoWorkspaceRadios.SelectedItem is RadioButton rb
+            && FindNeedleUX.Services.WorkspaceOpenPolicy.Parse(rb.Tag as string) is { } mode
+            && mode != ResultsViewerSettings.OpenIntoWorkspace)
+            ResultsViewerSettings.OpenIntoWorkspace = mode;
     }
 
     // ----- Title bar color -----
@@ -842,12 +853,6 @@ public sealed partial class ResultsViewerSettingsPage : Page
     {
         if (_suppressEvents) return;
         ResultsViewerSettings.ScrollToTopOnPageChange = ScrollToTopOnPageChangeCheck.IsChecked == true;
-    }
-
-    private void ShowWelcomeIntroCheck_Changed(object sender, RoutedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        ResultsViewerSettings.ShowWelcomeIntro = ShowWelcomeIntroCheck.IsChecked == true;
     }
 
     private void ShowStatusBarCheck_Changed(object sender, RoutedEventArgs e)

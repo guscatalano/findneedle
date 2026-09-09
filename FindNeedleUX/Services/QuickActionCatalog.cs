@@ -5,28 +5,29 @@ using System.Linq;
 
 namespace FindNeedleUX.Services;
 
-/// <summary>One customizable welcome-page quick action: a stable id, a display label, and an emoji.
+/// <summary>One customizable Home "Shortcuts" tile: a stable id, a display label, and an emoji.
 /// The id maps to <see cref="MainWindow.RunQuickAction"/>.</summary>
 public sealed record QuickAction(string Id, string Label, string Emoji);
 
 /// <summary>
-/// The catalog of available welcome-page quick actions plus the user's chosen subset/order.
+/// The catalog of available Home "Shortcuts" tiles plus the user's chosen subset/order. (The primary
+/// open/run actions live in the Home cards; the tiles are the customizable extras below them.)
 /// Persisted to a JSON file under <c>%LocalAppData%\FindNeedle\</c> (not WinRT LocalSettings, which
 /// throws when the app runs unpackaged) so customization actually sticks. A storage seam lets tests
 /// redirect persistence to a temp file.
 /// </summary>
 public static class QuickActionCatalog
 {
-    /// <summary>Every action a user can pin to the welcome page.</summary>
+    /// <summary>Every action a user can pin to the Home Shortcuts row. Ids are stable (persisted).</summary>
     public static readonly IReadOnlyList<QuickAction> All = new[]
     {
-        new QuickAction("open_file",        "Open Log File",       "📁"),
-        new QuickAction("open_folder",      "Open Folder",         "📂"),
-        new QuickAction("open_rules",       "Open Log with Rules", "📝"),
+        new QuickAction("open_file",        "Open log file",       "📁"),
+        new QuickAction("open_folder",      "Open folder",         "📂"),
+        new QuickAction("open_rules",       "Open with rules",     "📝"),
         new QuickAction("log_finder",       "Known logs",          "🧭"),
-        new QuickAction("open_ado",         "Open ADO Work Item",  "🔷"),
-        new QuickAction("open_github",      "Open GitHub Issue",   "🐙"),
-        new QuickAction("open_kusto",       "Open Kusto Query",    "🔎"),
+        new QuickAction("open_ado",         "Open ADO work item",  "🔷"),
+        new QuickAction("open_github",      "Open GitHub issue",   "🐙"),
+        new QuickAction("open_kusto",       "Open Kusto query",    "🔎"),
         new QuickAction("cached",           "Recent searches",     "🕑"),
         new QuickAction("locations",        "Sources",             "📍"),
         new QuickAction("rules_config",     "Rule files",          "⚙️"),
@@ -38,8 +39,10 @@ public static class QuickActionCatalog
         new QuickAction("inspect_etl",      "Inspect ETL",         "🔬"),
     };
 
-    /// <summary>The default set shown until the user customizes.</summary>
-    public static readonly IReadOnlyList<string> Defaults = new[] { "open_file", "open_folder", "open_rules", "cached" };
+    /// <summary>The default set shown until the user customizes. Open log file / folder / with rules and
+    /// Recent searches already have first-class buttons in the Home cards, so the default tiles are the
+    /// next-most-useful things that don't: Sources, Rule files, Inspect ETL, Diagram tools, Outputs.</summary>
+    public static readonly IReadOnlyList<string> Defaults = new[] { "locations", "rules_config", "inspect_etl", "diagram", "processor_output" };
 
     private static readonly string DefaultPath = Path.Combine(
         FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,

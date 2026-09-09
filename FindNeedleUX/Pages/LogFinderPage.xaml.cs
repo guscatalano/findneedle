@@ -16,11 +16,21 @@ namespace FindNeedleUX.Pages;
 /// Windows locations plus the user's own. "Open" loads the folder/file as a location and runs it.</summary>
 public sealed partial class LogFinderPage : Page
 {
+    private string _highlightId; // entry to spotlight when navigated from Home's "Known logs" card
+
     public LogFinderPage()
     {
         this.InitializeComponent();
         PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => RenderList();
+    }
+
+    /// <summary>Navigation parameter: a catalog entry id (e.g. "builtin:winevt") to highlight and scroll to.</summary>
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        _highlightId = e.Parameter as string;
+        if (IsLoaded) RenderList();
     }
 
     private void RenderList()
@@ -38,7 +48,17 @@ public sealed partial class LogFinderPage : Page
             });
             var rows = group.ToList();
             for (int i = 0; i < rows.Count; i++)
-                ListHost.Children.Add(BuildRow(rows[i], i, rows.Count));
+            {
+                var row = BuildRow(rows[i], i, rows.Count);
+                ListHost.Children.Add(row);
+                if (!string.IsNullOrEmpty(_highlightId) && string.Equals(rows[i].Id, _highlightId, StringComparison.OrdinalIgnoreCase)
+                    && row is Border b)
+                {
+                    b.BorderBrush = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                    b.BorderThickness = new Thickness(2);
+                    b.Loaded += (_, _) => { try { b.StartBringIntoView(); } catch { } };
+                }
+            }
         }
     }
 
@@ -144,14 +164,14 @@ public sealed partial class LogFinderPage : Page
         return sp;
     }
 
-    /// <summary>Load this catalog entry's folder/file as a fresh search and open the results.</summary>
-    private void OpenEntry(LogCatalogEntry e)
+    /// <summary>Open this catalog entry's folder/file through the one workspace-open path (Add / Replace /
+    /// Ask when a workspace is loaded) and show the results.</summary>
+    private async void OpenEntry(LogCatalogEntry e)
     {
         var path = e.ExpandedPath;
         if (string.IsNullOrWhiteSpace(path)) return;
-        MiddleLayerService.NewWorkspace();
-        MiddleLayerService.AddFolderLocation(path); // handles both a folder and a single file path
-        (WindowUtil.GetMainWindow() as MainWindow)?.RunAndViewResults();
+        if (WindowUtil.GetMainWindow() is MainWindow main)
+            await main.OpenIntoWorkspaceAsync(new[] { path }, label: $"Opening {e.Name}…");
     }
 
     private static void Reveal(LogCatalogEntry e)

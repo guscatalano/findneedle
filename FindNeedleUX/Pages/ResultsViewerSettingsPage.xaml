@@ -391,18 +391,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Welcome page -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Welcome page" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ShowWelcomeIntroCheck" Content="Show the &quot;New here?&quot; getting-started banner"
-                                      Checked="ShowWelcomeIntroCheck_Changed" Unchecked="ShowWelcomeIntroCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="The intro + key-features banner at the top of the welcome page. Dismissing it there also unchecks this."/>
-                        </StackPanel>
-                    </Border>
 
                     <!-- Status bar -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
@@ -434,22 +422,22 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Drag and drop behavior -->
+                    <!-- Opening another log while a workspace is loaded (pickers, Open with rules, Recent
+                         searches, Known logs, drag-and-drop — one policy for all of them). Mirrored on Home. -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                             CornerRadius="6" Padding="16">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Drag and drop" FontWeight="SemiBold"/>
+                            <TextBlock Text="When you open another log while a workspace is loaded" FontWeight="SemiBold"/>
+                            <RadioButtons x:Name="OpenIntoWorkspaceRadios" SelectionChanged="OpenIntoWorkspaceRadios_SelectionChanged"
+                                          AutomationProperties.Name="When you open another log while a workspace is loaded">
+                                <RadioButton Content="Add it to this workspace (default)" Tag="Add"/>
+                                <RadioButton Content="Replace the workspace" Tag="Replace"/>
+                                <RadioButton Content="Ask each time" Tag="Ask"/>
+                            </RadioButtons>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="When you drag a file or folder onto the viewer and a workspace is already loaded."/>
-                            <ComboBox x:Name="DragDropModeCombo" Width="320"
-                                      SelectionChanged="DragDropModeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Drag and drop behavior">
-                                <ComboBoxItem Content="Ask every time (default)"   Tag="Prompt"/>
-                                <ComboBoxItem Content="Clear workspace and open"   Tag="ClearAndAdd"/>
-                                <ComboBoxItem Content="Add to existing workspace"  Tag="AddToExisting"/>
-                            </ComboBox>
+                                       Text="Your sources and rule files are never discarded without asking. An empty workspace never prompts."/>
                         </StackPanel>
                     </Border>
 

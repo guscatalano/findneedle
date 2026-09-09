@@ -140,9 +140,6 @@
     <None Update="Pages\DiagramToolsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
-    <None Update="Pages\QuickLogWithRulesPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
     <None Update="Pages\SearchRulesPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
