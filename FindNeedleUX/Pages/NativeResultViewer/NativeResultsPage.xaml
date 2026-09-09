@@ -289,13 +289,17 @@
                         <TextBlock Text="Sources"/>
                     </StackPanel>
                 </Button>
-                <ToggleButton x:Name="FiltersToggle" Height="32"
-                              IsChecked="True"
-                              Click="FiltersToggle_Click"
-                              AutomationProperties.Name="Show or hide filters">
+                <!-- Secondary hide/show for the filter pane. A plain Button (not an accent-filled
+                     ToggleButton): the pane is simply there by default (docked left), so this must read as
+                     "hide it if you want", not as a mode the user has to switch on to get filters. The label
+                     flips "Hide filters" / "Show filters" in code (ApplyFiltersToggleState). -->
+                <Button x:Name="FiltersToggle" Height="32"
+                        Click="FiltersToggle_Click"
+                        AutomationProperties.Name="Hide or show the filter pane"
+                        ToolTipService.ToolTip="Hide or show the filter pane (position: View ▾ → Filter pane)">
                     <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock x:Name="FiltersToggleGlyph" Text="▾" FontSize="11"/>
-                        <TextBlock Text="Filters"/>
+                        <TextBlock x:Name="FiltersToggleGlyph" Text="◂" FontSize="11"/>
+                        <TextBlock x:Name="FiltersToggleText" Text="Hide filters"/>
                         <!-- Active-filter count: so the user knows filters are hiding rows even when the
                              pane is collapsed. -->
                         <Border x:Name="FiltersActiveBadge" Visibility="Collapsed" CornerRadius="8" Padding="5,0"
@@ -303,7 +307,7 @@
                             <TextBlock x:Name="FiltersActiveBadgeText" FontSize="10" Foreground="White"/>
                         </Border>
                     </StackPanel>
-                </ToggleButton>
+                </Button>
 
                 <!-- View: rule-filter toggle, row-detail mode, and filter-pane dock, grouped. -->
                 <Button x:Name="ViewButton" Content="View ▾" Height="32" AutomationProperties.Name="View options"
@@ -320,6 +324,8 @@
                                 <RadioMenuFlyoutItem x:Name="DetailsPopupItem"  Text="Popup — double-click a row for a dialog" GroupName="detailsMode" Click="DetailsModePopup_Click"/>
                             </MenuFlyoutSubItem>
                             <MenuFlyoutSubItem Text="Filter pane">
+                                <ToggleMenuFlyoutItem x:Name="ShowFilterPaneItem" Text="Show filter pane" IsChecked="True" Click="ShowFilterPane_Click"/>
+                                <MenuFlyoutSeparator/>
                                 <RadioMenuFlyoutItem x:Name="DockTopItem"  Text="Filters on top"  GroupName="filterDock" Click="FilterDockTop_Click"/>
                                 <RadioMenuFlyoutItem x:Name="DockLeftItem" Text="Filters on left" GroupName="filterDock" Click="FilterDockLeft_Click"/>
                             </MenuFlyoutSubItem>

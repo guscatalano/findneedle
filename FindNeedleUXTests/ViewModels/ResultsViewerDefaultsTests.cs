@@ -51,6 +51,16 @@ public class ResultsViewerDefaultsTests
     }
 
     [TestMethod]
+    public void Defaults_FilterPane_DockedLeftAndExpanded()
+    {
+        // The filter pane must simply BE THERE on first open: docked left, shown — not behind a toggle.
+        Assert.AreEqual(FilterDock.Left, ResultsViewerSettings.DefaultFilterDock);
+        Assert.AreEqual(FilterDock.Left, ResultsViewerSettings.FilterDock);
+        Assert.IsTrue(ResultsViewerSettings.DefaultFiltersExpanded);
+        Assert.IsTrue(ResultsViewerSettings.FiltersExpanded, "filter pane must be expanded on a fresh install");
+    }
+
+    [TestMethod]
     public void Defaults_IntegrationsAreOffUntilOptedIn()
     {
         // These touch the OS / expose data, so a fresh install must leave them off.

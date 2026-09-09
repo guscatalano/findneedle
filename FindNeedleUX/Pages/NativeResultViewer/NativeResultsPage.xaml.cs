@@ -582,13 +582,29 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private bool _filtersExpanded = true;
     private FilterDock _filterDock = ResultsViewerSettings.DefaultFilterDock;
 
+    /// <summary>Reflect the pane's shown/hidden state in the toolbar button (label + glyph), the View
+    /// menu check, and the layout. The pane is visible by default; the button is only the way to hide it.</summary>
     private void ApplyFiltersToggleState(bool expanded)
     {
         _filtersExpanded = expanded;
-        FiltersToggle.IsChecked = expanded;
-        FiltersToggleGlyph.Text = expanded ? "▾" : "▸";
+        if (FiltersToggleText != null) FiltersToggleText.Text = expanded ? "Hide filters" : "Show filters";
+        // Glyph points the way the pane goes: left dock collapses to the left, top dock collapses upward.
+        bool left = _filterDock == FilterDock.Left;
+        if (FiltersToggleGlyph != null) FiltersToggleGlyph.Text = expanded ? (left ? "◂" : "▴") : (left ? "▸" : "▾");
+        if (ShowFilterPaneItem != null) ShowFilterPaneItem.IsChecked = expanded;
         RefreshFilterLayout();
     }
+
+    /// <summary>Show/hide the filter pane and persist the choice (recorded against the current dock, so
+    /// a collapse is honored on the next open of the same layout — see ResultsViewerSettings.FiltersExpanded).</summary>
+    private void SetFiltersExpanded(bool expanded)
+    {
+        ApplyFiltersToggleState(expanded);
+        ResultsViewerSettings.FiltersExpanded = expanded;
+    }
+
+    private void ShowFilterPane_Click(object sender, RoutedEventArgs e)
+        => SetFiltersExpanded(ShowFilterPaneItem.IsChecked);
 
     // ----- Filter pane docking (Top / Left) -----
     private void FilterDockTop_Click(object sender, RoutedEventArgs e)  => SetFilterDock(FilterDock.Top);
@@ -597,8 +613,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void SetFilterDock(FilterDock dock)
     {
         _filterDock = dock;
-        RefreshFilterLayout();
         ResultsViewerSettings.FilterDock = dock; // persists + broadcasts (other open viewers re-lay-out)
+        // The shown/hidden state is per dock: a new dock comes up expanded unless it was deliberately
+        // collapsed under that same dock before. (Also re-lays-out.)
+        ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
     }
 
     /// <summary>
@@ -1186,8 +1204,18 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         TimeFormatConverter.Format = ResultsViewerSettings.TimeFormat;
         ViewModel.ApplyTheme(ResultsViewerSettings.ThemeName);
         RefreshSearchSubmitMode();
-        _filterDock = ResultsViewerSettings.FilterDock;
-        RefreshFilterLayout();
+        var dock = ResultsViewerSettings.FilterDock;
+        if (dock != _filterDock)
+        {
+            // Dock changed elsewhere (Settings page / another viewer window / MCP): switch layout and pick
+            // up the per-dock shown state. Otherwise leave the window's own shown/hidden state alone.
+            _filterDock = dock;
+            ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
+        }
+        else
+        {
+            RefreshFilterLayout();
+        }
         _colorTaggedRows = ResultsViewerSettings.ColorTaggedRows;
         // "Show known" toggle: set visibility now; combos get populated after the data finishes loading.
         if (ShowKnownToggle != null)
@@ -1223,7 +1251,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         "Columns" => "Columns",
         "Export" => "Export",
         "Sources" => "Sources",
-        "Filters" => "Filters toggle",
+        "Filters" => "Hide/show filters button",
         "View" => "View menu",
         "FilterPerf" => "Filter timing (⏱)",
         "Status" => "Status text (x / y results)",
@@ -1340,9 +1368,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         switch (id)
         {
             case "Sources": ShowLoadedSources_Click(el, new RoutedEventArgs()); break;
-            case "Filters":
-                if (el is ToggleButton tb) { tb.IsChecked = !(tb.IsChecked ?? false); FiltersToggle_Click(tb, new RoutedEventArgs()); }
-                break;
+            case "Filters": SetFiltersExpanded(!_filtersExpanded); break;
         }
     }
 
@@ -1657,12 +1683,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return sp;
     }
 
-    private void FiltersToggle_Click(object sender, RoutedEventArgs e)
-    {
-        var expanded = FiltersToggle.IsChecked == true;
-        ApplyFiltersToggleState(expanded);
-        ResultsViewerSettings.FiltersExpanded = expanded;
-    }
+    private void FiltersToggle_Click(object sender, RoutedEventArgs e) => SetFiltersExpanded(!_filtersExpanded);
 
     private void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

@@ -51,10 +51,38 @@ public static class ResultsViewerSettings
         set { Data.TimeFormat = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>
+    /// Whether the result viewer's filter pane is shown. Default TRUE: the pane is meant to simply be
+    /// there (docked left, see <see cref="DefaultFilterDock"/>), not something the user discovers behind a
+    /// toggle. A collapse is remembered PER DOCK — it's recorded together with the dock it was made under
+    /// (<c>FiltersExpandedDock</c>) and only honored while that dock is still active:
+    ///  - Deliberate collapse of the left pane → stays collapsed on the next open (same dock).
+    ///  - Switching dock (Top ↔ Left) → the pane comes back expanded; a collapse of the top ROW says
+    ///    nothing about wanting the left RAIL hidden (and vice-versa).
+    ///  - Legacy value: builds before this field existed defaulted the filters to a full row ACROSS THE
+    ///    TOP, and collapsing that row was the natural thing to do — but with no dock recorded that
+    ///    stale <c>false</c> would silently hide the new left pane and leave the toolbar toggle as the
+    ///    only way to reveal it. So a saved value with NO recorded dock is treated as "not a choice about
+    ///    this layout" and reset to expanded (a one-time reset: the next collapse records the dock and
+    ///    sticks from then on).
+    /// No Changed broadcast: per-window UI state.
+    /// </summary>
+    public const bool DefaultFiltersExpanded = true;
     public static bool FiltersExpanded
     {
-        get => Data.FiltersExpanded ?? true;
-        set { Data.FiltersExpanded = value; Save(); /* no Changed: per-window UI state */ }
+        get
+        {
+            if (Data.FiltersExpanded is not bool saved) return DefaultFiltersExpanded;
+            if (!string.Equals(Data.FiltersExpandedDock, FilterDock.ToString(), StringComparison.OrdinalIgnoreCase))
+                return DefaultFiltersExpanded; // legacy (no dock recorded) or recorded under the other dock
+            return saved;
+        }
+        set
+        {
+            Data.FiltersExpanded = value;
+            Data.FiltersExpandedDock = FilterDock.ToString();
+            Save();
+        }
     }
 
     /// <summary>
@@ -875,6 +903,7 @@ public static class ResultsViewerSettings
         public string TitleBarCustomColor { get; set; }
         public Dictionary<string, string> LevelColors { get; set; }
         public bool? FiltersExpanded { get; set; }
+        public string FiltersExpandedDock { get; set; } // dock FiltersExpanded was recorded under (null = legacy)
         public Dictionary<string, bool> ColumnVisibility { get; set; }
         public int? PageSize { get; set; }
         public string DefaultResultViewer { get; set; }
