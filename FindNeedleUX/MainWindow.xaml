@@ -68,7 +68,8 @@
             <!-- One home for troubleshooting views (was scattered across Settings + Run &amp; Results). -->
             <MenuBarItem Title="Diagnostics">
                 <MenuFlyoutItem Text="System check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
-                <MenuFlyoutItem Text="Logs" Click="MenuFlyoutItem_Click" Name="logs"/>
+                <MenuFlyoutItem Text="App logs" Click="MenuFlyoutItem_Click" Name="logs"
+                                ToolTipService.ToolTip="FindNeedle's own diagnostic log — not the logs you're analyzing"/>
                 <MenuFlyoutItem Text="Search statistics (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
                 <MenuFlyoutItem Text="WPP symbol resolution…" Click="MenuFlyoutItem_Click" Name="wpp_symbols"
                                 ToolTipService.ToolTip="Resolve the PDBs/TMFs a WPP .etl needs to decode — point at your symbols and see per-binary status"/>
