@@ -11,7 +11,7 @@
 
     <ScrollViewer Padding="24">
         <StackPanel MaxWidth="720" Spacing="8">
-            <TextBlock Text="System Check" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PageHeading" Text="System check" FontSize="22" FontWeight="SemiBold"/>
             <TextBlock Text="Environment and the external tools FindNeedle relies on. ✓ ready · ✗ missing · • info"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
 

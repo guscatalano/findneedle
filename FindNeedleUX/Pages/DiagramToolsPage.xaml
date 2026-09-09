@@ -11,7 +11,7 @@
 
     <ScrollViewer Padding="20">
         <StackPanel MaxWidth="800">
-            <TextBlock Text="Diagram Tools" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,10"/>
+            <TextBlock x:Name="PageHeading" Text="Diagram tools" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,10"/>
             <TextBlock Text="Manage UML diagram generation tools for visualizing log sequences." 
                        Opacity="0.7" Margin="0,0,0,20"/>
 

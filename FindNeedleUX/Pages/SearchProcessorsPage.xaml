@@ -22,7 +22,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Spacing="4">
-                <TextBlock Text="Active rules" FontSize="24" FontWeight="SemiBold"/>
+                <TextBlock x:Name="PageHeading" Text="Active rules" FontSize="24" FontWeight="SemiBold"/>
                 <TextBlock x:Name="SubtitleText" TextWrapping="Wrap"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Text="The RuleDSL rule sets processing the current search, with what each one contains and how many results it matched."/>

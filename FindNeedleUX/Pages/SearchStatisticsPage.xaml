@@ -15,7 +15,7 @@
 
             <Grid>
                 <StackPanel>
-                    <TextBlock Text="Search statistics &amp; timing" FontSize="24" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="PageHeading" Text="Search timing" FontSize="24" FontWeight="SemiBold"/>
                     <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="8">
@@ -71,12 +71,12 @@
                 </StackPanel>
             </Border>
 
-            <!-- Full ETL inspection (same as Settings → Inspect ETL), on demand -->
+            <!-- Full ETL inspection (same as Tools ▸ Inspect ETL), on demand -->
             <Expander x:Name="EtlInspectExpander" Visibility="Collapsed"
                       Header="ETL details (full inspection)"
                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Runs the same inspection as Settings → Inspect ETL on the loaded .etl file(s) — Windows build, capture window, event/lost counts, format breakdown, and providers. Can take a few seconds on large traces."
+                    <TextBlock Text="Runs the same inspection as Tools ▸ Inspect ETL on the loaded .etl file(s) — Windows build, capture window, event/lost counts, format breakdown, and providers. Can take a few seconds on large traces."
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
                     <Button x:Name="EtlInspectButton" Content="Run inspection" Click="EtlInspect_Click"/>
                     <TextBlock x:Name="EtlInspectText" FontFamily="Consolas" FontSize="12"

@@ -15,6 +15,7 @@ public sealed partial class AboutPage : Page
     public AboutPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => Render();
     }
 

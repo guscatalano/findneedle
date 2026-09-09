@@ -26,6 +26,7 @@ public sealed partial class SearchLocationsPage : Page
     public SearchLocationsPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         CheckOtherDLLs.AreWeInstalledOk();
         // Bind the repeater once; the VM refreshes its collection in place.
         VariedImageSizeRepeater.ItemsSource = _viewModel.Locations;
@@ -362,7 +363,7 @@ public sealed partial class SearchLocationsPage : Page
         panel.Children.Add(ids);
         panel.Children.Add(error);
 
-        var dialog = MakeLocationDialog(existing == null ? "Add Azure DevOps location" : "Edit Azure DevOps location",
+        var dialog = MakeLocationDialog(existing == null ? "Add Azure DevOps source" : "Edit Azure DevOps source",
             panel, existing == null ? "Add" : "Save");
         WireManageLink(manage, dialog);
         dialog.PrimaryButtonClick += (_, args) =>
@@ -417,7 +418,7 @@ public sealed partial class SearchLocationsPage : Page
         var d = new ContentDialog
         {
             Title = $"No {what} connections yet",
-            Content = $"Set up a {what} connection first under Configure ▸ Connections, then come back to add a location.",
+            Content = $"Set up a {what} connection first under Workspace ▸ Connections, then come back to add a source.",
             PrimaryButtonText = "Open Connections",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
@@ -459,7 +460,7 @@ public sealed partial class SearchLocationsPage : Page
         panel.Children.Add(issue);
         panel.Children.Add(state);
 
-        var dialog = MakeLocationDialog(existing == null ? "Add GitHub issues location" : "Edit GitHub issues location",
+        var dialog = MakeLocationDialog(existing == null ? "Add GitHub issues source" : "Edit GitHub issues source",
             panel, existing == null ? "Add" : "Save");
         WireManageLink(manage, dialog);
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
@@ -717,7 +718,7 @@ public sealed partial class SearchLocationsPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = existing == null ? "Add Kusto location" : "Edit Kusto location",
+            Title = existing == null ? "Add Kusto source" : "Edit Kusto source",
             Content = new ScrollViewer
             {
                 Content = panel, MaxHeight = 620,

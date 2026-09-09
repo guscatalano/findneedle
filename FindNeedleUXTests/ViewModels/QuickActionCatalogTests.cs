@@ -32,6 +32,21 @@ public class QuickActionCatalogTests
     }
 
     [TestMethod]
+    public void Labels_UseTheAgreedVocabulary()
+    {
+        // Ids are stable (persisted); labels follow the terminology table.
+        Assert.AreEqual("Known logs", QuickActionCatalog.Find("log_finder").Label);
+        Assert.AreEqual("Recent searches", QuickActionCatalog.Find("cached").Label);
+        Assert.AreEqual("Sources", QuickActionCatalog.Find("locations").Label);
+        Assert.AreEqual("Rule files", QuickActionCatalog.Find("rules_config").Label);
+        Assert.AreEqual("Auto rules", QuickActionCatalog.Find("auto_rules").Label);
+        Assert.AreEqual("Run search", QuickActionCatalog.Find("run_search").Label);
+        Assert.AreEqual("Open results", QuickActionCatalog.Find("results").Label);
+        Assert.AreEqual("Outputs", QuickActionCatalog.Find("processor_output").Label);
+        Assert.AreEqual("Diagram tools", QuickActionCatalog.Find("diagram").Label);
+    }
+
+    [TestMethod]
     public void Default_WhenNothingStored_ReturnsDefaults()
     {
         CollectionAssert.AreEqual(QuickActionCatalog.Defaults.ToList(), QuickActionCatalog.GetSelectedIds());

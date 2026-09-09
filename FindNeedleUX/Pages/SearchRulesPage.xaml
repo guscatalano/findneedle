@@ -9,7 +9,7 @@
         <StackPanel Spacing="24">
             <!-- Title -->
             <StackPanel Spacing="8">
-                <TextBlock Text="Rules" FontSize="24" FontWeight="Bold"/>
+                <TextBlock x:Name="PageHeading" Text="Rule files" FontSize="24" FontWeight="Bold"/>
                 <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Text="Rules automatically tag, filter, scope, and enrich your search results — they're optional. Add a sample below to see how one works, or Browse for your own."/>
             </StackPanel>

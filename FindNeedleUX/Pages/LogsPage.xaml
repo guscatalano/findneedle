@@ -22,7 +22,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Spacing="2">
-                <TextBlock Text="App logs" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock x:Name="PageHeading" Text="App log" FontSize="20" FontWeight="SemiBold"/>
                 <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Text="FindNeedle's OWN diagnostic log for this run — this is the app's log, not the logs you're analyzing."/>
             </StackPanel>

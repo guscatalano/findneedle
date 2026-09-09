@@ -18,6 +18,7 @@ public sealed partial class ConnectionsPage : Page
     public ConnectionsPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => RenderList();
     }
 

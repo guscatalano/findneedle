@@ -17,7 +17,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Spacing="2">
-            <TextBlock Text="Connections" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PageHeading" Text="Connections" FontSize="26" FontWeight="SemiBold"/>
             <TextBlock FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
                        Text="Reusable online-source endpoints + credentials (Azure DevOps, GitHub, Kusto). Set one up once here, then pick it when adding a source — no re-entering org / repo / cluster every time."/>
         </StackPanel>

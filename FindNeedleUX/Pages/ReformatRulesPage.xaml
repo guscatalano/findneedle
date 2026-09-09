@@ -17,7 +17,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="2">
-            <TextBlock Text="Field extraction" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PageHeading" Text="Field extraction" FontSize="26" FontWeight="SemiBold"/>
             <TextBlock FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
                        Text="Pull structured values out of dense one-line messages using a regex with named groups (?&lt;Field&gt;...). Built-ins cover DISM and CBS; add your own for any log."/>
 

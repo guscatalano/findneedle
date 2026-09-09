@@ -101,6 +101,7 @@ public sealed partial class LogsPage : Page
     public LogsPage()
     {
         InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         LogListView.ItemsSource = LogLines;
         foreach (var line in Logger.Instance.LogCache)
             _all.Add(new LogEntry(line));

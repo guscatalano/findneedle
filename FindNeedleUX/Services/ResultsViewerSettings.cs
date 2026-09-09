@@ -259,11 +259,10 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
-    /// Whether the Ctrl+K command palette is active. Default OFF — the accelerator does nothing unless a
-    /// user opts in (some people hit Ctrl+K expecting a different action and were surprised by the palette).
-    /// Also requires <see cref="HotkeysEnabled"/>.
+    /// Whether the Ctrl+K command palette is active. Default ON — it's the keyboard way to reach any page
+    /// or action; turn it off here if Ctrl+K should do nothing. Also requires <see cref="HotkeysEnabled"/>.
     /// </summary>
-    public const bool DefaultCommandPaletteEnabled = false;
+    public const bool DefaultCommandPaletteEnabled = true;
     public static bool CommandPaletteEnabled
     {
         get => Data.CommandPaletteEnabled ?? DefaultCommandPaletteEnabled;

@@ -11,7 +11,7 @@
 
     <ScrollViewer Padding="24">
         <StackPanel MaxWidth="820" Spacing="14">
-            <TextBlock Text="Performance benchmark" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PageHeading" Text="Performance benchmark" FontSize="22" FontWeight="SemiBold"/>
             <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        Text="Runs FindNeedle's search engine on synthetic logs generated on THIS machine and reports how it performs — no admin, no external data. The result file contains only hardware specs and timings (no log data), so it's safe to share. Ratios like FTS-vs-scan compare across machines; milliseconds are specific to your hardware and current load."/>
 

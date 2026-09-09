@@ -22,6 +22,7 @@ public sealed partial class ReformatRulesPage : Page
     public ReformatRulesPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) =>
         {
             // Reflect the persisted enrichment toggle (moved here from Settings → Integrations).

@@ -24,6 +24,7 @@ public sealed partial class DiagramToolsPage : Page
     public DiagramToolsPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         InstallDirectoryText.Text = SystemInfoMiddleware.GetUmlInstallDirectory();
         RefreshStatus();
     }

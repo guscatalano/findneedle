@@ -62,6 +62,7 @@ public sealed partial class PluginsPage : Page
     public PluginsPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         ShowInitProgress(true);
         SetBodyEnabled(false);
         _ = InitializeAsync();

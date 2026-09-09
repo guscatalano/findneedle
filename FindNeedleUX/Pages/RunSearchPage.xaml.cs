@@ -11,6 +11,7 @@ public sealed partial class RunSearchPage : Page
     public RunSearchPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => UpdatePreRunSummary();
     }
 
@@ -23,7 +24,7 @@ public sealed partial class RunSearchPage : Page
         int count = locs?.Count ?? 0;
         if (count == 0)
         {
-            summary.Text = "No sources yet — add at least one under Configure ▸ Sources before running.";
+            summary.Text = "No sources yet — add at least one under Workspace ▸ Sources before running.";
             return;
         }
         var names = new System.Text.StringBuilder();

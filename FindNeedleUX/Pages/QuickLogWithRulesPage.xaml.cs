@@ -24,6 +24,7 @@ public sealed partial class QuickLogWithRulesPage : Page
     public QuickLogWithRulesPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
     }
 
     private void BrowseLogButton_Click(object sender, RoutedEventArgs e)

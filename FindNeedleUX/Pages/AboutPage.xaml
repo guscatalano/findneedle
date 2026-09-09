@@ -11,7 +11,7 @@
 
     <ScrollViewer Padding="24">
         <StackPanel MaxWidth="640" Spacing="16">
-            <TextBlock Text="About FindNeedle" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PageHeading" Text="About" FontSize="22" FontWeight="SemiBold"/>
             <TextBlock Text="A Windows log-search utility built on a plugin + declarative-rule pipeline."
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
 

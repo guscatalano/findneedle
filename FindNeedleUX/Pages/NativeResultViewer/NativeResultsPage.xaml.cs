@@ -1480,7 +1480,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             var togglesHost = new StackPanel();
             panel.Children.Add(togglesHost);
 
-            panel.Children.Add(SourcesHeader($"Locations ({locInfo.Count})"));
+            panel.Children.Add(SourcesHeader($"Sources ({locInfo.Count})"));
             if (locInfo.Count == 0)
                 panel.Children.Add(SourcesNote("No locations loaded."));
             else
@@ -1622,7 +1622,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         System.Collections.Generic.HashSet<string> autoAdded)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"Locations ({locs.Count}):");
+        sb.AppendLine($"Sources ({locs.Count}):");
         if (locs.Count == 0) sb.AppendLine("  (none)");
         foreach (var (name, desc) in locs)
         {
@@ -2943,7 +2943,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     }
 
     // ----- Help dialog -----
-    private async void HelpButton_Click(object sender, RoutedEventArgs e)
+    private void HelpButton_Click(object sender, RoutedEventArgs e) => _ = ShowHelpDialogAsync();
+
+    /// <summary>The viewer's help dialog — also what Help ▸ Viewer help (F1) opens while the viewer is up.</summary>
+    public async System.Threading.Tasks.Task ShowHelpDialogAsync()
     {
         var stack = new StackPanel { Spacing = 6 };
         void Bullet(string s) => stack.Children.Add(new TextBlock { Text = "• " + s, TextWrapping = TextWrapping.Wrap });

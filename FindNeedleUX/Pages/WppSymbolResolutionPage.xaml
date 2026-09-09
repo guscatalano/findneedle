@@ -11,7 +11,7 @@
 
     <ScrollViewer Padding="24">
         <StackPanel MaxWidth="860" Spacing="14">
-            <TextBlock Text="WPP symbol resolution" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PageHeading" Text="Symbols (WPP)" FontSize="22" FontWeight="SemiBold"/>
             <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        Text="WPP-traced .etl files need TMF format files — extracted from each binary's private PDB — to decode; without them events show as 'Unknown'. Point FindNeedle at your symbols here, resolve them one at a time or all at once, then reopen the trace. A PDB is identified by a GUID (which component) plus an age (which build/revision of it), and symbols are matched on both exactly — so a folder holding many builds is safe: the right one is picked, and same-GUID-but-wrong-age copies are flagged as the wrong version."/>
 

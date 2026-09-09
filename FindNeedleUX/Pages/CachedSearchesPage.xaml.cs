@@ -42,6 +42,7 @@ public sealed partial class CachedSearchesPage : Page
     public CachedSearchesPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         CacheList.ItemsSource = _items;
         // Reflect the current cache-reuse preference without firing the change handler.
         _initing = true;

@@ -15,8 +15,8 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="8">
-            <TextBlock 
-                Text="Quick: Open Log with Rules"
+            <TextBlock x:Name="PageHeading"
+                Text="Open with rules"
                 Style="{ThemeResource TitleTextBlockStyle}"/>
             <TextBlock 
                 Text="Select a log file and a rules file, then run the search to apply the rules."
@@ -114,7 +114,7 @@
         <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="12">
             <Button 
                 x:Name="GoButton"
-                Content="Run Search"
+                Content="Run search"
                 Style="{ThemeResource AccentButtonStyle}"
                 Click="GoButton_Click"
                 IsEnabled="False"

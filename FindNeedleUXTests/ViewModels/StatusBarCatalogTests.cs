@@ -39,8 +39,29 @@ public class StatusBarCatalogTests
     [TestMethod]
     public void Defaults_IncludeRunView_AndAreValid()
     {
-        Assert.IsTrue(StatusBarCatalog.Defaults.Contains("run_view"), "Run → View Results is a default item");
+        Assert.IsTrue(StatusBarCatalog.Defaults.Contains("run_view"), "Run (run + open results) is a default item");
         Assert.IsTrue(StatusBarCatalog.Defaults.All(StatusBarCatalog.IsValidId));
+    }
+
+    [TestMethod]
+    public void OneVerb_Run_TheNoViewerRunItemIsGone()
+    {
+        // The redesign collapsed "Run & View" + "Run search (without the viewer)" into one "Run".
+        Assert.IsFalse(StatusBarCatalog.IsValidId("run"), "the no-viewer 'run' item must not come back");
+        Assert.AreEqual("Run", StatusBarCatalog.Find("run_view").Label);
+        // A persisted selection that still names the old id is cleaned, not crashed on.
+        StatusBarCatalog.SetSelectedIds(new[] { "locations", "run", "run_view" });
+        CollectionAssert.AreEqual(new[] { "locations", "run_view" }, StatusBarCatalog.GetSelectedIds());
+    }
+
+    [TestMethod]
+    public void Labels_UseTheAgreedVocabulary()
+    {
+        Assert.AreEqual("Sources", StatusBarCatalog.Find("locations").Label);
+        Assert.AreEqual("Rule files", StatusBarCatalog.Find("rules").Label);
+        Assert.AreEqual("Outputs", StatusBarCatalog.Find("outputfiles").Label);
+        Assert.AreEqual("Search timing", StatusBarCatalog.Find("perf").Label);
+        Assert.AreEqual("Auto rules", StatusBarCatalog.Find("autorules").Label);
     }
 
     [TestMethod]

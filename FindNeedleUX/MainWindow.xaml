@@ -16,6 +16,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -33,46 +34,87 @@
                 </Button.KeyboardAccelerators>
                 <FontIcon Glyph="&#xE72B;" FontSize="14"/>
             </Button>
-        <MenuBar Grid.Column="1">
-            <MenuBarItem x:Name="QuickMenu" Title="Quick">
-                <!-- Items are built in code (BuildQuickMenu): Welcome + the welcome-page quick actions. -->
-            </MenuBarItem>
-            <MenuBarItem Title="Configure">
-                <MenuFlyoutItem Text="Sources" Click="MenuFlyoutItem_Click" Name="search_location"/>
-                <MenuFlyoutItem Text="Log Finder" Click="MenuFlyoutItem_Click" Name="log_finder"/>
-                <MenuFlyoutItem Text="Connections" Click="MenuFlyoutItem_Click" Name="connections"/>
-                <MenuFlyoutItem Text="Rules" Click="MenuFlyoutItem_Click" Name="rules"/>
+        <!-- Menu titles double as the breadcrumb sections (see Services/PageCatalog): Open ▸ Workspace ▸ Run ▸
+             Tools ▸ Diagnostics ▸ Help. Item Names are stable ids (persisted settings, automation, tests) —
+             change labels and grouping here, never the Name. Page-backed labels are re-applied from
+             PageCatalog in code so the menu, breadcrumb, and page heading can't drift apart. -->
+        <MenuBar Grid.Column="1" x:Name="MainMenuBar">
+            <!-- Open: get a log in front of you (replaces the code-built "Quick" menu; the welcome tiles remain). -->
+            <MenuBarItem x:Name="OpenMenu" Title="Open">
+                <MenuFlyoutItem Text="Open log file…" Click="MenuFlyoutItem_Click" Name="openlogfile">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator x:Name="OpenFileAccelerator" Modifiers="Control" Key="O"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Open folder…" Click="MenuFlyoutItem_Click" Name="openlogfolder"/>
+                <MenuFlyoutItem Text="Open with rules…" Click="MenuFlyoutItem_Click" Name="openlogwithrules"
+                                ToolTipService.ToolTip="Pick a log file and a rules file, then open the results"/>
                 <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="New workspace" Click="MenuFlyoutItem_Click" Name="NewWorkspace"/>
-                <MenuFlyoutItem Text="Open workspace..." Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
-                <MenuFlyoutItem Text="Save workspace" Click="MenuFlyoutItem_Click" Name="SaveWorkspace"/>
-                <MenuFlyoutItem Text="Clear workspace" Click="MenuFlyoutItem_Click" Name="ClearWorkspace"/>
+                <MenuFlyoutItem Text="Recent searches" Click="MenuFlyoutItem_Click" Name="cached_searches"
+                                ToolTipService.ToolTip="Logs you've opened before — reopen them without re-scanning"/>
+                <MenuFlyoutItem Text="Known logs" Click="MenuFlyoutItem_Click" Name="log_finder"
+                                ToolTipService.ToolTip="A catalog of well-known Windows logs you can open directly"/>
+                <MenuFlyoutSeparator/>
+                <!-- New workspace = the old Clear (stops a running search, drops results/rules) + a fresh query. -->
+                <MenuFlyoutItem Text="New workspace" Click="MenuFlyoutItem_Click" Name="NewWorkspace"
+                                ToolTipService.ToolTip="Stop any running search and start over with an empty workspace"/>
+                <MenuFlyoutItem Text="Open workspace…" Click="MenuFlyoutItem_Click" Name="OpenWorkspace"/>
+                <MenuFlyoutItem Text="Save workspace" Click="MenuFlyoutItem_Click" Name="SaveWorkspace">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator x:Name="SaveWorkspaceAccelerator" Modifiers="Control" Key="S"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
             </MenuBarItem>
-            <MenuBarItem Title="Run &amp; Results">
-                <MenuFlyoutItem Text="New Search" Click="MenuFlyoutItem_Click" Name="results_get"
-                                ToolTipService.ToolTip="Run a fresh search, then open the results"/>
-                <MenuFlyoutItem Text="View Results" Click="MenuFlyoutItem_Click" Name="results_viewnative"
-                                ToolTipService.ToolTip="View the last results without re-running"/>
-                <MenuFlyoutItem Text="Processor Output" Click="MenuFlyoutItem_Click" Name="results_processoroutput"/>
+
+            <!-- Workspace: what the search is made of (was "Configure"). -->
+            <MenuBarItem x:Name="WorkspaceMenu" Title="Workspace">
+                <MenuFlyoutItem Text="Sources" Click="MenuFlyoutItem_Click" Name="search_location"/>
+                <MenuFlyoutItem Text="Rule files" Click="MenuFlyoutItem_Click" Name="rules"/>
+                <MenuFlyoutItem Text="Auto rules" Click="MenuFlyoutItem_Click" Name="auto_rules"/>
+                <MenuFlyoutItem Text="Field extraction" Click="MenuFlyoutItem_Click" Name="reformat_rules"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Connections" Click="MenuFlyoutItem_Click" Name="connections"/>
+            </MenuBarItem>
+
+            <!-- Run: run it, then look at what came out. -->
+            <MenuBarItem x:Name="RunMenu" Title="Run">
+                <MenuFlyoutItem Text="Run search" Click="MenuFlyoutItem_Click" Name="results_get"
+                                ToolTipService.ToolTip="Run the search over your sources and rule files, then open the results">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator x:Name="RunSearchAccelerator" Key="F5"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <!-- Esc is registered in code, only while a search is running (see ApplyStopAccelerator) — a
+                     permanent Escape accelerator would swallow the key everywhere. The hint is shown regardless. -->
+                <MenuFlyoutItem Text="Stop" Click="MenuFlyoutItem_Click" Name="stop_search" IsEnabled="False"
+                                KeyboardAcceleratorTextOverride="Esc"
+                                ToolTipService.ToolTip="Cancel the running search"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Open results" Click="MenuFlyoutItem_Click" Name="results_viewnative"
+                                ToolTipService.ToolTip="Open the results of the last run without re-running"/>
+                <MenuFlyoutItem Text="Outputs" Click="MenuFlyoutItem_Click" Name="results_processoroutput"
+                                ToolTipService.ToolTip="Files and diagrams the rule files produced"/>
+                <MenuFlyoutItem Text="Search timing" Click="MenuFlyoutItem_Click" Name="results_statistics"
+                                ToolTipService.ToolTip="Where the time went in the last run (why so slow?)"/>
+                <MenuFlyoutSeparator x:Name="RemapCsvSeparator" Visibility="Collapsed"/>
                 <MenuFlyoutItem x:Name="RemapCsvMenuItem" Text="Remap CSV columns…" Click="RemapCsvMenuItem_Click" Visibility="Collapsed"/>
             </MenuBarItem>
 
-            <MenuBarItem Title="Tools">
+            <MenuBarItem x:Name="ToolsMenu" Title="Tools">
                 <MenuFlyoutItem Text="Inspect ETL" Click="MenuFlyoutItem_Click" Name="inspect_etl"/>
-                <MenuFlyoutItem Text="Inspect Binary" Click="MenuFlyoutItem_Click" Name="inspect_binary"/>
+                <MenuFlyoutItem Text="Inspect binary" Click="MenuFlyoutItem_Click" Name="inspect_binary"/>
+                <MenuFlyoutItem Text="Symbols (WPP)…" Click="MenuFlyoutItem_Click" Name="wpp_symbols"
+                                ToolTipService.ToolTip="Resolve the PDBs/TMFs a WPP .etl needs to decode — point at your symbols and see per-binary status"/>
                 <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="Diagram Tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
+                <MenuFlyoutItem Text="Diagram tools" Click="MenuFlyoutItem_Click" Name="diagramtools"/>
                 <MenuFlyoutItem Text="Plugins" Click="MenuFlyoutItem_Click" Name="search_plugins"/>
             </MenuBarItem>
 
-            <!-- One home for troubleshooting views (was scattered across Settings + Run &amp; Results). -->
-            <MenuBarItem Title="Diagnostics">
+            <!-- Diagnostics: the app looking at itself. -->
+            <MenuBarItem x:Name="DiagnosticsMenu" Title="Diagnostics">
                 <MenuFlyoutItem Text="System check" Click="MenuFlyoutItem_Click" Name="systeminfo"/>
-                <MenuFlyoutItem Text="App logs" Click="MenuFlyoutItem_Click" Name="logs"
+                <MenuFlyoutItem Text="App log" Click="MenuFlyoutItem_Click" Name="logs"
                                 ToolTipService.ToolTip="FindNeedle's own diagnostic log — not the logs you're analyzing"/>
-                <MenuFlyoutItem Text="Search statistics (why so slow?)" Click="MenuFlyoutItem_Click" Name="results_statistics"/>
-                <MenuFlyoutItem Text="WPP symbol resolution…" Click="MenuFlyoutItem_Click" Name="wpp_symbols"
-                                ToolTipService.ToolTip="Resolve the PDBs/TMFs a WPP .etl needs to decode — point at your symbols and see per-binary status"/>
                 <MenuFlyoutItem Text="Performance benchmark…" Click="MenuFlyoutItem_Click" Name="perf_benchmark"
                                 ToolTipService.ToolTip="Measure how this machine performs on a standard synthetic workload — share the result to compare hardware"/>
                 <!-- Developer-only (hidden unless AppMode.IsDeveloper). -->
@@ -83,7 +125,13 @@
                                 ToolTipService.ToolTip="Open the WPP symbol-resolution page filled with a synthetic large, mostly-unresolved trace — a scale check for the resolution UI."/>
             </MenuBarItem>
 
-            <MenuBarItem Title="Help">
+            <MenuBarItem x:Name="HelpMenu" Title="Help">
+                <MenuFlyoutItem Text="Viewer help" Click="MenuFlyoutItem_Click" Name="viewer_help"
+                                ToolTipService.ToolTip="Filtering, query syntax and navigation in the results viewer (Documentation when the viewer isn't open)">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator x:Name="ViewerHelpAccelerator" Key="F1"/>
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutItem Text="Documentation" Click="MenuFlyoutItem_Click" Name="documentation"/>
                 <MenuFlyoutItem Text="About" Click="MenuFlyoutItem_Click" Name="about"/>
             </MenuBarItem>
@@ -113,8 +161,55 @@
             </Button>
         </StackPanel>
 
+        <!-- "You are here": <menu section> ▸ <page title>, driven from contentFrame.Navigated via
+             PageCatalog, plus a compact workspace chip on the right (same numbers as the window caption). -->
+        <Border x:Name="BreadcrumbBar" Grid.Row="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderThickness="0,1,0,1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16,0"
+                MinHeight="36" AutomationProperties.Name="Current page">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock x:Name="BreadcrumbSection" FontSize="13" VerticalAlignment="Center" AutomationProperties.AutomationId="BreadcrumbSection"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <FontIcon x:Name="BreadcrumbChevron" Glyph="&#xE76C;" FontSize="10" VerticalAlignment="Center"
+                              Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    <TextBlock x:Name="BreadcrumbTitle" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="BreadcrumbTitle"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- Command-palette hint (Ctrl+K). Visible only while the palette is enabled (ApplyHotkeys). -->
+                    <Button x:Name="PaletteHintButton" Click="PaletteHintButton_Click" Background="Transparent"
+                            BorderThickness="0" Padding="8,2" MinHeight="24" Margin="0,0,8,0"
+                            ToolTipService.ToolTip="Command palette — jump to any page or action (Ctrl+K)"
+                            AutomationProperties.Name="Command palette (Ctrl+K)">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE721;" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="Ctrl+K" FontSize="11" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Text="Workspace" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <Border x:Name="WorkspaceChip" CornerRadius="12" BorderThickness="1" Padding="10,2" MinHeight="24"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                            ToolTipService.ToolTip="The current workspace — click to see its sources"
+                            AutomationProperties.Name="Workspace">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock x:Name="WorkspaceChipName" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="WorkspaceChipSummary" FontSize="12" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Status strip: clickable, iconed segments + a hide button. -->
-        <Border x:Name="StatusStripBorder" Grid.Row="1" Background="{ThemeResource SystemControlBackgroundAltHighBrush}"
+        <Border x:Name="StatusStripBorder" Grid.Row="2" Background="{ThemeResource SystemControlBackgroundAltHighBrush}"
                 BorderThickness="0,1,0,1" BorderBrush="{ThemeResource SystemControlForegroundAltHighBrush}" Padding="8,2">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -140,7 +235,7 @@
 
         <!-- Main content area with overlay spinner. AllowDrop here lets you drag log files/folders
              onto the viewer to open them (events bubble up from the hosted page in contentFrame). -->
-        <Grid Grid.Row="2" AllowDrop="True"
+        <Grid Grid.Row="3" AllowDrop="True"
               DragOver="Content_DragOver" DragLeave="Content_DragLeave" Drop="Content_Drop">
             <Frame x:Name="contentFrame" />
             <!-- Dismissible "your cached searches are large" prompt (see App startup + ShowCacheCleanupPrompt).
@@ -225,8 +320,8 @@
         </Grid>
 
         <!-- Command palette (Ctrl+K): keyboard-first jump to any page/action. Overlays the whole window
-             (RowSpan=3). Click the dimmed backdrop or press Esc to dismiss. -->
-        <Grid x:Name="CommandPalettePanel" Grid.RowSpan="3" Visibility="Collapsed"
+             (RowSpan=4). Click the dimmed backdrop or press Esc to dismiss. -->
+        <Grid x:Name="CommandPalettePanel" Grid.RowSpan="4" Visibility="Collapsed"
               Background="#66000000" Tapped="CommandPalettePanel_Tapped">
             <Border Width="640" MaxHeight="480" VerticalAlignment="Top" HorizontalAlignment="Center"
                     Margin="0,88,0,0" Padding="0" CornerRadius="8" Translation="0,0,48"

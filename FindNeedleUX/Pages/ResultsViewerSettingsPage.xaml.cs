@@ -65,7 +65,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             "columns"      => "Columns",
             "decoding"     => "Decoding (WPP symbols)",
             "integrations" => "Integrations",
-            "logs"         => "Logs",
+            "logs"         => "Support",
             _              => "Appearance",
         };
     }
@@ -96,7 +96,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
             (PanelColumns,      "Columns"),
             (PanelDecoding,     "Decoding"),
             (PanelIntegrations, "Integrations"),
-            (PanelLogs,         "Logs"),
+            (PanelLogs,         "Support"),
         };
         foreach (var (panel, category) in panels)
         {
@@ -327,7 +327,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
                     + "Use \"Manage defaults in Windows…\" to choose FindNeedle per file type.";
             }
 
-            // --- WPP symbols: managed on the dedicated Diagnostics → WPP symbol resolution page ---
+            // --- WPP symbols: managed on the dedicated Tools ▸ Symbols (WPP) page ---
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += OnMcpStatusChanged;
 
@@ -1001,7 +1001,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
     }
 
     // ----- WPP / tracefmt TMF path -----
-    // WPP symbol decoding now lives on its dedicated diagnostics page (Diagnostics → WPP symbol
+    // WPP symbol decoding now lives on its dedicated page (Tools ▸ Symbols (WPP)
     // resolution) so this settings section stays a single link instead of duplicating that UI.
     private void OpenWppSymbols_Click(object sender, RoutedEventArgs e)
         => FindNeedleUX.Services.MainWindowActions.NavigateToWppSymbols();

@@ -15,6 +15,7 @@ public sealed partial class SystemInfoPage : Page
     public SystemInfoPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => Render();
     }
 

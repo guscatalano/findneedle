@@ -6,7 +6,9 @@ using System.Linq;
 namespace FindNeedleUX.Services;
 
 /// <summary>One configurable status-bar item: an id and a display label. Info items show a count and
-/// navigate; action items (e.g. run_view) perform a command. Rendering/behavior lives in MainWindow.</summary>
+/// navigate; action items (e.g. run_view) perform a command. Rendering/behavior lives in MainWindow.
+/// Ids are stable (persisted in the user's status-bar.json) — only labels change. There is deliberately
+/// no "run without opening the viewer" item: one verb, "Run".</summary>
 public sealed record StatusBarItem(string Id, string Label);
 
 /// <summary>
@@ -18,16 +20,15 @@ public static class StatusBarCatalog
 {
     public static readonly IReadOnlyList<StatusBarItem> All = new[]
     {
-        new StatusBarItem("locations",   "Locations"),
-        new StatusBarItem("rules",       "Rules"),
+        new StatusBarItem("locations",   "Sources"),
+        new StatusBarItem("rules",       "Rule files"),
         new StatusBarItem("lastrun",     "Last run"),
-        new StatusBarItem("outputfiles", "Output files"),
-        new StatusBarItem("run_view",    "Run & View"),
-        new StatusBarItem("run",         "Run search"),
+        new StatusBarItem("outputfiles", "Outputs"),
+        new StatusBarItem("run_view",    "Run"),
         new StatusBarItem("stop",        "Stop"),
-        new StatusBarItem("perf",        "Storage & timing"),
+        new StatusBarItem("perf",        "Search timing"),
         new StatusBarItem("connections", "Connections"),
-        new StatusBarItem("autorules",   "Auto-rules"),
+        new StatusBarItem("autorules",   "Auto rules"),
         new StatusBarItem("diagram",     "Diagram tools"),
         new StatusBarItem("mcp",         "MCP server"),
     };

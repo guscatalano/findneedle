@@ -34,6 +34,7 @@ public sealed partial class AutoAddRulesPage : Page
     public AutoAddRulesPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         EntriesList.ItemsSource = _rows;
         Loaded += (_, _) => Refresh();
     }

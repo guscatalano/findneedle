@@ -11,7 +11,7 @@
 
     <NavigationView x:Name="SettingsNav" PaneDisplayMode="Left"
                     IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
-                    PaneTitle="Viewer settings"
+                    PaneTitle="Settings"
                     SelectionChanged="SettingsNav_SelectionChanged">
         <NavigationView.AutoSuggestBox>
             <AutoSuggestBox x:Name="SettingsSearchBox" QueryIcon="Find"
@@ -430,7 +430,7 @@
                             <CheckBox x:Name="CommandPaletteCheck" Content="Ctrl+K command palette" Margin="0,8,0,0"
                                       Checked="CommandPaletteCheck_Changed" Unchecked="CommandPaletteCheck_Changed"/>
                             <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="Off by default. A keyboard-first jump list to any page or action. Requires keyboard shortcuts (above) to be on."/>
+                                       Text="On by default. A keyboard-first jump list to any page or action. Requires keyboard shortcuts (above) to be on."/>
                         </StackPanel>
                     </Border>
 
@@ -507,7 +507,7 @@
                                 <Button x:Name="CacheClearButton" Content="Clear…" Click="CacheClear_Click"
                                         ToolTipService.ToolTip="Delete all cached searches"/>
                                 <Button Content="Browse…" Click="CacheBrowse_Click"
-                                        ToolTipService.ToolTip="Open the Cached Searches page"/>
+                                        ToolTipService.ToolTip="Open the Recent searches page"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -690,7 +690,7 @@
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        Text="WPP-traced .etl files need TMF format files (from each binary's private PDB) to decode — otherwise events show as 'Unknown'. Point at ready-made TMFs, resolve them from PDBs/symbols, and see per-binary status on the dedicated page."/>
-                            <Button Content="Open WPP symbol resolution →" Click="OpenWppSymbols_Click"/>
+                            <Button Content="Open Symbols (WPP) →" Click="OpenWppSymbols_Click"/>
 
                             <TextBlock Text="WPP decoder" FontWeight="SemiBold" Margin="0,8,0,0"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -764,15 +764,15 @@
                 <!-- ============================ LOGS ============================ -->
                 <StackPanel x:Name="PanelLogs" Spacing="16" Visibility="Collapsed">
 
-                    <!-- Diagnostics: bundle logs for the developer -->
+                    <!-- Support: bundle logs for the developer -->
                     <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                             CornerRadius="6" Padding="16">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Diagnostics" FontWeight="SemiBold"/>
+                            <TextBlock Text="Support" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Bundle the app logs, settings, plugin config, and system info into a single .zip you can attach to a bug report. No log file contents are uploaded anywhere — you choose where to save it."/>
+                                       Text="Bundle the app log, settings, plugin config, and system info into a single .zip you can attach to a bug report. No log file contents are uploaded anywhere — you choose where to save it."/>
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Button x:Name="SendLogsButton" Content="Send app logs to dev…" Click="SendLogs_Click"/>
                                 <TextBlock x:Name="SendLogsStatus" VerticalAlignment="Center" FontSize="12"

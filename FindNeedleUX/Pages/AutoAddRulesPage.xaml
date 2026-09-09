@@ -18,7 +18,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="Auto-add rules" FontSize="24" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PageHeading" Text="Auto rules" FontSize="24" FontWeight="SemiBold"/>
             <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        Text="Rules that get applied to a search automatically when their condition matches the logs you load (file type, source kind, path pattern, provider, or build). Toggle individual rules below, or turn the whole feature off."/>
         </StackPanel>
@@ -31,7 +31,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <ToggleSwitch x:Name="MasterSwitch" Grid.Column="0"
-                          Header="Auto-add rules to searches"
+                          Header="Add matching rule files to searches automatically"
                           OnContent="On" OffContent="Off"
                           Toggled="MasterSwitch_Toggled"/>
             <Button Grid.Column="1" Content="Add rule file…" Click="AddFile_Click" VerticalAlignment="Bottom"/>

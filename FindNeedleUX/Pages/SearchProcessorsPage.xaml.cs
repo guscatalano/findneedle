@@ -39,6 +39,7 @@ public sealed partial class SearchProcessorsPage : Page
     public SearchProcessorsPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         RulesList.ItemsSource = _rows;
         this.Loaded += (_, _) => Build();
     }
@@ -57,7 +58,7 @@ public sealed partial class SearchProcessorsPage : Page
         {
             EmptyBar.Title = "No active rules";
             EmptyBar.Message = "The current search isn't applying any RuleDSL rules. Add rules in "
-                + "Configure ▸ Rules, or enable Auto-add rules, then run a search.";
+                + "Workspace ▸ Rule files, or enable Auto rules, then run a search.";
             EmptyBar.IsOpen = true;
             SubtitleText.Text = "The RuleDSL rule sets processing the current search.";
             return;

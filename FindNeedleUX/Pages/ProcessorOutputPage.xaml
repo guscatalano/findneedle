@@ -25,7 +25,7 @@
                 <FontIcon x:Name="ToggleListIcon" Glyph="&#xE700;" FontSize="16" />
             </Button>
             <StackPanel Grid.Column="1" Spacing="2">
-                <TextBlock Text="Processor Output" FontSize="26" FontWeight="SemiBold" />
+                <TextBlock x:Name="PageHeading" Text="Outputs" FontSize="26" FontWeight="SemiBold" />
                 <TextBlock x:Name="SummaryText" FontSize="13" Foreground="Gray" TextWrapping="Wrap" />
             </StackPanel>
             <StackPanel Grid.Column="2" VerticalAlignment="Top" HorizontalAlignment="Right" Spacing="4" MaxWidth="280">

@@ -23,6 +23,7 @@ public sealed partial class WppSymbolResolutionPage : Page
     public WppSymbolResolutionPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => OnLoaded();
     }
 

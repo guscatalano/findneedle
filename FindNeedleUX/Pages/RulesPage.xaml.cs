@@ -6,7 +6,7 @@ namespace FindNeedleUX.Pages;
 
 /// <summary>
 /// One "Rules" hub: a tabbed shell that hosts the existing rule pages in a content Frame, so all rule
-/// configuration lives behind a single Configure → Rules entry instead of five separate menu items.
+/// configuration lives behind one hub (Workspace ▸ Rule files / Auto rules / Field extraction open its tabs).
 /// Each tab just navigates the inner Frame to the corresponding existing page (their logic/stores are
 /// unchanged). Navigation parameter is a tab tag (e.g. "fields") so deep-links open the right tab.
 /// </summary>
@@ -15,6 +15,13 @@ public sealed partial class RulesPage : Page
     // Default to a config tab ("Rule files"), not the runtime "Active" status tab which is empty until a
     // search has run. A nav param (from a specific menu item) still overrides this.
     private string _initialTag = "files";
+
+    /// <summary>The page currently hosted in the hub's frame — the shell breadcrumb names THAT page
+    /// ("Workspace ▸ Auto rules"), not the hub.</summary>
+    public System.Type ActivePageType => RulesContent?.Content?.GetType();
+
+    /// <summary>Raised after the hub switches tabs, so the shell can refresh its breadcrumb.</summary>
+    public static event System.Action ActiveTabChanged;
 
     public RulesPage()
     {
@@ -47,8 +54,8 @@ public sealed partial class RulesPage : Page
             case "files":   RulesContent.Navigate(typeof(SearchRulesPage)); break;
             case "autoadd": RulesContent.Navigate(typeof(AutoAddRulesPage)); break;
             case "fields":  RulesContent.Navigate(typeof(ReformatRulesPage)); break;
-            case "uml":     RulesContent.Navigate(typeof(DiagramToolsPage)); break;
             default:        RulesContent.Navigate(typeof(SearchProcessorsPage)); break; // "active"
         }
+        try { ActiveTabChanged?.Invoke(); } catch { /* breadcrumb is cosmetic */ }
     }
 }

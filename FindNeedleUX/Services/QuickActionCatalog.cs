@@ -23,18 +23,18 @@ public static class QuickActionCatalog
         new QuickAction("open_file",        "Open Log File",       "📁"),
         new QuickAction("open_folder",      "Open Folder",         "📂"),
         new QuickAction("open_rules",       "Open Log with Rules", "📝"),
-        new QuickAction("log_finder",       "Log Finder",          "🧭"),
+        new QuickAction("log_finder",       "Known logs",          "🧭"),
         new QuickAction("open_ado",         "Open ADO Work Item",  "🔷"),
         new QuickAction("open_github",      "Open GitHub Issue",   "🐙"),
         new QuickAction("open_kusto",       "Open Kusto Query",    "🔎"),
-        new QuickAction("cached",           "Cached Searches",     "🕑"),
-        new QuickAction("locations",        "Configure Locations", "📍"),
-        new QuickAction("rules_config",     "Configure Rules",     "⚙️"),
-        new QuickAction("auto_rules",       "Auto-add Rules",      "✨"),
-        new QuickAction("run_search",       "Run Search",          "▶️"),
-        new QuickAction("results",          "View Results",        "📊"),
-        new QuickAction("processor_output", "Processor Output",    "🖼️"),
-        new QuickAction("diagram",          "Diagram Tools",       "📈"),
+        new QuickAction("cached",           "Recent searches",     "🕑"),
+        new QuickAction("locations",        "Sources",             "📍"),
+        new QuickAction("rules_config",     "Rule files",          "⚙️"),
+        new QuickAction("auto_rules",       "Auto rules",          "✨"),
+        new QuickAction("run_search",       "Run search",          "▶️"),
+        new QuickAction("results",          "Open results",        "📊"),
+        new QuickAction("processor_output", "Outputs",             "🖼️"),
+        new QuickAction("diagram",          "Diagram tools",       "📈"),
         new QuickAction("inspect_etl",      "Inspect ETL",         "🔬"),
     };
 
@@ -77,8 +77,8 @@ public static class QuickActionCatalog
         Changed?.Invoke();
     }
 
-    /// <summary>Raised after the selection changes (add/remove/reorder), so the welcome page and the
-    /// top "Quick" menu stay in sync.</summary>
+    /// <summary>Raised after the selection changes (add/remove/reorder), so anything mirroring the
+    /// welcome page's tiles can refresh.</summary>
     public static event Action Changed;
 
     /// <summary>Add an action to the end (no-op if unknown or already present). Returns the new list.</summary>

@@ -19,7 +19,7 @@
         <!-- Header -->
         <Grid Grid.Row="0">
             <StackPanel>
-                <TextBlock Text="Plugins &amp; modules" FontSize="22" FontWeight="SemiBold"/>
+                <TextBlock x:Name="PageHeading" Text="Plugins" FontSize="22" FontWeight="SemiBold"/>
                 <TextBlock Text="Loaded plugin DLLs and the plugins they provide. ✓ loaded · ✗ failed to load · ⚠ invalid"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
             </StackPanel>
