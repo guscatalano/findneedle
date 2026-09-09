@@ -765,7 +765,7 @@ public static class ResultsViewerSettings
     /// <summary>Toolbar buttons the user can show/hide (stable ids). The search box and the More (⋯)
     /// menu are always shown and not in this list.</summary>
     public static readonly IReadOnlyList<string> ToolbarButtonIds =
-        new[] { "SearchHelp", "Columns", "Export", "Sources", "Filters", "View", "FilterPerf", "Status" };
+        new[] { "SearchHelp", "Columns", "Export", "Sources", "FilterPlacement", "DetailsMode", "RuleFilter", "FilterPerf", "Status" };
 
     /// <summary>Per-button toolbar visibility (all shown by default), merged with the defaults.</summary>
     public static IReadOnlyDictionary<string, bool> ToolbarButtonVisibility

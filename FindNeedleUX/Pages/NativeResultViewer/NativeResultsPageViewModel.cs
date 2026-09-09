@@ -515,7 +515,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     // True while a streaming search is still producing rows into our backing store. Bound to the
     // Stop button's visibility — once the producer signals completion, the button disappears.
     private bool _isStreaming;
-    public bool IsStreaming { get => _isStreaming; set => Set(ref _isStreaming, value); }
+    public bool IsStreaming
+    {
+        get => _isStreaming;
+        set { if (Set(ref _isStreaming, value)) NotifyProgressBannerChanged(); }
+    }
 
     private string _statusText = "0 / 0 results";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
@@ -526,20 +530,125 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private string _lastFilterBreakdown = "Apply a filter or search to see timing.";
     public string LastFilterBreakdown { get => _lastFilterBreakdown; set => Set(ref _lastFilterBreakdown, value); }
 
-    // Prominent "still loading" banner shown while a streaming search produces rows.
+    // The streaming half of the progress banner: refreshed on each live tick while rows stream in.
     private string _streamingBannerText = "Loading logs…";
-    public string StreamingBannerText { get => _streamingBannerText; set => Set(ref _streamingBannerText, value); }
+    public string StreamingBannerText
+    {
+        get => _streamingBannerText;
+        set { if (Set(ref _streamingBannerText, value)) NotifyProgressBannerChanged(); }
+    }
 
     private string ComposeStreamBanner() =>
         $"Loading logs — {_source?.TotalCount ?? TotalCount:N0} rows so far and rising. You can search and scroll now; results keep filling in.";
 
-    // True while the substring-search (FTS) index is being built (lazy/background modes). Bound to a
-    // toolbar indicator + Cancel button. Substring search uses the slower scan until it clears.
+    // True while the substring-search (FTS) index is being built (lazy/background modes). Folded into
+    // the single progress banner (no separate indicator). Substring search uses the slower scan until it clears.
     private bool _isIndexing;
-    public bool IsIndexing { get => _isIndexing; set => Set(ref _isIndexing, value); }
+    public bool IsIndexing
+    {
+        get => _isIndexing;
+        set { if (Set(ref _isIndexing, value)) NotifyProgressBannerChanged(); }
+    }
 
     private string _indexStatusText = "";
-    public string IndexStatusText { get => _indexStatusText; set => Set(ref _indexStatusText, value); }
+    public string IndexStatusText
+    {
+        get => _indexStatusText;
+        set { if (Set(ref _indexStatusText, value)) NotifyProgressBannerChanged(); }
+    }
+
+    // ----- The ONE progress banner (F10): streaming load and/or background index build -----
+
+    /// <summary>The banner shows whenever anything is still working: rows streaming in, or the search
+    /// index building in the background. There is no second indicator on the toolbar.</summary>
+    public bool IsProgressBannerVisible => IsStreaming || IsIndexing;
+
+    /// <summary>What the banner says (see <see cref="ComposeProgressBanner"/>).</summary>
+    public string ProgressBannerText => ComposeProgressBanner(IsStreaming, StreamingBannerText, IsIndexing, IndexStatusText);
+
+    private void NotifyProgressBannerChanged()
+    {
+        OnPropertyChanged(nameof(IsProgressBannerVisible));
+        OnPropertyChanged(nameof(ProgressBannerText));
+    }
+
+    /// <summary>
+    /// Compose the single progress line. Pure so it's unit-testable:
+    /// <list type="bullet">
+    /// <item>streaming only → the streaming text as-is ("Loading logs — N rows so far and rising. …");</item>
+    /// <item>streaming + indexing → the streaming text plus a secondary " · index building in background" phrase
+    ///   (with the build's percentage when known) — NOT a third control;</item>
+    /// <item>indexing only → the index-build status ("Building search index… N / M (P%)") plus why it matters;</item>
+    /// <item>neither → empty (the banner is hidden anyway).</item>
+    /// </list>
+    /// </summary>
+    public static string ComposeProgressBanner(bool streaming, string streamingText, bool indexing, string indexStatusText)
+    {
+        if (streaming)
+        {
+            var main = string.IsNullOrWhiteSpace(streamingText) ? "Loading logs…" : streamingText.Trim();
+            if (!indexing) return main;
+            var pct = ExtractPercent(indexStatusText);
+            return pct == null
+                ? $"{main} · index building in background"
+                : $"{main} · index building in background ({pct})";
+        }
+        if (indexing)
+        {
+            var status = string.IsNullOrWhiteSpace(indexStatusText) ? "Building search index…" : indexStatusText.Trim();
+            return $"{status} — text search uses a slower scan until it finishes.";
+        }
+        return "";
+    }
+
+    /// <summary>Pull a trailing "(NN%)" out of the index status text, if present.</summary>
+    private static string ExtractPercent(string indexStatusText)
+    {
+        if (string.IsNullOrEmpty(indexStatusText)) return null;
+        int close = indexStatusText.LastIndexOf("%)", StringComparison.Ordinal);
+        if (close < 0) return null;
+        int open = indexStatusText.LastIndexOf('(', close);
+        if (open < 0) return null;
+        var inner = indexStatusText.Substring(open + 1, close - open); // "NN%"
+        return inner.Length is > 1 and <= 4 ? inner : null;
+    }
+
+    /// <summary>
+    /// The "Rule filter" toolbar toggle's caption. When the toggle cannot be enabled its text says WHY
+    /// (F4), instead of a silently greyed-out control:
+    /// no rule files → "Rule filter (no rule files loaded)"; files present but rows still streaming in →
+    /// "Rule filter (available after loading)"; otherwise "Rule filter · N file(s)".
+    /// </summary>
+    public static string RuleFilterLabel(int ruleFileCount, bool streaming)
+    {
+        if (ruleFileCount <= 0) return "Rule filter (no rule files loaded)";
+        if (streaming) return "Rule filter (available after loading)";
+        return ruleFileCount == 1 ? "Rule filter · 1 file" : $"Rule filter · {ruleFileCount} files";
+    }
+
+    // ----- Toolbar segmented controls (pure mapping, so the page stays thin and this is testable) -----
+
+    /// <summary>Segment order of the "Filters: Left | Top | Hide" control.</summary>
+    public const int FiltersSegLeft = 0, FiltersSegTop = 1, FiltersSegHide = 2;
+
+    /// <summary>Which Filters segment reflects a pane state: hidden wins (Hide), else the dock.</summary>
+    public static int FiltersSegmentIndexFor(FilterDock dock, bool expanded)
+        => !expanded ? FiltersSegHide : (dock == FilterDock.Left ? FiltersSegLeft : FiltersSegTop);
+
+    /// <summary>Segment order of the "Details: In row | Panel | Popup" control.</summary>
+    public static int DetailsSegmentIndexFor(DetailsMode mode) => mode switch
+    {
+        DetailsMode.BottomPanel => 1,
+        DetailsMode.Popup => 2,
+        _ => 0,
+    };
+
+    public static DetailsMode DetailsModeForSegment(int index) => index switch
+    {
+        1 => DetailsMode.BottomPanel,
+        2 => DetailsMode.Popup,
+        _ => DetailsMode.Inrow,
+    };
 
     // ----- per-level + per-column metadata -----
     public ObservableCollection<LevelEntry> Levels { get; } = new();

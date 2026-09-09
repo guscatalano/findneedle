@@ -68,7 +68,21 @@
                         <TextBlock Grid.Row="6" Text="Level"    FontWeight="SemiBold" VerticalAlignment="Top"/>
                         <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
                     </Grid>
-                    <Button Content="Copy as JSON" Click="CopyJson_Click" Margin="0,8,0,0"/>
+                    <!-- Row actions, visible under the detail (the same actions as the row's right-click
+                         menu, so nobody has to discover the context menu). Each handler reads the row
+                         from the button's DataContext and opens a flyout anchored to it. -->
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+                        <Button Content="Filter in ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailFilterIn_Click"
+                                ToolTipService.ToolTip="Keep only rows whose field matches this row's value (adds a predicate to the search box)"/>
+                        <Button Content="Filter out ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailFilterOut_Click"
+                                ToolTipService.ToolTip="Hide rows whose field matches this row's value (adds a predicate to the search box)"/>
+                        <Button Content="Follow this activity" Height="28" FontSize="12" Padding="10,0"
+                                Click="RowDetailFollowActivity_Click" Loaded="RowDetailFollowActivity_Loaded"/>
+                        <Button Content="Tag ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailTag_Click"
+                                ToolTipService.ToolTip="Mark this row (Important / Question / Resolved / Note) and add a note"/>
+                        <Button Content="Copy ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailCopy_Click"
+                                ToolTipService.ToolTip="Copy this row as JSON, CSV or XML"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -111,24 +125,34 @@
                 </Grid>
             </Border>
 
-            <!-- Shown while a streaming search is still producing rows; count keeps rising. -->
+            <!-- THE one "what's happening" surface: shown while a streaming search is still producing
+                 rows (count keeps rising) and/or the search index is building in the background. One
+                 status line, one Refresh, one Stop — there is deliberately no second indicator on the
+                 toolbar. Text comes from ViewModel.ProgressBannerText (ComposeProgressBanner). -->
             <InfoBar x:Name="StreamingBanner" IsClosable="False" Severity="Informational"
                      IsIconVisible="False" Margin="12,8,12,0"
-                     Visibility="{x:Bind ViewModel.IsStreaming, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                     IsOpen="{x:Bind ViewModel.IsStreaming, Mode=OneWay}">
+                     Visibility="{x:Bind ViewModel.IsProgressBannerVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                     IsOpen="{x:Bind ViewModel.IsProgressBannerVisible, Mode=OneWay}">
                 <InfoBar.Content>
-                    <!-- Single compact row: animated loader icon · status text · Stop. -->
+                    <!-- Single compact row: animated loader icon · status text · Refresh · Stop. -->
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2,0,6">
                         <Grid Width="28" Height="28" VerticalAlignment="Center">
                             <Image x:Name="StreamGif" Stretch="Uniform" Visibility="Collapsed"/>
                             <ProgressRing x:Name="StreamRing" Width="20" Height="20" IsActive="True" Visibility="Collapsed"/>
                         </Grid>
-                        <TextBlock Text="{x:Bind ViewModel.StreamingBannerText, Mode=OneWay}"
+                        <TextBlock x:Name="ProgressBannerText" Text="{x:Bind ViewModel.ProgressBannerText, Mode=OneWay}"
                                    VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
-                        <Button Content="Refresh results" Click="RefreshResults_Click" VerticalAlignment="Center"
+                        <Button Content="Refresh" Click="RefreshResults_Click" VerticalAlignment="Center"
                                 Visibility="{x:Bind ViewModel.PendingRowsVisibility, Mode=OneWay}"
                                 ToolTipService.ToolTip="Fold newly-loaded rows into your filtered view (paused while searching during load)"/>
-                        <Button Content="Stop loading" Click="StopStreamingButton_Click" VerticalAlignment="Center"/>
+                        <Button x:Name="ProgressStopButton" Click="StopProgressButton_Click" VerticalAlignment="Center"
+                                AutomationProperties.Name="Stop loading"
+                                ToolTipService.ToolTip="Stop loading rows (keeps what is loaded). When only the index is building, cancels the index build.">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE71A;" FontSize="10"/>
+                                <TextBlock Text="Stop"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </InfoBar.Content>
             </InfoBar>
@@ -168,7 +192,7 @@
                 <ColumnDefinition Width="Auto"/>  <!-- ? help + search indicators -->
                 <ColumnDefinition Width="Auto"/>  <!-- action buttons, pinned right -->
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="SearchBox" Grid.Column="0" Height="32" HorizontalAlignment="Stretch" Margin="0,0,8,0"
+            <TextBox x:Name="SearchBox" Grid.Column="0" Height="32" HorizontalAlignment="Stretch" Margin="0,0,8,0" MinWidth="160"
                          PlaceholderText="Search all columns…  (advanced query: press ?)"
                          TextChanged="SearchBox_TextChanged"
                          KeyDown="SearchBox_KeyDown"
@@ -186,40 +210,12 @@
                 </TextBox>
                 <!-- Col1: ? help + search-state indicators, riding just right of the (filled) box. -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <!-- "?" help: full search/query syntax in a flyout. -->
+                <!-- "?" opens the ONE viewer help surface (query syntax + filters + shortcuts) — the same
+                     dialog as Help ▸ Viewer help (F1) and More ▸ Help. -->
                 <Button x:Name="SearchHelpButton" Width="32" Height="32" Padding="0" Content="?" FontSize="14"
-                        VerticalAlignment="Center" ToolTipService.ToolTip="Search &amp; query syntax">
-                    <Button.Flyout>
-                        <Flyout>
-                            <StackPanel Spacing="8" MaxWidth="440">
-                                <TextBlock Text="Search &amp; query syntax" FontWeight="SemiBold" FontSize="14"/>
-                                <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           Text="Plain text searches every column. Add a field + operator (or AND / OR) and the box switches to a structured query."/>
-                                <TextBlock Text="Examples" FontWeight="SemiBold" Margin="0,4,0,0"/>
-                                <TextBlock FontFamily="Consolas" TextWrapping="Wrap" IsTextSelectionEnabled="True">
-                                    <Run Text="error"/><LineBreak/>
-                                    <Run Text="msg != &quot;this&quot; AND taskname == &quot;that&quot;"/><LineBreak/>
-                                    <Run Text="level == Error OR provider ~ Kernel"/><LineBreak/>
-                                    <Run Text="(pid == 1234 OR pid == 5678) AND NOT msg ~ debug"/><LineBreak/>
-                                    <Run Text="time &gt;= &quot;2024-01-15 09:00&quot;"/>
-                                </TextBlock>
-                                <TextBlock Text="Operators" FontWeight="SemiBold" Margin="0,4,0,0"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="12">
-                                    <Run FontFamily="Consolas" Text="=="/><Run Text=" equals   "/>
-                                    <Run FontFamily="Consolas" Text="!="/><Run Text=" not-equals   "/>
-                                    <Run FontFamily="Consolas" Text="~"/><Run Text=" contains   "/>
-                                    <Run FontFamily="Consolas" Text="!~"/><Run Text=" not-contains   "/>
-                                    <Run FontFamily="Consolas" Text="&gt; &lt; &gt;= &lt;="/><Run Text=" compare (time / number)"/>
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                           Text="Combine with AND, OR, NOT and parentheses. == / != / ~ are case-insensitive. Quote values that contain spaces."/>
-                                <TextBlock Text="Fields" FontWeight="SemiBold" Margin="0,4,0,0"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" FontFamily="Consolas" IsTextSelectionEnabled="True"
-                                           Text="msg, taskname, provider, source, level, pid, tid, eventid, channel, machine, user, opcode, time"/>
-                            </StackPanel>
-                        </Flyout>
-                    </Button.Flyout>
-                </Button>
+                        VerticalAlignment="Center" Click="HelpButton_Click"
+                        AutomationProperties.Name="Viewer help"
+                        ToolTipService.ToolTip="Viewer help: search &amp; query syntax, filters, shortcuts (F1)"/>
                 <!-- Inline parse error when the box holds a malformed structured query. -->
                 <TextBlock x:Name="SearchQueryErrorText" VerticalAlignment="Center" FontSize="11"
                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
@@ -238,10 +234,29 @@
                            AutomationProperties.Name="Search submit hint"/>
                 </StackPanel>
 
-                <!-- Col2: action buttons + status/indicators, pinned to the right.
+                <!-- Col2: layout controls, then the action buttons, pinned to the right.
                      Left margin keeps a gap from the "?" so they don't collide. -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
                             Margin="16,0,0,0">
+                <!-- Filters: Left | Top | Hide — the filter pane's placement, first-level (was View ▾ ▸
+                     Filter pane). Left/Top set the dock; Hide collapses the pane. The active-filter
+                     count rides on the label segment so hidden filters still announce themselves. -->
+                <local:SegmentedControl x:Name="FiltersSegment" Label="Filters" Items="Left,Top,Hide"
+                                        ItemToolTips="Filter pane docked left of the results,Filters as a row above the results,Hide the filter pane (filters stay applied)"
+                                        SelectionChanged="FiltersSegment_SelectionChanged"
+                                        AutomationProperties.Name="Filter pane placement"/>
+                <!-- Details: In row | Panel | Popup — how a selected row's details show (was View ▾ ▸ Row details). -->
+                <local:SegmentedControl x:Name="DetailsSegment" Label="Details" Items="In row,Panel,Popup"
+                                        ItemToolTips="Click a row to expand its details inline,Docked panel below the grid shows the selected row,Double-click a row for a details dialog"
+                                        SelectionChanged="DetailsSegment_SelectionChanged"
+                                        AutomationProperties.Name="Row details mode"/>
+                <!-- Rule filter: hide rows excluded by the active rule files. Its label says why it is
+                     off when it cannot be enabled (no rule files / still loading) — see RuleFilterLabel. -->
+                <ToggleButton x:Name="RuleFilterToggle" Height="32" IsEnabled="False"
+                              Content="Rule filter (no rule files loaded)"
+                              Click="RuleFilterToggle_Click"
+                              AutomationProperties.Name="Rule filter"
+                              ToolTipService.ToolTip="Hide rows excluded by the active rule files (from Workspace ▸ Rule files)"/>
                 <Button x:Name="ColumnsButton" Content="Columns ▾" Height="32"
                         AutomationProperties.Name="Toggle column visibility">
                     <Button.Flyout>
@@ -289,98 +304,8 @@
                         <TextBlock Text="Sources"/>
                     </StackPanel>
                 </Button>
-                <!-- Secondary hide/show for the filter pane. A plain Button (not an accent-filled
-                     ToggleButton): the pane is simply there by default (docked left), so this must read as
-                     "hide it if you want", not as a mode the user has to switch on to get filters. The label
-                     flips "Hide filters" / "Show filters" in code (ApplyFiltersToggleState). -->
-                <Button x:Name="FiltersToggle" Height="32"
-                        Click="FiltersToggle_Click"
-                        AutomationProperties.Name="Hide or show the filter pane"
-                        ToolTipService.ToolTip="Hide or show the filter pane (position: View ▾ → Filter pane)">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock x:Name="FiltersToggleGlyph" Text="◂" FontSize="11"/>
-                        <TextBlock x:Name="FiltersToggleText" Text="Hide filters"/>
-                        <!-- Active-filter count: so the user knows filters are hiding rows even when the
-                             pane is collapsed. -->
-                        <Border x:Name="FiltersActiveBadge" Visibility="Collapsed" CornerRadius="8" Padding="5,0"
-                                VerticalAlignment="Center" Background="{ThemeResource SystemAccentColorBrush}">
-                            <TextBlock x:Name="FiltersActiveBadgeText" FontSize="10" Foreground="White"/>
-                        </Border>
-                    </StackPanel>
-                </Button>
-
-                <!-- View: rule-filter toggle, row-detail mode, and filter-pane dock, grouped. -->
-                <Button x:Name="ViewButton" Content="View ▾" Height="32" AutomationProperties.Name="View options"
-                        ToolTipService.ToolTip="Row details, filter pane position, and rule filtering">
-                    <Button.Flyout>
-                        <MenuFlyout Placement="Bottom">
-                            <ToggleMenuFlyoutItem x:Name="RuleFilterToggle"
-                                                  Text="Rule filter — hide rows excluded by active rules"
-                                                  IsEnabled="False" Click="RuleFilterToggle_Click"/>
-                            <MenuFlyoutSeparator/>
-                            <MenuFlyoutSubItem Text="Row details">
-                                <RadioMenuFlyoutItem x:Name="DetailsInrowItem"  Text="Inrow — click a row to expand"          GroupName="detailsMode" Click="DetailsModeInrow_Click"/>
-                                <RadioMenuFlyoutItem x:Name="DetailsPanelItem"  Text="Bottom panel — docked below the grid"   GroupName="detailsMode" Click="DetailsModeBottomPanel_Click"/>
-                                <RadioMenuFlyoutItem x:Name="DetailsPopupItem"  Text="Popup — double-click a row for a dialog" GroupName="detailsMode" Click="DetailsModePopup_Click"/>
-                            </MenuFlyoutSubItem>
-                            <MenuFlyoutSubItem Text="Filter pane">
-                                <ToggleMenuFlyoutItem x:Name="ShowFilterPaneItem" Text="Show filter pane" IsChecked="True" Click="ShowFilterPane_Click"/>
-                                <MenuFlyoutSeparator/>
-                                <RadioMenuFlyoutItem x:Name="DockTopItem"  Text="Filters on top"  GroupName="filterDock" Click="FilterDockTop_Click"/>
-                                <RadioMenuFlyoutItem x:Name="DockLeftItem" Text="Filters on left" GroupName="filterDock" Click="FilterDockLeft_Click"/>
-                            </MenuFlyoutSubItem>
-                        </MenuFlyout>
-                    </Button.Flyout>
-                </Button>
-
-                <TextBlock x:Name="StatusText" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
-                           AutomationProperties.AutomationId="StatusText"
-                           VerticalAlignment="Center" Margin="16,0,0,0"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-
-                <!-- Filter performance breakdown (what made the last filter/search slow). -->
-                <Button x:Name="FilterPerfButton" Height="32" Margin="8,0,0,0" Padding="8,0,8,0"
-                        Content="{x:Bind ViewModel.LastFilterSummary, Mode=OneWay}"
-                        ToolTipService.ToolTip="Filter performance breakdown">
-                    <Button.Flyout>
-                        <Flyout>
-                            <StackPanel Spacing="6" MinWidth="300">
-                                <TextBlock Text="Filter performance" FontWeight="SemiBold"/>
-                                <TextBlock Text="{x:Bind ViewModel.LastFilterBreakdown, Mode=OneWay}"
-                                           FontFamily="Consolas" FontSize="12" IsTextSelectionEnabled="True"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock Text="Tip: if the index is still building, text search uses a slower scan until it finishes."
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Flyout>
-                    </Button.Flyout>
-                </Button>
-
-                <!-- Streaming indicator + Stop button. Visible only while the source's producer
-                     (the running search task) is still writing rows. Collapses cleanly when the
-                     search finishes or the user clicks Stop. -->
-                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                            Margin="12,0,0,0"
-                            Visibility="{x:Bind ViewModel.IsStreaming, Mode=OneWay}">
-                    <ProgressRing IsActive="True" Width="16" Height="16"/>
-                    <TextBlock Text="loading…" VerticalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <Button Content="Stop" Height="28" Click="StopStreamingButton_Click"
-                            AutomationProperties.Name="Stop loading"/>
-                </StackPanel>
-
-                <!-- Search-index build indicator + Cancel. Visible while the FTS index builds
-                     (lazy/background modes); substring search uses the slower scan until it clears. -->
-                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                            Margin="12,0,0,0"
-                            Visibility="{x:Bind ViewModel.IsIndexing, Mode=OneWay}">
-                    <ProgressRing IsActive="True" Width="16" Height="16"/>
-                    <TextBlock Text="{x:Bind ViewModel.IndexStatusText, Mode=OneWay}" VerticalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <Button Content="Cancel" Height="28" Click="CancelIndexingButton_Click"
-                            AutomationProperties.Name="Cancel building search index"/>
-                </StackPanel>
+                <!-- No loading / index indicator here on purpose: StreamingBanner (above the grid) is the
+                     single progress surface with the single Stop (F10). -->
                 <!-- Overflow: rarely-used Help + Settings -->
                 <Button x:Name="OverflowButton" Height="32" VerticalAlignment="Center"
                         AutomationProperties.Name="More" ToolTipService.ToolTip="More">
@@ -682,7 +607,7 @@
                                         ToolTipService.ToolTip="Clear the time window (zoom back out to the whole log)"/>
                                 <Button Content="✕" FontSize="10" Padding="6,0" MinHeight="0" Height="18"
                                         Click="TimeStripHide_Click" AutomationProperties.Name="Hide time strip"
-                                        ToolTipService.ToolTip="Hide the time strip (bring it back from View ▾)"/>
+                                        ToolTipService.ToolTip="Hide the time strip (bring it back from Columns ▾ → Show)"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -856,11 +781,41 @@
             </Grid>
         </Border>
 
-        <!-- Pagination bar -->
+        <!-- Pagination bar: paging on the left; the filtered/total count + filter timing on the right
+             (moved down from the toolbar so the toolbar's first-level controls fit at 1280px). -->
         <Border Grid.Row="3" Padding="12,6"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="16,0,0,0">
+                <TextBlock x:Name="StatusText" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                           AutomationProperties.AutomationId="StatusText"
+                           VerticalAlignment="Center" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <!-- Filter performance breakdown (what made the last filter/search slow). -->
+                <Button x:Name="FilterPerfButton" Height="28" FontSize="12" Padding="8,0,8,0"
+                        Content="{x:Bind ViewModel.LastFilterSummary, Mode=OneWay}"
+                        ToolTipService.ToolTip="Filter performance breakdown">
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel Spacing="6" MinWidth="300">
+                                <TextBlock Text="Filter performance" FontWeight="SemiBold"/>
+                                <TextBlock Text="{x:Bind ViewModel.LastFilterBreakdown, Mode=OneWay}"
+                                           FontFamily="Consolas" FontSize="12" IsTextSelectionEnabled="True"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="Tip: if the index is still building, text search uses a slower scan until it finishes."
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+            </StackPanel>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <!-- The four navigation buttons grouped together: « First ‹ Prev  Next › Last » -->
                 <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <Button Content="« First" Click="FirstPage_Click" Height="28" FontSize="12"/>
@@ -896,6 +851,7 @@
                     <ComboBoxItem Content="5000" Tag="5000"/>
                 </ComboBox>
             </StackPanel>
+          </Grid>
         </Border>
             </Grid>   <!-- main content column -->
         </Grid>       <!-- BodyGrid -->
