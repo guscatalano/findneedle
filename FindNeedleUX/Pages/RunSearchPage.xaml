@@ -25,15 +25,12 @@
                 </InfoBar.ActionButton>
             </InfoBar>
 
-            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Search depth" FontWeight="SemiBold"/>
-                    <StackPanel x:Name="DepthInputs" Orientation="Horizontal" Spacing="8">
-                        <RadioButton Content="Full — search every line (default)" GroupName="SearchDepth" IsChecked="True" Click="NormalSearch_Click"/>
-                        <RadioButton Content="Quick — headers / first lines only (faster)" GroupName="SearchDepth" Click="ShallowSearch_Click"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+            <!-- The "Search depth" Full/Quick radio group used to sit here. Removed because it did nothing:
+                 the value reached ISearchLocation.SetSearchDepth and NOTHING ever read it back
+                 (GetSearchDepth has no callers anywhere), so "Quick - headers / first lines only (faster)"
+                 ran the same full scan at the same cost. Better no control than one that lies. The lever
+                 that really does cut the work is the decode-time scope (provider / time / level) offered
+                 by large-file triage. -->
 
             <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
                 <StackPanel Spacing="12">

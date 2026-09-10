@@ -1080,8 +1080,12 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.PluginsPage));
                 break;
             case "results_get":
-                Logger.Instance.Log("Navigated: RunSearchPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage));
+                // "Run search" RUNS. It used to navigate to RunSearchPage, where you had to press Run
+                // again — so the menu item, its F5 accelerator and Home's Run button all promised a run
+                // and delivered a page (the same two-step the Known logs card had). The status bar's Run
+                // already did the right thing; this is now the one run action everything shares.
+                Logger.Instance.Log("Run search (menu/F5)");
+                RunAndViewResults();
                 break;
             case "results_statistics":
                 Logger.Instance.Log("Navigated: SearchStatisticsPage");
@@ -1996,6 +2000,23 @@ public sealed partial class MainWindow : Window
                 await RunSearchWithProgress();
                 ShowSpinner(false);
                 await OpenViewerAsync();
+            }
+        }
+        catch (OperationCanceledException) { ShowSpinner(false); }
+        catch (Exception ex)
+        {
+            // BACKSTOP, matching SearchOrchestrator.RunAsync. Every caller of this method is an async
+            // void handler (RunAndViewResults, the open paths, drag-drop), so an escaping exception is
+            // reposted to the UI thread and the rethrow trips a WinUI failfast that
+            // App.UnhandledException cannot intercept — the window disappears with nothing logged.
+            // A failed run must end as a message.
+            ShowSpinner(false);
+            var reason = ex is AggregateException { InnerException: { } inner } ? inner : ex;
+            Logger.Instance.Log($"Run failed: {reason.GetType().Name}: {reason.Message}\n{ex}");
+            if (RunFailedBar != null)
+            {
+                RunFailedBar.Message = reason.Message;
+                RunFailedBar.IsOpen = true;
             }
         }
         finally { MiddleLayerService.PendingScopeRulePath = null; } // don't carry the scope to the next open

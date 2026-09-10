@@ -251,6 +251,12 @@
                     </StackPanel>
                 </InfoBar.Content>
             </InfoBar>
+            <!-- "Search failed" notice. An InfoBar, NOT a dialog: a second ContentDialog.ShowAsync while
+                 one is open is a native failfast, and a failing run is exactly when another dialog (triage,
+                 cache reuse, open policy) may already be up. -->
+            <InfoBar x:Name="RunFailedBar" VerticalAlignment="Top" Margin="12,12,12,0"
+                     IsOpen="False" IsClosable="True" Severity="Error" Canvas.ZIndex="10"
+                     Title="Search failed"/>
             <!-- Full-window overlay spinner for ETL inspection and quick actions -->
             <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
                   AutomationProperties.Name="Operation in progress" AutomationProperties.LiveSetting="Polite">

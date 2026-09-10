@@ -39,8 +39,7 @@ public sealed partial class RunSearchPage : Page
             shown++;
         }
         if (count > 4) names.Append($", +{count - 4} more");
-        var depth = _shallowSearch ? "Quick (headers / first lines)" : "Full (every line)";
-        summary.Text = $"Will search: {count} source{(count == 1 ? "" : "s")} — {names}\nDepth: {depth}";
+        summary.Text = $"Will search: {count} source{(count == 1 ? "" : "s")} — {names}";
     }
 
     private void SetControlsTo(bool enable)
@@ -51,8 +50,6 @@ public sealed partial class RunSearchPage : Page
         // ancestor disables every descendant regardless of its own IsEnabled, which previously made
         // the Cancel button (and any escape) unclickable for the entire run. (A StackPanel has no
         // IsEnabled, so disable its child controls directly.)
-        foreach (var child in DepthInputs.Children)
-            if (child is Control c) c.IsEnabled = enable;
         RunButton.IsEnabled = enable;
         CancelButton.IsEnabled = !enable;
         if (!enable)
@@ -106,7 +103,7 @@ public sealed partial class RunSearchPage : Page
             // the two UI side effects (open viewer, show status). Both callbacks run on the UI
             // thread because RunAsync resumes on the captured WinUI context.
             await _orchestrator.RunAsync(
-                _shallowSearch,
+                shallowSearch: false, // the depth control is gone — see the note in RunSearchPage.xaml
                 onOpenViewer: MainWindowActions.NavigateToNativeResultsPage,
                 onStatus: text => summary.Text = text);
         }
@@ -115,11 +112,6 @@ public sealed partial class RunSearchPage : Page
             SetControlsTo(true);
         }
     }
-
-    private bool _shallowSearch;
-
-    private void ShallowSearch_Click(object sender, RoutedEventArgs e) { _shallowSearch = true; UpdatePreRunSummary(); }
-    private void NormalSearch_Click(object sender, RoutedEventArgs e) { _shallowSearch = false; UpdatePreRunSummary(); }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
