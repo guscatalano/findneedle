@@ -1692,8 +1692,30 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     // ----- INPC plumbing -----
     public event PropertyChangedEventHandler PropertyChanged;
 
+    /// <summary>
+    /// Raise PropertyChanged ON THE UI THREAD. These properties are x:Bind targets, so the binding engine
+    /// writes straight into XAML (InfoBar.Visibility, TextBlock.Text) on whichever thread raised the event —
+    /// and touching a XAML object off the UI thread originates a WinRT error that WinUI turns into a
+    /// RaiseFailFastException (0xC000027B). That failfast bypasses App.UnhandledException, so the process
+    /// dies with no managed stack and nothing in the app log. It is the same hazard already called out for
+    /// Results/the DataGrid where _uiDispatcher is declared.
+    ///
+    /// It bites on the streaming path: the load-completion tick awaits an off-UI-thread refresh and then
+    /// sets IsStreaming = false, notifying the progress banner's bindings from that background continuation
+    /// (open a folder of .evtx, then Run search → viewer opens on a streaming source → crash at run end).
+    /// Marshalling here fixes it for every binding, not just that one property. With no dispatcher
+    /// (unit tests, non-WinUI threads) it raises inline, exactly as before.
+    /// </summary>
     private void OnPropertyChanged(string name)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    {
+        var handler = PropertyChanged;
+        if (handler == null) return;
+        var d = _uiDispatcher;
+        if (d != null && !d.HasThreadAccess
+            && d.TryEnqueue(() => handler(this, new PropertyChangedEventArgs(name))))
+            return; // handed to the UI thread; the binding reads the (already stored) value when it runs
+        handler(this, new PropertyChangedEventArgs(name));
+    }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string name = null, bool applyFilters = false)
     {
