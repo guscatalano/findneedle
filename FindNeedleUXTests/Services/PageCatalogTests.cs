@@ -23,7 +23,7 @@ public class PageCatalogTests
         "WelcomePage", "CachedSearchesPage", "LogFinderPage",
         "SearchLocationsPage", "RulesPage", "SearchRulesPage", "AutoAddRulesPage", "ReformatRulesPage",
         "SearchProcessorsPage", "ConnectionsPage",
-        "RunSearchPage", "NativeResultViewer.NativeResultsPage", "ProcessorOutputPage", "SearchStatisticsPage",
+        "RunSearchPage", "NativeResultsPage", "ProcessorOutputPage", "SearchStatisticsPage",
         "WppSymbolResolutionPage", "DiagramToolsPage", "PluginsPage", "PluginConfigPage",
         "SystemInfoPage", "LogsPage", "PerformanceBenchmarkPage",
         "AboutPage", "ResultsViewerSettingsPage",
@@ -74,6 +74,15 @@ public class PageCatalogTests
         Assert.AreEqual("System check", PageCatalog.Find(Pages + "SystemInfoPage").Title);
         Assert.AreEqual("Settings", PageCatalog.Find(Pages + "ResultsViewerSettingsPage").Title);
 
+        // The results viewer must be keyed by its NAMESPACE, not its folder. It sits in
+        // Pages\NativeResultViewer\ but its x:Class is FindNeedleUX.Pages.NativeResultsPage, so keying it
+        // by the folder made Find() miss on every navigation and the breadcrumb read "Home" the whole
+        // time the viewer was open. Both halves are asserted so the mistake cannot come back.
+        Assert.AreEqual("Results", PageCatalog.Find(Pages + "NativeResultsPage")?.Title,
+            "the viewer is FindNeedleUX.Pages.NativeResultsPage");
+        Assert.IsNull(PageCatalog.Find(Pages + "NativeResultViewer.NativeResultsPage"),
+            "that folder-shaped name is not a real type name and must not be registered");
+
         foreach (var title in PageCatalog.Titles)
         {
             Assert.IsTrue(title.All(c => c < 0x2190 || c == '▸'), $"'{title}' contains a symbol/emoji");
@@ -86,7 +95,7 @@ public class PageCatalogTests
     public void Breadcrumb_IsSectionAndTitle_ExceptWhenTheyMatch()
     {
         Assert.AreEqual("Workspace ▸ Sources", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "SearchLocationsPage")));
-        Assert.AreEqual("Run ▸ Results", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "NativeResultViewer.NativeResultsPage")));
+        Assert.AreEqual("Run ▸ Results", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "NativeResultsPage")));
         Assert.AreEqual("Diagnostics ▸ App log", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "LogsPage")));
         Assert.AreEqual("Home", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "WelcomePage")));
         Assert.AreEqual("Settings", PageCatalog.Breadcrumb(PageCatalog.Find(Pages + "ResultsViewerSettingsPage")));

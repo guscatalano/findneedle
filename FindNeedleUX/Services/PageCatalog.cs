@@ -54,7 +54,10 @@ public static class PageCatalog
 
         // Run — run it and look at what came out.
         [P + "RunSearchPage"]                        = new(Run, "Run search"),
-        [P + "NativeResultViewer.NativeResultsPage"] = new(Run, "Results"),
+        // The viewer lives in the Pages\NativeResultViewer FOLDER but its namespace is plain
+        // FindNeedleUX.Pages (see NativeResultsPage.xaml x:Class). Keying it by folder made every lookup
+        // miss, so the breadcrumb read "Home" the entire time the results viewer was open.
+        [P + "NativeResultsPage"]                    = new(Run, "Results"),
         [P + "ProcessorOutputPage"]                  = new(Run, "Outputs"),
         [P + "SearchStatisticsPage"]                 = new(Run, "Search timing"),
 

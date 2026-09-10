@@ -23,6 +23,11 @@ namespace FindNeedleUX.Pages.NativeResultViewer;
 /// </summary>
 public sealed partial class SegmentedControl : UserControl
 {
+    /// <summary>Corner radius of the pill. The outer segments (label on the left, last option on the
+    /// right) carry it too — a Border does not round its children, so without that a selected segment's
+    /// fill squares off the ends and the control stops reading as one control.</summary>
+    private const double SegmentRadius = 4;
+
     private readonly Border _root;
     private readonly StackPanel _strip;
     private readonly TextBlock _labelText;
@@ -57,6 +62,10 @@ public sealed partial class SegmentedControl : UserControl
             Padding = new Thickness(9, 0, 9, 0),
             BorderThickness = new Thickness(0, 0, 1, 0),
             VerticalAlignment = VerticalAlignment.Stretch,
+            // The label is the LEFT end of the pill, so it carries the left corners. Without this the
+            // square-cornered fills inside painted over the rounded outline and the control read as a
+            // row of square buttons rather than one rounded segmented control.
+            CornerRadius = new CornerRadius(SegmentRadius, 0, 0, SegmentRadius),
             Child = labelInner,
         };
         _strip = new StackPanel { Orientation = Orientation.Horizontal };
@@ -65,7 +74,7 @@ public sealed partial class SegmentedControl : UserControl
         {
             Height = 32,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(SegmentRadius),
             Child = _strip,
         };
         Content = _root;
@@ -159,6 +168,10 @@ public sealed partial class SegmentedControl : UserControl
             _segments.Add(btn);
             _strip.Children.Add(btn);
         }
+        // The last segment is the RIGHT end of the pill: round its outer corners so a selected fill
+        // follows the outline instead of squaring it off.
+        if (_segments.Count > 0)
+            _segments[^1].CornerRadius = new CornerRadius(0, SegmentRadius, SegmentRadius, 0);
         ApplyToolTips();
         ApplyVisuals();
     }
