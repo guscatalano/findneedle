@@ -489,19 +489,34 @@
                                     ToolTipService.ToolTip="Clear only the per-field filters (Provider, TaskName, Message, Source, Level) — leaves the search box and time range."/>
                         </StackPanel>
                         <StackPanel x:Name="FilterRowPanel" AutomationProperties.AutomationId="FilterRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <!-- Provider: text box OR known-value combo (one visible at a time). A persistent
-                                 field label (like SimpleEventViewer's sections) so it's clear which filter is
-                                 which once a value is picked — the combo otherwise shows only the bare value. -->
-                            <TextBlock Text="Provider" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                                       Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBox x:Name="ProviderFilterBox" AutomationProperties.AutomationId="ProviderFilterBox"
-                                     Width="120" Height="28" FontSize="12"
-                                     PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
-                            <ComboBox x:Name="ProviderFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
-                                      DisplayMemberPath="Display" DropDownOpened="ProviderFilterCombo_DropDownOpened"
-                                      PlaceholderText="Provider (known)…" SelectionChanged="ProviderFilterCombo_SelectionChanged"/>
-                            <DropDownButton x:Name="ProviderFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
-                                            Content="Provider: All">
+                            <!-- Provider: text box OR known-value combo (one visible at a time; they share
+                                 the Grid's middle column). A persistent field label (like SimpleEventViewer's
+                                 sections) so it's clear which filter is which once a value is picked — the
+                                 combo otherwise shows only the bare value. The X removes the whole field row;
+                                 "+ Add field" (below) puts it back. -->
+                            <Grid x:Name="ProviderFieldGroup" ColumnSpacing="6" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Provider" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Grid.Column="1" x:Name="ProviderFilterBox" AutomationProperties.AutomationId="ProviderFilterBox"
+                                         Width="120" Height="28" FontSize="12" HorizontalAlignment="Left"
+                                         PlaceholderText="Provider…" TextChanged="ProviderFilter_TextChanged"/>
+                                <ComboBox Grid.Column="1" x:Name="ProviderFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
+                                          HorizontalAlignment="Left"
+                                          DisplayMemberPath="Display" DropDownOpened="ProviderFilterCombo_DropDownOpened"
+                                          PlaceholderText="Provider (known)…" SelectionChanged="ProviderFilterCombo_SelectionChanged"/>
+                                <Button Grid.Column="2" Tag="provider" Content="&#x2715;" Click="RemoveField_Click"
+                                        FontSize="10" Padding="5,0" MinWidth="0" MinHeight="0" Height="24"
+                                        Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Remove the Provider filter"
+                                        ToolTipService.ToolTip="Stop filtering on Provider (add it back with + Add field)"/>
+                                <DropDownButton Grid.Column="1" x:Name="ProviderFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
+                                                HorizontalAlignment="Left"
+                                                Content="Provider: All">
                                 <DropDownButton.Flyout>
                                     <Flyout Opening="ProviderFlyout_Opening">
                                         <StackPanel MinWidth="260" Spacing="4">
@@ -513,16 +528,31 @@
                                         </StackPanel>
                                     </Flyout>
                                 </DropDownButton.Flyout>
-                            </DropDownButton>
-                            <TextBlock Text="TaskName" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                                       Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBox x:Name="TaskNameFilterBox" Width="140" Height="28" FontSize="12"
-                                     PlaceholderText="TaskName…" TextChanged="TaskNameFilter_TextChanged"/>
-                            <ComboBox x:Name="TaskNameFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
-                                      DisplayMemberPath="Display" DropDownOpened="TaskNameFilterCombo_DropDownOpened"
-                                      PlaceholderText="TaskName (known)…" SelectionChanged="TaskNameFilterCombo_SelectionChanged"/>
-                            <DropDownButton x:Name="TaskNameFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
-                                            Content="TaskName: All">
+                                </DropDownButton>
+                            </Grid>
+                            <Grid x:Name="TaskNameFieldGroup" ColumnSpacing="6" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="TaskName" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Grid.Column="1" x:Name="TaskNameFilterBox" Width="140" Height="28" FontSize="12"
+                                         HorizontalAlignment="Left"
+                                         PlaceholderText="TaskName…" TextChanged="TaskNameFilter_TextChanged"/>
+                                <ComboBox Grid.Column="1" x:Name="TaskNameFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
+                                          HorizontalAlignment="Left"
+                                          DisplayMemberPath="Display" DropDownOpened="TaskNameFilterCombo_DropDownOpened"
+                                          PlaceholderText="TaskName (known)…" SelectionChanged="TaskNameFilterCombo_SelectionChanged"/>
+                                <Button Grid.Column="2" Tag="taskname" Content="&#x2715;" Click="RemoveField_Click"
+                                        FontSize="10" Padding="5,0" MinWidth="0" MinHeight="0" Height="24"
+                                        Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Remove the TaskName filter"
+                                        ToolTipService.ToolTip="Stop filtering on TaskName (add it back with + Add field)"/>
+                                <DropDownButton Grid.Column="1" x:Name="TaskNameFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
+                                                HorizontalAlignment="Left"
+                                                Content="TaskName: All">
                                 <DropDownButton.Flyout>
                                     <Flyout Opening="TaskNameFlyout_Opening">
                                         <StackPanel MinWidth="260" Spacing="4">
@@ -534,20 +564,48 @@
                                         </StackPanel>
                                     </Flyout>
                                 </DropDownButton.Flyout>
-                            </DropDownButton>
-                            <TextBlock Text="Message" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                                       Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBox x:Name="MessageFilterBox" Width="220" Height="28" FontSize="12"
-                                     PlaceholderText="Message…" TextChanged="MessageFilter_TextChanged"/>
-                            <TextBlock Text="Source" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                                       Margin="6,0,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBox x:Name="SourceFilterBox" Width="140" Height="28" FontSize="12"
-                                     PlaceholderText="Source…" TextChanged="SourceFilter_TextChanged"/>
-                            <ComboBox x:Name="SourceFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
-                                      DisplayMemberPath="Display" DropDownOpened="SourceFilterCombo_DropDownOpened"
-                                      PlaceholderText="Source (known)…" SelectionChanged="SourceFilterCombo_SelectionChanged"/>
-                            <DropDownButton x:Name="SourceFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
-                                            Content="Source: All">
+                                </DropDownButton>
+                            </Grid>
+                            <Grid x:Name="MessageFieldGroup" ColumnSpacing="6" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Message" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Grid.Column="1" x:Name="MessageFilterBox" Width="220" Height="28" FontSize="12"
+                                         HorizontalAlignment="Left"
+                                         PlaceholderText="Message…" TextChanged="MessageFilter_TextChanged"/>
+                                <Button Grid.Column="2" Tag="message" Content="&#x2715;" Click="RemoveField_Click"
+                                        FontSize="10" Padding="5,0" MinWidth="0" MinHeight="0" Height="24"
+                                        Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Remove the Message filter"
+                                        ToolTipService.ToolTip="Stop filtering on Message (add it back with + Add field)"/>
+                            </Grid>
+                            <Grid x:Name="SourceFieldGroup" ColumnSpacing="6" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Source" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Grid.Column="1" x:Name="SourceFilterBox" Width="140" Height="28" FontSize="12"
+                                         HorizontalAlignment="Left"
+                                         PlaceholderText="Source…" TextChanged="SourceFilter_TextChanged"/>
+                                <ComboBox Grid.Column="1" x:Name="SourceFilterCombo" Width="200" Height="28" FontSize="12" Visibility="Collapsed"
+                                          HorizontalAlignment="Left"
+                                          DisplayMemberPath="Display" DropDownOpened="SourceFilterCombo_DropDownOpened"
+                                          PlaceholderText="Source (known)…" SelectionChanged="SourceFilterCombo_SelectionChanged"/>
+                                <Button Grid.Column="2" Tag="source" Content="&#x2715;" Click="RemoveField_Click"
+                                        FontSize="10" Padding="5,0" MinWidth="0" MinHeight="0" Height="24"
+                                        Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Remove the Source filter"
+                                        ToolTipService.ToolTip="Stop filtering on Source (add it back with + Add field)"/>
+                                <DropDownButton Grid.Column="1" x:Name="SourceFilterMulti" Height="28" FontSize="12" Visibility="Collapsed"
+                                                HorizontalAlignment="Left"
+                                                Content="Source: All">
                                 <DropDownButton.Flyout>
                                     <Flyout Opening="SourceFlyout_Opening">
                                         <StackPanel MinWidth="260" Spacing="4">
@@ -559,7 +617,8 @@
                                         </StackPanel>
                                     </Flyout>
                                 </DropDownButton.Flyout>
-                            </DropDownButton>
+                                </DropDownButton>
+                            </Grid>
                             <!-- The level filter is now driven by the clickable Level chips below; this combo is
                                  kept (hidden) only as the backing control the existing filter code writes to. -->
                             <TextBlock Text="Level" Visibility="Collapsed" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
@@ -581,6 +640,13 @@
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
+                            <!-- Add a filter on any other column the engine can filter (ProcessId,
+                                 EventId, Channel…) — or put back one of the four above after removing
+                                 it. The menu is built in code from FilterableFields. -->
+                            <Button x:Name="AddFieldButton" Content="+ Add field" Height="28" FontSize="12" Padding="8,0"
+                                    Click="AddFieldButton_Click" VerticalAlignment="Center"
+                                    AutomationProperties.Name="Add a field filter"
+                                    ToolTipService.ToolTip="Filter on another column"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

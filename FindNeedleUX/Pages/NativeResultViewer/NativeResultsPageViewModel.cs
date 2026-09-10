@@ -323,6 +323,40 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ReloadFromSource();
     }
 
+    // Field filters beyond the four with their own FilterSpec slot (ProcessId, EventId, Channel…).
+    // Kept in the order the user added them and applied as predicates ANDed into FilterSpec.Query, the
+    // same node the search box's structured queries use — so both storage backends already handle them
+    // (SQLite compiles it to SQL, the in-memory source evaluates it per row).
+    private readonly List<KeyValuePair<string, string>> _extraFields = new();
+
+    /// <summary>Active extra-field filters as (canonical field, substring), in the order added.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> ExtraFieldFilters => _extraFields;
+
+    /// <summary>Set (or, with an empty value, drop) one extra field filter and re-apply. Fields must be
+    /// canonical LogQuery names — see FilterableFields.</summary>
+    public void SetExtraFieldFilter(string field, string value)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        int at = _extraFields.FindIndex(kv => string.Equals(kv.Key, field, StringComparison.OrdinalIgnoreCase));
+        var v = value ?? "";
+        if (v.Length == 0)
+        {
+            if (at < 0) return;
+            _extraFields.RemoveAt(at);
+        }
+        else
+        {
+            if (at >= 0)
+            {
+                if (_extraFields[at].Value == v) return;
+                _extraFields[at] = new KeyValuePair<string, string>(field, v);
+            }
+            else _extraFields.Add(new KeyValuePair<string, string>(field, v));
+        }
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
     private string _levelFilter = "";
     public string LevelFilter { get => _levelFilter; set => Set(ref _levelFilter, value, applyFilters: true); }
 
@@ -943,7 +977,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         !string.IsNullOrEmpty(_sourceFilter) || !string.IsNullOrEmpty(_levelFilter) ||
         _fromDate.HasValue || _toDate.HasValue ||
         _providerFilterSet != null || _taskNameFilterSet != null || _sourceFilterSet != null ||
-        _levelFilterSet != null;
+        _levelFilterSet != null || _extraFields.Count > 0;
 
     // Shown while streaming with a filter active: the live re-filter is paused (so the app isn't
     // constantly re-searching the growing table); the user clicks Refresh to fold in new matches.
@@ -1233,6 +1267,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         _fromDate = null;
         _toDate = null;
         _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = _levelFilterSet = null;
+        _extraFields.Clear();
         MiddleLayerService.OutputTimeFrom = MiddleLayerService.OutputTimeTo = null;
         _currentPage = 1;
         HasPendingRows = false;
@@ -1382,6 +1417,21 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         LastFilterBreakdown = sb.ToString();
     }
 
+    /// <summary>AND the extra-field predicates onto whatever the search box parsed (which may be null).
+    /// Contains-semantics, matching the substring behaviour of the built-in field boxes.</summary>
+    private FindPluginCore.Searching.Query.QueryNode ComposeQuery()
+    {
+        var node = _parsedQuery;
+        foreach (var kv in _extraFields)
+        {
+            if (string.IsNullOrEmpty(kv.Value)) continue;
+            var p = new FindPluginCore.Searching.Query.PredicateNode(
+                kv.Key, FindPluginCore.Searching.Query.QueryOp.Contains, kv.Value);
+            node = node == null ? p : new FindPluginCore.Searching.Query.AndNode(node, p);
+        }
+        return node;
+    }
+
     private FilterSpec BuildFilterSpec() => new(
         Search: _effectiveSearch ?? "",   // "" when the box holds a structured query (see _parsedQuery)
         Provider: _providerFilter ?? "",
@@ -1396,7 +1446,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         TaskNameSet = _taskNameFilterSet,
         SourceSet = _sourceFilterSet,
         LevelSet = _levelFilterSet,
-        Query = _parsedQuery,
+        Query = ComposeQuery(),
     };
 
     public void ClearFilters()
@@ -1407,6 +1457,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ToDate = null;
         // Clear multi-select sets without an extra reload each (the property sets above already reload).
         _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = _levelFilterSet = null;
+        _extraFields.Clear();
     }
 
     // ----- Headless drive hooks (used by the MCP viewer bridge) -----

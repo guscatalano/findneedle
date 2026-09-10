@@ -76,6 +76,55 @@ public sealed class ActiveFilterState
 }
 
 /// <summary>
+/// Which columns the filter pane can put a field filter on, and what to call them.
+/// <para>
+/// The list is exactly the text fields the SEARCH ENGINE can filter, not every column the grid shows:
+/// four of them (Provider / TaskName / Message / Source) are first-class members of
+/// <c>FilterSpec</c>, and the rest are applied as predicates ANDed into <c>FilterSpec.Query</c>, which
+/// both backends already evaluate (SQLite via SQL, in-memory via the row getter). Time has the Time
+/// section and Level the level chips, so neither appears here.
+/// </para>
+/// </summary>
+public static class FilterFieldCatalog
+{
+    /// <summary>Canonical (LogQuery) name → the column label the pane shows, in menu order.</summary>
+    public static readonly IReadOnlyList<KeyValuePair<string, string>> All = new[]
+    {
+        new KeyValuePair<string, string>("provider", "Provider"),
+        new KeyValuePair<string, string>("taskname", "TaskName"),
+        new KeyValuePair<string, string>("message", "Message"),
+        new KeyValuePair<string, string>("source", "Source"),
+        new KeyValuePair<string, string>("processid", "ProcessId"),
+        new KeyValuePair<string, string>("threadid", "ThreadId"),
+        new KeyValuePair<string, string>("eventid", "EventId"),
+        new KeyValuePair<string, string>("opcode", "OpCode"),
+        new KeyValuePair<string, string>("channel", "Channel"),
+        new KeyValuePair<string, string>("activityid", "ActivityId"),
+        new KeyValuePair<string, string>("relatedactivityid", "RelatedActivityId"),
+        new KeyValuePair<string, string>("machinename", "MachineName"),
+        new KeyValuePair<string, string>("username", "Username"),
+    };
+
+    /// <summary>The four with a dedicated FilterSpec slot — and the only ones with "Pick from values"
+    /// known-value dropdowns behind them. Shown by default.</summary>
+    public static readonly IReadOnlyList<string> BuiltIn = new[] { "provider", "taskname", "message", "source" };
+
+    public static bool IsBuiltIn(string canonical)
+        => BuiltIn.Contains(canonical, StringComparer.OrdinalIgnoreCase);
+
+    public static bool IsKnown(string canonical)
+        => All.Any(kv => string.Equals(kv.Key, canonical, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Column label for a canonical name (the canonical name itself if unrecognised).</summary>
+    public static string DisplayOf(string canonical)
+    {
+        foreach (var kv in All)
+            if (string.Equals(kv.Key, canonical, StringComparison.OrdinalIgnoreCase)) return kv.Value;
+        return canonical ?? "";
+    }
+}
+
+/// <summary>
 /// The single source of truth for "what is narrowing this view". The pane renders this list as
 /// removable pills AND takes the Filters badge count straight from <c>Count</c>, so the number on the
 /// toolbar and the list in the pane cannot disagree (they used to be two hand-kept tallies).

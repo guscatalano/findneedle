@@ -377,6 +377,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (TaskNameFilterBox != null) TaskNameFilterBox.Text = "";
         if (MessageFilterBox != null) MessageFilterBox.Text = "";
         if (SourceFilterBox != null) SourceFilterBox.Text = "";
+        foreach (var box in _extraFieldBoxes.Values) box.Text = "";
         if (LevelFilterCombo != null) LevelFilterCombo.SelectedItem = null;
         ResetTimeFilterUiToAll();
     }
@@ -439,6 +440,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         From = ViewModel.FromDate,
         To = ViewModel.ToDate,
         TimePreset = CheckedTimePresetLabel(),
+        ExtraFields = ViewModel.ExtraFieldFilters,
         RuleFilterActive = ViewModel.RuleFilterActive,
         RuleFileCount = ActiveRuleFiles().Count,
         QuickRules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules
@@ -726,7 +728,151 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 if (MessageFilterBox != null) MessageFilterBox.Text = "";
                 ViewModel.MessageFilter = "";
                 break;
+            default:
+                // An added field (ProcessId, EventId, Channel…): one box, one predicate.
+                if (_extraFieldBoxes.TryGetValue(field ?? "", out var extraBox)) extraBox.Text = "";
+                ViewModel.SetExtraFieldFilter(field, "");
+                break;
         }
+    }
+
+    // ===== Fields: which columns the pane filters on =====
+    // The four built-ins (Provider / TaskName / Message / Source) are laid out in XAML and hidden
+    // rather than destroyed when removed, because they are wired to dedicated FilterSpec slots and to
+    // the "Pick from values" known-value controls. Any other field the engine can filter is added as a
+    // row built here, whose value becomes a predicate ANDed into FilterSpec.Query.
+    private readonly Dictionary<string, FrameworkElement> _extraFieldRows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, TextBox> _extraFieldBoxes = new(StringComparer.OrdinalIgnoreCase);
+
+    private FrameworkElement BuiltInFieldGroup(string field) => field switch
+    {
+        "provider" => ProviderFieldGroup,
+        "taskname" => TaskNameFieldGroup,
+        "message" => MessageFieldGroup,
+        "source" => SourceFieldGroup,
+        _ => null,
+    };
+
+    private bool FieldIsShown(string field)
+    {
+        var g = BuiltInFieldGroup(field);
+        return g != null ? g.Visibility == Visibility.Visible : _extraFieldRows.ContainsKey(field);
+    }
+
+    /// <summary>"+ Add field": offer every filterable column not already on the pane.</summary>
+    private void AddFieldButton_Click(object sender, RoutedEventArgs e)
+    {
+        var flyout = new MenuFlyout();
+        foreach (var kv in FilterFieldCatalog.All)
+        {
+            if (FieldIsShown(kv.Key)) continue;
+            var item = new MenuFlyoutItem { Text = kv.Value, Tag = kv.Key };
+            item.Click += (s, _) => ShowFieldRow((string)((MenuFlyoutItem)s).Tag);
+            flyout.Items.Add(item);
+        }
+        if (flyout.Items.Count == 0)
+            flyout.Items.Add(new MenuFlyoutItem { Text = "Every filterable column is already shown", IsEnabled = false });
+        flyout.ShowAt(sender as FrameworkElement);
+    }
+
+    /// <summary>The X on a field row: stop filtering on that column and take the row away.</summary>
+    private void RemoveField_Click(object sender, RoutedEventArgs e)
+        => RemoveFieldRow(((FrameworkElement)sender).Tag as string);
+
+    private void ShowFieldRow(string field)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        var builtIn = BuiltInFieldGroup(field);
+        if (builtIn != null)
+        {
+            builtIn.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            if (_extraFieldRows.ContainsKey(field)) return;
+            var row = BuildExtraFieldRow(field);
+            _extraFieldRows[field] = row;
+            int at = AddFieldButton == null ? -1 : FilterRowPanel.Children.IndexOf(AddFieldButton);
+            if (at < 0) FilterRowPanel.Children.Add(row); else FilterRowPanel.Children.Insert(at, row);
+        }
+        RefreshFilterLayout(); // give the new row the current dock's sizing
+    }
+
+    private void RemoveFieldRow(string field)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        var builtIn = BuiltInFieldGroup(field);
+        if (builtIn != null)
+        {
+            // Never leave a hidden filter narrowing the view: drop the value AND the known-value set.
+            ClearFieldFilter(field);
+            ClearFieldFilter(field + ":set");
+            builtIn.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            if (!_extraFieldRows.TryGetValue(field, out var row)) return;
+            FilterRowPanel.Children.Remove(row);
+            _extraFieldRows.Remove(field);
+            _extraFieldBoxes.Remove(field);
+            ViewModel.SetExtraFieldFilter(field, "");
+        }
+        UpdateFiltersBadge();
+    }
+
+    /// <summary>A row for a field with no dedicated FilterSpec slot: label, substring box, remove.</summary>
+    private FrameworkElement BuildExtraFieldRow(string field)
+    {
+        var display = FilterFieldCatalog.DisplayOf(field);
+        var grid = new Grid { ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center, Tag = field };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = display,
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+
+        var box = new TextBox
+        {
+            Width = 140,
+            Height = 28,
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            PlaceholderText = display + "…",
+        };
+        box.TextChanged += (s, _) => { ViewModel.SetExtraFieldFilter(field, ((TextBox)s).Text); UpdateFiltersBadge(); };
+        Grid.SetColumn(box, 1);
+        grid.Children.Add(box);
+        _extraFieldBoxes[field] = box;
+
+        var remove = new Button
+        {
+            Content = "\u2715",
+            Tag = field,
+            FontSize = 10,
+            Padding = new Thickness(5, 0, 5, 0),
+            MinWidth = 0,
+            MinHeight = 0,
+            Height = 24,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(remove, $"Stop filtering on {display}");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, "Remove the " + display + " filter");
+        remove.Click += RemoveField_Click;
+        Grid.SetColumn(remove, 2);
+        grid.Children.Add(remove);
+
+        return grid;
     }
 
     /// <summary>Drop a known-value multi-select (and its list selection + button caption).</summary>
@@ -987,6 +1133,15 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // left dock they'd keep their fixed width and look ragged next to the stretched text boxes.
         Field(ProviderFilterCombo, 200); Field(TaskNameFilterCombo, 200); Field(SourceFilterCombo, 200);
         Field(ProviderFilterMulti, double.NaN); Field(TaskNameFilterMulti, double.NaN); Field(SourceFilterMulti, double.NaN);
+        // Each field is a 3-column Grid (label · control · remove). It fills the column in left dock so
+        // the control's star column can stretch; in top dock it hugs its content and sits in the row.
+        void Group(FrameworkElement g)
+        {
+            if (g != null) g.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+        }
+        Group(ProviderFieldGroup); Group(TaskNameFieldGroup); Group(MessageFieldGroup); Group(SourceFieldGroup);
+        foreach (var row in _extraFieldRows.Values) Group(row);
+        foreach (var box in _extraFieldBoxes.Values) Field(box, 140);
 
         // Host visibility follows the expand state; the inactive host stays collapsed.
         FiltersPanel.Visibility  = _filtersExpanded ? Visibility.Visible : Visibility.Collapsed;
@@ -3255,6 +3410,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void ResetColumnFilters_Click(object sender, RoutedEventArgs e)
     {
         ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
+        foreach (var box in _extraFieldBoxes.Values) box.Text = "";
         LevelFilterCombo.SelectedItem = null;
         ViewModel.LevelFilter = "";
         ViewModel.SetKnownFilterSet("Level", null);
@@ -3271,6 +3427,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         SearchBox.Text = "";
         ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
+        foreach (var box in _extraFieldBoxes.Values) box.Text = "";
         LevelFilterCombo.SelectedItem = null;
         ResetTimeFilterUiToAll();
         ViewModel.ClearFilters();
