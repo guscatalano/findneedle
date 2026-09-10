@@ -237,28 +237,40 @@
              onto the viewer to open them (events bubble up from the hosted page in contentFrame). -->
         <Grid Grid.Row="2" AllowDrop="True"
               DragOver="Content_DragOver" DragLeave="Content_DragLeave" Drop="Content_Drop">
-            <Frame x:Name="contentFrame" />
-            <!-- Dismissible "your cached searches are large" prompt (see App startup + ShowCacheCleanupPrompt).
-                 An InfoBar, NOT a dialog, so it never blocks launch or hits ContentDialog re-entrancy. -->
-            <InfoBar x:Name="CacheCleanupBar" VerticalAlignment="Top" Margin="12,12,12,0"
-                     IsOpen="False" IsClosable="True" Severity="Informational" Canvas.ZIndex="10"
-                     Title="Cached searches are large" Closed="CacheCleanupBar_Closed">
-                <InfoBar.Content>
-                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
-                        <Button Content="Clean up now" Click="CacheCleanupNow_Click"/>
-                        <Button Content="Always clean up at launch" Click="CacheCleanupAlways_Click"/>
-                        <Button Content="Never ask" Click="CacheCleanupNever_Click"/>
-                    </StackPanel>
-                </InfoBar.Content>
-            </InfoBar>
-            <!-- "Search failed" notice. An InfoBar, NOT a dialog: a second ContentDialog.ShowAsync while
-                 one is open is a native failfast, and a failing run is exactly when another dialog (triage,
-                 cache reuse, open policy) may already be up. -->
-            <InfoBar x:Name="RunFailedBar" VerticalAlignment="Top" Margin="12,12,12,0"
-                     IsOpen="False" IsClosable="True" Severity="Error" Canvas.ZIndex="10"
-                     Title="Search failed"/>
+            <!-- Notices get their OWN row so they push the page down instead of painting over it. They
+                 used to share the cell with contentFrame (VerticalAlignment=Top + ZIndex), which meant the
+                 cache prompt landed straight on top of the Home page's heading — two bits of text in the
+                 same pixels. A closed InfoBar collapses, so the row costs nothing when there is no notice. -->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <!-- Dismissible "your cached searches are large" prompt (see App startup + ShowCacheCleanupPrompt).
+                     An InfoBar, NOT a dialog, so it never blocks launch or hits ContentDialog re-entrancy. -->
+                <InfoBar x:Name="CacheCleanupBar" Margin="12,12,12,0"
+                         IsOpen="False" IsClosable="True" Severity="Informational"
+                         Title="Cached searches are large" Closed="CacheCleanupBar_Closed">
+                    <InfoBar.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
+                            <Button Content="Clean up now" Click="CacheCleanupNow_Click"/>
+                            <Button Content="Always clean up at launch" Click="CacheCleanupAlways_Click"/>
+                            <Button Content="Never ask" Click="CacheCleanupNever_Click"/>
+                        </StackPanel>
+                    </InfoBar.Content>
+                </InfoBar>
+                <!-- "Search failed" notice. An InfoBar, NOT a dialog: a second ContentDialog.ShowAsync while
+                     one is open is a native failfast, and a failing run is exactly when another dialog
+                     (triage, cache reuse, open policy) may already be up. -->
+                <InfoBar x:Name="RunFailedBar" Margin="12,12,12,0"
+                         IsOpen="False" IsClosable="True" Severity="Error"
+                         Title="Search failed"/>
+            </StackPanel>
+
+            <Frame x:Name="contentFrame" Grid.Row="1" />
             <!-- Full-window overlay spinner for ETL inspection and quick actions -->
-            <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+            <Grid x:Name="SpinnerPanel" Visibility="Collapsed" Grid.RowSpan="2" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
                   AutomationProperties.Name="Operation in progress" AutomationProperties.LiveSetting="Polite">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
                     <ProgressRing x:Name="EtlSpinner" Width="64" Height="64" IsActive="False" AutomationProperties.Name="Working"/>
@@ -312,7 +324,7 @@
 
             <!-- Drag-and-drop overlay: shown while files are dragged over the viewer (hit-test off so
                  the drag events still reach the grid below). -->
-            <Border x:Name="DropOverlay" Visibility="Collapsed" IsHitTestVisible="False" Margin="8"
+            <Border x:Name="DropOverlay" Visibility="Collapsed" Grid.RowSpan="2" IsHitTestVisible="False" Margin="8"
                     Background="#CC101418" CornerRadius="6"
                     BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" BorderThickness="3">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
