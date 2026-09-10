@@ -388,8 +388,19 @@
                             <ToggleButton Content="24h" Tag="1440"  Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="Last 24 hours of the log"/>
                             <ToggleButton Content="7d"  Tag="10080" Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="Last 7 days of the log"/>
                             <ToggleButton x:Name="TimePresetAll" Content="All" Tag="0" IsChecked="True" Height="28" FontSize="12" Padding="8,0" Click="TimePreset_Click" ToolTipService.ToolTip="No time filter (whole log)"/>
-                            <ToggleButton x:Name="CustomTimeToggle" Content="Custom ▾" Height="28" FontSize="12" Padding="8,0" Click="CustomTimeToggle_Click" ToolTipService.ToolTip="Pick an exact From/To date and time"/>
                         </local:WrapPanelLite>
+                        <!-- Custom sits OUTSIDE the preset row on purpose. Styled as a chip alongside
+                             15m/1h/…/All it read as a seventh PRESET, so the way to pick an exact range was
+                             effectively invisible — it opens a From/To picker, it does not select a range by
+                             itself. As a quiet link under the chips it reads as the different thing it is. -->
+                        <ToggleButton x:Name="CustomTimeToggle" Height="26" FontSize="12" Padding="0"
+                                      Background="Transparent" BorderThickness="0" HorizontalAlignment="Left"
+                                      Click="CustomTimeToggle_Click"
+                                      AutomationProperties.Name="Custom range"
+                                      ToolTipService.ToolTip="Pick an exact From/To date and time">
+                            <TextBlock FontSize="12" Text="Custom range…"
+                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                        </ToggleButton>
                         <!-- Custom absolute range. Each bound stacks its date over its time so the 24h
                              TimePicker keeps enough width to show BOTH hour and minute (it clips to just
                              the hour when squeezed). The groups wrap to fit a narrow / resized pane. -->

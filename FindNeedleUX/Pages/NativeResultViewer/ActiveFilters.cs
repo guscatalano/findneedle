@@ -21,6 +21,11 @@ public sealed class ActiveFilter
     /// <summary>Short pill caption, e.g. <c>level in (Error, Warning)</c>.</summary>
     public string Label { get; init; } = "";
 
+    /// <summary>The constraint in full, for a tooltip, when <see cref="Label"/> had to be shortened.
+    /// Empty when the label already says everything. A structured query is the case that matters: it can
+    /// be far longer than a pill, and an ellipsized boolean expression is unreadable.</summary>
+    public string FullText { get; init; } = "";
+
     /// <summary>Clears just this constraint. Null when the host supplied no clear action.</summary>
     public Action Clear { get; init; }
 
@@ -43,6 +48,12 @@ public sealed class ActiveFilterState
 {
     // Toolbar search box (plain substring or a structured query — either way, one constraint).
     public string Search { get; init; } = "";
+
+    /// <summary>True when <see cref="Search"/> parsed as a structured query (msg == "x" AND level == Error)
+    /// rather than plain text. It stays ONE constraint — the terms of a boolean expression cannot be
+    /// removed individually, and an OR/NOT makes a flat AND-list of pills a lie — but it must not be
+    /// labelled as if the user typed a search term.</summary>
+    public bool SearchIsQuery { get; init; }
 
     // Per-field substring filters.
     public string Provider { get; init; } = "";
@@ -169,11 +180,28 @@ public static class ActiveFilterCatalog
         var list = new List<ActiveFilter>();
         if (state == null) return list;
 
-        void Add(string kind, string key, string label)
-            => list.Add(new ActiveFilter { Kind = kind, Key = key, Label = label, Clear = clearFor?.Invoke(kind, key) });
+        void Add(string kind, string key, string label, string fullText = "")
+            => list.Add(new ActiveFilter
+            {
+                Kind = kind, Key = key, Label = label,
+                FullText = fullText ?? "",
+                Clear = clearFor?.Invoke(kind, key),
+            });
 
         if (Has(state.Search))
-            Add("search", "", $"search: \"{Ellipsize(state.Search)}\"");
+        {
+            // Say which it is. A structured query is not a search term, and showing
+            // `search: "msg == "FAILED" AND msg == "test""` reads as a literal string to look for —
+            // doubly confusing because the label's own quotes collide with the query's. It stays ONE
+            // pill (you cannot remove one side of a boolean expression), but it is named honestly and
+            // the untruncated text is on the tooltip so an ellipsis never hides the meaning.
+            var text = state.Search.Trim();
+            var shown = Ellipsize(text);
+            Add("search", "",
+                state.SearchIsQuery ? $"query: {shown}" : $"search: \"{shown}\"",
+                // Only worth a tooltip when the pill actually had to cut something off.
+                fullText: shown == text ? "" : text);
+        }
 
         // Time: a preset chip is one constraint ("last 24h"); an explicit range is up to two bounds,
         // each independently removable.

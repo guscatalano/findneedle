@@ -428,6 +428,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private ActiveFilterState BuildActiveFilterState() => new()
     {
         Search = ViewModel.SearchText,
+        SearchIsQuery = ViewModel.SearchIsQuery, // a structured query gets named as one, not as a search term
         Provider = ViewModel.ProviderFilter,
         TaskName = ViewModel.TaskNameFilter,
         Message = ViewModel.MessageFilter,
@@ -492,6 +493,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
+        // A shortened label must still be readable in full somewhere — a truncated boolean query is
+        // meaningless otherwise.
+        if (!string.IsNullOrEmpty(f.FullText))
+            ToolTipService.SetToolTip(text, f.FullText);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(text);
         if (f.Clear != null)

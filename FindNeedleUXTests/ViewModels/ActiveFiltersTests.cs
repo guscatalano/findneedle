@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using FindNeedleUX.Pages.NativeResultViewer;
@@ -187,5 +187,53 @@ public class ActiveFiltersTests
 
         list.Single(f => f.Kind == "field").Clear();
         CollectionAssert.AreEqual(new[] { "field/provider" }, cleared);
+    }
+
+    // ── A structured query is not a search term ───────────────────────────────
+    // Labelling `msg == "FAILED" AND msg == "test"` as `search: "..."` reads as a literal string to look
+    // for, and the label's own quotes collide with the query's. It stays ONE pill (you cannot remove one
+    // side of a boolean expression) but it must say what it is, and the full text must survive on the
+    // tooltip so an ellipsis never hides the meaning.
+
+    [TestMethod]
+    public void StructuredQuery_IsLabelledQuery_NotSearch()
+    {
+        var q = "msg == \"FAILED\" AND msg == \"test\"";
+        var only = ActiveFilterCatalog.Build(new ActiveFilterState { Search = q, SearchIsQuery = true }).Single();
+
+        StringAssert.StartsWith(only.Label, "query: ");
+        Assert.IsFalse(only.Label.StartsWith("search:"), "a query is not a search term");
+        Assert.AreEqual(q, only.FullText, "the untruncated query must be available for the tooltip");
+    }
+
+    [TestMethod]
+    public void PlainText_IsStillLabelledSearch_AndQuoted()
+    {
+        var only = ActiveFilterCatalog.Build(new ActiveFilterState { Search = "cache-miss" }).Single();
+        Assert.AreEqual("search: \"cache-miss\"", only.Label);
+        Assert.AreEqual("", only.FullText, "nothing was hidden, so there is nothing to expand");
+    }
+
+    [TestMethod]
+    public void Query_IsOneConstraint_NotDecomposedIntoItsTerms()
+    {
+        // Removing one half of an AND/OR is not a thing the UI can honestly offer.
+        var built = ActiveFilterCatalog.Build(new ActiveFilterState
+        {
+            Search = "msg == \"a\" OR msg == \"b\"",
+            SearchIsQuery = true,
+        });
+        Assert.AreEqual(1, built.Count);
+    }
+
+    [TestMethod]
+    public void LongQuery_IsEllipsizedInTheLabel_ButWholeInFullText()
+    {
+        var q = "provider ~ Microsoft-Windows-Kernel-Power AND level == Error AND msg ~ transition";
+        var only = ActiveFilterCatalog.Build(new ActiveFilterState { Search = q, SearchIsQuery = true }).Single();
+
+        Assert.IsTrue(only.Label.Length < q.Length, "a long query should not be shown whole on the pill");
+        StringAssert.EndsWith(only.Label, "…");
+        Assert.AreEqual(q, only.FullText);
     }
 }
