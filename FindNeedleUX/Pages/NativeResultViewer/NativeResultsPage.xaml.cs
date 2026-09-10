@@ -592,7 +592,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private UIElement BuildQuickRuleRow(FindNeedleUX.Services.ViewerQuickRule rule, int index)
     {
-        var grid = new Grid();
+        var grid = new Grid { ColumnSpacing = 8, MinWidth = 220 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -657,6 +657,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8, 2, 2, 2),
+            // Fills the narrow left pane; capped so the row doesn't stretch the full window width in
+            // the top dock, stranding the switch and the X at the far right edge.
+            MaxWidth = 420,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Child = grid,
         };
     }
