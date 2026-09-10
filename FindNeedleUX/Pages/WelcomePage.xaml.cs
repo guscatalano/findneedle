@@ -233,12 +233,25 @@ public sealed partial class WelcomePage : Page
         text.Children.Add(Secondary(sub, trim: true));
         Grid.SetColumn(text, 0); grid.Children.Add(text);
 
-        // "Open…" goes to the Known logs page with this entry spotlighted (it has reveal/hide/category too).
-        var open = SmallButton("Open…", "Show this entry on the Known logs page");
+        // "Open…" opens these logs straight into the workspace (Add / Replace / Ask), like the Known logs page
+        // does. Bouncing through that page first made it Known logs -> Known logs -> Open.
+        var open = SmallButton("Open…", "Open these logs");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(open, $"Open {entry.Name}");
-        open.Click += (_, _) => Frame?.Navigate(typeof(LogFinderPage), entry.Id);
+        open.Click += (_, _) => OpenKnownLog(entry);
         Grid.SetColumn(open, 1); grid.Children.Add(open);
         return grid;
+    }
+
+    private async void OpenKnownLog(LogCatalogEntry entry)
+    {
+        var path = entry.ExpandedPath;
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try
+        {
+            if (WindowUtil.GetMainWindow() is MainWindow main)
+                await main.OpenIntoWorkspaceAsync(new[] { path }, label: $"Opening {entry.Name}…");
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"Open known log failed: {ex.Message}"); }
     }
 
     // ===================== Current workspace =====================
