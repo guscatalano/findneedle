@@ -101,10 +101,16 @@ public class SearchQueryUX
             throw new Exception("wtf");
         }
         q.Depth = depth;
-        q.Filters = filters;
-        q.Locations = locations;
-        q.Processors = processors;
-        q.Outputs = outputs;
+        // SNAPSHOT, do not alias. These lists come straight from MiddleLayerService's process-wide
+        // statics, and the search enumerates q.Locations on a background thread for the whole run. Storing
+        // the caller's list by reference meant the UI thread adding a source (opening a second file) or
+        // clearing the workspace mutated the very collection being enumerated — an
+        // InvalidOperationException on the search thread, which nothing observes, so the load silently
+        // died. A run should search the set it was started with; a later change belongs to a later run.
+        q.Filters = filters == null ? null : new List<ISearchFilter>(filters);
+        q.Locations = locations == null ? null : new List<ISearchLocation>(locations);
+        q.Processors = processors == null ? null : new List<IResultProcessor>(processors);
+        q.Outputs = outputs == null ? null : new List<ISearchOutput>(outputs);
         q.SearchStepNotificationSink = stepnotifysink;
         q.stats = stats;
     }

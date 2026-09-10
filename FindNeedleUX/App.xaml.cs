@@ -257,8 +257,20 @@ public partial class App : Application
         if (m_window is not MainWindow mw) return;
         foreach (var path in ExtractPaths(args))
         {
-            _ = mw.OpenPathAsync(path);
+            // Fire-and-forget, but NOT unobserved: a faulted open used to vanish entirely (no dialog, no
+            // log, nothing in the app log), so "that file just didn't load" was the only symptom of a
+            // real failure. We cannot await here — activation must return promptly — so record the fault.
+            _ = OpenActivatedPathAsync(mw, path);
             break; // one workspace per window — open the first file
+        }
+    }
+
+    private static async System.Threading.Tasks.Task OpenActivatedPathAsync(MainWindow mw, string path)
+    {
+        try { await mw.OpenPathAsync(path); }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"Opening '{path}' from activation failed: {ex.GetBaseException().Message}\n{ex}");
         }
     }
 

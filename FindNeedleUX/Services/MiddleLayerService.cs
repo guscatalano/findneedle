@@ -967,11 +967,11 @@ public class MiddleLayerService
 
     public static Task<string> RunSearch(bool surfacescan = false, CancellationToken cancellationToken = default)
     {
-        // If a streaming search is in flight, its background task is still writing to a storage
-        // we're about to replace + dispose. Stop it first so the next UpdateSearchQuery call's
-        // storage cleanup doesn't yank the storage out from under a live writer.
-        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
-        CurrentStreamingSearch = null;
+        // If a streaming search is in flight, its background task is still writing to a storage we're
+        // about to replace + dispose. Stop it AND WAIT: this used to only signal cancellation and carry
+        // on, which is precisely the "yank the storage out from under a live writer" the comment warned
+        // about, since cancellation of an ETL decode is not immediate.
+        StopCurrentStreamingSearchAndWait();
         ClearOverrideStorage(); // a real search supersedes any cache being viewed
         LastStats = null;        // drop the previous file's decode/stats so its warning banner clears
         // Stop any background index build from a previous search before we wipe/replace storage.
@@ -1458,6 +1458,50 @@ public class MiddleLayerService
     /// </summary>
     public static StreamingSearchHandle? CurrentStreamingSearch { get; private set; }
 
+    /// <summary>How long to wait for a cancelled streaming search to unwind before giving up on it.
+    /// Long enough for a decode to reach its next cancellation check, short enough that a wedged search
+    /// cannot freeze the caller. Exposed for tests.</summary>
+    internal static int StopWaitMs = 15_000;
+
+    /// <summary>
+    /// Cancel the in-flight streaming search and wait, bounded, for its task to finish. Callers that are
+    /// about to replace or dispose the search's storage MUST use this rather than a bare Stop(): the
+    /// search task writes batches into that storage right up until it unwinds.
+    /// Returns true if it stopped, false if it outlived the wait (then it is left cancelled and orphaned —
+    /// worse than clean, better than deadlocking the UI).
+    /// </summary>
+    private static bool StopCurrentStreamingSearchAndWait()
+    {
+        var handle = CurrentStreamingSearch;
+        if (handle == null) return true;
+        try { handle.Stop(); } catch { /* already disposed */ }
+        try
+        {
+            // Wait() rethrows as AggregateException; a cancelled search is the EXPECTED outcome here.
+            if (!handle.SearchTask.Wait(StopWaitMs))
+            {
+                Logger.Instance.Log(
+                    $"Previous streaming search did not stop within {StopWaitMs}ms; continuing and leaving it orphaned.");
+                return false;
+            }
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is OperationCanceledException))
+        {
+            // Normal: that is what cancelling looks like.
+        }
+        catch (Exception ex)
+        {
+            // The previous search failed on its way out. It is finished, which is all we needed; record
+            // why rather than letting it disappear (this task is otherwise unobserved).
+            Logger.Instance.Log($"Previous streaming search ended with an error: {ex.GetBaseException().Message}");
+        }
+        finally
+        {
+            CurrentStreamingSearch = null;
+        }
+        return true;
+    }
+
     /// <summary>
     /// Streaming variant of <see cref="RunSearch"/>. Forces SQLite storage (only backend that's
     /// safe under concurrent read+write), constructs the storage on this thread, hands the
@@ -1467,10 +1511,17 @@ public class MiddleLayerService
     /// </summary>
     public static StreamingSearchHandle RunSearchStreaming(bool surfaceScan = false)
     {
-        // Cancel any in-flight streaming search before starting a new one. Without this, the
-        // previous search's background task would keep producing into an orphaned SqliteStorage,
-        // wasting CPU + disk and racing with the new search for the result handle.
-        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
+        // Cancel any in-flight streaming search AND WAIT FOR IT TO ACTUALLY STOP. Cancelling alone was
+        // not enough: UpdateSearchQuery() below disposes the old query's storage while the previous
+        // search's background task is still inside Step2 writing batches into that same SqliteStorage.
+        // Disposing it under a live writer faults the search thread, and nothing observes that task, so
+        // the load just silently vanished. ETL decode only checks cancellation between phases, so on a
+        // multi-GB capture the gap between Cancel() and "actually stopped" is minutes, not milliseconds.
+        StopCurrentStreamingSearchAndWait();
+        // Stop any background FTS build from the previous search before storage is replaced. RunSearch
+        // has always done this; the streaming path did not, so the build kept writing to storage that was
+        // about to be disposed and its cancellation handle was overwritten, making it unstoppable.
+        CancelBackgroundIndexBuild();
         ClearOverrideStorage(); // a real search supersedes any cache being viewed
         LastStats = null;        // drop the previous file's decode/stats so its warning banner clears
 

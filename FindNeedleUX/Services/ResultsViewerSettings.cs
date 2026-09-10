@@ -887,8 +887,25 @@ public static class ResultsViewerSettings
         {
             var dir = Path.GetDirectoryName(_settingsPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(_settingsPath,
-                JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true }));
+            var json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
+
+            // ATOMIC: write a temp file next to the target, then swap it in. A plain WriteAllText
+            // truncates the real file first, so any reader that lands in that window sees an empty or
+            // half-written file, fails to parse, and silently falls back to defaults — i.e. the user's
+            // settings appear to reset themselves. The window is small with one process and wide open
+            // with several, which matters now that running more than one instance is on the table.
+            var tmp = _settingsPath + ".tmp";
+            File.WriteAllText(tmp, json);
+            if (File.Exists(_settingsPath))
+            {
+                // Replace keeps the destination's identity and is atomic where the filesystem supports it.
+                // No backup file: we already hold the full contents in memory.
+                File.Replace(tmp, _settingsPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            }
+            else
+            {
+                File.Move(tmp, _settingsPath);
+            }
         }
         catch (Exception ex)
         {
