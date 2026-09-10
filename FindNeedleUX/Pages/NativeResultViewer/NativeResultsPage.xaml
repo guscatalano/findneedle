@@ -584,13 +584,24 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
-                <!-- Clear every filter at once (search box, per-column, time range, level). -->
-                <Border Padding="12,6"
+                <!-- Active filters: every constraint currently narrowing the view, one removable pill
+                     each. Rendered in code from ActiveFilterCatalog.Build(BuildActiveFilterState()) —
+                     the SAME list the Filters badge counts, so the number and the list can't disagree.
+                     The whole section hides when nothing is active (there is then nothing to clear). -->
+                <Border x:Name="ActiveFiltersSection" Padding="12,6" Visibility="Collapsed"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-                    <Button Content="Clear all (incl. search &amp; time)" Click="ClearFiltersButton_Click"
-                            Height="28" FontSize="12"
-                            ToolTipService.ToolTip="Clear everything: the search box, per-field filters, time range, and level."
-                            AutomationProperties.Name="Clear all filters"/>
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="ACTIVE FILTERS" Style="{StaticResource PaneSectionHeader}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="ActiveFiltersCount" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <Button Content="Clear all" Click="ClearFiltersButton_Click"
+                                    Height="24" FontSize="12" Padding="8,0" MinHeight="0"
+                                    ToolTipService.ToolTip="Clear everything: the search box, per-field filters, time range, and level."
+                                    AutomationProperties.Name="Clear all filters"/>
+                        </StackPanel>
+                        <local:WrapPanelLite x:Name="ActiveFiltersHost" HorizontalSpacing="6" VerticalSpacing="4"/>
+                    </StackPanel>
                 </Border>
             </StackPanel>
         </Border>

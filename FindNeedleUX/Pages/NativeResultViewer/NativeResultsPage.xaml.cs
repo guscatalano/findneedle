@@ -415,26 +415,222 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// <summary>Show a centered empty-state over the grid when a finished load has zero rows, so the user
     /// sees *why* it's blank instead of an empty grid. Distinguishes "no rows at all" (empty source /
     /// nothing decoded) from "filters hid everything" (offers Clear filters). No-op while loading.</summary>
-    // Active-filter count badge on the Filters segmented control's label, so the user sees rows are being
-    // hidden even with the pane collapsed. Counts search + each per-field/level/time filter and the
-    // known-value multi-selects.
+    // ===== Active filters =====
+    // ONE source of truth for "what is narrowing this view": ActiveFilterCatalog.Build. The pane's
+    // removable pill list AND the count badge on the Filters segmented control both come from it, so
+    // the number on the toolbar can never disagree with the list in the pane (they used to be two
+    // separately hand-kept tallies, and they drifted).
+
+    /// <summary>Snapshot the filter inputs for the catalog. The time-preset chip lives only in the UI —
+    /// a preset leaves nothing behind in the view model but a From bound — so it's read from the chips
+    /// here, and only when the range still has a preset's shape (From set, To open).</summary>
+    private ActiveFilterState BuildActiveFilterState() => new()
+    {
+        Search = ViewModel.SearchText,
+        Provider = ViewModel.ProviderFilter,
+        TaskName = ViewModel.TaskNameFilter,
+        Message = ViewModel.MessageFilter,
+        Source = ViewModel.SourceFilter,
+        Level = ViewModel.LevelFilter,
+        ProviderSet = ViewModel.ProviderFilterSet,
+        TaskNameSet = ViewModel.TaskNameFilterSet,
+        SourceSet = ViewModel.SourceFilterSet,
+        LevelSet = ViewModel.LevelFilterSet,
+        From = ViewModel.FromDate,
+        To = ViewModel.ToDate,
+        TimePreset = CheckedTimePresetLabel(),
+        RuleFilterActive = ViewModel.RuleFilterActive,
+        RuleFileCount = ActiveRuleFiles().Count,
+    };
+
+    /// <summary>The checked relative-time chip ("24h"), or null when the range isn't one — "All",
+    /// no chip, or an absolute/zoomed range (which sets BOTH bounds; a preset only sets From).</summary>
+    private string CheckedTimePresetLabel()
+    {
+        if (TimePresetPanel == null || ViewModel.FromDate == null || ViewModel.ToDate != null) return null;
+        var chip = PresetChips().FirstOrDefault(c => c.IsChecked == true && !ReferenceEquals(c, TimePresetAll));
+        return chip?.Content as string;
+    }
+
+    private IReadOnlyList<ActiveFilter> BuildActiveFilters()
+        => ActiveFilterCatalog.Build(BuildActiveFilterState(), ClearActionFor);
+
+    // Active-filter badge on the Filters segmented control's label, so the user sees rows are being
+    // hidden even with the pane collapsed — now simply the length of the pill list.
     private void UpdateFiltersBadge()
     {
-        if (FiltersSegment == null) return;
-        int n = 0;
-        if (!string.IsNullOrEmpty(ViewModel.SearchText)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.ProviderFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.TaskNameFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.MessageFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.SourceFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.LevelFilter)) n++;
-        if (ViewModel.LevelFilterSet?.Count > 0) n++;
-        if (ViewModel.FromDate != null) n++;
-        if (ViewModel.ToDate != null) n++;
-        if (ViewModel.ProviderFilterSet?.Count > 0) n++;
-        if (ViewModel.TaskNameFilterSet?.Count > 0) n++;
-        if (ViewModel.SourceFilterSet?.Count > 0) n++;
-        FiltersSegment.BadgeCount = n;
+        var active = BuildActiveFilters();
+        if (FiltersSegment != null) FiltersSegment.BadgeCount = active.Count;
+        RenderActiveFilters(active);
+    }
+
+    /// <summary>Redraw the pane's "Active filters" pills; hide the whole section when nothing is active.</summary>
+    private void RenderActiveFilters(IReadOnlyList<ActiveFilter> active)
+    {
+        if (ActiveFiltersHost == null || ActiveFiltersSection == null) return; // during initial parse
+        ActiveFiltersHost.Children.Clear();
+        ActiveFiltersSection.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (active.Count == 0) return;
+        if (ActiveFiltersCount != null)
+            ActiveFiltersCount.Text = active.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var f in active) ActiveFiltersHost.Children.Add(BuildFilterPill(f));
+    }
+
+    /// <summary>One pill: the constraint's label plus an X that removes exactly that constraint.</summary>
+    private UIElement BuildFilterPill(ActiveFilter f)
+    {
+        var text = new TextBlock
+        {
+            Text = f.Label,
+            FontSize = 12,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(text);
+        if (f.Clear != null)
+        {
+            var x = new Button
+            {
+                Content = "\u2715",
+                FontSize = 10,
+                Padding = new Thickness(5, 0, 5, 0),
+                MinWidth = 0,
+                MinHeight = 0,
+                Height = 20,
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            ToolTipService.SetToolTip(x, "Remove this filter");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(x, "Remove filter " + f.Label);
+            var clear = f.Clear;
+            x.Click += (_, _) => { clear(); UpdateFiltersBadge(); };
+            row.Children.Add(x);
+        }
+        return new Border
+        {
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 1, f.Clear != null ? 2 : 8, 1),
+            Child = row,
+            Tag = f.Kind + "/" + f.Key,
+        };
+    }
+
+    /// <summary>The "remove just this one" action behind each pill's X, by (kind, key).</summary>
+    private Action ClearActionFor(string kind, string key)
+    {
+        switch (kind)
+        {
+            case "search":
+                return () => { if (SearchBox != null) SearchBox.Text = ""; ViewModel.SearchText = ""; };
+
+            case "time":
+                if (key == "preset") return () => ClearTimeRange_Click(null, null);
+                if (key == "from") return () => ClearTimeBound(isFrom: true);
+                if (key == "to") return () => ClearTimeBound(isFrom: false);
+                return null;
+
+            case "level":
+                if (key == "set")
+                    return () => { ViewModel.SetKnownFilterSet("Level", null); SyncLevelChips(); };
+                return () =>
+                {
+                    if (LevelFilterCombo != null) LevelFilterCombo.SelectedItem = null;
+                    ViewModel.LevelFilter = "";
+                };
+
+            case "field":
+                return () => ClearFieldFilter(key);
+
+            case "rules":
+                return () =>
+                {
+                    if (RuleFilterToggle == null) return;
+                    RuleFilterToggle.IsChecked = false;
+                    RuleFilterToggle_Click(RuleFilterToggle, new RoutedEventArgs());
+                };
+        }
+        return null;
+    }
+
+    /// <summary>Drop one absolute time bound (and its pickers), keeping the other. With both gone the
+    /// preset chips go back to "All".</summary>
+    private void ClearTimeBound(bool isFrom)
+    {
+        _suppressTimeBounds = true;
+        try
+        {
+            if (isFrom)
+            {
+                if (FromDatePicker != null) FromDatePicker.Date = null;
+                if (FromTimePicker != null) FromTimePicker.SelectedTime = null;
+                UpdateTimeButtonLabel(FromTimeButton, FromTimePicker);
+            }
+            else
+            {
+                if (ToDatePicker != null) ToDatePicker.Date = null;
+                if (ToTimePicker != null) ToTimePicker.SelectedTime = null;
+                UpdateTimeButtonLabel(ToTimeButton, ToTimePicker);
+            }
+        }
+        catch { /* picker display is best-effort; the VM bound below is the real filter */ }
+        _suppressTimeBounds = false;
+
+        if (isFrom) ViewModel.FromDate = null; else ViewModel.ToDate = null;
+        if (ViewModel.FromDate == null && ViewModel.ToDate == null && TimePresetAll != null)
+            SelectOnlyPreset(TimePresetAll);
+    }
+
+    /// <summary>Clear one field constraint. <paramref name="key"/> is the catalog key: a canonical field
+    /// name ("provider") for the substring filter, or "provider:set" for its known-value OR-set.</summary>
+    private void ClearFieldFilter(string key)
+    {
+        bool isSet = key != null && key.EndsWith(":set", StringComparison.Ordinal);
+        var field = isSet ? key.Substring(0, key.Length - 4) : key;
+        switch (field)
+        {
+            case "provider":
+                if (isSet) ClearKnownSet("Provider", ProviderFilterMulti, ProviderFilterMultiList);
+                else { if (ProviderFilterBox != null) ProviderFilterBox.Text = ""; ViewModel.ProviderFilter = ""; SelectKnownComboAll(ProviderFilterCombo); }
+                break;
+            case "taskname":
+                if (isSet) ClearKnownSet("TaskName", TaskNameFilterMulti, TaskNameFilterMultiList);
+                else { if (TaskNameFilterBox != null) TaskNameFilterBox.Text = ""; ViewModel.TaskNameFilter = ""; SelectKnownComboAll(TaskNameFilterCombo); }
+                break;
+            case "source":
+                if (isSet) ClearKnownSet("Source", SourceFilterMulti, SourceFilterMultiList);
+                else { if (SourceFilterBox != null) SourceFilterBox.Text = ""; ViewModel.SourceFilter = ""; SelectKnownComboAll(SourceFilterCombo); }
+                break;
+            case "message":
+                if (MessageFilterBox != null) MessageFilterBox.Text = "";
+                ViewModel.MessageFilter = "";
+                break;
+        }
+    }
+
+    /// <summary>Drop a known-value multi-select (and its list selection + button caption).</summary>
+    private void ClearKnownSet(string field, DropDownButton button, ListView list)
+    {
+        _suppressKnownCombo = true;
+        try { list?.SelectedItems.Clear(); } catch { /* list may not be realized yet */ }
+        _suppressKnownCombo = false;
+        UpdateMultiButtonLabel(field, button, list);
+        ViewModel.SetKnownFilterSet(field, null);
+    }
+
+    /// <summary>Point a known-value single-select combo back at its "(All)" row without re-filtering.</summary>
+    private void SelectKnownComboAll(ComboBox combo)
+    {
+        if (combo == null) return;
+        _suppressKnownCombo = true;
+        try { combo.SelectedItem = combo.Items.OfType<KnownFacetItem>().FirstOrDefault(i => i.IsAll); }
+        catch { /* not populated yet */ }
+        _suppressKnownCombo = false;
     }
 
     private void UpdateEmptyState()
