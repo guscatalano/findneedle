@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,6 +41,54 @@ public class SearchOrchestratorTests
         }
 
         public string GetSummaryReport() => Report;
+    }
+
+    /// <summary>A runner whose search task faults — stands in for a real search failure
+    /// (e.g. a protected .evtx under C:\Windows\System32\winevt\Logs).</summary>
+    private sealed class FailingRunner : ISearchRunner
+    {
+        private readonly Exception _fault;
+        public FailingRunner(Exception fault) => _fault = fault;
+        public bool LastSearchReusedCache => false;
+
+        public SearchRunHandle RunStreaming(bool shallowSearch)
+            => new() { SearchTask = Task.FromException(_fault), Cancellation = new CancellationTokenSource() };
+
+        public string GetSummaryReport() => "";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // A failed search must end as a message, never as a crash. Anything escaping
+    // RunAsync reaches an async void UI handler, gets reposted to the UI thread, and
+    // trips a WinUI failfast (0xC000027B) that App.UnhandledException cannot intercept.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task RunAsync_SearchFails_ReportsInsteadOfThrowing()
+    {
+        var runner = new FailingRunner(new UnauthorizedAccessException("Access to the path is denied."));
+        string status = null;
+
+        // Must not throw: throwing here is what killed the process.
+        await new SearchOrchestrator(runner).RunAsync(false, () => { }, s => status = s, graceMs: 20);
+
+        StringAssert.Contains(status ?? "", "Access to the path is denied.",
+            "the user should be told why the search failed");
+    }
+
+    [TestMethod]
+    public async Task RunAsync_SearchFailsWithAggregate_ReportsTheInnerReason()
+    {
+        var inner = new UnauthorizedAccessException("Access to the path is denied.");
+        var runner = new FailingRunner(new AggregateException(new AggregateException(inner)));
+        string status = null;
+
+        await new SearchOrchestrator(runner).RunAsync(false, () => { }, s => status = s, graceMs: 20);
+
+        StringAssert.Contains(status ?? "", "Access to the path is denied.",
+            "task plumbing wraps the real fault in AggregateException; report the inner one");
+        Assert.IsFalse((status ?? "").Contains("One or more errors occurred"),
+            "the generic AggregateException text is useless to the user");
     }
 
     // ─────────────────────────────────────────────────────────────────────────

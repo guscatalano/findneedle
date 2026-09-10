@@ -65,7 +65,26 @@ public sealed class SearchOrchestrator
         {
             onStatus("Search cancelled.");
         }
+        catch (Exception ex)
+        {
+            // BACKSTOP: a failed search must never take the process down. Callers of RunAsync are
+            // async void UI handlers (RunSearchPage.Button_Click and friends), so anything escaping
+            // here is reposted to the UI thread by the runtime and the rethrow trips a WinUI
+            // RaiseFailFastException (0xC000027B) — a kill App.UnhandledException cannot intercept,
+            // leaving no managed stack and nothing in the app log. That is exactly how one unreadable
+            // .evtx under C:\Windows\System32\winevt\Logs killed the app.
+            //
+            // Individual causes still get fixed at their source (see FolderLocation), but a search
+            // that fails for ANY reason should end as a message, not a vanished window.
+            var reason = Unwrap(ex);
+            FindNeedlePluginLib.Logger.Instance.Log($"Search failed: {reason.GetType().Name}: {reason.Message}\n{ex}");
+            onStatus($"Search failed: {reason.Message}");
+        }
     }
+
+    /// <summary>The exception worth showing: task plumbing wraps the real fault in AggregateException.</summary>
+    private static Exception Unwrap(Exception ex)
+        => ex is AggregateException { InnerException: { } inner } ? Unwrap(inner) : ex;
 
     /// <summary>Requests cancellation of the in-flight search, if any.</summary>
     public void Cancel() => _cts?.Cancel();

@@ -562,19 +562,34 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         foreach (var processor in processors)
         {
             if (cancellationToken.IsCancellationRequested) break;
-            await processor.GetResultsWithCallback(results =>
+            // Same rule as ProcessFile: one file that cannot be read must not abort the whole scan.
+            // This is the SECOND place a protected .evtx threw from — reading rows, not opening the
+            // file — so fixing only the load path left the crash in place on a re-run.
+            try
             {
-                if (cancellationToken.IsCancellationRequested) return;
-                foreach (var result in results)
+                await processor.GetResultsWithCallback(results =>
                 {
-                    batch.Add(result);
-                    if (batch.Count == batchSize)
+                    if (cancellationToken.IsCancellationRequested) return;
+                    foreach (var result in results)
                     {
-                        onBatch(batch);
-                        batch = new List<ISearchResult>(batchSize);
+                        batch.Add(result);
+                        if (batch.Count == batchSize)
+                        {
+                            onBatch(batch);
+                            batch = new List<ISearchResult>(batchSize);
+                        }
                     }
-                }
-            }, cancellationToken, batchSize);
+                }, cancellationToken, batchSize);
+            }
+            catch (OperationCanceledException) { throw; } // the user stopped the search — not a file fault
+            catch (UnauthorizedAccessException ex)
+            {
+                RecordSkippedFile(processor.GetFileName(), "no permission to read it (try running as administrator)", ex);
+            }
+            catch (Exception ex)
+            {
+                RecordSkippedFile(processor.GetFileName(), ex.Message, ex);
+            }
         }
         if (batch.Count > 0)
         {
