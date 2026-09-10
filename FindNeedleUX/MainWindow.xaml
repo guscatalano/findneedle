@@ -180,17 +180,9 @@
                                AutomationProperties.AutomationId="BreadcrumbTitle"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <!-- Command-palette hint (Ctrl+K). Visible only while the palette is enabled (ApplyHotkeys). -->
-                    <Button x:Name="PaletteHintButton" Click="PaletteHintButton_Click" Background="Transparent"
-                            BorderThickness="0" Padding="8,2" MinHeight="24" Margin="0,0,8,0"
-                            ToolTipService.ToolTip="Command palette — jump to any page or action (Ctrl+K)"
-                            AutomationProperties.Name="Command palette (Ctrl+K)">
-                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <FontIcon Glyph="&#xE721;" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Text="Ctrl+K" FontSize="11" VerticalAlignment="Center"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        </StackPanel>
-                    </Button>
+                    <!-- No "Ctrl+K" hint chip here: the command palette is discoverable on its own and the
+                         chip just sat in the breadcrumb row looking like a stray tooltip. The Ctrl+K
+                         accelerator itself is unaffected (registered in code by ApplyHotkeys). -->
                     <TextBlock Text="Workspace" FontSize="12" VerticalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <Border x:Name="WorkspaceChip" CornerRadius="12" BorderThickness="1" Padding="10,2" MinHeight="24"

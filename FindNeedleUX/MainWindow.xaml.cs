@@ -1342,15 +1342,7 @@ public sealed partial class MainWindow : Window
 
         foreach (var accel in new[] { OpenFileAccelerator, SaveWorkspaceAccelerator, RunSearchAccelerator, ViewerHelpAccelerator })
             if (accel != null) accel.IsEnabled = hotkeys;
-        // The visible "Ctrl+K" hint (breadcrumb row) tracks the same switch — no hint for a dead shortcut.
-        if (PaletteHintButton != null) PaletteHintButton.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         ApplyStopAccelerator();
-    }
-
-    private void PaletteHintButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (CommandPalettePanel.Visibility == Visibility.Visible) CloseCommandPalette();
-        else OpenCommandPalette();
     }
 
     // Esc → Stop is only registered while a search is running: a permanent Escape accelerator would swallow
