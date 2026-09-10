@@ -832,7 +832,7 @@
                     <Run Text="  ·  "/>
                     <Run Text="{x:Bind ViewModel.PageRangeText, Mode=OneWay}"/>
                     <Run Text=" of "/>
-                    <Run Text="{x:Bind ViewModel.TotalFilteredCount, Mode=OneWay}"/>
+                    <Run Text="{x:Bind ViewModel.TotalFilteredCountText, Mode=OneWay}"/>
                 </TextBlock>
                 <TextBox x:Name="PageJumpBox" Width="60" Height="28" FontSize="12"
                          PlaceholderText="# go to" KeyDown="PageJumpBox_KeyDown"

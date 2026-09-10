@@ -359,7 +359,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         }
     }
 
-    public int TotalFilteredCount { get => _totalFilteredCount; private set => Set(ref _totalFilteredCount, value); }
+    public int TotalFilteredCount
+    {
+        get => _totalFilteredCount;
+        private set { if (Set(ref _totalFilteredCount, value)) OnPropertyChanged(nameof(TotalFilteredCountText)); }
+    }
     private int _totalFilteredCount;
 
     public int TotalPages
@@ -370,6 +374,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             return (_totalFilteredCount + _pageSize - 1) / _pageSize;
         }
     }
+
+    /// <summary>The filtered total, grouped. The paging bar reads "&lt;range&gt; of &lt;total&gt;" and the range is
+    /// already grouped, so binding the raw int here produced "1–5,000 of 72923" — two number formats in
+    /// one sentence.</summary>
+    public string TotalFilteredCountText => _totalFilteredCount.ToString("N0");
 
     public string PageRangeText
     {
@@ -651,6 +660,15 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     };
 
     // ----- per-level + per-column metadata -----
+
+    /// <summary>
+    /// Severity rank of a level name, taken from the <see cref="FindNeedlePluginLib.Level"/> enum, which is
+    /// declared worst-first (Catastrophic, Error, Warning, Info, Verbose, Unknown). Used to order the level
+    /// chips. Anything unparseable sorts last rather than pretending to be critical.
+    /// </summary>
+    internal static int LevelRank(string level)
+        => Enum.TryParse<FindNeedlePluginLib.Level>(level, ignoreCase: true, out var l) ? (int)l : int.MaxValue;
+
     public ObservableCollection<LevelEntry> Levels { get; } = new();
     public ObservableCollection<string> KnownLevelNames { get; } = new();
     public ObservableCollection<ColumnEntry> Columns { get; } = new();
@@ -839,7 +857,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                     StringComparer.OrdinalIgnoreCase);
 
                 Levels.Clear();
-                foreach (var level in levelSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+                // SEVERITY order, not alphabetical. Sorting by name put Info above Warning and left the
+                // chips reading Catastrophic, Error, Info, Warning — which defeats the point of a severity
+                // filter. The Level enum is already declared worst-first, so use it as the rank rather
+                // than keeping a second hand-maintained table that can drift from the enum.
+                foreach (var level in levelSet.OrderBy(LevelRank).ThenBy(s => s, StringComparer.OrdinalIgnoreCase))
                 {
                     var color = DefaultLevelColors.TryGetValue(level, out var c) ? c : "Transparent";
                     Levels.Add(new LevelEntry { Level = level, HexColor = color });

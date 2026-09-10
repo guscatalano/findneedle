@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -35,7 +35,6 @@ public sealed partial class WelcomePage : Page
     private static readonly string[] PreferredKnownLogIds = { "builtin:winevt", "builtin:wu", "builtin:panther", "builtin:cbs" };
 
     private bool _editMode;
-    private bool _syncingPolicy;
     private int _recentLoadGeneration;
 
     public WelcomePage()
@@ -58,9 +57,7 @@ public sealed partial class WelcomePage : Page
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         MiddleLayerService.StateChanged += OnWorkspaceStateChanged;
-        ResultsViewerSettings.Changed += OnSettingsChanged;
         RenderWorkspace();
-        SyncPolicyRadios();
         RenderKnownLogs();
         RenderQuickActions();
         LoadRecentAsync();
@@ -69,11 +66,9 @@ public sealed partial class WelcomePage : Page
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         MiddleLayerService.StateChanged -= OnWorkspaceStateChanged;
-        ResultsViewerSettings.Changed -= OnSettingsChanged;
     }
 
     private void OnWorkspaceStateChanged() => DispatcherQueue?.TryEnqueue(() => { if (IsLoaded) RenderWorkspace(); });
-    private void OnSettingsChanged() => DispatcherQueue?.TryEnqueue(() => { if (IsLoaded) SyncPolicyRadios(); });
 
     private MainWindow Main => WindowUtil.GetMainWindow() as MainWindow;
 
@@ -367,33 +362,6 @@ public sealed partial class WelcomePage : Page
     private void EditRules_Click(object sender, RoutedEventArgs e) => Frame?.Navigate(typeof(RulesPage), "files");
     private async void RunSearch_Click(object sender, RoutedEventArgs e) { if (Main is { } m) await m.ExecuteMenuActionAsync("results_get"); }
     private void OpenResults_Click(object sender, RoutedEventArgs e) => Main?.RunQuickAction("results");
-
-    // ===================== Open policy (Add / Replace / Ask) =====================
-
-    private void SyncPolicyRadios()
-    {
-        _syncingPolicy = true;
-        try
-        {
-            var current = ResultsViewerSettings.OpenIntoWorkspace.ToString();
-            for (int i = 0; i < PolicyRadios.Items.Count; i++)
-                if (PolicyRadios.Items[i] is RadioButton rb && string.Equals(rb.Tag as string, current, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (PolicyRadios.SelectedIndex != i) PolicyRadios.SelectedIndex = i;
-                    break;
-                }
-        }
-        finally { _syncingPolicy = false; }
-    }
-
-    private void PolicyRadios_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_syncingPolicy) return;
-        if (PolicyRadios.SelectedItem is RadioButton rb
-            && WorkspaceOpenPolicy.Parse(rb.Tag as string) is { } mode
-            && mode != ResultsViewerSettings.OpenIntoWorkspace)
-            ResultsViewerSettings.OpenIntoWorkspace = mode;
-    }
 
     // ===================== Workspaces =====================
 

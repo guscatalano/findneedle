@@ -229,25 +229,10 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Open policy: Add / Replace / Ask. Bound to ResultsViewerSettings.OpenIntoWorkspace;
-                         the same card lives in Settings and both follow the settings Changed event. -->
-                    <Border Style="{StaticResource HomeCard}" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="When you open another log while this workspace is loaded" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                            <RadioButtons x:Name="PolicyRadios" SelectionChanged="PolicyRadios_SelectionChanged"
-                                          AutomationProperties.Name="When you open another log while this workspace is loaded">
-                                <RadioButton Tag="Add" MinHeight="32" AutomationProperties.Name="Add it to this workspace (default)">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="Add it to this workspace"/>
-                                        <TextBlock Text="default" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </RadioButton>
-                                <RadioButton Tag="Replace" Content="Replace the workspace" MinHeight="32"/>
-                                <RadioButton Tag="Ask" Content="Ask each time" MinHeight="32"/>
-                            </RadioButtons>
-                            <TextBlock Style="{StaticResource Secondary}" Text="Your sources and rule files are never discarded without asking."/>
-                        </StackPanel>
-                    </Border>
+                    <!-- The Add / Replace / Ask card used to sit here. Removed: it is a SETTING, not an
+                         action, it already lives in Settings ▸ General, and on a fresh start it contradicted
+                         the card above it — "when you open another log while this workspace is loaded"
+                         directly under "Nothing loaded yet". Home is for opening a log. -->
 
                     <!-- Workspaces: the same actions as the Open menu -->
                     <Border Style="{StaticResource HomeCard}">

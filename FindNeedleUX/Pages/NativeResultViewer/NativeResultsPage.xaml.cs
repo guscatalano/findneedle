@@ -2760,11 +2760,16 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return list;
     }
 
-    // Stacked severity order (bottom → top): Critical, Error, Warning, Info, Verbose, Debug, then anything else.
-    private static readonly Dictionary<string, int> _levelRank = new(StringComparer.OrdinalIgnoreCase)
-    { {"Critical",0},{"Error",1},{"Warning",2},{"Info",3},{"Information",3},{"Verbose",4},{"Debug",5} };
+    // Stacked severity order (bottom → top), ranked off the Level enum so the time strip and the level
+    // chips agree. The old hand-written table led with "Critical", a name this app never emits — its enum
+    // name is "Catastrophic" — so the most severe level fell to the BOTTOM of the order. These aliases
+    // only cover level names that arrive from foreign log formats.
+    private static readonly Dictionary<string, int> _levelAliases = new(StringComparer.OrdinalIgnoreCase)
+    { {"Critical",0},{"Fatal",0},{"Information",3},{"Debug",4} };
+    private static int LevelRank(string level)
+        => _levelAliases.TryGetValue(level, out var alias) ? alias : NativeResultsPageViewModel.LevelRank(level);
     private static IEnumerable<string> OrderedLevels(Dictionary<string, int> levels)
-        => levels.Keys.OrderBy(k => _levelRank.TryGetValue(k, out var r) ? r : 99).ThenBy(k => k, StringComparer.OrdinalIgnoreCase);
+        => levels.Keys.OrderBy(LevelRank).ThenBy(k => k, StringComparer.OrdinalIgnoreCase);
 
     private void DrawTimeStrip()
     {
