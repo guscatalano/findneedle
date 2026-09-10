@@ -441,6 +441,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         TimePreset = CheckedTimePresetLabel(),
         RuleFilterActive = ViewModel.RuleFilterActive,
         RuleFileCount = ActiveRuleFiles().Count,
+        QuickRules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules
+            .Select(r => new QuickRuleView { Label = r.Label, Enabled = r.Enabled }).ToList(),
     };
 
     /// <summary>The checked relative-time chip ("24h"), or null when the range isn't one — "All",
@@ -462,6 +464,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         var active = BuildActiveFilters();
         if (FiltersSegment != null) FiltersSegment.BadgeCount = active.Count;
         RenderActiveFilters(active);
+        RenderQuickRules();
     }
 
     /// <summary>Redraw the pane's "Active filters" pills; hide the whole section when nothing is active.</summary>
@@ -554,9 +557,122 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                     RuleFilterToggle.IsChecked = false;
                     RuleFilterToggle_Click(RuleFilterToggle, new RoutedEventArgs());
                 };
+
+            case "quickrule":
+                if (!int.TryParse(key, out var index)) return null;
+                return () => RemoveQuickRuleAt(index);
         }
         return null;
     }
+
+    // ----- Quick rules section (session-only reshape rules; see ViewerQuickRulesStore) -----
+
+    /// <summary>Redraw the pane's quick-rule rows: label, an on/off switch that keeps the rule but stops
+    /// applying it, and a remove button.</summary>
+    private void RenderQuickRules()
+    {
+        if (QuickRulesHost == null) return; // during initial parse
+        QuickRulesHost.Children.Clear();
+        var rules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules;
+        if (rules.Count == 0)
+        {
+            QuickRulesHost.Children.Add(new TextBlock
+            {
+                Text = "None. Right-click a column header, or add one below.",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+            return;
+        }
+        for (int i = 0; i < rules.Count; i++) QuickRulesHost.Children.Add(BuildQuickRuleRow(rules[i], i));
+    }
+
+    private UIElement BuildQuickRuleRow(FindNeedleUX.Services.ViewerQuickRule rule, int index)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = rule.Label,
+            FontSize = 12,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Opacity = rule.Enabled ? 1.0 : 0.5,
+        };
+        ToolTipService.SetToolTip(label, rule.Label);
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+
+        var toggle = new ToggleSwitch
+        {
+            IsOn = rule.Enabled,
+            OnContent = null,
+            OffContent = null,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(toggle, "Apply this rule (off keeps it in the list without applying it)");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, "Enable quick rule " + rule.Label);
+        toggle.Toggled += (s, _) =>
+        {
+            rule.Enabled = ((ToggleSwitch)s).IsOn;
+            label.Opacity = rule.Enabled ? 1.0 : 0.5;
+            ViewModel.RefreshNow();   // rows rebuild with/without the rule — no re-scan
+            // Re-render OFF this event: UpdateFiltersBadge rebuilds these very rows, and swapping the
+            // switch out from under its own Toggled handler is asking for trouble.
+            DispatcherQueue.TryEnqueue(UpdateFiltersBadge);
+        };
+        Grid.SetColumn(toggle, 1);
+        grid.Children.Add(toggle);
+
+        var remove = new Button
+        {
+            Content = "\u2715",
+            FontSize = 10,
+            Padding = new Thickness(5, 0, 5, 0),
+            MinWidth = 0,
+            MinHeight = 0,
+            Height = 20,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(remove, "Remove this quick rule");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, "Remove quick rule " + rule.Label);
+        remove.Click += (_, _) => RemoveQuickRuleAt(index);
+        Grid.SetColumn(remove, 2);
+        grid.Children.Add(remove);
+
+        return new Border
+        {
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 2, 2, 2),
+            Child = grid,
+        };
+    }
+
+    private void RemoveQuickRuleAt(int index)
+    {
+        var rules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules;
+        if (index < 0 || index >= rules.Count) return;
+        FindNeedleUX.Services.ViewerQuickRulesStore.Remove(rules[index]);
+        ViewModel.RefreshNow();
+        // Off this event — the click came from a button inside the row we are about to replace.
+        DispatcherQueue.TryEnqueue(UpdateFiltersBadge);
+    }
+
+    /// <summary>"+ New quick rule": the SAME dialog the column-header right-click opens, with the target
+    /// column picked inside it instead of implied by which header was clicked.</summary>
+    private void NewQuickRule_Click(object sender, RoutedEventArgs e)
+        => _ = ShowColumnQuickRuleDialogAsync(null);
 
     /// <summary>Drop one absolute time bound (and its pickers), keeping the other. With both gone the
     /// preset chips go back to "All".</summary>
@@ -3911,9 +4027,20 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         catch { return null; }
     }
 
+    /// <summary>The columns "+ New quick rule" offers as a target. Message is the strip-only case (its
+    /// own column can't be set by an extract rule); the rest are the enrichment fields a rule can fill.</summary>
+    private static readonly string[] QuickRuleTargetColumns =
+        { "Message", "TaskName", "Provider", "ProcessId", "ProcessName", "ThreadId", "EventId", "ActivityId", "Channel", "OpCode" };
+
+    /// <summary>
+    /// The viewer's ONE quick-rule dialog. <paramref name="column"/> names the target column when the
+    /// user right-clicked that column's header; pass null for the filter pane's "+ New quick rule",
+    /// which adds a column picker to this same dialog rather than forking a second one.
+    /// </summary>
     private async System.Threading.Tasks.Task ShowColumnQuickRuleDialogAsync(string column)
     {
-        var settable = SettableFieldFor(column);
+        string col = column ?? "Message";
+        string settable = SettableFieldFor(col);
         var samples = ViewModel.Results.Select(r => r.Message).Where(s => !string.IsNullOrEmpty(s)).Take(12).ToList();
 
         var pattern = new TextBox
@@ -3923,7 +4050,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         };
         var extractRadio = new RadioButton
         {
-            Content = settable != null ? $"Extract a value into the {column} column" : $"Extract (the {column} column can't be set)",
+            Content = settable != null ? $"Extract a value into the {col} column" : $"Extract (the {col} column can't be set)",
             IsChecked = settable != null, IsEnabled = settable != null, GroupName = "qr",
         };
         var stripRadio = new RadioButton { Content = "Strip the matched text from the Message", IsChecked = settable == null, GroupName = "qr" };
@@ -3937,7 +4064,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             if (string.IsNullOrWhiteSpace(pattern.Text)) { preview.Text = "Type a regex to preview…"; return; }
             bool extract = extractRadio.IsChecked == true && settable != null;
-            var rule = BuildQuickRule(column, settable ?? column, pattern.Text, extract);
+            var rule = BuildQuickRule(col, settable ?? col, pattern.Text, extract);
             if (rule == null) { preview.Text = "⚠ Invalid regex"; return; }
             var sb = new System.Text.StringBuilder();
             int shown = 0, changed = 0;
@@ -3947,7 +4074,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 if (matched) changed++;
                 if (shown < 8 && (matched || shown < 3))
                 {
-                    var val = extract && !string.IsNullOrEmpty(captured) ? $"   → {column}={captured}" : "";
+                    var val = extract && !string.IsNullOrEmpty(captured) ? $"   → {col}={captured}" : "";
                     sb.Append("• ").Append(TruncMid(msg, 92)).Append('\n');
                     sb.Append("   ⇒ ").Append(TruncMid(after, 92)).Append(val).Append("\n\n");
                     shown++;
@@ -3963,10 +4090,36 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         var panel = new StackPanel { Spacing = 8, MinWidth = 480 };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Pull a value out of the Message into the {column} column, or strip matching text. Applies to the open results instantly — no re-scan; cleared on restart.",
+            Text = column != null
+                ? $"Pull a value out of the Message into the {column} column, or strip matching text. Applies to the open results instantly — no re-scan; cleared on restart."
+                : "Pull a value out of the Message into a column, or strip matching text. Applies to the open results instantly — no re-scan; cleared on restart.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         });
+        // Opened from the filter pane rather than a column header: pick the target column here. Only
+        // this control differs — everything below is the same dialog the header right-click shows.
+        if (column == null)
+        {
+            var target = new ComboBox
+            {
+                Header = "Target column",
+                ItemsSource = QuickRuleTargetColumns,
+                SelectedItem = col,
+                MinWidth = 200,
+            };
+            target.SelectionChanged += (_, _) =>
+            {
+                col = target.SelectedItem as string ?? "Message";
+                settable = SettableFieldFor(col);
+                extractRadio.Content = settable != null
+                    ? $"Extract a value into the {col} column"
+                    : $"Extract (the {col} column can't be set)";
+                extractRadio.IsEnabled = settable != null;
+                if (settable == null) stripRadio.IsChecked = true;
+                Refresh();
+            };
+            panel.Children.Add(target);
+        }
         panel.Children.Add(pattern);
         panel.Children.Add(extractRadio);
         panel.Children.Add(stripRadio);
@@ -3981,7 +4134,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         bool anyActive = FindNeedleUX.Services.ViewerQuickRulesStore.Any;
         var dlg = new ContentDialog
         {
-            Title = $"Quick rule — {column}",
+            Title = column != null ? $"Quick rule — {column}" : "Quick rule",
             Content = new ScrollViewer { Content = panel, MaxHeight = 440 },
             PrimaryButtonText = "Apply",
             SecondaryButtonText = anyActive ? "Clear all quick rules" : null,
@@ -3995,14 +4148,16 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             FindNeedleUX.Services.ViewerQuickRulesStore.Clear();
             ViewModel.RefreshNow();
+            UpdateFiltersBadge();
             return;
         }
         if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(pattern.Text)) return;
         bool ex2 = extractRadio.IsChecked == true && settable != null;
-        var rule = BuildQuickRule(column, settable ?? column, pattern.Text, ex2);
+        var rule = BuildQuickRule(col, settable ?? col, pattern.Text, ex2);
         if (rule == null) return;
         FindNeedleUX.Services.ViewerQuickRulesStore.Add(rule);
         ViewModel.RefreshNow(); // re-fetch the current page → rows rebuild with the rule applied (no re-scan)
+        UpdateFiltersBadge();   // the pane's Quick rules list + the Active filters pill for it
     }
 
     private static string TryGetCellColumnHeader(CommunityToolkit.WinUI.UI.Controls.DataGridCell cell)
