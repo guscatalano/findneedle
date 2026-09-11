@@ -9,7 +9,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Padding="24" RowSpacing="12">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -17,9 +17,9 @@
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0">
-            <StackPanel>
-                <TextBlock x:Name="PageHeading" Text="Recent searches" FontSize="24" FontWeight="SemiBold"/>
-                <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="PageHeading" Text="Recent searches" Style="{StaticResource PageHeading}"/>
+                <TextBlock x:Name="SubtitleText" Style="{StaticResource PageSubtitle}"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="8">
                 <CheckBox x:Name="IgnoreCachesCheck" Content="Ignore caches when loading" VerticalAlignment="Center"
@@ -48,9 +48,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="8" Padding="14,10,14,10">
+                    <Border Style="{StaticResource PageCard}" Padding="14,10,14,10">
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
