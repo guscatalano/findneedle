@@ -51,7 +51,6 @@
     <None Remove="Windows\DemoViewerWindow.xaml" />
     <None Remove="Pages\LogsPage.xaml" />
     <None Remove="Pages\PluginsPage.xaml" />
-    <None Remove="Pages\RunSearchPage.xaml" />
     <None Remove="Pages\SearchLocationsPage.xaml" />
     <None Remove="Pages\SearchProcessorsPage.xaml" />
     <None Remove="Pages\SearchStatisticsPage.xaml" />
@@ -170,9 +169,6 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
-    <Page Update="Pages\RunSearchPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Pages\SearchProcessorsPage.xaml">

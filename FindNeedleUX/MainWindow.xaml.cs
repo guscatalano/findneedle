@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -142,7 +142,6 @@ public sealed partial class MainWindow : Window
         Label(auto_rules, typeof(FindNeedleUX.Pages.AutoAddRulesPage));
         Label(reformat_rules, typeof(FindNeedleUX.Pages.ReformatRulesPage));
         Label(connections, typeof(FindNeedleUX.Pages.ConnectionsPage));
-        Label(results_get, typeof(FindNeedleUX.Pages.RunSearchPage));
         Label(results_processoroutput, typeof(FindNeedleUX.Pages.ProcessorOutputPage));
         Label(results_statistics, typeof(FindNeedleUX.Pages.SearchStatisticsPage));
         Label(wpp_symbols, typeof(FindNeedleUX.Pages.WppSymbolResolutionPage), "…");
@@ -334,7 +333,7 @@ public sealed partial class MainWindow : Window
             case "locations":         contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)); break;
             case "rules_config":      contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"); break;
             case "auto_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "autoadd"); break;
-            case "run_search":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage)); break;
+            case "run_search":        RunAndViewResults(); break; // the tile says "Run search": run, do not navigate
             case "results":           NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage)); break;
             case "processor_output":  contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)); break;
             case "diagram":           contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage)); break;
@@ -1307,7 +1306,7 @@ public sealed partial class MainWindow : Window
             Cmd(T(typeof(FindNeedleUX.Pages.SearchProcessorsPage)), Workspace, "processors stats matched timing", menu("search_processors")),
             Cmd(T(typeof(FindNeedleUX.Pages.ConnectionsPage)), Workspace, "kusto ado github online remote", menu("connections")),
 
-            Cmd(T(typeof(FindNeedleUX.Pages.RunSearchPage)), Run, "execute start go scan", menu("results_get")),
+            Cmd("Run search", Run, "execute start go scan", menu("results_get")),
             Cmd("Stop", Run, "cancel abort", menu("stop_search")),
             Cmd("Open results", Run, "view grid logs native viewer results", menu("results_viewnative")),
             Cmd(T(typeof(FindNeedleUX.Pages.ProcessorOutputPage)), Run, "generated output files uml diagram processor", menu("results_processoroutput")),
@@ -2092,7 +2091,7 @@ public sealed partial class MainWindow : Window
         catch (OperationCanceledException) { ShowSpinner(false); }
         catch (Exception ex)
         {
-            // BACKSTOP, matching SearchOrchestrator.RunAsync. Every caller of this method is an async
+            // BACKSTOP. Every caller of this method is an async
             // void handler (RunAndViewResults, the open paths, drag-drop), so an escaping exception is
             // reposted to the UI thread and the rethrow trips a WinUI failfast that
             // App.UnhandledException cannot intercept — the window disappears with nothing logged.

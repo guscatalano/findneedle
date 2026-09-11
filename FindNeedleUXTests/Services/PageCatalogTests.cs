@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using FindNeedleUX.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -23,7 +23,7 @@ public class PageCatalogTests
         "WelcomePage", "CachedSearchesPage", "LogFinderPage",
         "SearchLocationsPage", "RulesPage", "SearchRulesPage", "AutoAddRulesPage", "ReformatRulesPage",
         "SearchProcessorsPage", "ConnectionsPage",
-        "RunSearchPage", "NativeResultsPage", "ProcessorOutputPage", "SearchStatisticsPage",
+        "NativeResultsPage", "ProcessorOutputPage", "SearchStatisticsPage",
         "WppSymbolResolutionPage", "DiagramToolsPage", "PluginsPage", "PluginConfigPage",
         "SystemInfoPage", "LogsPage", "PerformanceBenchmarkPage",
         "AboutPage", "ResultsViewerSettingsPage",
@@ -70,7 +70,6 @@ public class PageCatalogTests
         Assert.AreEqual("Outputs", PageCatalog.Find(Pages + "ProcessorOutputPage").Title);
         Assert.AreEqual("Search timing", PageCatalog.Find(Pages + "SearchStatisticsPage").Title);
         Assert.AreEqual("App log", PageCatalog.Find(Pages + "LogsPage").Title);
-        Assert.AreEqual("Run search", PageCatalog.Find(Pages + "RunSearchPage").Title);
         Assert.AreEqual("System check", PageCatalog.Find(Pages + "SystemInfoPage").Title);
         Assert.AreEqual("Settings", PageCatalog.Find(Pages + "ResultsViewerSettingsPage").Title);
 
