@@ -674,7 +674,18 @@
                      filters stays a full-width strip below it; Quick rules is collapsed in the top dock (the
                      band deliberately carries less than the left rail). RefreshFilterLayout moves the
                      sections between here and PaneSections. -->
-                <local:WrapPanelLite x:Name="TopInputsRow" HorizontalSpacing="0" VerticalSpacing="0" Visibility="Collapsed"/>
+                <local:WrapPanelLite x:Name="TopInputsRow" HorizontalSpacing="0" VerticalSpacing="0" Visibility="Collapsed">
+                    <!-- Overflow for what the band leaves out (quick rules). Lives INSIDE the row so it sits
+                         after the last column; only visible in the top dock. -->
+                    <Border x:Name="TopOverflowSection" Padding="12,6" VerticalAlignment="Top" Visibility="Collapsed">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="MORE" Style="{StaticResource PaneSectionHeader}"/>
+                            <Button x:Name="TopOverflowButton" Content="Quick rules ▾" Height="28" FontSize="12" Padding="8,0"
+                                    Click="TopOverflow_Click"
+                                    ToolTipService.ToolTip="Session quick rules — the top band keeps these in a menu"/>
+                        </StackPanel>
+                    </Border>
+                </local:WrapPanelLite>
                 <Border x:Name="ActiveFiltersSection" Padding="12,6" Visibility="Collapsed"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
                     <StackPanel Spacing="6">

@@ -578,6 +578,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// applying it, and a remove button.</summary>
     private void RenderQuickRules()
     {
+        UpdateTopOverflowCaption(); // the top-dock overflow mirrors the same store
+
         if (QuickRulesHost == null) return; // during initial parse
         QuickRulesHost.Children.Clear();
         var rules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules;
@@ -1257,11 +1259,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 s.MinWidth = 0;
             }
             TopInputsRow.Visibility = Visibility.Collapsed;
+            if (TopOverflowSection != null) TopOverflowSection.Visibility = Visibility.Collapsed;
             if (QuickRulesSection != null) QuickRulesSection.Visibility = Visibility.Visible;
         }
         else
         {
-            foreach (var s in inputs) MoveTo(TopInputsRow, -1, s);
+            // Insert the inputs BEFORE the overflow section so "More" stays last in the row.
+            int overflowAt = TopOverflowSection != null ? TopInputsRow.Children.IndexOf(TopOverflowSection) : -1;
+            foreach (var s in inputs) MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, s);
             foreach (var s in inputs)
             {
                 s.BorderThickness = new Thickness(0, 0, 1, 0); // rule BETWEEN the columns
@@ -1269,9 +1274,65 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 s.MinWidth = 220; // a column that is at least chip-row wide, so Level does not collapse
             }
             TopInputsRow.Visibility = Visibility.Visible;
-            // The band carries less than the rail: quick rules stay reachable from a column header.
+            // The band carries less than the rail: quick rules move into the "More" overflow (and stay
+            // reachable from a column header).
             if (QuickRulesSection != null) QuickRulesSection.Visibility = Visibility.Collapsed;
+            if (TopOverflowSection != null) TopOverflowSection.Visibility = Visibility.Visible;
+            UpdateTopOverflowCaption();
         }
+    }
+
+    /// <summary>"Quick rules ▾" / "Quick rules (2) ▾": the count of active session rules, so the band
+    /// still says something is applied even though the section itself is folded away.</summary>
+    private void UpdateTopOverflowCaption()
+    {
+        if (TopOverflowButton == null) return;
+        int n = FindNeedleUX.Services.ViewerQuickRulesStore.Rules.Count(r => r.Enabled);
+        TopOverflowButton.Content = n > 0 ? $"Quick rules ({n}) ▾" : "Quick rules ▾";
+    }
+
+    /// <summary>The top-dock overflow menu: the same quick-rule actions the rail's section offers —
+    /// each rule as a checkable item (apply / not), a Remove per rule, and New quick rule… — so the band
+    /// carries less on screen but nothing becomes unreachable.</summary>
+    private void TopOverflow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        var rules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules;
+        if (rules.Count == 0)
+        {
+            menu.Items.Add(new MenuFlyoutItem { Text = "No quick rules this session", IsEnabled = false });
+        }
+        else
+        {
+            for (int i = 0; i < rules.Count; i++)
+            {
+                var rule = rules[i];
+                int index = i;
+                var sub = new MenuFlyoutSubItem { Text = rule.Label };
+                var apply = new ToggleMenuFlyoutItem { Text = "Apply", IsChecked = rule.Enabled };
+                apply.Click += (_, __) =>
+                {
+                    rule.Enabled = apply.IsChecked;
+                    ViewModel.RefreshNow();
+                    DispatcherQueue.TryEnqueue(() => { UpdateFiltersBadge(); UpdateTopOverflowCaption(); });
+                };
+                var remove = new MenuFlyoutItem { Text = "Remove", Icon = new SymbolIcon(Symbol.Delete) };
+                remove.Click += (_, __) =>
+                {
+                    RemoveQuickRuleAt(index);
+                    DispatcherQueue.TryEnqueue(UpdateTopOverflowCaption);
+                };
+                sub.Items.Add(apply);
+                sub.Items.Add(remove);
+                menu.Items.Add(sub);
+            }
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var add = new MenuFlyoutItem { Text = "New quick rule…", Icon = new SymbolIcon(Symbol.Add) };
+        add.Click += (_, __) => _ = ShowColumnQuickRuleDialogAsync(null);
+        menu.Items.Add(add);
+        menu.ShowAt(anchor);
     }
 
     private DetailsMode _detailsMode = DetailsMode.Inrow;
