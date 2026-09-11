@@ -293,6 +293,22 @@ public static class ResultsViewerSettings
     // Default to a LEFT dock: for a first-time user a full row of filters across the top reads as
     // overwhelming, whereas a left rail is calmer and leaves the results as the focus. Users who
     // prefer the top layout can switch (and their choice persists).
+    /// <summary>
+    /// Which field filters the pane shows, as canonical names (see FilterFieldCatalog). Null means the
+    /// default four. Persisted so a field you added is still there after a restart — until this existed
+    /// the pane came back with the default four every launch, which made "+ Add field" feel like it
+    /// forgot. Per-window UI state: no Changed broadcast.
+    /// </summary>
+    public static IReadOnlyList<string> ShownFilterFields
+    {
+        get => Data.ShownFilterFields;
+        set
+        {
+            Data.ShownFilterFields = value == null ? null : new List<string>(value);
+            Save();
+        }
+    }
+
     public const FilterDock DefaultFilterDock = FilterDock.Left;
     public static FilterDock FilterDock
     {
@@ -937,6 +953,7 @@ public static class ResultsViewerSettings
         public bool? CommandPaletteEnabled { get; set; }
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
+        public List<string> ShownFilterFields { get; set; } // canonical field names in the pane; null = the default four
         public bool? ShowStepHistory { get; set; }
         public bool? StreamWhileLoading { get; set; }
         public string LoadingAnimation { get; set; }

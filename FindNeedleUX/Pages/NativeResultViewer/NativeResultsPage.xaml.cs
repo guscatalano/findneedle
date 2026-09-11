@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -768,6 +768,43 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return g != null ? g.Visibility == Visibility.Visible : _extraFieldRows.ContainsKey(field);
     }
 
+    /// <summary>The fields currently shown in the pane, canonical names, built-ins first in their fixed
+    /// order then added fields in the order they were added.</summary>
+    private List<string> ShownFields()
+    {
+        var shown = new List<string>();
+        foreach (var f in FilterFieldCatalog.BuiltIn) if (FieldIsShown(f)) shown.Add(f);
+        foreach (var f in _extraFieldRows.Keys) shown.Add(f);
+        return shown;
+    }
+
+    /// <summary>Remember which fields are shown so they come back next launch. Skipped while restoring so
+    /// the restore's own Show/Remove calls don't rewrite the setting mid-way.</summary>
+    private bool _restoringShownFields;
+    private void PersistShownFields()
+    {
+        if (_restoringShownFields) return;
+        ResultsViewerSettings.ShownFilterFields = ShownFields();
+    }
+
+    /// <summary>Bring the pane back to the saved field set (or the default four when nothing is saved).
+    /// Unknown names are ignored so a stale setting can never strand the pane.</summary>
+    private void RestoreShownFields()
+    {
+        var saved = ResultsViewerSettings.ShownFilterFields;
+        if (saved == null) return; // defaults: the four built-ins, already visible in XAML
+        _restoringShownFields = true;
+        try
+        {
+            var want = new HashSet<string>(saved, StringComparer.OrdinalIgnoreCase);
+            foreach (var f in FilterFieldCatalog.BuiltIn)
+                if (!want.Contains(f) && FieldIsShown(f)) RemoveFieldRow(f);
+            foreach (var f in saved)
+                if (FilterFieldCatalog.IsKnown(f) && !FieldIsShown(f)) ShowFieldRow(f);
+        }
+        finally { _restoringShownFields = false; }
+    }
+
     /// <summary>"+ Add field": offer every filterable column not already on the pane.</summary>
     private void AddFieldButton_Click(object sender, RoutedEventArgs e)
     {
@@ -805,6 +842,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             if (at < 0) FilterRowPanel.Children.Add(row); else FilterRowPanel.Children.Insert(at, row);
         }
         RefreshFilterLayout(); // give the new row the current dock's sizing
+        PersistShownFields();
     }
 
     private void RemoveFieldRow(string field)
@@ -827,6 +865,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             ViewModel.SetExtraFieldFilter(field, "");
         }
         UpdateFiltersBadge();
+        PersistShownFields();
     }
 
     /// <summary>A row for a field with no dedicated FilterSpec slot: label, substring box, remove.</summary>
@@ -1714,6 +1753,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             RefreshFilterLayout();
         }
+        RestoreShownFields(); // the field rows the user added last time (defaults when nothing saved)
         _colorTaggedRows = ResultsViewerSettings.ColorTaggedRows;
         // "Show known" toggle: set visibility now; combos get populated after the data finishes loading.
         if (ShowKnownToggle != null)

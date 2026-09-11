@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using FindNeedleUX.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -114,5 +114,36 @@ public class FilterPaneSettingsTests
         WriteSettings("{ \"FilterDock\": \"Sideways\", \"FiltersExpanded\": false, \"FiltersExpandedDock\": \"Sideways\" }");
         Assert.AreEqual(FilterDock.Left, ResultsViewerSettings.FilterDock);
         Assert.IsTrue(ResultsViewerSettings.FiltersExpanded, "a collapse recorded under an unknown dock does not apply to Left");
+    }
+
+    // ── Added field filters survive a restart ─────────────────────────────────
+    // Until ShownFilterFields existed the pane came back with the default four every launch, which
+    // made "+ Add field" feel like it forgot.
+
+    [TestMethod]
+    public void ShownFilterFields_DefaultIsNull_MeaningTheBuiltInFour()
+    {
+        WriteSettings("{}");
+        Assert.IsNull(ResultsViewerSettings.ShownFilterFields);
+    }
+
+    [TestMethod]
+    public void ShownFilterFields_RoundTrips()
+    {
+        WriteSettings("{}");
+        ResultsViewerSettings.ShownFilterFields = new[] { "provider", "message", "threadid" };
+        ResultsViewerSettings.ReloadFromDiskForTests();
+        CollectionAssert.AreEqual(new[] { "provider", "message", "threadid" },
+            new System.Collections.Generic.List<string>(ResultsViewerSettings.ShownFilterFields));
+    }
+
+    [TestMethod]
+    public void ShownFilterFields_SetToNull_ReturnsToDefaults()
+    {
+        WriteSettings("{}");
+        ResultsViewerSettings.ShownFilterFields = new[] { "threadid" };
+        ResultsViewerSettings.ShownFilterFields = null;
+        ResultsViewerSettings.ReloadFromDiskForTests();
+        Assert.IsNull(ResultsViewerSettings.ShownFilterFields);
     }
 }
