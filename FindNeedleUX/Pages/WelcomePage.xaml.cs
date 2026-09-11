@@ -127,7 +127,7 @@ public sealed partial class WelcomePage : Page
         // Only sources that still exist: a cache whose log was deleted (temp files, cleaned-up folders) has
         // nothing to reopen or add, so it would only show as a dead row here. The full Recent searches page
         // still lists it, marked "source missing", so it can be deleted.
-        var named = entries.Where(x => !string.IsNullOrEmpty(x.SourcePath) && (x.SourceExists || System.IO.Directory.Exists(x.SourcePath)))
+        var named = entries.Where(x => !string.IsNullOrEmpty(x.SourcePath) && x.SourceExists) // SourceExists covers files AND folders
                            .Take(RecentCount).ToList();
         RecentEmpty.Visibility = named.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         var now = DateTime.Now;
@@ -151,7 +151,7 @@ public sealed partial class WelcomePage : Page
         try { isFolder = Directory.Exists(entry.SourcePath); } catch { }
         if (isFolder) name += " (folder)";
         var sub = new List<string> { dir };
-        if (!entry.SourceExists && !isFolder) sub.Add("source missing");
+        if (!entry.SourceExists) sub.Add("source missing");
         if (entry.FtsBuilt) sub.Add("indexed");
 
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1, MinWidth = 0 };
@@ -172,14 +172,14 @@ public sealed partial class WelcomePage : Page
         open.Click += async (_, _) =>
         {
             if (Main is not { } main) return;
-            var sources = entry.SourceExists || isFolder ? new[] { entry.SourcePath } : Array.Empty<string>();
+            var sources = entry.SourceExists ? new[] { entry.SourcePath } : Array.Empty<string>();
             try { await main.OpenIntoWorkspaceAsync(sources, cachedDbPath: entry.DbPath, displayName: name); }
             catch (Exception ex) { Logger.Instance.Log($"Home: open recent failed: {ex.Message}"); }
         };
         buttons.Children.Add(open);
         var add = SmallButton("Add to workspace", "Add this search's source to the workspace without running it");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(add, $"Add {name} to workspace");
-        add.IsEnabled = entry.SourceExists || isFolder;
+        add.IsEnabled = entry.SourceExists;
         add.Click += (_, _) =>
         {
             try { MiddleLayerService.OpenIntoWorkspace(OpenIntoWorkspaceMode.Add, new[] { entry.SourcePath }); }
@@ -244,7 +244,7 @@ public sealed partial class WelcomePage : Page
         try
         {
             if (WindowUtil.GetMainWindow() is MainWindow main)
-                await main.OpenIntoWorkspaceAsync(new[] { path }, label: $"Opening {entry.Name}…");
+                await main.OpenIntoWorkspaceAsync(new[] { path }, label: $"Opening {entry.Name}…", displayName: entry.Name); // name it, not its folder
         }
         catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"Open known log failed: {ex.Message}"); }
     }
