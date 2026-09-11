@@ -22,7 +22,7 @@ public class PageCatalogTests
     {
         "WelcomePage", "CachedSearchesPage", "LogFinderPage",
         "SearchLocationsPage", "RulesPage", "SearchRulesPage", "AutoAddRulesPage", "ReformatRulesPage",
-        "SearchProcessorsPage", "ConnectionsPage",
+        "ConnectionsPage",
         "NativeResultsPage", "ProcessorOutputPage", "SearchStatisticsPage",
         "WppSymbolResolutionPage", "DiagramToolsPage", "PluginsPage", "PluginConfigPage",
         "SystemInfoPage", "LogsPage", "PerformanceBenchmarkPage",

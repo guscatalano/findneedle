@@ -2027,15 +2027,24 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 ?? new System.Collections.Generic.List<string>());
             foreach (var a in autoAdded)
                 if (!rules.Any(x => string.Equals(x, a, StringComparison.OrdinalIgnoreCase))) rules.Add(a);
+            // Runtime status per rule set (what it contains, how many results it matched, per-rule
+            // field-extraction cost) — recorded by the last run. This used to be the Rules hub's "Active"
+            // tab; it is status about THIS load, so it lives here beside "which sources loaded".
+            var active = FindNeedleUX.Services.ActiveRuleSummary.Build();
+            var activeByPath = new System.Collections.Generic.Dictionary<string, FindNeedleUX.Services.ActiveRuleInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach (var a in active) activeByPath.TryAdd(a.FilePath, a);
+            // A processor with no file (the built-in default) is only known from the run — list it too.
+            foreach (var a in active)
+                if (!rules.Any(x => string.Equals(x, a.FilePath, StringComparison.OrdinalIgnoreCase))) rules.Add(a.FilePath);
 
             var panel = new StackPanel { Spacing = 10 };
 
             // Copy buttons (kept inside the content so the dialog stays open after copying).
             var copyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             var copyText = new Button { Content = "Copy as text" };
-            copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules, autoAdded));
+            copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules, autoAdded, activeByPath));
             var copyJson = new Button { Content = "Copy as JSON" };
-            copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules, autoAdded));
+            copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules, autoAdded, activeByPath));
             copyRow.Children.Add(copyText);
             copyRow.Children.Add(copyJson);
             panel.Children.Add(copyRow);
@@ -2055,11 +2064,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
             panel.Children.Add(SourcesHeader($"Rules ({rules.Count})"));
             if (rules.Count == 0)
-                panel.Children.Add(SourcesNote("No rule files loaded."));
+            {
+                panel.Children.Add(SourcesNote("No rule files loaded. Add rules in Workspace ▸ Rule files, or enable Auto rules, then run a search."));
+            }
             else
+            {
+                if (active.Count > 0)
+                    panel.Children.Add(SourcesNote(
+                        $"{active.Count} rule set{(active.Count == 1 ? "" : "s")} active · "
+                        + $"{active.Sum(a => a.Matched):N0} total matches in the last search."));
                 foreach (var r in rules)
-                    panel.Children.Add(SourcesItem(
-                        System.IO.Path.GetFileName(r) + (autoAdded.Contains(r) ? "   — auto-added" : ""), r));
+                {
+                    activeByPath.TryGetValue(r, out var info);
+                    bool isAuto = autoAdded.Contains(r) || (info?.AutoAdded ?? false);
+                    string title = string.IsNullOrWhiteSpace(info?.Title) ? System.IO.Path.GetFileName(r) : info.Title;
+                    panel.Children.Add(SourcesRuleItem(title + (isAuto ? "   — auto-added" : ""), r, info));
+                }
+            }
 
             var dialog = new ContentDialog
             {
@@ -2185,7 +2206,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private static string SourcesAsText(
         System.Collections.Generic.List<(string name, string description)> locs,
         System.Collections.Generic.List<string> rules,
-        System.Collections.Generic.HashSet<string> autoAdded)
+        System.Collections.Generic.HashSet<string> autoAdded,
+        System.Collections.Generic.Dictionary<string, FindNeedleUX.Services.ActiveRuleInfo> active)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Sources ({locs.Count}):");
@@ -2198,19 +2220,43 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         sb.AppendLine($"Rules ({rules.Count}):");
         if (rules.Count == 0) sb.AppendLine("  (none)");
         foreach (var r in rules)
-            sb.AppendLine($"  - {r}{(autoAdded.Contains(r) ? "   (auto-added)" : "")}");
+        {
+            active.TryGetValue(r, out var info);
+            bool isAuto = autoAdded.Contains(r) || (info?.AutoAdded ?? false);
+            sb.AppendLine($"  - {r}{(isAuto ? "   (auto-added)" : "")}");
+            if (info == null) continue;
+            sb.AppendLine($"      {info.MatchedSummary}");
+            if (!string.IsNullOrEmpty(info.StructureSummary)) sb.AppendLine($"      {info.StructureSummary}");
+            if (!string.IsNullOrEmpty(info.TagSummary)) sb.AppendLine($"      {info.TagSummary}");
+            foreach (var line in info.TimingSummary.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                sb.AppendLine($"        {line}");
+        }
         return sb.ToString();
     }
 
     private static string SourcesAsJson(
         System.Collections.Generic.List<(string name, string description)> locs,
         System.Collections.Generic.List<string> rules,
-        System.Collections.Generic.HashSet<string> autoAdded)
+        System.Collections.Generic.HashSet<string> autoAdded,
+        System.Collections.Generic.Dictionary<string, FindNeedleUX.Services.ActiveRuleInfo> active)
     {
         var payload = new
         {
             locations = locs.ConvertAll(l => new { name = l.name, description = l.description }),
-            rules = rules.ConvertAll(r => new { path = r, autoAdded = autoAdded.Contains(r) }),
+            rules = rules.ConvertAll(r =>
+            {
+                active.TryGetValue(r, out var info);
+                return new
+                {
+                    path = r,
+                    autoAdded = autoAdded.Contains(r) || (info?.AutoAdded ?? false),
+                    title = info?.Title,
+                    matched = info?.Matched,
+                    structure = info?.StructureSummary,
+                    tags = info?.TagSummary,
+                    timing = info?.TimingSummary,
+                };
+            }),
         };
         return System.Text.Json.JsonSerializer.Serialize(payload,
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
@@ -2246,6 +2292,39 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 Margin = new Thickness(12, 0, 0, 0),
             });
+        return sp;
+    }
+
+    /// <summary>A rule-file line in the Sources dialog: the plain <see cref="SourcesItem"/> plus, when the
+    /// last run recorded this rule set, its runtime status (matched count, structure, tags, per-rule cost).</summary>
+    private static FrameworkElement SourcesRuleItem(string title, string path, FindNeedleUX.Services.ActiveRuleInfo? info)
+    {
+        var sp = (StackPanel)SourcesItem(title, path);
+        if (info == null) return sp;
+        var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var detail = new StackPanel { Spacing = 1, Margin = new Thickness(12, 2, 0, 4) };
+        detail.Children.Add(new TextBlock
+        {
+            Text = info.MatchedSummary,
+            FontSize = 12,
+            FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        if (!string.IsNullOrEmpty(info.StructureSummary))
+            detail.Children.Add(new TextBlock { Text = info.StructureSummary, FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrEmpty(info.TagSummary))
+            detail.Children.Add(new TextBlock { Text = info.TagSummary, FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrEmpty(info.TimingSummary))
+            detail.Children.Add(new TextBlock
+            {
+                Text = info.TimingSummary,
+                FontSize = 12,
+                FontFamily = new FontFamily("Consolas"),
+                Foreground = secondary,
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+            });
+        sp.Children.Add(detail);
         return sp;
     }
 

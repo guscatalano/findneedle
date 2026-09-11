@@ -49,7 +49,6 @@ public static class PageCatalog
         [P + "SearchRulesPage"]                      = new(Workspace, "Rule files"),
         [P + "AutoAddRulesPage"]                     = new(Workspace, "Auto rules"),
         [P + "ReformatRulesPage"]                    = new(Workspace, "Field extraction"),
-        [P + "SearchProcessorsPage"]                 = new(Workspace, "Active rules"),
         [P + "ConnectionsPage"]                      = new(Workspace, "Connections"),
 
         // Run — run it and look at what came out.

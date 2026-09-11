@@ -1157,9 +1157,6 @@ public sealed partial class MainWindow : Window
             case "auto_rules":
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "autoadd");
                 break;
-            case "search_processors":
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "active");
-                break;
             case "search_plugins":
                 Logger.Instance.Log("Navigated: PluginsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.PluginsPage));
@@ -1303,7 +1300,6 @@ public sealed partial class MainWindow : Window
             Cmd(T(typeof(FindNeedleUX.Pages.SearchRulesPage)), Workspace, "rules ruledsl filter enrichment", menu("rules")),
             Cmd(T(typeof(FindNeedleUX.Pages.AutoAddRulesPage)), Workspace, "automatic suggest auto-add", menu("auto_rules")),
             Cmd(T(typeof(FindNeedleUX.Pages.ReformatRulesPage)), Workspace, "reformat enrichment columns", menu("reformat_rules")),
-            Cmd(T(typeof(FindNeedleUX.Pages.SearchProcessorsPage)), Workspace, "processors stats matched timing", menu("search_processors")),
             Cmd(T(typeof(FindNeedleUX.Pages.ConnectionsPage)), Workspace, "kusto ado github online remote", menu("connections")),
 
             Cmd("Run search", Run, "execute start go scan", menu("results_get")),

@@ -9,9 +9,6 @@
                     IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
                     SelectionChanged="RulesNav_SelectionChanged">
         <NavigationView.MenuItems>
-            <NavigationViewItem Content="Active" Tag="active">
-                <NavigationViewItem.Icon><FontIcon Glyph="&#xE9D2;"/></NavigationViewItem.Icon>
-            </NavigationViewItem>
             <NavigationViewItem Content="Rule files" Tag="files">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE8A5;"/></NavigationViewItem.Icon>
             </NavigationViewItem>

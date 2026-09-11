@@ -12,8 +12,8 @@ namespace FindNeedleUX.Pages;
 /// </summary>
 public sealed partial class RulesPage : Page
 {
-    // Default to a config tab ("Rule files"), not the runtime "Active" status tab which is empty until a
-    // search has run. A nav param (from a specific menu item) still overrides this.
+    // Default tab is "Rule files". A nav param (from a specific menu item) still overrides this.
+    // (Runtime "which rules did the last run apply" status lives in the viewer's Sources dialog, not here.)
     private string _initialTag = "files";
 
     /// <summary>The page currently hosted in the hub's frame — the shell breadcrumb names THAT page
@@ -51,10 +51,9 @@ public sealed partial class RulesPage : Page
         var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
         switch (tag)
         {
-            case "files":   RulesContent.Navigate(typeof(SearchRulesPage)); break;
             case "autoadd": RulesContent.Navigate(typeof(AutoAddRulesPage)); break;
             case "fields":  RulesContent.Navigate(typeof(ReformatRulesPage)); break;
-            default:        RulesContent.Navigate(typeof(SearchProcessorsPage)); break; // "active"
+            default:        RulesContent.Navigate(typeof(SearchRulesPage)); break; // "files"
         }
         try { ActiveTabChanged?.Invoke(); } catch { /* breadcrumb is cosmetic */ }
     }
