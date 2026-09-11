@@ -21,9 +21,19 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
 
 ## 2. Investigate before trusting
 
-- [ ] **Cache-reuse prompt never appeared** when opening the Windows Update known log from Home with
-      `CacheReuseMode = Prompt`. Reopen-from-cache is a core feature. Find out whether the prompt
-      logic regressed or the cache key simply did not match, and fix or explain.
+- [x] (explained, no code change) **Cache-reuse prompt never appeared** when opening the Windows Update
+      known log. Not a regression. The cache was valid and complete (`cache.write.ok rows=71437`); the
+      NEXT open logged `cache.eval reuse=false reason=size_differs got=27918336 want=27967488`. The
+      folder is live — Windows Update kept writing to it — so the size+mtime signature correctly
+      declared the cache stale, and the prompt only appears on a hit. Working as designed; reopening
+      that cache would have shown stale data.
+      **Design gap it exposes:** for any actively written log (all the Known logs) the reopen cache
+      effectively never hits, and nothing says why. Two candidate improvements, pending decision:
+      - [ ] Recent searches row shows "log changed since" (same signature check) so a rescan is
+            expected rather than mysterious. Information only.
+      - [ ] Offer a stale cache honestly instead of silently wiping it: "Previous results are from
+            09:02 and the log has changed since — open previous anyway / rescan". Changes semantics;
+            owner's call.
 
 ## 3. Things already asked for
 
