@@ -764,6 +764,7 @@
                               SelectionChanged="ResultsGrid_SelectionChanged"
                               RowDetailsTemplate="{StaticResource RowDetailsTemplate}"
                               RowDetailsVisibilityMode="VisibleWhenSelected"
+                              AreRowDetailsFrozen="True"
                               SelectionMode="Extended"
                               ClipboardCopyMode="IncludeHeader"
                               AutomationProperties.Name="Search results">

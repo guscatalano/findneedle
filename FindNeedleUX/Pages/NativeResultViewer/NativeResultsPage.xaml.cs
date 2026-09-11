@@ -1146,7 +1146,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // the control's star column can stretch; in top dock it hugs its content and sits in the row.
         void Group(FrameworkElement g)
         {
-            if (g != null) g.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+            if (g == null) return;
+            g.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+            // Left dock: a shared label column so the boxes line up down the pane (Provider / TaskName /
+            // Message / Source labels differ in width, so Auto sizing left every box starting at a
+            // different x). Top dock: hug the label so the row stays compact.
+            // (MinWidth rather than a fixed width so a long label like RelatedActivityId still fits.)
+            if (g is Grid grid && grid.ColumnDefinitions.Count > 0)
+                grid.ColumnDefinitions[0].MinWidth = left ? 72 : 0;
         }
         Group(ProviderFieldGroup); Group(TaskNameFieldGroup); Group(MessageFieldGroup); Group(SourceFieldGroup);
         foreach (var row in _extraFieldRows.Values) Group(row);
@@ -4211,7 +4218,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         var pattern = new TextBox
         {
-            PlaceholderText = @"regex — e.g. PID=(?<v>\d+)   (the (?<v>…) group is the captured value)",
+            // Short enough to fit the dialog's box: the old placeholder ran off the right edge mid-sentence.
+            PlaceholderText = @"Regex with a (?<v>…) group, e.g. PID=(?<v>\d+)",
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
         };
         var extractRadio = new RadioButton
