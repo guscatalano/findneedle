@@ -2273,6 +2273,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private static TextBlock SourcesNote(string text) => new()
     {
         Text = text,
+        TextWrapping = TextWrapping.Wrap,
         Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         Margin = new Thickness(8, 0, 0, 0),
     };
