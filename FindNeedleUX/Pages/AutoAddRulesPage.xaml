@@ -9,7 +9,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="24" RowSpacing="14">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -18,8 +18,8 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock x:Name="PageHeading" Text="Auto rules" FontSize="24" FontWeight="SemiBold"/>
-            <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            <TextBlock x:Name="PageHeading" Text="Auto rules" Style="{StaticResource PageHeading}"/>
+            <TextBlock Style="{StaticResource PageSubtitle}"
                        Text="Rules that get applied to a search automatically when their condition matches the logs you load (file type, source kind, path pattern, provider, or build). Toggle individual rules below, or turn the whole feature off."/>
         </StackPanel>
 
@@ -40,8 +40,7 @@
 
         <InfoBar x:Name="StatusBar" Grid.Row="2" IsOpen="False" IsClosable="True"/>
 
-        <Border Grid.Row="3" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                CornerRadius="6">
+        <Border Grid.Row="3" Style="{StaticResource PageCard}" Padding="0">
             <ListView x:Name="EntriesList" SelectionMode="None"
                       ScrollViewer.HorizontalScrollMode="Disabled">
                 <ListView.ItemContainerStyle>
