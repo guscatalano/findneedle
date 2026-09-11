@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -244,5 +244,41 @@ public static class ActiveFilterCatalog
             }
 
         return list;
+    }
+}
+
+/// <summary>One way to follow a row: caption, and the query that isolates that sequence.</summary>
+public readonly record struct FollowAxis(string Caption, string Query);
+
+/// <summary>
+/// Follow ▾ in the in-row detail: which axes a row can be followed along, and the query each runs.
+/// "Follow" replaces the search with a query that keeps only this row's activity / thread / process /
+/// provider and reads it in time order. Pure so the axis selection is unit-testable without WinUI.
+/// An axis the row has no value for is NOT offered — an item that silently does nothing is worse than
+/// no item. Thread is paired with its process because thread ids only mean something within one.
+/// </summary>
+public static class FollowCatalog
+{
+    /// <summary>An ActivityId worth following: not blank and not an all-zero GUID.</summary>
+    public static bool HasActivity(string a)
+        => !string.IsNullOrWhiteSpace(a) && a.Trim('0', '-', '{', '}', ' ').Length > 0;
+
+    /// <summary>Axes in order of how much they narrow: activity, thread, process, provider.</summary>
+    public static IReadOnlyList<FollowAxis> AxesFor(string activityId, string processId, string threadId, string provider)
+    {
+        var axes = new List<FollowAxis>();
+        if (HasActivity(activityId))
+            axes.Add(new FollowAxis("Follow this activity",
+                $"activityid == \"{activityId}\" OR relatedactivityid == \"{activityId}\""));
+        bool hasPid = !string.IsNullOrWhiteSpace(processId);
+        bool hasTid = !string.IsNullOrWhiteSpace(threadId);
+        if (hasPid && hasTid)
+            axes.Add(new FollowAxis($"Follow this thread ({processId}:{threadId})",
+                $"processid == \"{processId}\" AND threadid == \"{threadId}\""));
+        if (hasPid)
+            axes.Add(new FollowAxis($"Follow this process ({processId})", $"processid == \"{processId}\""));
+        if (!string.IsNullOrWhiteSpace(provider))
+            axes.Add(new FollowAxis($"Follow this provider ({provider})", $"provider == \"{provider}\""));
+        return axes;
     }
 }

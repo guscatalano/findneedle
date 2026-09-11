@@ -86,8 +86,12 @@
                                 ToolTipService.ToolTip="Keep only rows whose field matches this row's value (adds a predicate to the search box)"/>
                         <Button Content="Filter out ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailFilterOut_Click"
                                 ToolTipService.ToolTip="Hide rows whose field matches this row's value (adds a predicate to the search box)"/>
-                        <Button Content="Follow this activity" Height="28" FontSize="12" Padding="10,0"
-                                Click="RowDetailFollowActivity_Click" Loaded="RowDetailFollowActivity_Loaded"/>
+                        <!-- Follow ▾: isolate the sequence this row belongs to — by activity, process, thread
+                             or provider — in time order. A flyout like Filter in ▾, not one button per axis,
+                             and only the axes this row actually has a value for are offered. -->
+                        <Button Content="Follow ▾" Height="28" FontSize="12" Padding="10,0"
+                                Click="RowDetailFollow_Click" Loaded="RowDetailFollow_Loaded"
+                                ToolTipService.ToolTip="Show only this row's activity, process, thread or provider, in time order"/>
                         <Button Content="Tag ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailTag_Click"
                                 ToolTipService.ToolTip="Mark this row (Important / Question / Resolved / Note) and add a note"/>
                         <Button Content="Copy ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailCopy_Click"

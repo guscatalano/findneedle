@@ -3586,7 +3586,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         Bullet("The count badge on the Filters label is how many filters are active — it stays visible when the pane is hidden. \"Clear all (incl. search & time)\" resets everything at once.");
 
         Section("Rows");
-        Bullet("Click a row to open its details (Details: In row). Under the detail: Filter in ▾ / Filter out ▾ add a predicate for one of the row's fields to the search box; Follow this activity filters to that ActivityId's sequence in time order; Tag ▾ marks the row (Important / Question / Resolved / Note, plus a note); Copy ▾ copies the row as JSON, CSV or XML.");
+        Bullet("Click a row to open its details (Details: In row). Under the detail: Filter in ▾ / Filter out ▾ add a predicate for one of the row's fields to the search box; Follow ▾ keeps only this row's activity, thread, process or provider, in time order (only the axes the row has); Tag ▾ marks the row (Important / Question / Resolved / Note, plus a note); Copy ▾ copies the row as JSON, CSV or XML.");
         Bullet("Right-click a row for the same actions, plus, with several rows selected, copy / tag / diagram the selection as a sequence.");
         Bullet("Right-click a column header for a Quick rule (this session): pull a value out of the Message into that column, or strip matching text — applied instantly, cleared on restart.");
         Bullet("Click a header to sort; drag headers to reorder; drag a header's right edge to resize.");
@@ -3735,21 +3735,37 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void RowDetailFilterIn_Click(object sender, RoutedEventArgs e) => ShowFilterFieldMenu(sender, negate: false);
     private void RowDetailFilterOut_Click(object sender, RoutedEventArgs e) => ShowFilterFieldMenu(sender, negate: true);
 
-    private void RowDetailFollowActivity_Loaded(object sender, RoutedEventArgs e)
+    // ----- Follow ▾: isolate the sequence this row belongs to, along one axis -----
+    // "Follow" means: replace the search with a query that keeps only this row's activity / process /
+    // thread / provider, and sort by Time, so the grid reads as that one sequence. It was a single
+    // "Follow this activity" button; the other axes are the same operation on a different field, so
+    // they are one flyout like Filter in ▾ rather than a row of buttons. Only axes the row has a value
+    // for are offered — an item that silently does nothing is worse than no item.
+
+    private void RowDetailFollow_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is not Button b) return;
         var row = RowOf(sender);
-        bool has = row != null && HasActivity(row.ActivityId);
-        b.IsEnabled = has;
-        ToolTipService.SetToolTip(b, has
-            ? "Filter to this ActivityId's causal sequence (its events plus the child activities it started), in time order"
-            : "This row has no ActivityId to follow");
+        bool any = row != null && NativeResultViewer.FollowCatalog.AxesFor(row.ActivityId, row.ProcessId, row.ThreadId, row.Provider).Count > 0;
+        b.IsEnabled = any;
+        if (!any) ToolTipService.SetToolTip(b, "This row has no activity, process, thread or provider to follow");
     }
 
-    private async void RowDetailFollowActivity_Click(object sender, RoutedEventArgs e)
+    private void RowDetailFollow_Click(object sender, RoutedEventArgs e)
     {
         var row = RowOf(sender);
-        if (row != null && HasActivity(row.ActivityId)) await FollowActivityAsync(row.ActivityId);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        foreach (var axis in NativeResultViewer.FollowCatalog.AxesFor(row.ActivityId, row.ProcessId, row.ThreadId, row.Provider))
+        {
+            var item = new MenuFlyoutItem { Text = axis.Caption, Icon = new SymbolIcon(Symbol.Link) };
+            var q = axis.Query;
+            item.Click += async (_, __) => await FollowQueryAsync(q);
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count == 0)
+            menu.Items.Add(new MenuFlyoutItem { Text = "Nothing on this row to follow", IsEnabled = false });
+        menu.ShowAt(anchor);
     }
 
     private void RowDetailTag_Click(object sender, RoutedEventArgs e)
@@ -3786,9 +3802,13 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// <summary>Filter the grid to one activity's causal sequence: every event in the activity PLUS the start
     /// events of the child activities it spawned (which carry it as RelatedActivityId), in time order. Uses
     /// the structured query DSL — no capped in-memory gather, so it works across the full paged set.</summary>
-    private async System.Threading.Tasks.Task FollowActivityAsync(string activityId)
+    private System.Threading.Tasks.Task FollowActivityAsync(string activityId)
+        => FollowQueryAsync($"activityid == \"{activityId}\" OR relatedactivityid == \"{activityId}\"");
+
+    /// <summary>Follow along any axis: replace the search with <paramref name="q"/> and read the result in
+    /// time order, in one reload.</summary>
+    private async System.Threading.Tasks.Task FollowQueryAsync(string q)
     {
-        var q = $"activityid == \"{activityId}\" OR relatedactivityid == \"{activityId}\"";
         ViewModel.SetSortState("Time", false); // chronological, without a separate reload
         SearchBox.Text = q;
         SearchBox.Focus(FocusState.Programmatic);
