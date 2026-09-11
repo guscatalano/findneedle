@@ -172,7 +172,7 @@ public sealed partial class LogFinderPage : Page
         var path = e.ExpandedPath;
         if (string.IsNullOrWhiteSpace(path)) return;
         if (WindowUtil.GetMainWindow() is MainWindow main)
-            await main.OpenIntoWorkspaceAsync(new[] { path }, label: $"Opening {e.Name}…");
+            await main.OpenIntoWorkspaceAsync(new[] { path }, label: $"Opening {e.Name}…", displayName: e.Name); // name it, not its folder
     }
 
     private static void Reveal(LogCatalogEntry e)
