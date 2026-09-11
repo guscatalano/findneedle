@@ -9,17 +9,15 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <ScrollViewer Padding="20">
-        <StackPanel MaxWidth="800">
-            <TextBlock x:Name="PageHeading" Text="Diagram tools" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,10"/>
-            <TextBlock Text="Manage UML diagram generation tools for visualizing log sequences." 
-                       Opacity="0.7" Margin="0,0,0,20"/>
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource PagePadding}" MaxWidth="1000" HorizontalAlignment="Left">
+            <TextBlock x:Name="PageHeading" Text="Diagram tools" Style="{StaticResource PageHeading}" Margin="0,0,0,4"/>
+            <TextBlock Text="Manage UML diagram generation tools for visualizing log sequences."
+                       Style="{StaticResource PageSubtitle}" Margin="0,0,0,20"/>
 
 
             <!-- Install Progress (at top) -->
-            <Border x:Name="InstallProgressPanel" Visibility="Collapsed" 
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                    CornerRadius="8" Padding="15" Margin="0,0,0,15">
+            <Border x:Name="InstallProgressPanel" Visibility="Collapsed" Style="{StaticResource PageCard}" Margin="0,0,0,16">
                 <StackPanel>
                     <TextBlock x:Name="InstallProgressText" Text="Installing..." Margin="0,0,0,10"
                                IsTextSelectionEnabled="True" TextWrapping="Wrap"
@@ -31,11 +29,10 @@
             </Border>
 
             <!-- Timeline Demo Section -->
-            <TextBlock Text="Desktop Session Replay" FontWeight="SemiBold" FontSize="18" Margin="0,10,0,5"/>
-            <TextBlock Text="Interactive demo that replays window movement across multiple monitors. You can open it in-app or in your external browser." 
-                       Opacity="0.7" FontSize="12" Margin="0,0,0,10"/>
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                    CornerRadius="8" Padding="15" Margin="0,5,0,15">
+            <TextBlock Text="Desktop Session Replay" Style="{StaticResource CardTitle}" Margin="0,8,0,4"/>
+            <TextBlock Text="Interactive demo that replays window movement across multiple monitors. You can open it in-app or in your external browser."
+                       Style="{StaticResource SecondaryText}" Margin="0,0,0,8"/>
+            <Border Style="{StaticResource PageCard}" Margin="0,0,0,20">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -53,12 +50,11 @@
             </Border>
 
             <!-- PlantUML Section -->
-            <TextBlock Text="PlantUML" FontWeight="SemiBold" FontSize="18" Margin="0,10,0,5"/>
-            <TextBlock Text="Generates UML diagrams using Java. Best for detailed sequence diagrams with notes and groups." 
-                       Opacity="0.7" FontSize="12" Margin="0,0,0,10"/>
-            
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                    CornerRadius="8" Padding="15" Margin="0,5,0,15">
+            <TextBlock Text="PlantUML" Style="{StaticResource CardTitle}" Margin="0,8,0,4"/>
+            <TextBlock Text="Generates UML diagrams using Java. Best for detailed sequence diagrams with notes and groups."
+                       Style="{StaticResource SecondaryText}" Margin="0,0,0,8"/>
+
+            <Border Style="{StaticResource PageCard}" Margin="0,0,0,20">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -69,50 +65,55 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    
+
                     <StackPanel Grid.Column="0" Grid.Row="0" Orientation="Horizontal">
                         <TextBlock x:Name="PlantUmlStatusIcon" Text="?" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
                         <TextBlock x:Name="PlantUmlStatusText" Text="Checking..." FontSize="14" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
                     </StackPanel>
-                    
-                    <TextBlock x:Name="PlantUmlPathDisplay" Grid.Row="1" Grid.Column="0" 
+
+                    <TextBlock x:Name="PlantUmlPathDisplay" Grid.Row="1" Grid.Column="0"
                                Text="" Opacity="0.5" FontSize="11" TextTrimming="CharacterEllipsis" Margin="26,5,0,0"/>
-                    
-                    <TextBlock x:Name="PlantUmlVersionDisplay" Grid.Row="2" Grid.Column="0" 
+
+                    <TextBlock x:Name="PlantUmlVersionDisplay" Grid.Row="2" Grid.Column="0"
                                Text="" Opacity="0.5" FontSize="11" Margin="26,2,0,0"/>
-                    
-                    <StackPanel Grid.Column="1" Grid.RowSpan="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Button x:Name="TestPlantUmlButton" Content="Test" Click="TestPlantUml_Click" Width="60" Margin="0,0,5,0"
+
+                    <StackPanel Grid.Column="1" Grid.RowSpan="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="10,0,0,0">
+                        <Button x:Name="TestPlantUmlButton" Content="Test" Click="TestPlantUml_Click" MinWidth="60"
                                 AutomationProperties.Name="Test PlantUML installation"/>
-                        <Button x:Name="InstallPlantUmlButton" Content="Install" Click="InstallPlantUml_Click" Width="80"
+                        <Button x:Name="InstallPlantUmlButton" Content="Install" Click="InstallPlantUml_Click" MinWidth="80"
                                 AutomationProperties.Name="Install PlantUML"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Custom PlantUML JAR path (moved here from System Check) -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    CornerRadius="8" Padding="15" Margin="0,0,0,15">
+            <Border Style="{StaticResource PageCard}" Margin="0,0,0,20">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Custom PlantUML JAR path" FontWeight="SemiBold"/>
                     <TextBlock Text="Point at a specific plantuml.jar to override the bundled/installed copy. Leave unset to use the install above."
-                               Opacity="0.7" FontSize="12" TextWrapping="Wrap"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock x:Name="PlantUmlCustomPathText" VerticalAlignment="Center" Width="460"
+                               Style="{StaticResource SecondaryText}"/>
+                    <!-- Path fills the row; the button sits at the card's right edge, in line with the
+                         Test / Reinstall buttons of the cards above and below (a fixed 460px path left it
+                         stranded mid-card). -->
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" x:Name="PlantUmlCustomPathText" VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" FontFamily="Consolas" FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <Button Content="Change…" Click="ChangePlantUmlPath_Click"/>
-                    </StackPanel>
+                        <Button Grid.Column="1" Content="Change…" Click="ChangePlantUmlPath_Click"/>
+                    </Grid>
                 </StackPanel>
             </Border>
 
             <!-- Mermaid Section -->
-            <TextBlock Text="Mermaid CLI" FontWeight="SemiBold" FontSize="18" Margin="0,10,0,5"/>
-            <TextBlock Text="Generates diagrams using Node.js. Great for web-friendly output and simpler diagrams." 
-                       Opacity="0.7" FontSize="12" Margin="0,0,0,10"/>
-            
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                    CornerRadius="8" Padding="15" Margin="0,5,0,15">
+            <TextBlock Text="Mermaid CLI" Style="{StaticResource CardTitle}" Margin="0,8,0,4"/>
+            <TextBlock Text="Generates diagrams using Node.js. Great for web-friendly output and simpler diagrams."
+                       Style="{StaticResource SecondaryText}" Margin="0,0,0,8"/>
+
+            <Border Style="{StaticResource PageCard}" Margin="0,0,0,20">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -123,49 +124,48 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    
+
                     <StackPanel Grid.Column="0" Grid.Row="0" Orientation="Horizontal">
                         <TextBlock x:Name="MermaidStatusIcon" Text="?" Margin="0,0,10,0" FontSize="16" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"/>
                         <TextBlock x:Name="MermaidStatusText" Text="Checking..." FontSize="14" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
                     </StackPanel>
-                    
-                    <TextBlock x:Name="MermaidPathDisplay" Grid.Row="1" Grid.Column="0" 
+
+                    <TextBlock x:Name="MermaidPathDisplay" Grid.Row="1" Grid.Column="0"
                                Text="" Opacity="0.5" FontSize="11" TextTrimming="CharacterEllipsis" Margin="26,5,0,0"/>
-                    
-                    <TextBlock x:Name="MermaidVersionDisplay" Grid.Row="2" Grid.Column="0" 
+
+                    <TextBlock x:Name="MermaidVersionDisplay" Grid.Row="2" Grid.Column="0"
                                Text="" Opacity="0.5" FontSize="11" Margin="26,2,0,0"/>
-                    
-                    <StackPanel Grid.Column="1" Grid.RowSpan="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Button x:Name="TestMermaidButton" Content="Test" Click="TestMermaid_Click" Width="60" Margin="0,0,5,0"
+
+                    <StackPanel Grid.Column="1" Grid.RowSpan="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="10,0,0,0">
+                        <Button x:Name="TestMermaidButton" Content="Test" Click="TestMermaid_Click" MinWidth="60"
                                 AutomationProperties.Name="Test Mermaid CLI installation"/>
-                        <Button x:Name="InstallMermaidButton" Content="Install" Click="InstallMermaid_Click" Width="80"
+                        <Button x:Name="InstallMermaidButton" Content="Install" Click="InstallMermaid_Click" MinWidth="80"
                                 AutomationProperties.Name="Install Mermaid CLI"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Test Options -->
-            <TextBlock Text="Test Options" FontWeight="SemiBold" FontSize="18" Margin="0,20,0,5"/>
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                    CornerRadius="8" Padding="15" Margin="0,5,0,15">
+            <TextBlock Text="Test options" Style="{StaticResource CardTitle}" Margin="0,8,0,4"/>
+            <Border Style="{StaticResource PageCard}" Margin="0,0,0,20">
                 <StackPanel>
-                    <TextBlock Text="Preferred Output Format" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock Text="Preferred output format" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <StackPanel Orientation="Horizontal" Spacing="20">
-                        <RadioButton x:Name="OutputPngRadio" Content="PNG Image" GroupName="OutputFormat" 
+                        <RadioButton x:Name="OutputPngRadio" Content="PNG Image" GroupName="OutputFormat"
                                      IsChecked="True" Checked="OutputFormat_Changed"/>
                         <RadioButton x:Name="OutputBrowserRadio" Content="Browser (HTML)" GroupName="OutputFormat"
                                      Checked="OutputFormat_Changed"/>
                     </StackPanel>
-                    <TextBlock Text="PNG generates a static image file. Browser generates an interactive HTML file." 
-                               Opacity="0.6" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Text="PNG generates a static image file. Browser generates an interactive HTML file."
+                               Style="{StaticResource SecondaryText}" Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
 
             <!-- Install Directory Info -->
-            <TextBlock Text="Installation Directory" FontWeight="SemiBold" Margin="0,20,0,5"/>
-            <TextBlock x:Name="InstallDirectoryText" Text="" Opacity="0.6" FontSize="11" 
-                       IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
-            
+            <TextBlock Text="Installation directory" Style="{StaticResource CardTitle}" Margin="0,8,0,4"/>
+            <TextBlock x:Name="InstallDirectoryText" Text="" Style="{StaticResource SecondaryText}" FontFamily="Consolas"
+                       IsTextSelectionEnabled="True"/>
+
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="10">
                 <Button Content="Open Install Folder" Click="OpenInstallFolder_Click"/>
                 <Button Content="Open Test Output Folder" Click="OpenTestOutputFolder_Click"/>
