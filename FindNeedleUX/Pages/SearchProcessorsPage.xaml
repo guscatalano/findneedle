@@ -9,7 +9,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="24" RowSpacing="14">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -22,9 +22,8 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Spacing="4">
-                <TextBlock x:Name="PageHeading" Text="Active rules" FontSize="24" FontWeight="SemiBold"/>
-                <TextBlock x:Name="SubtitleText" TextWrapping="Wrap"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                <TextBlock x:Name="PageHeading" Text="Active rules" Style="{StaticResource PageHeading}"/>
+                <TextBlock x:Name="SubtitleText" Style="{StaticResource PageSubtitle}"
                            Text="The RuleDSL rule sets processing the current search, with what each one contains and how many results it matched."/>
             </StackPanel>
             <Button Grid.Column="1" Content="Refresh" Click="Refresh_Click" VerticalAlignment="Top"/>
@@ -37,12 +36,10 @@
             <ItemsControl x:Name="RulesList">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="local:ActiveRuleRow">
-                        <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                                CornerRadius="6" Padding="16" Margin="0,0,0,12">
+                        <Border Style="{StaticResource PageCard}" Margin="0,0,0,12">
                             <StackPanel Spacing="6">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{x:Bind Title}" Style="{StaticResource CardTitle}"/>
                                     <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}"
                                             CornerRadius="3" Padding="6,1" VerticalAlignment="Center"
                                             Visibility="{x:Bind AutoAddedVisibility}">
