@@ -1,4 +1,4 @@
-<Page
+﻿<Page
     x:Class="FindNeedleUX.Pages.NativeResultsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -376,9 +376,9 @@
         <Border x:Name="FiltersPanel"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-            <StackPanel>
+            <StackPanel x:Name="PaneSections">
                 <!-- Time range -->
-                <Border Padding="12,6"
+                <Border x:Name="TimeSection" Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                     <StackPanel x:Name="TimeRowPanel" Orientation="Vertical" Spacing="6">
                         <TextBlock Text="TIME" Style="{StaticResource PaneSectionHeader}"/>
@@ -455,7 +455,7 @@
                 <!-- Level filter: click a chip to filter to that level (click again to clear). These chips
                      ARE the level filter (the old separate combo is hidden). Colors are edited on the
                      settings page (Settings → Appearance → Level colors), the single source of truth. -->
-                <Border Padding="12,6"
+                <Border x:Name="LevelSection" Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                     <StackPanel Spacing="6">
                         <TextBlock Text="LEVEL" Style="{StaticResource PaneSectionHeader}"/>
@@ -488,7 +488,7 @@
                     </StackPanel>
                 </Border>
                 <!-- Fields: one filter per column. -->
-                <Border Padding="12,6"
+                <Border x:Name="FieldsSection" Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                     <StackPanel Spacing="6">
                         <!-- Header row: section name + the two group-wide actions. Kept OUT of
@@ -669,6 +669,12 @@
                      each. Rendered in code from ActiveFilterCatalog.Build(BuildActiveFilterState()) —
                      the SAME list the Filters badge counts, so the number and the list can't disagree.
                      The whole section hides when nothing is active (there is then nothing to clear). -->
+                <!-- TOP DOCK ONLY: Time / Level / Fields are re-parented into this wrapping row so they sit
+                     side by side as columns across the band instead of stacking into a tall block. Active
+                     filters stays a full-width strip below it; Quick rules is collapsed in the top dock (the
+                     band deliberately carries less than the left rail). RefreshFilterLayout moves the
+                     sections between here and PaneSections. -->
+                <local:WrapPanelLite x:Name="TopInputsRow" HorizontalSpacing="0" VerticalSpacing="0" Visibility="Collapsed"/>
                 <Border x:Name="ActiveFiltersSection" Padding="12,6" Visibility="Collapsed"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
                     <StackPanel Spacing="6">

@@ -1157,6 +1157,13 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             TopFilterHost.Content = FiltersPanel;
         }
 
+        // The pane was designed as a vertical RAIL of five stacked sections. As a band across the top,
+        // those same five stacked sections made a tall, hard-to-read block. The top dock therefore lays
+        // the three INPUT sections (Time / Level / Fields) out side by side as columns, keeps Active
+        // filters as a full-width strip beneath them, and drops Quick rules (still reachable from a
+        // column header). Less than the rail, on purpose.
+        ArrangeSectionsForDock(left);
+
         // Rows stack vertically when docked left (narrow column), horizontally when on top.
         // TimeRowPanel stays vertical in both docks — it's its own mini-layout (preset chips + a
         // collapsible custom range) that wraps internally via WrapPanelLite, so flipping it would
@@ -1212,6 +1219,59 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         // Toolbar reflection: the Filters segmented control shows Left / Top / Hide.
         if (FiltersSegment != null) FiltersSegment.SelectedIndex = NativeResultsPageViewModel.FiltersSegmentIndexFor(_filterDock, _filtersExpanded);
+    }
+
+    /// <summary>
+    /// Put the pane's sections where the current dock wants them. LEFT: five sections stacked in
+    /// PaneSections, each closed by a bottom rule. TOP: Time / Level / Fields re-parented into
+    /// TopInputsRow (a wrapping horizontal row) as columns separated by a right rule, Active filters
+    /// left in PaneSections as a full-width strip under them, Quick rules collapsed. Idempotent —
+    /// called from every RefreshFilterLayout, it only moves what is in the wrong place.
+    /// </summary>
+    private void ArrangeSectionsForDock(bool left)
+    {
+        if (PaneSections == null || TopInputsRow == null) return;
+        var inputs = new[] { TimeSection, LevelSection, FieldsSection };
+        if (inputs.Any(s => s == null)) return;
+
+        // A section only ever lives in one of two panels, so ask THEM rather than FrameworkElement.Parent:
+        // Parent did not resolve to the panel here, so the old check fell through and Insert threw the
+        // WinUI "already has a parent" COMException on first layout (a launch crash in the left dock).
+        void MoveTo(Panel target, int insertAt, FrameworkElement el)
+        {
+            if (target.Children.Contains(el)) return;
+            var other = ReferenceEquals(target, PaneSections) ? (Panel)TopInputsRow : PaneSections;
+            other.Children.Remove(el); // no-op when it is not there
+            if (insertAt < 0 || insertAt > target.Children.Count) target.Children.Add(el);
+            else target.Children.Insert(insertAt, el);
+        }
+
+        if (left)
+        {
+            // Back into the rail, at the top, in order, before TopInputsRow.
+            for (int i = 0; i < inputs.Length; i++) MoveTo(PaneSections, i, inputs[i]);
+            foreach (var s in inputs)
+            {
+                s.BorderThickness = new Thickness(0, 0, 0, 1); // rule under each stacked section
+                s.VerticalAlignment = VerticalAlignment.Stretch;
+                s.MinWidth = 0;
+            }
+            TopInputsRow.Visibility = Visibility.Collapsed;
+            if (QuickRulesSection != null) QuickRulesSection.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            foreach (var s in inputs) MoveTo(TopInputsRow, -1, s);
+            foreach (var s in inputs)
+            {
+                s.BorderThickness = new Thickness(0, 0, 1, 0); // rule BETWEEN the columns
+                s.VerticalAlignment = VerticalAlignment.Top;
+                s.MinWidth = 220; // a column that is at least chip-row wide, so Level does not collapse
+            }
+            TopInputsRow.Visibility = Visibility.Visible;
+            // The band carries less than the rail: quick rules stay reachable from a column header.
+            if (QuickRulesSection != null) QuickRulesSection.Visibility = Visibility.Collapsed;
+        }
     }
 
     private DetailsMode _detailsMode = DetailsMode.Inrow;
