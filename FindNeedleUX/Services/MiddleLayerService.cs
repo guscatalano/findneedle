@@ -1034,7 +1034,7 @@ public class MiddleLayerService
         try
         {
             var count = GetFilteredRowCount();
-            LastRunSummary = $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (cached)" : " (scanned)")}";
+            LastRunSummary = $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (from cache)" : " (scanned)")}";
         }
         catch { LastRunSummary = "done"; }
         LastRunCompletedAt = DateTime.Now;

@@ -834,7 +834,7 @@ public sealed partial class MainWindow : Window
                 try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { }
                 if (liveCount >= 0)
                 {
-                    var suffix = MiddleLayerService.LastSearchReusedCache ? " (cached)" : " (scanned)";
+                    var suffix = MiddleLayerService.LastSearchReusedCache ? " (from cache)" : " (scanned)";
                     lastRun = $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
                     hasResults = liveCount > 0;
                 }
