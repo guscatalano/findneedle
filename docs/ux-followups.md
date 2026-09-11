@@ -48,11 +48,11 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
 
 ## 4. Finish the review (F3 / F8)
 
-- [ ] **Move the Active rules tab** out of the Rules hub into the viewer's Sources dialog (runtime
+- [x] (2fe4c2d) **Move the Active rules tab** out of the Rules hub into the viewer's Sources dialog (runtime
       status beside "which sources loaded"). Rules hub keeps Rule files / Auto rules / Field extraction.
-- [ ] **One name for field extraction.** The viewer's "Reformatted — …" label and any "(enrichment)"
+- [x] (75312b4) **One name for field extraction.** The viewer's "Reformatted — …" label and any "(enrichment)"
       wording become "Field extraction".
-- [ ] **Regroup Settings** so categories match their contents: Appearance · Viewer (paging, sort, row
+- [x] (77596ce) **Regroup Settings** so categories match their contents: Appearance · Viewer (paging, sort, row
       tags, dropdowns, columns) · Loading & cache (progressive, cache, storage, index, cleanup) ·
       Decoding · Integrations · App (welcome, status bar, shortcuts, file associations) · Support.
       Cards move; no behaviour or x:Name changes.
