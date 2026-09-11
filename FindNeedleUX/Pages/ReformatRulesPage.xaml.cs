@@ -54,9 +54,9 @@ public sealed partial class ReformatRulesPage : Page
         {
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(4),
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            Padding = new Thickness(12),
+            Padding = new Thickness(12, 10, 12, 10),
         };
         var grid = new Grid { ColumnSpacing = 10 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -88,10 +88,11 @@ public sealed partial class ReformatRulesPage : Page
         Grid.SetColumn(text, 1); grid.Children.Add(text);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-        var up = new Button { Content = new FontIcon { Glyph = ((char)0xE70E).ToString(), FontSize = 12 }, IsEnabled = index > 0, Padding = new Thickness(6) };
+        // Icon buttons match the 32px text buttons beside them (Padding=6 alone made them 28px).
+        var up = new Button { Content = new FontIcon { Glyph = ((char)0xE70E).ToString(), FontSize = 12 }, IsEnabled = index > 0, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(up, "Move up");
         up.Click += (_, _) => { MessageReformatCatalog.Move(r.Id, -1); RenderList(); };
-        var down = new Button { Content = new FontIcon { Glyph = ((char)0xE70D).ToString(), FontSize = 12 }, IsEnabled = index < count - 1, Padding = new Thickness(6) };
+        var down = new Button { Content = new FontIcon { Glyph = ((char)0xE70D).ToString(), FontSize = 12 }, IsEnabled = index < count - 1, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(down, "Move down");
         down.Click += (_, _) => { MessageReformatCatalog.Move(r.Id, +1); RenderList(); };
         actions.Children.Add(up); actions.Children.Add(down);

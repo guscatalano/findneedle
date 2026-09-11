@@ -8,7 +8,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="16" RowSpacing="12">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -16,13 +16,12 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Spacing="2">
-            <TextBlock x:Name="PageHeading" Text="Field extraction" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock x:Name="PageHeading" Text="Field extraction" Style="{StaticResource PageHeading}"/>
+            <TextBlock Style="{StaticResource PageSubtitle}"
                        Text="Pull structured values out of dense one-line messages using a regex with named groups (?&lt;Field&gt;...). Built-ins cover DISM and CBS; add your own for any log."/>
 
-            <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6"
-                    Padding="12" Margin="0,8,0,0" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+            <Border Style="{StaticResource PageCard}" Margin="0,12,0,0">
                 <StackPanel Spacing="4">
                     <CheckBox x:Name="EnrichmentEnabledCheck" Content="Store extracted fields as columns (enrichment)"
                               Checked="EnrichmentEnabledCheck_Changed" Unchecked="EnrichmentEnabledCheck_Changed"/>
@@ -38,10 +37,9 @@
             </StackPanel>
         </Button>
 
-        <Border Grid.Row="2" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                CornerRadius="6" Padding="12" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-            <StackPanel Spacing="6">
-                <TextBlock Text="Try it" FontWeight="SemiBold"/>
+        <Border Grid.Row="2" Style="{StaticResource PageCard}">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Try it" Style="{StaticResource CardTitle}"/>
                 <TextBox x:Name="TestInput" PlaceholderText="Paste a log message to see how the enabled rules break it up…"
                          TextWrapping="Wrap" AcceptsReturn="True" Height="60" TextChanged="TestInput_Changed"/>
                 <StackPanel x:Name="TestOutput" Spacing="2"/>
