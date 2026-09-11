@@ -6,9 +6,10 @@
     xmlns:local="using:FindNeedleUX.Pages"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="12,10,12,12" RowSpacing="8">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -21,14 +22,19 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Spacing="2">
-                <TextBlock x:Name="PageHeading" Text="App log" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock x:Name="PageHeading" Text="App log" Style="{StaticResource PageHeading}"/>
+                <TextBlock Style="{StaticResource PageSubtitle}"
                            Text="FindNeedle's OWN diagnostic log for this run — this is the app's log, not the logs you're analyzing."/>
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
-                <ToggleSwitch x:Name="DebugToggleSwitch" Header="Debug logging" Toggled="DebugToggleSwitch_Toggled"/>
-                <TextBlock x:Name="DebugStatusText" VerticalAlignment="Center"
+            <!-- One row: label, then the switch. The switch's Header stacked the label above it and the
+                 separate "on/off" text floated at the far right edge, half-way between the two. -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="16,0,0,0">
+                <TextBlock Text="Debug logging" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <ToggleSwitch x:Name="DebugToggleSwitch" OnContent="On" OffContent="Off" MinWidth="0"
+                              AutomationProperties.Name="Debug logging" Toggled="DebugToggleSwitch_Toggled"/>
+                <TextBlock x:Name="DebugStatusText" VerticalAlignment="Center" Visibility="Collapsed"
                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12"/>
             </StackPanel>
         </Grid>
