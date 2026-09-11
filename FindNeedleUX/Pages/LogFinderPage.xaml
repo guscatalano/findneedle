@@ -8,16 +8,16 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="16" RowSpacing="12">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Spacing="2">
-            <TextBlock x:Name="PageHeading" Text="Known logs" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock x:Name="PageHeading" Text="Known logs" Style="{StaticResource PageHeading}"/>
+            <TextBlock Style="{StaticResource PageSubtitle}"
                        Text="A catalog of well-known Windows logs — a library, separate from your workspace's sources. Open one to search it (built-ins cover the common Windows logs; add your own below)."/>
         </StackPanel>
 

@@ -70,9 +70,9 @@ public sealed partial class LogFinderPage : Page
         {
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(4),
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            Padding = new Thickness(12),
+            Padding = new Thickness(12, 10, 12, 10),
         };
         var grid = new Grid { ColumnSpacing = 10 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -99,16 +99,17 @@ public sealed partial class LogFinderPage : Page
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
 
         // Reorder within the category. (Segoe MDL2 chevrons via char code — no unicode literal.)
-        var up = new Button { Content = new FontIcon { Glyph = ((char)0xE70E).ToString(), FontSize = 12 }, IsEnabled = indexInGroup > 0, Padding = new Thickness(6) };
+        // Icon buttons match the 32px text buttons beside them (Padding=6 alone made them 28px).
+        var up = new Button { Content = new FontIcon { Glyph = ((char)0xE70E).ToString(), FontSize = 12 }, IsEnabled = indexInGroup > 0, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(up, "Move up");
         up.Click += (_, _) => { LogCatalog.MoveWithinCategory(e.Id, -1); RenderList(); };
-        var down = new Button { Content = new FontIcon { Glyph = ((char)0xE70D).ToString(), FontSize = 12 }, IsEnabled = indexInGroup < groupCount - 1, Padding = new Thickness(6) };
+        var down = new Button { Content = new FontIcon { Glyph = ((char)0xE70D).ToString(), FontSize = 12 }, IsEnabled = indexInGroup < groupCount - 1, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(down, "Move down");
         down.Click += (_, _) => { LogCatalog.MoveWithinCategory(e.Id, +1); RenderList(); };
         actions.Children.Add(up); actions.Children.Add(down);
 
         // Reassign category (built-ins and user entries).
-        var cat = new Button { Content = new SymbolIcon { Symbol = Symbol.Tag }, Padding = new Thickness(6) };
+        var cat = new Button { Content = new SymbolIcon { Symbol = Symbol.Tag }, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(cat, "Move to category");
         var catMenu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
         foreach (var c in LogCatalog.GetCategories())
@@ -128,7 +129,7 @@ public sealed partial class LogFinderPage : Page
         var open = new Button { Content = WithIcon(e.IsFolder ? Symbol.OpenLocal : Symbol.OpenFile, e.IsFolder ? "Open folder" : "Open file"), IsEnabled = e.Exists };
         open.Click += (_, _) => OpenEntry(e);
         actions.Children.Add(open);
-        var reveal = new Button { Content = new SymbolIcon { Symbol = Symbol.View }, IsEnabled = e.Exists };
+        var reveal = new Button { Content = new SymbolIcon { Symbol = Symbol.View }, IsEnabled = e.Exists, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(reveal, "Reveal in Explorer");
         reveal.Click += (_, _) => Reveal(e);
         actions.Children.Add(reveal);
