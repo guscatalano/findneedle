@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -57,15 +57,17 @@ public class SettingsAtomicWriteTests
         var before = new FileInfo(_path).Length;
         Assert.IsTrue(before > 0);
 
-        // Rewrite repeatedly; the destination must be parseable after every single save. With a
-        // truncating write the file passes through zero length on each one.
+        // Rewrite repeatedly; after every single save the file must load back with the value just
+        // written. With a truncating write the file passes through zero length on each one, and a
+        // reader in that window falls into "corrupt => defaults". Read back through the app's own
+        // loader (which also covers its retry on a transient sharing violation) rather than racing the
+        // file with a raw ReadAllText, which is what made this test flake under an indexer/antivirus.
         for (int i = 300; i < 310; i++)
         {
             ResultsViewerSettings.FilterPaneWidth = i;
-            var text = File.ReadAllText(_path);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(text), "settings file was empty mid-save");
-            using var doc = JsonDocument.Parse(text); // throws if half-written
-            Assert.AreEqual((double)i, doc.RootElement.GetProperty("FilterPaneWidth").GetDouble());
+            ResultsViewerSettings.ReloadFromDiskForTests();
+            Assert.AreEqual((double)i, ResultsViewerSettings.FilterPaneWidth,
+                "the value just saved must load back — an empty or half-written file would read as the default");
         }
     }
 

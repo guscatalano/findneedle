@@ -885,15 +885,39 @@ public static class ResultsViewerSettings
 
     private static SettingsData Load()
     {
-        try
+        // Two very different failures used to share one `catch { start fresh }`:
+        //  - a CORRUPT file (JSON that will not parse) — starting fresh is right;
+        //  - a TRANSIENT I/O failure (sharing violation while another process, an indexer or
+        //    antivirus has the file open, or a write's File.Replace mid-swap) — starting fresh is
+        //    WRONG: it hands back defaults, and the very next Save() writes those defaults over the
+        //    user's real settings. Silent settings loss, and exactly the collision that becomes
+        //    likely once more than one instance can run.
+        // So I/O errors are retried briefly; only a parse failure is treated as corrupt.
+        if (!File.Exists(_settingsPath)) return new SettingsData();
+
+        const int attempts = 6;
+        for (int i = 1; i <= attempts; i++)
         {
-            if (File.Exists(_settingsPath))
+            try
             {
                 var json = File.ReadAllText(_settingsPath);
                 return JsonSerializer.Deserialize<SettingsData>(json) ?? new SettingsData();
             }
+            catch (JsonException ex)
+            {
+                FindNeedlePluginLib.Logger.Instance.Log(
+                    $"WARNING: viewer-settings.json is not valid JSON; starting with defaults ({ex.Message})");
+                return new SettingsData();
+            }
+            catch (IOException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
+            catch (UnauthorizedAccessException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
+            catch (Exception ex)
+            {
+                FindNeedlePluginLib.Logger.Instance.Log(
+                    $"WARNING: could not read {_settingsPath} after {i} attempt(s); using defaults for this session ({ex.GetType().Name}: {ex.Message})");
+                return new SettingsData();
+            }
         }
-        catch { /* corrupt file => start fresh */ }
         return new SettingsData();
     }
 
