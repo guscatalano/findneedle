@@ -37,12 +37,12 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
 
 ## 3. Things already asked for
 
-- [ ] **Delete the Run page.** "Run search" is an action everywhere now; the page is the last place it
+- [x] (ea414a6) **Delete the Run page.** "Run search" is an action everywhere now; the page is the last place it
       is a destination, and it is redundant with the shell spinner, the viewer banner and the Home
       card. Remove the page, its PageCatalog entry, the `run_search` quick action and palette entry.
       The backstop on `OpenWithOptionalStreamingAsync` already covers the path everything uses;
       `SearchOrchestrator` and its tests go with the page.
-- [ ] **Follow as a split button.** In the in-row detail: Follow ▾ with this activity / this process /
+- [x] (9952709) **Follow as a split button.** In the in-row detail: Follow ▾ with this activity / this process /
       this thread / this provider, shaped like Filter in ▾. Only offer items whose field the row
       actually has, so nothing silently does nothing.
 
