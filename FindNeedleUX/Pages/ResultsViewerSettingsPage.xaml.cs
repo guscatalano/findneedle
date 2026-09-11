@@ -47,11 +47,11 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (PanelAppearance == null) return;
         bool all = tag == "all";
         PanelAppearance.Visibility   = all || tag == "appearance"   ? Visibility.Visible : Visibility.Collapsed;
-        PanelGeneral.Visibility      = all || tag == "general"      ? Visibility.Visible : Visibility.Collapsed;
-        PanelSearch.Visibility       = all || tag == "search"       ? Visibility.Visible : Visibility.Collapsed;
-        PanelColumns.Visibility      = all || tag == "columns"      ? Visibility.Visible : Visibility.Collapsed;
+        PanelViewer.Visibility       = all || tag == "viewer"       ? Visibility.Visible : Visibility.Collapsed;
+        PanelLoading.Visibility      = all || tag == "loading"      ? Visibility.Visible : Visibility.Collapsed;
         PanelDecoding.Visibility     = all || tag == "decoding"     ? Visibility.Visible : Visibility.Collapsed;
         PanelIntegrations.Visibility = all || tag == "integrations" ? Visibility.Visible : Visibility.Collapsed;
+        PanelApp.Visibility          = all || tag == "app"          ? Visibility.Visible : Visibility.Collapsed;
         PanelLogs.Visibility         = all || tag == "logs"         ? Visibility.Visible : Visibility.Collapsed;
 
         // A prior search filter may have collapsed individual cards — restore them.
@@ -60,11 +60,11 @@ public sealed partial class ResultsViewerSettingsPage : Page
         CategoryTitle.Text = tag switch
         {
             "all"          => "All settings",
-            "general"      => "General",
-            "search"       => "Search",
-            "columns"      => "Columns",
+            "viewer"       => "Viewer",
+            "loading"      => "Loading & cache",
             "decoding"     => "Decoding (WPP symbols)",
             "integrations" => "Integrations",
+            "app"          => "App",
             "logs"         => "Support",
             _              => "Appearance",
         };
@@ -91,11 +91,11 @@ public sealed partial class ResultsViewerSettingsPage : Page
         var panels = new (Panel panel, string category)[]
         {
             (PanelAppearance,   "Appearance"),
-            (PanelGeneral,      "General"),
-            (PanelSearch,       "Search"),
-            (PanelColumns,      "Columns"),
+            (PanelViewer,       "Viewer"),
+            (PanelLoading,      "Loading & cache"),
             (PanelDecoding,     "Decoding"),
             (PanelIntegrations, "Integrations"),
+            (PanelApp,          "App"),
             (PanelLogs,         "Support"),
         };
         foreach (var (panel, category) in panels)
@@ -155,8 +155,8 @@ public sealed partial class ResultsViewerSettingsPage : Page
         }
 
         // Show every category panel so matches from any category appear, then hide non-matching cards.
-        PanelAppearance.Visibility = PanelGeneral.Visibility = PanelSearch.Visibility =
-            PanelColumns.Visibility = PanelDecoding.Visibility = PanelIntegrations.Visibility =
+        PanelAppearance.Visibility = PanelViewer.Visibility = PanelLoading.Visibility =
+            PanelDecoding.Visibility = PanelIntegrations.Visibility = PanelApp.Visibility =
             PanelLogs.Visibility = Visibility.Visible;
 
         int matches = 0;
@@ -181,8 +181,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
         var allItem = SettingsNav.MenuItems.OfType<NavigationViewItem>()
             .FirstOrDefault(i => (i.Tag as string) == "all");
         if (allItem != null) SettingsNav.SelectedItem = allItem;
-        PanelAppearance.Visibility = PanelGeneral.Visibility = PanelSearch.Visibility =
-            PanelColumns.Visibility = PanelDecoding.Visibility = PanelIntegrations.Visibility = Visibility.Visible;
+        PanelAppearance.Visibility = PanelViewer.Visibility = PanelLoading.Visibility =
+            PanelDecoding.Visibility = PanelIntegrations.Visibility = PanelApp.Visibility =
+            PanelLogs.Visibility = Visibility.Visible;
         CategoryTitle.Text = e.Category;
 
         var card = e.Card;
