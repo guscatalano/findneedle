@@ -5,35 +5,37 @@
     xmlns:viewobjects="using:FindNeedleUX.ViewObjects"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <ScrollViewer Padding="24">
-        <StackPanel Spacing="24">
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource PagePadding}" Spacing="20" MaxWidth="{StaticResource PageMaxWidth}" HorizontalAlignment="Stretch">
             <!-- Title -->
-            <StackPanel Spacing="8">
-                <TextBlock x:Name="PageHeading" Text="Rule files" FontSize="24" FontWeight="Bold"/>
-                <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="PageHeading" Text="Rule files" Style="{StaticResource PageHeading}"/>
+                <TextBlock Style="{StaticResource PageSubtitle}"
                            Text="Rules automatically tag, filter, scope, and enrich your search results — they're optional. Add a sample below to see how one works, or Browse for your own."/>
             </StackPanel>
 
             <!-- Rule Files Section -->
-            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+            <Border Style="{StaticResource PageCard}">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Rule files" FontWeight="SemiBold"/>
+                    <TextBlock Text="Rule files" Style="{StaticResource CardTitle}"/>
 
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Button x:Name="BrowseButton" Content="📂 Browse..." Click="BrowseButton_Click"
+                        <Button x:Name="BrowseButton" Content="Browse…" Click="BrowseButton_Click"
                                 AutomationProperties.Name="Browse for rule file"/>
-                        <Button x:Name="AddSampleButton" Content="✨ Add a sample rule" Click="AddSampleRule_Click"
+                        <Button x:Name="AddSampleButton" Content="Add a sample rule" Click="AddSampleRule_Click"
                                 AutomationProperties.Name="Add a sample rule"/>
                         <HyperlinkButton Content="Learn more" NavigateUri="https://github.com/guscatalano/findneedle/blob/master/FindNeedleRuleDSL/README.md"/>
-                        <Button x:Name="RemoveButton" Content="🗑️ Remove Selected" Click="RemoveButton_Click" IsEnabled="False"
+                        <Button x:Name="RemoveButton" Content="Remove selected" Click="RemoveButton_Click" IsEnabled="False"
                                 AutomationProperties.Name="Remove selected rule file"/>
-                        <TextBox x:Name="TestFilePathInput" Width="200" Height="32" Header="Test file path" PlaceholderText="Enter file path" KeyDown="TestFilePathInput_KeyDown"
+                        <TextBox x:Name="TestFilePathInput" Width="200" Height="32" PlaceholderText="Test file path" KeyDown="TestFilePathInput_KeyDown"
                                  AutomationProperties.Name="Test file path"/>
-                        <Button x:Name="TestLoadButton" Content="🚀 Load" Click="TestLoadButton_Click" Height="32"
+                        <Button x:Name="TestLoadButton" Content="Load" Click="TestLoadButton_Click" Height="32"
                                 AutomationProperties.Name="Load test file"/>
                     </StackPanel>
 
-                    <ListView x:Name="RuleFilesListBox" ItemsSource="{x:Bind RuleFiles, Mode=OneWay}" Height="150" SelectionChanged="RuleFilesListBox_SelectionChanged"
+                    <!-- MaxHeight, not Height: a fixed 150px list sat as a black hole above the "No rule
+                         files yet" text when the list was empty. -->
+                    <ListView x:Name="RuleFilesListBox" ItemsSource="{x:Bind RuleFiles, Mode=OneWay}" MaxHeight="220" SelectionChanged="RuleFilesListBox_SelectionChanged"
                               AutomationProperties.Name="Loaded rule files">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="viewobjects:RuleFileItem">
@@ -49,7 +51,7 @@
                                         <TextBlock Text="{x:Bind FilePath}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     </StackPanel>
 
-                                    <Button Grid.Column="1" Content="📄 Open" Click="OpenRuleFile_Click" Tag="{x:Bind FilePath}"
+                                    <Button Grid.Column="1" Content="Open" Click="OpenRuleFile_Click" Tag="{x:Bind FilePath}"
                                             VerticalAlignment="Center" FontSize="12"
                                             ToolTipService.ToolTip="Open this rules.json in the default editor"
                                             AutomationProperties.Name="Open rule file"/>
@@ -67,12 +69,20 @@
             </Border>
 
             <!-- Rule Sections Section -->
-            <Border BorderThickness="1" BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="8" Padding="16" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+            <Border Style="{StaticResource PageCard}">
                 <StackPanel Spacing="12">
-                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
-                        <TextBlock Text="📋 Pipeline Sections" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <ComboBox x:Name="PurposeFilterCombo" SelectionChanged="PurposeFilterCombo_SelectionChanged" Width="120"
-                                  Header="Filter by purpose" AutomationProperties.Name="Filter sections by purpose">
+                    <!-- Title on the left, the purpose filter on the right — the combo's Header used to
+                         push it below the title's baseline so the two sat at different heights. -->
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Pipeline sections" Style="{StaticResource CardTitle}"/>
+                        <TextBlock Grid.Column="1" Text="Filter by purpose" Style="{StaticResource SecondaryText}" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="2" x:Name="PurposeFilterCombo" SelectionChanged="PurposeFilterCombo_SelectionChanged" Width="150"
+                                  AutomationProperties.Name="Filter sections by purpose">
                             <ComboBoxItem IsSelected="True" Tag="All">All Purposes</ComboBoxItem>
                             <ComboBoxItem Tag="scope">Scope</ComboBoxItem>
                             <ComboBoxItem Tag="filter">Filter</ComboBoxItem>
@@ -80,11 +90,11 @@
                             <ComboBoxItem Tag="uml">UML</ComboBoxItem>
                             <ComboBoxItem Tag="output">Output</ComboBoxItem>
                         </ComboBox>
-                    </StackPanel>
+                    </Grid>
 
                     <ListView x:Name="RuleSectionsListView" ItemsSource="{x:Bind RuleSections, Mode=OneWay}">
                         <ListView.Header>
-                            <Grid ColumnSpacing="12" Padding="12,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <Grid ColumnSpacing="12" Padding="12,8" Background="{ThemeResource LayerFillColorDefaultBrush}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="80"/>
