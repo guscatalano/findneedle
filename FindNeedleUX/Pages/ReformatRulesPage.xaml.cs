@@ -284,7 +284,7 @@ public sealed partial class ReformatRulesPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = existing == null ? "Add reformat rule" : "Edit reformat rule",
+            Title = existing == null ? "Add field extraction rule" : "Edit field extraction rule",
             Content = new ScrollViewer { Content = panel, MaxHeight = 520, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 16, 0) },
             PrimaryButtonText = existing == null ? "Add" : "Save",
             CloseButtonText = "Cancel",

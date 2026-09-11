@@ -2464,7 +2464,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         AppendReformattedMessage(g, line);
     }
 
-    /// <summary>Append a "Reformatted" section when an enabled message-reformat rule applies to this
+    /// <summary>Append a "Field extraction" section when an enabled field-extraction rule applies to this
     /// row's Message — breaks a dense one-line blob (e.g. a DISM line) into readable named fields.
     /// Generic: driven by <see cref="MessageReformatCatalog"/>, which the user can edit/extend.</summary>
     private void AppendReformattedMessage(Grid g, LogLine line)
@@ -2478,7 +2478,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var header = new TextBlock
         {
-            Text = $"Reformatted — {r.RuleName} ({r.Fields.Count})",
+            Text = $"Field extraction — {r.RuleName} ({r.Fields.Count})",
             FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 10, 0, 2),
         };

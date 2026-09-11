@@ -23,10 +23,10 @@
 
             <Border Style="{StaticResource PageCard}" Margin="0,12,0,0">
                 <StackPanel Spacing="4">
-                    <CheckBox x:Name="EnrichmentEnabledCheck" Content="Store extracted fields as columns (enrichment)"
+                    <CheckBox x:Name="EnrichmentEnabledCheck" Content="Store extracted fields as columns"
                               Checked="EnrichmentEnabledCheck_Changed" Unchecked="EnrichmentEnabledCheck_Changed"/>
                     <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
-                               Text="Off: fields show only in the results details panel. On: the rules also run during the scan and write the values into real, filterable/sortable columns (ProcessId, ThreadId, Provider, …) — also visible to exports, diagrams, and the MCP server. The per-row regex is a scan-time cost; enriched scans use a separate cache, so flipping this doesn't force a rescan once both are warm. Applies on the next search."/>
+                               Text="Off: fields show only in the results details panel. On: the rules also run during the scan and write the values into real, filterable/sortable columns (ProcessId, ThreadId, Provider, …) — also visible to exports, diagrams, and the MCP server. The per-row regex is a scan-time cost; scans with field extraction on use a separate cache, so flipping this doesn't force a rescan once both are warm. Applies on the next search."/>
                 </StackPanel>
             </Border>
         </StackPanel>
