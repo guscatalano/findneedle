@@ -40,9 +40,9 @@ public sealed partial class SearchLocationsPage : Page
     private void RefreshOnlineButtons()
     {
         if (KustoButton == null) return;
-        KustoButton.Content  = ConnectionStore.GetAll("kusto").Count  == 0 ? "☁ Set up Kusto…"        : "☁ Add Kusto";
-        AdoButton.Content    = ConnectionStore.GetAll("ado").Count    == 0 ? "☁ Set up Azure DevOps…" : "☁ Add Azure DevOps";
-        GithubButton.Content = ConnectionStore.GetAll("github").Count == 0 ? "☁ Set up GitHub…"       : "☁ Add GitHub";
+        KustoButton.Content  = ConnectionStore.GetAll("kusto").Count  == 0 ? "Set up Kusto…"        : "Add Kusto";
+        AdoButton.Content    = ConnectionStore.GetAll("ado").Count    == 0 ? "Set up Azure DevOps…" : "Add Azure DevOps";
+        GithubButton.Content = ConnectionStore.GetAll("github").Count == 0 ? "Set up GitHub…"       : "Add GitHub";
     }
 
     private void GoSetUpConnection(string kind) => this.Frame?.Navigate(typeof(ConnectionsPage), kind);
