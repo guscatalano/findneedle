@@ -8,7 +8,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="16" RowSpacing="12">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -16,34 +16,21 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Spacing="2">
-            <TextBlock x:Name="PageHeading" Text="Connections" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+        <StackPanel Grid.Row="0" Spacing="4">
+            <TextBlock x:Name="PageHeading" Text="Connections" Style="{StaticResource PageHeading}"/>
+            <TextBlock Style="{StaticResource PageSubtitle}"
                        Text="Reusable online-source endpoints + credentials (Azure DevOps, GitHub, Kusto). Set one up once here, then pick it when adding a source — no re-entering org / repo / cluster every time."/>
         </StackPanel>
 
         <!-- Add buttons -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
-            <Button Click="Button_AddAdo">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="🔷"/><TextBlock Text="Add Azure DevOps"/>
-                </StackPanel>
-            </Button>
-            <Button Click="Button_AddGithub">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="🐙"/><TextBlock Text="Add GitHub"/>
-                </StackPanel>
-            </Button>
-            <Button Click="Button_AddKusto">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="🔎"/><TextBlock Text="Add Kusto"/>
-                </StackPanel>
-            </Button>
+            <Button Content="Add Azure DevOps" Click="Button_AddAdo"/>
+            <Button Content="Add GitHub" Click="Button_AddGithub"/>
+            <Button Content="Add Kusto" Click="Button_AddKusto"/>
         </StackPanel>
 
         <!-- List -->
-        <Border Grid.Row="2" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Border Grid.Row="2" Style="{StaticResource PageCard}" Padding="0" VerticalAlignment="Top">
             <Grid>
                 <TextBlock x:Name="EmptyHint" Margin="16" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Text="No connections yet. Add one above." Visibility="Collapsed"/>

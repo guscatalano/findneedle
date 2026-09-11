@@ -38,7 +38,8 @@ public sealed partial class ConnectionsPage : Page
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var icon = new TextBlock { Text = KindEmoji(c.Kind), FontSize = 18, VerticalAlignment = VerticalAlignment.Center };
+        var icon = new FontIcon { Glyph = KindGlyph(c.Kind), FontSize = 16, VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
         Grid.SetColumn(icon, 0); grid.Children.Add(icon);
 
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -59,7 +60,8 @@ public sealed partial class ConnectionsPage : Page
         return grid;
     }
 
-    private static string KindEmoji(string kind) => kind switch { "ado" => "🔷", "github" => "🐙", "kusto" => "🔎", _ => "🔗" };
+    // Segoe Fluent glyphs (no emoji — they render as coloured pictures against the flat Fluent controls).
+    private static string KindGlyph(string kind) => kind switch { "ado" => "\uE968", "github" => "\uE943", "kusto" => "\uE721", _ => "\uE71B" };
     private static string KindLabel(string kind) => kind switch { "ado" => "Azure DevOps", "github" => "GitHub", "kusto" => "Kusto", _ => kind };
     private static string Detail(SavedConnection c) => c.Kind switch
     {
