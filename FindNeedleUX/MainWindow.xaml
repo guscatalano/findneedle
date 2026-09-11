@@ -241,7 +241,11 @@
             <StackPanel Grid.Row="0">
                 <!-- Dismissible "your cached searches are large" prompt (see App startup + ShowCacheCleanupPrompt).
                      An InfoBar, NOT a dialog, so it never blocks launch or hits ContentDialog re-entrancy. -->
-                <InfoBar x:Name="CacheCleanupBar" Margin="12,12,12,0"
+                <!-- Visibility=Collapsed as well as IsOpen=False: a closed InfoBar still occupies its
+                     Margin (12px each), so the two of them left a dead 24px band between the breadcrumb
+                     and every page. Code flips Visibility with IsOpen (see ShowCacheCleanupPrompt / the
+                     Closed handlers). -->
+                <InfoBar x:Name="CacheCleanupBar" Margin="12,12,12,0" Visibility="Collapsed"
                          IsOpen="False" IsClosable="True" Severity="Informational"
                          Title="Cached searches are large" Closed="CacheCleanupBar_Closed">
                     <InfoBar.Content>
@@ -255,9 +259,9 @@
                 <!-- "Search failed" notice. An InfoBar, NOT a dialog: a second ContentDialog.ShowAsync while
                      one is open is a native failfast, and a failing run is exactly when another dialog
                      (triage, cache reuse, open policy) may already be up. -->
-                <InfoBar x:Name="RunFailedBar" Margin="12,12,12,0"
+                <InfoBar x:Name="RunFailedBar" Margin="12,12,12,0" Visibility="Collapsed"
                          IsOpen="False" IsClosable="True" Severity="Error"
-                         Title="Search failed"/>
+                         Title="Search failed" Closed="RunFailedBar_Closed"/>
             </StackPanel>
 
             <Frame x:Name="contentFrame" Grid.Row="1" />

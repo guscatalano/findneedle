@@ -1372,12 +1372,21 @@ public sealed partial class MainWindow : Window
         CacheCleanupBar.Message =
             $"Cached searches are using {FindNeedleUX.Services.CacheMaintenance.FormatBytes(bytes)} " +
             $"({files} file{(files == 1 ? "" : "s")}). Clearing frees the space; reopening those logs re-scans them.";
+        CacheCleanupBar.Visibility = Visibility.Visible;   // a closed InfoBar still keeps its Margin; see MainWindow.xaml
         CacheCleanupBar.IsOpen = true;
     }
 
     private void CacheCleanupBar_Closed(Microsoft.UI.Xaml.Controls.InfoBar sender,
         Microsoft.UI.Xaml.Controls.InfoBarClosedEventArgs args)
-    { /* dismissed = "not now" — leaves the preference at Ask, so it can surface again next launch. */ }
+    {
+        // Dismissed = "not now" — leaves the preference at Ask, so it can surface again next launch.
+        // Collapse the element too so its Margin stops reserving a band above the page.
+        sender.Visibility = Visibility.Collapsed;
+    }
+
+    private void RunFailedBar_Closed(Microsoft.UI.Xaml.Controls.InfoBar sender,
+        Microsoft.UI.Xaml.Controls.InfoBarClosedEventArgs args)
+        => sender.Visibility = Visibility.Collapsed;
 
     private void CacheCleanupNow_Click(object sender, RoutedEventArgs e)
     {
@@ -2094,6 +2103,7 @@ public sealed partial class MainWindow : Window
             if (RunFailedBar != null)
             {
                 RunFailedBar.Message = reason.Message;
+                RunFailedBar.Visibility = Visibility.Visible;
                 RunFailedBar.IsOpen = true;
             }
         }

@@ -46,6 +46,39 @@
             <SolidColorBrush x:Key="SystemAccentColorBrush"
                  Color="{StaticResource SystemAccentColor}"
                  Opacity=".33" />
+            <!-- Page frame vocabulary — the same values the Home page (WelcomePage) uses, so every page
+                 starts at the same left edge with the same heading size, subtitle and card. Pages use
+                 these instead of inventing their own (20/22/24/26px headings, 16/20/24px paddings,
+                 black-with-accent-border cards were all in use at once). -->
+            <Thickness x:Key="PagePadding">32,24,32,24</Thickness>
+            <x:Double x:Key="PageMaxWidth">1440</x:Double>
+            <Style x:Key="PageHeading" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="24"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style x:Key="PageSubtitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style x:Key="PageCard" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="4"/>
+                <Setter Property="Padding" Value="16"/>
+            </Style>
+            <Style x:Key="CardTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style x:Key="SecondaryText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
             <!-- Other app resources here -->
             <pages:BoolToEnabledConverter x:Key="BoolToEnabledConverter" />
         </ResourceDictionary>
