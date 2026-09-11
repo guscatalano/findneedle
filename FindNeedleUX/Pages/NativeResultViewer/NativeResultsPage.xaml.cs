@@ -1183,12 +1183,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             c.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
             c.Width = left ? double.NaN : topWidth;
         }
-        Field(ProviderFilterBox, 120); Field(TaskNameFilterBox, 140);
-        Field(MessageFilterBox, 220);  Field(SourceFilterBox, 140);
+        // Top-dock widths are sized so the whole Fields line (four fields + "+ Add field" + the
+        // Pick/Clear buttons) fits on one row at 1440px; wider and "+ Add field" clipped off the edge.
+        Field(ProviderFilterBox, 110); Field(TaskNameFilterBox, 120);
+        Field(MessageFilterBox, 180);  Field(SourceFilterBox, 120);
         Field(LevelFilterCombo, 140);
         // The "known value" controls (combos + multi-select dropdowns) need the same treatment, or in
         // left dock they'd keep their fixed width and look ragged next to the stretched text boxes.
-        Field(ProviderFilterCombo, 200); Field(TaskNameFilterCombo, 200); Field(SourceFilterCombo, 200);
+        Field(ProviderFilterCombo, 160); Field(TaskNameFilterCombo, 160); Field(SourceFilterCombo, 160);
         Field(ProviderFilterMulti, double.NaN); Field(TaskNameFilterMulti, double.NaN); Field(SourceFilterMulti, double.NaN);
         // Each field is a 3-column Grid (label · control · remove). It fills the column in left dock so
         // the control's star column can stretch; in top dock it hugs its content and sits in the row.
@@ -1257,22 +1259,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 s.BorderThickness = new Thickness(0, 0, 0, 1); // rule under each stacked section
                 s.VerticalAlignment = VerticalAlignment.Stretch;
                 s.MinWidth = 0;
+                s.Padding = new Thickness(12, 6, 12, 6);
             }
+            SetBandCompaction(false);
             TopInputsRow.Visibility = Visibility.Collapsed;
             if (TopOverflowSection != null) TopOverflowSection.Visibility = Visibility.Collapsed;
             if (QuickRulesSection != null) QuickRulesSection.Visibility = Visibility.Visible;
         }
         else
         {
-            // Insert the inputs BEFORE the overflow section so "More" stays last in the row.
+            // Row order: Time | Level | More | Fields. Time and Level are short and share the first line
+            // with the "More" overflow; Fields is wide and takes the whole second line. (With More after
+            // Fields it wrapped onto a third line by itself.)
             int overflowAt = TopOverflowSection != null ? TopInputsRow.Children.IndexOf(TopOverflowSection) : -1;
-            foreach (var s in inputs) MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, s);
+            MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, TimeSection);
+            MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, LevelSection);
+            MoveTo(TopInputsRow, -1, FieldsSection);
             foreach (var s in inputs)
             {
                 s.BorderThickness = new Thickness(0, 0, 1, 0); // rule BETWEEN the columns
-                s.VerticalAlignment = VerticalAlignment.Top;
-                s.MinWidth = 220; // a column that is at least chip-row wide, so Level does not collapse
+                s.VerticalAlignment = VerticalAlignment.Center;
+                s.MinWidth = 0;
+                s.Padding = new Thickness(10, 4, 10, 4);
             }
+            SetBandCompaction(true);
             TopInputsRow.Visibility = Visibility.Visible;
             // The band carries less than the rail: quick rules move into the "More" overflow (and stay
             // reachable from a column header).
@@ -1280,6 +1290,25 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             if (TopOverflowSection != null) TopOverflowSection.Visibility = Visibility.Visible;
             UpdateTopOverflowCaption();
         }
+    }
+
+    /// <summary>
+    /// The band is short because it drops what the rail spends rows on. Compact (top dock): no section
+    /// headers — the chips and boxes say what they are — and the Fields section lays its header buttons
+    /// (Pick from values / Clear fields) on the SAME line as the boxes instead of a row above them. The
+    /// Time section flips horizontal so "Custom range…" sits after the chips rather than under them.
+    /// Uncompacted (left rail): everything back to stacked with headers.
+    /// </summary>
+    private void SetBandCompaction(bool compact)
+    {
+        var headerVis = compact ? Visibility.Collapsed : Visibility.Visible;
+        if (TimeHeader != null) TimeHeader.Visibility = headerVis;
+        if (LevelHeader != null) LevelHeader.Visibility = headerVis;
+        if (FieldsHeader != null) FieldsHeader.Visibility = headerVis;
+        if (MoreHeader != null) MoreHeader.Visibility = headerVis;
+        if (FieldsSectionBody != null) FieldsSectionBody.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
+        if (TimeRowPanel != null) TimeRowPanel.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
+        if (TopOverflowSection != null) TopOverflowSection.Padding = compact ? new Thickness(10, 4, 10, 4) : new Thickness(12, 6, 12, 6);
     }
 
     /// <summary>"Quick rules ▾" / "Quick rules (2) ▾": the count of active session rules, so the band

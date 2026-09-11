@@ -381,7 +381,7 @@
                 <Border x:Name="TimeSection" Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                     <StackPanel x:Name="TimeRowPanel" Orientation="Vertical" Spacing="6">
-                        <TextBlock Text="TIME" Style="{StaticResource PaneSectionHeader}"/>
+                        <TextBlock x:Name="TimeHeader" Text="TIME" Style="{StaticResource PaneSectionHeader}"/>
                         <!-- Quick relative presets (anchored to the log's latest event) + Custom toggle.
                              WrapPanelLite so the chips flow onto more lines in a narrow (left-dock) pane
                              instead of falling off the edge. -->
@@ -458,7 +458,7 @@
                 <Border x:Name="LevelSection" Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="LEVEL" Style="{StaticResource PaneSectionHeader}"/>
+                        <TextBlock x:Name="LevelHeader" Text="LEVEL" Style="{StaticResource PaneSectionHeader}"/>
                         <StackPanel x:Name="LevelsRowPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <ItemsControl ItemsSource="{x:Bind ViewModel.Levels}">
                                 <ItemsControl.ItemsPanel>
@@ -490,12 +490,12 @@
                 <!-- Fields: one filter per column. -->
                 <Border x:Name="FieldsSection" Padding="12,6"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                    <StackPanel Spacing="6">
+                    <StackPanel x:Name="FieldsSectionBody" Spacing="6">
                         <!-- Header row: section name + the two group-wide actions. Kept OUT of
                              FilterRowPanel so it stays one horizontal row when that panel flips to a
                              vertical stack in the left dock. -->
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <TextBlock Text="FIELDS" Style="{StaticResource PaneSectionHeader}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="FieldsHeader" Text="FIELDS" Style="{StaticResource PaneSectionHeader}" VerticalAlignment="Center"/>
                             <!-- Toggle: free-text boxes vs "known value" dropdowns for Provider/TaskName/Source. -->
                             <ToggleButton x:Name="ShowKnownToggle" Height="28" FontSize="12" Padding="8,0"
                                           Content="Pick from values" Checked="ShowKnownToggle_Toggled" Unchecked="ShowKnownToggle_Toggled"
@@ -679,7 +679,7 @@
                          after the last column; only visible in the top dock. -->
                     <Border x:Name="TopOverflowSection" Padding="12,6" VerticalAlignment="Top" Visibility="Collapsed">
                         <StackPanel Spacing="6">
-                            <TextBlock Text="MORE" Style="{StaticResource PaneSectionHeader}"/>
+                            <TextBlock x:Name="MoreHeader" Text="MORE" Style="{StaticResource PaneSectionHeader}"/>
                             <Button x:Name="TopOverflowButton" Content="Quick rules ▾" Height="28" FontSize="12" Padding="8,0"
                                     Click="TopOverflow_Click"
                                     ToolTipService.ToolTip="Session quick rules — the top band keeps these in a menu"/>
