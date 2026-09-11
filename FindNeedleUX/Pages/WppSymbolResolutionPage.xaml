@@ -9,29 +9,25 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <ScrollViewer Padding="24">
-        <StackPanel MaxWidth="860" Spacing="14">
-            <TextBlock x:Name="PageHeading" Text="Symbols (WPP)" FontSize="22" FontWeight="SemiBold"/>
-            <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource PagePadding}" MaxWidth="1000" HorizontalAlignment="Left" Spacing="14">
+            <TextBlock x:Name="PageHeading" Text="Symbols (WPP)" Style="{StaticResource PageHeading}"/>
+            <TextBlock Style="{StaticResource PageSubtitle}"
                        Text="WPP-traced .etl files need TMF format files — extracted from each binary's private PDB — to decode; without them events show as 'Unknown'. Point FindNeedle at your symbols here, resolve them one at a time or all at once, then reopen the trace. A PDB is identified by a GUID (which component) plus an age (which build/revision of it), and symbols are matched on both exactly — so a folder holding many builds is safe: the right one is picked, and same-GUID-but-wrong-age copies are flagged as the wrong version."/>
 
             <!-- What the current trace needs -->
-            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="16">
+            <Border Style="{StaticResource PageCard}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="What the current trace needs" FontWeight="SemiBold"/>
+                    <TextBlock Text="What the current trace needs" Style="{StaticResource CardTitle}"/>
                     <TextBlock x:Name="NeedsText" TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </Border>
 
             <!-- Your symbols -->
-            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="16">
+            <Border Style="{StaticResource PageCard}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Your symbols" FontWeight="SemiBold"/>
+                    <TextBlock Text="Your symbols" Style="{StaticResource CardTitle}"/>
 
                     <!-- TMF folders: ready-made .tmf files (the fastest path if you already have them) -->
                     <TextBlock Text="TMF folders — ready-made .tmf files (fastest, if your team already ships them; no PDBs needed)"
@@ -128,11 +124,9 @@
             </Border>
 
             <!-- Per-symbol status -->
-            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="16">
+            <Border Style="{StaticResource PageCard}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Symbols" FontWeight="SemiBold"/>
+                    <TextBlock Text="Symbols" Style="{StaticResource CardTitle}"/>
                     <TextBlock x:Name="EmptyStatusText" FontSize="12" TextWrapping="Wrap"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Text="Set a symbol source above and press Refresh — each binary's PDB status (✓ found · ✗ missing/wrong · ⚠ no WPP data) shows here, with a Locate… action on the ones that still need attention."/>
