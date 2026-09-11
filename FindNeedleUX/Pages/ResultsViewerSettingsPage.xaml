@@ -49,20 +49,22 @@
             </NavigationViewItem>
         </NavigationView.MenuItems>
 
-        <ScrollViewer Padding="24">
-            <StackPanel MaxWidth="640" Spacing="16">
+        <!-- Left-aligned like every other page (it used to float as a 640px column in the middle of the
+             content area, leaving a dead band on each side). -->
+        <ScrollViewer>
+            <StackPanel Padding="{StaticResource PagePadding}" MaxWidth="1000" HorizontalAlignment="Left" Spacing="16">
 
-                <TextBlock x:Name="CategoryTitle" Text="Appearance" FontSize="22" FontWeight="SemiBold"/>
-                <TextBlock Text="These preferences are saved per-user and apply to the native results viewer."
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                <StackPanel Spacing="4">
+                    <TextBlock x:Name="CategoryTitle" Text="Appearance" Style="{StaticResource PageHeading}"/>
+                    <TextBlock Text="These preferences are saved per-user and apply to the native results viewer."
+                               Style="{StaticResource PageSubtitle}"/>
+                </StackPanel>
 
                 <!-- ============================ APPEARANCE ============================ -->
                 <StackPanel x:Name="PanelAppearance" Spacing="16">
 
                     <!-- Loading animation -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Loading animation" FontWeight="SemiBold"/>
                             <TextBlock Text="What the full-window loading overlay shows during searches and file opens."
@@ -126,9 +128,7 @@
                     </Border>
 
                     <!-- Time format -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Time format" FontWeight="SemiBold"/>
                             <!-- Items are populated in code (PopulateTimeFormatCombo) so each row shows a
@@ -143,9 +143,7 @@
                     </Border>
 
                     <!-- Color theme -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Color theme" FontWeight="SemiBold"/>
                             <TextBlock Text="A preset that fills in level row backgrounds. Picking a theme overwrites individual color overrides below."
@@ -167,9 +165,7 @@
                     </Border>
 
                     <!-- Per-level colors (kept next to Color theme — a theme is just a preset for these) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <Grid>
                                 <TextBlock Text="Level colors" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -210,9 +206,7 @@
                     </Border>
 
                     <!-- Title bar color -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Title bar" FontWeight="SemiBold"/>
                             <TextBlock Text="Color of the window's title bar. Takes effect on Windows 11."
@@ -239,9 +233,7 @@
                     </Border>
 
                     <!-- Scrollbar -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Scrollbar" FontWeight="SemiBold"/>
                             <TextBlock Text="How thick the result grid's scrollbar is. Larger sizes are easier to see and grab."
@@ -263,9 +255,7 @@
                     </Border>
 
                     <!-- Row text size -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Row text size" FontWeight="SemiBold"/>
                             <TextBlock Text="Font size of the result grid's rows. Smaller fits more rows on screen; larger is easier to read."
@@ -284,9 +274,7 @@
                     </Border>
 
                     <!-- Row height (density) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Row height" FontWeight="SemiBold"/>
                             <TextBlock Text="How tall each row is relative to its text. Tighter fits more rows on screen; roomier is easier to scan."
@@ -303,9 +291,7 @@
                     </Border>
 
                     <!-- Row tags -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Row tags" FontWeight="SemiBold"/>
                             <CheckBox x:Name="ColorTaggedRowsCheck" Content="Also color the whole row with the tag color"
@@ -316,9 +302,7 @@
                     </Border>
 
                     <!-- Paging -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Paging" FontWeight="SemiBold"/>
                             <CheckBox x:Name="ScrollToTopOnPageChangeCheck" Content="Scroll to the top when changing pages"
@@ -334,9 +318,7 @@
                 <StackPanel x:Name="PanelGeneral" Spacing="16" Visibility="Collapsed">
 
                     <!-- Default sort -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Default sort" FontWeight="SemiBold"/>
                             <TextBlock Text="How rows are sorted when a log first opens. &quot;Load order&quot; keeps the exact order rows were read from the source (not necessarily by time). You can always click a column header to re-sort."
@@ -352,9 +334,7 @@
                     </Border>
 
                     <!-- "Show known" filter dropdown mode (per field) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Known-value filter dropdowns" FontWeight="SemiBold"/>
                             <TextBlock Text="When the result viewer's &quot;Known ▾&quot; filter is on, choose whether each column's dropdown lets you pick one value or several (matched as any-of)."
@@ -393,9 +373,7 @@
 
 
                     <!-- Status bar -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Status bar" FontWeight="SemiBold"/>
                             <CheckBox x:Name="ShowStatusBarCheck" Content="Show the status bar"
@@ -406,9 +384,7 @@
                     </Border>
 
                     <!-- Keyboard shortcuts -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Keyboard shortcuts" FontWeight="SemiBold"/>
                             <CheckBox x:Name="HotkeysCheck" Content="Enable keyboard shortcuts"
@@ -424,9 +400,7 @@
 
                     <!-- Opening another log while a workspace is loaded (pickers, Open with rules, Recent
                          searches, Known logs, drag-and-drop — one policy for all of them). Mirrored on Home. -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="When you open another log while a workspace is loaded" FontWeight="SemiBold"/>
                             <RadioButtons x:Name="OpenIntoWorkspaceRadios" SelectionChanged="OpenIntoWorkspaceRadios_SelectionChanged"
@@ -447,9 +421,7 @@
                 <StackPanel x:Name="PanelSearch" Spacing="16" Visibility="Collapsed">
 
                     <!-- Progressive loading -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Progressive loading" FontWeight="SemiBold"/>
                             <CheckBox x:Name="StreamWhileLoadingCheck"
@@ -462,9 +434,7 @@
                     </Border>
 
                     <!-- Cache reuse -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Cache search results" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -481,9 +451,7 @@
                     </Border>
 
                     <!-- Cached searches (size / clear / browse) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Cached searches" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -501,9 +469,7 @@
                     </Border>
 
                     <!-- Startup cache cleanup -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Startup cache cleanup" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -520,9 +486,7 @@
                     </Border>
 
                     <!-- Substring-search index -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Substring-search index" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -546,9 +510,7 @@
                     </Border>
 
                     <!-- Loading performance -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Loading performance" FontWeight="SemiBold"/>
                             <CheckBox x:Name="ParallelIngestCheck" Margin="0,4,0,0"
@@ -565,9 +527,7 @@
                     </Border>
 
                     <!-- Search box submit -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Search box" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -586,9 +546,7 @@
                     </Border>
 
                     <!-- Search progress -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Search progress" FontWeight="SemiBold"/>
                             <CheckBox x:Name="ShowStepHistoryCheck" Content="Show completed steps above the current step"
@@ -597,9 +555,7 @@
                     </Border>
 
                     <!-- Search storage backend -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Search storage" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -623,9 +579,7 @@
                 <StackPanel x:Name="PanelColumns" Spacing="16" Visibility="Collapsed">
 
                     <!-- Default columns -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <Grid>
                                 <TextBlock Text="Default columns" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -643,9 +597,7 @@
                 <StackPanel x:Name="PanelDecoding" Spacing="16" Visibility="Collapsed">
 
                     <!-- Event payload format (ETW TraceLogging etc.) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Event payload format" FontWeight="SemiBold"/>
                             <TextBlock Text="How a structured event's fields (e.g. ETW TraceLogging) are shown in the Message column. Applies instantly — no re-scan."
@@ -670,9 +622,7 @@
                     </Border>
 
                     <!-- WPP / tracefmt symbols — moved to its own page; this is just a pointer -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="WPP symbols (TMF decoding)" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -698,9 +648,7 @@
                 <StackPanel x:Name="PanelIntegrations" Spacing="16" Visibility="Collapsed">
 
                     <!-- MCP server -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="MCP server (experimental)" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -720,9 +668,7 @@
                     </Border>
 
                     <!-- File associations -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="File associations" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -753,9 +699,7 @@
                 <StackPanel x:Name="PanelLogs" Spacing="16" Visibility="Collapsed">
 
                     <!-- Support: bundle logs for the developer -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Support" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -770,9 +714,7 @@
                     </Border>
 
                     <!-- Settings file path -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Settings file" FontWeight="SemiBold"/>
                             <TextBlock Text="Where your per-user viewer settings are stored on disk."
