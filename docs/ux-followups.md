@@ -8,15 +8,15 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
 
 ## 1. Small bugs and small gaps
 
-- [ ] **Recent searches flags folder sources as "source missing".** `CachedSearchCatalog` checks
+- [x] (feb5f0e) **Recent searches flags folder sources as "source missing".** `CachedSearchCatalog` checks
       `File.Exists` only, so every folder source reads as missing on the Recent page. Home already
       checks directories; the page does not. Check both.
-- [ ] **Open-policy Ask dialog names a known log by its folder** ("Add Logs to it…" for the Event Log
+- [x] (2b9040e) **Open-policy Ask dialog names a known log by its folder** ("Add Logs to it…" for the Event Log
       folder). `OpenIntoWorkspaceAsync` takes a `displayName`; the Known logs paths don't pass one.
       Pass the catalog entry's name.
-- [ ] **Added field filters are forgotten on restart.** Persist the list of added fields in
+- [x] (41a4019) **Added field filters are forgotten on restart.** Persist the list of added fields in
       `viewer-settings.json` (session-only today). Defaults stay Provider/TaskName/Message/Source.
-- [ ] **Last-run line says "(cached)".** Reword to "from cache" / "scanned". Keep the qualifier; it
+- [x] (3cb4799) **Last-run line says "(cached)".** Reword to "from cache" / "scanned". Keep the qualifier; it
       answers a real question.
 
 ## 2. Investigate before trusting
