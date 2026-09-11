@@ -64,7 +64,10 @@ public sealed partial class MainWindow : Window
         FindNeedleUX.Pages.RulesPage.ActiveTabChanged += () => DispatcherQueue.TryEnqueue(UpdateBreadcrumb);
         MiddleLayerService.StateChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         ApplyCatalogLabels();
-        WorkspaceChip.Tapped += (_, _) => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
+        // The chip summarises the workspace ("2 sources · 1 rule file"), so clicking it opens a menu of the
+        // things it summarises. It used to jump straight to Sources, which left the rule files it mentions
+        // unreachable from here and the workspace name unchangeable anywhere in the app.
+        WorkspaceChip.Tapped += (_, _) => ShowWorkspaceChipMenu();
         // Unified "Step X of N · phase · detail" status: whenever the spinner is up (search or viewer
         // open), show the current flow phase. Detail (row counts etc.) flows in via FlowProgress.Detail.
         FindNeedlePluginLib.FlowProgress.Updated += OnFlowProgress;
@@ -229,6 +232,89 @@ public sealed partial class MainWindow : Window
         WorkspaceChipName.Text = name;
         WorkspaceChipSummary.Text =
             $"{sources} source{(sources == 1 ? "" : "s")} · {rules} rule file{(rules == 1 ? "" : "s")}";
+    }
+
+    /// <summary>
+    /// The workspace chip's menu: the things the chip actually names (sources, rule files), plus the
+    /// workspace-level commands. Counts are in the item text so you can see what you have without opening
+    /// the page.
+    /// </summary>
+    private void ShowWorkspaceChipMenu()
+    {
+        var (name, sources, rules) = WorkspaceSummary();
+        var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+
+        void Item(string text, Action onClick, bool enabled = true)
+        {
+            var mi = new MenuFlyoutItem { Text = text, IsEnabled = enabled };
+            mi.Click += (_, _) => onClick();
+            menu.Items.Add(mi);
+        }
+
+        Item($"Sources ({sources})", () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)));
+        Item($"Rule files ({rules})", () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Item("Rename workspace…", async () => await RenameWorkspaceAsync());
+        Item("Save workspace", SaveCommand);
+        Item("New workspace", () => _ = ExecuteMenuActionAsync("NewWorkspace"));
+
+        menu.ShowAt(WorkspaceChip);
+    }
+
+    /// <summary>A workspace name is free text, so strip anything the file system would reject before
+    /// offering it as a file name. Null when nothing usable is left.</summary>
+    private static string SanitizeFileName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var cleaned = new string(name.Trim()
+            .Where(c => !System.IO.Path.GetInvalidFileNameChars().Contains(c)).ToArray()).Trim();
+        return cleaned.Length == 0 ? null : cleaned;
+    }
+
+    private bool _renameDialogOpen; // re-entrancy guard — a 2nd ContentDialog.ShowAsync while one is open failfasts
+
+    /// <summary>Name the current workspace. Before this the name came ONLY from the file name on save or
+    /// open, so an unsaved workspace was stuck as "Untitled workspace".</summary>
+    private async System.Threading.Tasks.Task RenameWorkspaceAsync()
+    {
+        if (_renameDialogOpen) return;
+        var box = new TextBox
+        {
+            Text = MiddleLayerService.WorkspaceName ?? "",
+            PlaceholderText = "Untitled workspace",
+            SelectionStart = (MiddleLayerService.WorkspaceName ?? "").Length,
+        };
+        var dlg = new ContentDialog
+        {
+            Title = "Rename workspace",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "A name for this set of sources and rule files. Leave it empty for \"Untitled workspace\".",
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12,
+                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                    },
+                    box,
+                },
+            },
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = RootGrid.XamlRoot,
+        };
+        _renameDialogOpen = true;
+        try
+        {
+            if (await dlg.ShowAsync() == ContentDialogResult.Primary)
+                MiddleLayerService.RenameWorkspace(box.Text);
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Rename workspace failed: {ex.Message}"); }
+        finally { _renameDialogOpen = false; }
     }
 
     /// <summary>Run a welcome-page quick action by its catalog id (see QuickActionCatalog). Maps to the
@@ -2288,7 +2374,10 @@ public sealed partial class MainWindow : Window
     private async void SaveCommand()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var path = Win32FileDialog.SaveFile(hWnd, "SearchQuery",
+        // Default the file name to the workspace's name so a rename carries through to the save, instead
+        // of everything landing as "SearchQuery.json" and the name being silently replaced on save.
+        var suggested = SanitizeFileName(MiddleLayerService.WorkspaceName) ?? "SearchQuery";
+        var path = Win32FileDialog.SaveFile(hWnd, suggested,
             new (string, string)[] { ("Workspace JSON", "*.json") }, ".json");
         if (path == null) return;
         try

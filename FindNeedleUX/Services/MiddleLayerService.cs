@@ -93,6 +93,20 @@ public class MiddleLayerService
     public static string WorkspaceDisplayName
         => string.IsNullOrWhiteSpace(WorkspaceName) ? "Untitled workspace" : WorkspaceName;
 
+    /// <summary>
+    /// Name the current workspace without saving it. Until this existed the name was derived ONLY from the
+    /// file name on save/open, so an unsaved workspace was permanently "Untitled workspace" with no way to
+    /// call it anything. Blank clears it back to untitled. Saving later still takes the name from the file
+    /// chosen in the save dialog (which now defaults to this name).
+    /// </summary>
+    public static void RenameWorkspace(string name)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        if (string.Equals(trimmed, WorkspaceName, StringComparison.Ordinal)) return;
+        WorkspaceName = trimmed;
+        NotifyStateChanged();
+    }
+
     public static void AddFolderLocation(string location)
     {
         // Don't add the same folder/file twice — repeated adds (e.g. an agent calling add_folder per run)
