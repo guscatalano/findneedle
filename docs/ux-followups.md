@@ -45,6 +45,19 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
 - [x] (9952709) **Follow as a split button.** In the in-row detail: Follow ▾ with this activity / this process /
       this thread / this provider, shaped like Filter in ▾. Only offer items whose field the row
       actually has, so nothing silently does nothing.
+- [x] **Raw level in the row details.** The details showed only the mapped Level (Info/Error/…), never
+      the number the source recorded. ISearchResult grew `GetRawLevel()` (ETW TraceEventLevel, Event
+      Log Level byte, WPP meta level; "" for text logs); it is persisted as a RawLevel column (cache
+      schema v11, old caches rebuild) and shown as a RawLevel row under Level in the in-row template,
+      the panel and the popup, plus the XML copy and the MCP record. Only sources with a raw value get
+      the row. tracefmt-decoded WPP rows have no level in the text, so they stay blank.
+- [x] **A way to cancel a search.** The streaming open (the default) showed "Running search…" with no
+      Cancel while a big .etl decoded, and Run ▸ Stop / Esc stayed disabled because nothing refreshed
+      the running state. Now: the spinner's Cancel covers both paths, the status-bar Run turns into a
+      red Stop while a search runs (no configuration needed), Esc and Run ▸ Stop arm on the streaming
+      path too, and a cancelled run stays where it was instead of opening an empty viewer. The engine
+      finishes a cancelled scan normally with whatever it had, so the cancel is detected from the token
+      and reported as "cancelled (N rows kept)" rather than "0 results (scanned)".
 
 ## 4. Finish the review (F3 / F8)
 

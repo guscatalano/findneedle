@@ -635,8 +635,9 @@ public sealed partial class MainWindow : Window
             if (!await MaybeOfferTriageAsync()) { ShowSpinner(false); return; } // cancelled → abort the open
 
             ShowSpinner(true, "Opening file...", showCancel: true);
-            await RunSearchWithProgress();
+            bool completed = await RunSearchWithProgress();
             ShowSpinner(false);
+            if (!completed) return; // cancelled: stay on Home rather than open an empty viewer
 
             // Only the native viewer remains; --viewer is accepted for back-compat but always native.
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
@@ -842,7 +843,9 @@ public sealed partial class MainWindow : Window
                 if (liveCount >= 0)
                 {
                     var suffix = MiddleLayerService.LastSearchReusedCache ? " (from cache)" : " (scanned)";
-                    lastRun = $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
+                    lastRun = MiddleLayerService.LastRunWasCancelled
+                        ? $"cancelled ({liveCount:N0} row{(liveCount == 1 ? "" : "s")} kept)"
+                        : $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
                     hasResults = liveCount > 0;
                 }
                 else
@@ -871,6 +874,11 @@ public sealed partial class MainWindow : Window
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)));
             }
             case "run_view":
+                // One slot, two states: while a search runs the Run action becomes Stop, so cancelling is
+                // always one click away in the status bar without configuring the separate Stop item.
+                if (IsSearchRunning)
+                    return MakeStatusActionButton(Symbol.Stop, "Stop", "Cancel the running search (Esc)",
+                        () => StopSearch(), Color.FromArgb(255, 196, 43, 28));
                 return MakeStatusActionButton(Symbol.Play, "Run",
                     "Run the search and open the results", () => RunAndViewResults());
             case "stop":
@@ -913,7 +921,10 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _searchRunning;
-    private bool IsSearchRunning => _searchRunning || MiddleLayerService.CurrentStreamingSearch != null;
+    // A finished streaming handle stays published (the viewer reads its source), so "running" means its
+    // search task is still going — otherwise Stop would stay lit after every streaming open.
+    private bool IsSearchRunning => _searchRunning
+        || (MiddleLayerService.CurrentStreamingSearch is { } h && !h.SearchTask.IsCompleted);
 
     /// <summary>Cancel the running search (streaming or progress) — status-bar "Stop".</summary>
     public void StopSearch()
@@ -990,8 +1001,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>A prominent action button for the status bar (icon + label), distinct from the info
     /// segments — used for "Run".</summary>
-    private Button MakeStatusActionButton(Symbol icon, string label, string tooltip, Action onClick)
+    private Button MakeStatusActionButton(Symbol icon, string label, string tooltip, Action onClick, Color? tint = null)
     {
+        var accent = tint ?? Color.FromArgb(255, 46, 160, 67);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new SymbolIcon { Symbol = icon, RenderTransform = new ScaleTransform { ScaleX = 0.7, ScaleY = 0.7 }, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5) });
         row.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
@@ -1000,8 +1012,9 @@ public sealed partial class MainWindow : Window
             Content = row,
             Padding = new Thickness(10, 2, 10, 2),
             MinHeight = 0,
-            Background = new SolidColorBrush(Color.FromArgb(30, 46, 160, 67)),
+            Background = new SolidColorBrush(Color.FromArgb(30, accent.R, accent.G, accent.B)),
         };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, label); // the content is a panel, so the button has no name of its own
         ToolTipService.SetToolTip(btn, tooltip);
         btn.Click += (_, _) => { try { onClick(); } catch { } };
         return btn;
@@ -1656,7 +1669,10 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private async Task RunSearchWithProgress(bool surfaceScan = false)
+    /// <summary>Run the search under the loading screen. Returns false when the user cancelled it
+    /// (Cancel / Run ▸ Stop / Esc / status-bar Stop), so callers can stay put instead of opening an
+    /// empty viewer over a run that was abandoned on purpose.</summary>
+    private async Task<bool> RunSearchWithProgress(bool surfaceScan = false)
     {
         _quickActionCts = new CancellationTokenSource();
         _searchRunning = true; RefreshStatusStrip(); // enables Run ▸ Stop (+ Esc) and the status-bar Stop
@@ -1672,7 +1688,11 @@ public sealed partial class MainWindow : Window
         sink.RegisterForNumericProgress(OnNumericProgress);
         try
         {
-            await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, _quickActionCts.Token).Wait(), _quickActionCts.Token);
+            var cts = _quickActionCts;
+            await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, cts.Token).Wait(), cts.Token);
+            // The engine honours cancellation by ending the scan early and completing NORMALLY with whatever
+            // it had (often 0 rows) — it does not throw. So ask the token, not the exception path.
+            if (cts.IsCancellationRequested) throw new OperationCanceledException(cts.Token);
             var stats = MiddleLayerService.GetStats();
             var count = MiddleLayerService.GetFilteredRowCount();
             var cacheSuffix = MiddleLayerService.LastSearchReusedCache ? " (from cache)" : " (scanned)";
@@ -1682,6 +1702,7 @@ public sealed partial class MainWindow : Window
         {
             DispatcherQueue.TryEnqueue(() => SpinnerText.Text = "Search cancelled.");
             _lastRunSummary = "cancelled";
+            return false;
         }
         finally
         {
@@ -1691,6 +1712,7 @@ public sealed partial class MainWindow : Window
             _searchRunning = false;
             DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         }
+        return true;
     }
 
     /// <summary>
@@ -2078,17 +2100,27 @@ public sealed partial class MainWindow : Window
 
             if (ResultsViewerSettings.StreamWhileLoading)
             {
-                ShowSpinner(true, label);
                 var handle = MiddleLayerService.RunSearchStreaming();
+                // The wait for the first rows is the long part of a big .etl open (the whole decode can
+                // run before a row lands), so it must be cancellable like the non-streaming run: the
+                // spinner's Cancel, Run ▸ Stop, Esc and the status-bar Stop all end in StopSearch().
+                ShowSpinner(true, label, showCancel: true);
+                RefreshStatusStrip(); // IsSearchRunning is now true → enables Run ▸ Stop (+ Esc) and the status-bar Stop
+                // When the streaming search ends (done, faulted or stopped) put the Stop controls back.
+                _ = handle.SearchTask.ContinueWith(_ => DispatcherQueue.TryEnqueue(RefreshStatusStrip));
                 await WaitForFirstRowsAsync(handle);
                 ShowSpinner(false);
+                // Stopped before anything arrived: there is nothing to show, so stay on the current page
+                // rather than opening an empty viewer.
+                if (handle.Cancellation.IsCancellationRequested && (handle.Source?.TotalCount ?? 0) == 0) return;
                 await OpenViewerAsync();
             }
             else
             {
                 ShowSpinner(true, label, showCancel: true);
-                await RunSearchWithProgress();
+                bool completed = await RunSearchWithProgress();
                 ShowSpinner(false);
+                if (!completed) return; // cancelled: nothing to show
                 await OpenViewerAsync();
             }
         }
@@ -2523,15 +2555,17 @@ public sealed partial class MainWindow : Window
 
     private void CancelQuickActionButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_quickActionCts != null && !_quickActionCts.IsCancellationRequested)
-        {
-            // Cancellation only takes effect at the next checkpoint in the worker, which can be a
-            // moment away — give immediate visual confirmation that the click registered.
-            CancelQuickActionButton.IsEnabled = false;
-            CancelQuickActionButton.Content = "Cancelling…";
-            SpinnerText.Text = "Cancelling…";
-            _quickActionCts.Cancel();
-        }
+        // The spinner fronts either a progress-mode run (_quickActionCts) or a streaming run waiting for
+        // its first rows (CurrentStreamingSearch) — cancel whichever is live.
+        bool live = (_quickActionCts != null && !_quickActionCts.IsCancellationRequested)
+                 || (MiddleLayerService.CurrentStreamingSearch is { } h && !h.Cancellation.IsCancellationRequested);
+        if (!live) return;
+        // Cancellation only takes effect at the next checkpoint in the worker, which can be a
+        // moment away — give immediate visual confirmation that the click registered.
+        CancelQuickActionButton.IsEnabled = false;
+        CancelQuickActionButton.Content = "Cancelling…";
+        SpinnerText.Text = "Cancelling…";
+        StopSearch();
     }
 }
 

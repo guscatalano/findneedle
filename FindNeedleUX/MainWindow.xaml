@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="FindNeedleUX.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -323,8 +323,12 @@
                     </ItemsControl>
 
                     <TextBlock x:Name="SpinnerText" Text="Inspecting file..." Margin="0,16,0,0" FontSize="18" Foreground="{ThemeResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
-                    <Button x:Name="CancelQuickActionButton" Content="Cancel" Width="100" Margin="0,24,0,0" Click="CancelQuickActionButton_Click" Visibility="Collapsed"
-                            AutomationProperties.Name="Cancel current operation"/>
+                    <!-- Centered under the status line (a fixed-width button in a stretching StackPanel
+                         otherwise sits at the left edge, off-axis from the text above it). -->
+                    <Button x:Name="CancelQuickActionButton" Content="Cancel" Width="100" Margin="0,24,0,0" HorizontalAlignment="Center"
+                            Click="CancelQuickActionButton_Click" Visibility="Collapsed"
+                            AutomationProperties.Name="Cancel current operation"
+                            ToolTipService.ToolTip="Stop this run (Esc). Nothing is opened."/>
                 </StackPanel>
             </Grid>
 

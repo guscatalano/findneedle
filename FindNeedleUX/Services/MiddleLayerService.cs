@@ -220,6 +220,7 @@ public class MiddleLayerService
         ViewerQuickRulesStore.Clear(); // session right-click rules don't outlive the workspace
         OutputTimeFrom = OutputTimeTo = null;
         LastRunSummary = null;
+        LastRunWasCancelled = false;
         LastRunCompletedAt = null;
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
         // Drop the previous run's rule-output state so the Processor Output page clears too.
@@ -284,6 +285,10 @@ public class MiddleLayerService
     /// <summary>Human-readable summary of the most recent search (row count + cache/scanned), set on
     /// every search path so the main window status strip's "Last run" is accurate. Null until a run.</summary>
     public static string? LastRunSummary { get; private set; }
+    /// <summary>True when the most recent run (progress or streaming) was stopped by the user before it
+    /// finished. The engine completes a cancelled scan normally with whatever it had, so without this
+    /// flag a stopped run is indistinguishable from an empty file.</summary>
+    public static bool LastRunWasCancelled { get; private set; }
 
     /// <summary>Local time the most recent search finished (null until a run; cleared with the workspace).
     /// The Home page's "Last run 2 minutes ago · N rows" line reads it.</summary>
@@ -1006,6 +1011,7 @@ public class MiddleLayerService
                 query.SetDepthForAllLocations(SearchLocationDepth.Intermediate);
             }
         }
+        LastRunWasCancelled = false;
         if (cancellationToken != default)
         {
             SearchResults = SearchQueryUX.GetSearchResults(cancellationToken);
@@ -1034,7 +1040,12 @@ public class MiddleLayerService
         try
         {
             var count = GetFilteredRowCount();
-            LastRunSummary = $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (from cache)" : " (scanned)")}";
+            // A cancelled scan completes normally with whatever it had; say so instead of "0 results
+            // (scanned)", which reads as "the file was empty".
+            LastRunWasCancelled = cancellationToken.IsCancellationRequested;
+            LastRunSummary = LastRunWasCancelled
+                ? $"cancelled ({count:N0} row{(count == 1 ? "" : "s")} kept)"
+                : $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (from cache)" : " (scanned)")}";
         }
         catch { LastRunSummary = "done"; }
         LastRunCompletedAt = DateTime.Now;
@@ -1441,6 +1452,7 @@ public class MiddleLayerService
         _workspaceCleared = false; // viewing a cache is a fresh result set
         OpenCacheDbPath = dbPath;
         LastStats = null; // the cache has no live SearchStatistics
+        LastRunWasCancelled = false; // a cached result is complete by definition
         NotifyStateChanged();
     }
 
@@ -1552,12 +1564,14 @@ public class MiddleLayerService
         var cts = new CancellationTokenSource();
         var storage = (SqliteStorage)nu.PrepareStorage(cts.Token);
         var source = PagedLogSourceFactory.CreateStreaming(storage);
+        LastRunWasCancelled = false;
 
         var task = Task.Run(() =>
         {
             try
             {
                 SearchResults = SearchQueryUX.GetSearchResults(cts.Token);
+                LastRunWasCancelled = cts.IsCancellationRequested; // stopped early: the rows so far are kept
                 CaptureStats(nu, storage); // decode done now → per-file decode info + counts are complete
                 NotifyStateChanged();
 
