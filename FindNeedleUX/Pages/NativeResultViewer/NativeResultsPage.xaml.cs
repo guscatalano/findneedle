@@ -2555,6 +2555,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (Show("Message"))     yield return ("Message",     line.Message);
         if (Show("Source"))      yield return ("Source",      line.Source);
         if (Show("Level"))       yield return ("Level",       line.Level);
+        // The unmapped source value (ETW TraceEventLevel 1..5, Event Log Level byte) — only when the
+        // source has one, so plain-text rows don't get an empty row.
+        if (Show("RawLevel") && !string.IsNullOrEmpty(line.RawLevel))
+                                 yield return ("RawLevel",    line.RawLevel);
         if (Show("MachineName")) yield return ("MachineName", line.MachineName);
         if (Show("Username"))    yield return ("Username",    line.Username);
         if (Show("OpCode"))      yield return ("OpCode",      line.OpCode);
@@ -4754,6 +4758,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         AppendXmlField(sb, "Message",     line.Message);
         AppendXmlField(sb, "Source",      line.Source);
         AppendXmlField(sb, "Level",       line.Level);
+        AppendXmlField(sb, "RawLevel",    line.RawLevel);
         AppendXmlField(sb, "MachineName", line.MachineName);
         AppendXmlField(sb, "Username",    line.Username);
         AppendXmlField(sb, "OpCode",      line.OpCode);
@@ -4883,6 +4888,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             dto.OpCode = l.OpCode;
             dto.SearchableData = l.SearchableData;
             dto.StructuredData = l.StructuredData; // decoded EventData / TraceLogging fields for the agent
+            dto.RawLevel = l.RawLevel;
 
             dto.ProcessName = l.ProcessName;
             dto.ActivityId = l.ActivityId;

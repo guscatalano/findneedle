@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using FindNeedlePluginLib;
@@ -50,6 +50,9 @@ public class RedactingSearchResultTests
         Assert.AreEqual(Level.Error, r.GetLevel());
         Assert.AreEqual(when, r.GetLogTime());
         Assert.AreEqual("nothing here", r.GetMessage(), "no match → unchanged");
+        // The wrapper fronts every viewer row: a member it forgets to forward silently reads as the
+        // interface default ("") for the whole viewer, which is how RawLevel first went missing.
+        Assert.AreEqual("2", r.GetRawLevel(), "the source's raw level is forwarded, not the interface default");
     }
 
     [TestMethod]
@@ -77,5 +80,6 @@ public class RedactingSearchResultTests
         public string GetSearchableData() => _m;
         public string GetMessage() => _m;
         public string GetResultSource() => "rs";
+        public string GetRawLevel() => "2";
     }
 }

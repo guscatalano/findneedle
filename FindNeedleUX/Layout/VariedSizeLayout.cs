@@ -35,6 +35,7 @@ public class LogLine
         Time = LogTime.ToString("o");
         Source = NormalizeMissing(searchResult.GetResultSource());
         Level = searchResult.GetLevel().ToString();
+        RawLevel = NormalizeMissing(searchResult.GetRawLevel()); // the source's own number, pre-mapping ("" for text logs)
         MachineName = NormalizeMissing(searchResult.GetMachineName());
         Username = NormalizeMissing(searchResult.GetUsername());
         OpCode = NormalizeMissing(searchResult.GetOpCode());
@@ -168,6 +169,16 @@ public class LogLine
     {
         get; set;
     }
+    /// <summary>The source's severity value before it was mapped onto <see cref="Level"/> — e.g. the
+    /// ETW TraceEventLevel ("2") or the Event Log Level byte. Empty for sources without one.</summary>
+    public string RawLevel
+    {
+        get; set;
+    }
+    /// <summary>For the in-row details template: show the RawLevel row only when the source has one.
+    /// Not part of the row's JSON copy (it's derived).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasRawLevel => !string.IsNullOrEmpty(RawLevel);
     public string MachineName
     {
         get; set;

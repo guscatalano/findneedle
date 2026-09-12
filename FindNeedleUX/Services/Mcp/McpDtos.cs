@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace FindNeedleUX.Services.Mcp;
@@ -33,6 +33,9 @@ public sealed class RecordDto
     // payload), so an agent can reason over the decoded fields, not just the rendered Message. Populated
     // only for a full single-record fetch.
     public string StructuredData { get; set; }
+    // The source's severity value before it was mapped onto Level (ETW TraceEventLevel "2", Event Log
+    // Level byte); "" when the source has none. Populated only for a full single-record fetch.
+    public string RawLevel { get; set; }
     // Correlation / detail columns — also where field-extraction enrichment writes (e.g. an
     // extracted HRESULT into EventId). Populated only for a full single-record fetch.
     public string EventId { get; set; }

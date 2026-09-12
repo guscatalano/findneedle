@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using FindNeedlePluginLib;
@@ -75,4 +75,5 @@ internal sealed class RedactingSearchResult : ISearchResult
     public string GetRecordId() => _inner.GetRecordId();
     public string GetProcessName() => _inner.GetProcessName();
     public string GetStructuredData() => Redact(_inner.GetStructuredData());
+    public string GetRawLevel() => _inner.GetRawLevel(); // a number, nothing to redact
 }

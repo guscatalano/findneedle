@@ -301,6 +301,19 @@ public class ETLLogLine : ISearchResult
         tempBuffer = String.Empty;
         //step++;
     }
+    public string GetRawLevel()
+    {
+        if (eventLevel >= 0) return eventLevel.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        try
+        {
+            if (_keyjson != null && _keyjson.TryGetValue("meta", out var meta)
+                && meta is Newtonsoft.Json.Linq.JObject metaObj && metaObj["level"] != null)
+                return (metaObj["level"]?.ToString() ?? "").Trim(); // tracefmt pads the text form ("Information ")
+        }
+        catch { }
+        return "";
+    }
+
     public Level GetLevel()
     {
         // TraceEvent-sourced rows (live capture + TraceLogging/manifest events from .etl) carry the

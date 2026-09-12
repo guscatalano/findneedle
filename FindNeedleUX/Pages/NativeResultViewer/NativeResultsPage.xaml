@@ -58,7 +58,7 @@
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
-                            <RowDefinition/><RowDefinition/><RowDefinition/>
+                            <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
                         </Grid.RowDefinitions>
 
                         <!-- VerticalAlignment=Top so the labels line up with the TOP of a tall, wrapping
@@ -77,6 +77,13 @@
                         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Source, Converter={StaticResource SourceTrim}}" TextWrapping="Wrap" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
                         <TextBlock Grid.Row="6" Text="Level"    FontWeight="SemiBold" VerticalAlignment="Top"/>
                         <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" VerticalAlignment="Top" IsTextSelectionEnabled="True"/>
+                        <!-- The source's own severity number before it was mapped onto Level (ETW TraceEventLevel,
+                             Event Log Level byte). Only sources that carry one get the row. -->
+                        <TextBlock Grid.Row="7" Text="RawLevel" FontWeight="SemiBold" VerticalAlignment="Top"
+                                   Visibility="{Binding HasRawLevel, Converter={StaticResource BoolToVis}}"
+                                   ToolTipService.ToolTip="The level value as the source recorded it, before FindNeedle mapped it onto Catastrophic/Error/Warning/Info/Verbose"/>
+                        <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding RawLevel}" VerticalAlignment="Top" IsTextSelectionEnabled="True"
+                                   Visibility="{Binding HasRawLevel, Converter={StaticResource BoolToVis}}"/>
                     </Grid>
                     <!-- Row actions, visible under the detail (the same actions as the row's right-click
                          menu, so nobody has to discover the context menu). Each handler reads the row

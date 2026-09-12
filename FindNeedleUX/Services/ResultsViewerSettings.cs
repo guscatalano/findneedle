@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -629,7 +629,7 @@ public static class ResultsViewerSettings
     /// <summary>Canonical ordered set of fields the row-details panel can show.</summary>
     public static readonly IReadOnlyList<string> DetailFieldNames = new[]
     {
-        "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
+        "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level", "RawLevel",
         "MachineName", "Username", "OpCode", "ProcessId", "ProcessName", "ThreadId", "ActivityId",
         "EventId", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId", "Tag",
     };

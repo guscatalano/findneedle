@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FindNeedlePluginLib;
 
@@ -58,4 +58,5 @@ public sealed class EnrichedSearchResult : ISearchResult
     public string GetRecordId()          => Or("RecordId", _base.GetRecordId);
     public string GetProcessName()       => Or("ProcessName", _base.GetProcessName);
     public string GetStructuredData()    => Or("StructuredData", _base.GetStructuredData);
+    public string GetRawLevel()          => _base.GetRawLevel();
 }
