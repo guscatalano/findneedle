@@ -936,15 +936,29 @@ public static class ResultsViewerSettings
             // with several, which matters now that running more than one instance is on the table.
             var tmp = _settingsPath + ".tmp";
             File.WriteAllText(tmp, json);
-            if (File.Exists(_settingsPath))
+            // The swap needs exclusive access to both files for an instant, and a search indexer or
+            // antivirus opening the just-written temp file (or the destination) makes it throw. Giving up
+            // on the first throw left the on-disk file silently STALE — the setting "didn't stick" — and
+            // is what made the settings tests flake in the full suite. Retry briefly, like Load does.
+            const int attempts = 6;
+            for (int i = 1; i <= attempts; i++)
             {
-                // Replace keeps the destination's identity and is atomic where the filesystem supports it.
-                // No backup file: we already hold the full contents in memory.
-                File.Replace(tmp, _settingsPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
-            }
-            else
-            {
-                File.Move(tmp, _settingsPath);
+                try
+                {
+                    if (File.Exists(_settingsPath))
+                    {
+                        // Replace keeps the destination's identity and is atomic where the filesystem
+                        // supports it. No backup file: we already hold the full contents in memory.
+                        File.Replace(tmp, _settingsPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                    }
+                    else
+                    {
+                        File.Move(tmp, _settingsPath);
+                    }
+                    break;
+                }
+                catch (IOException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
+                catch (UnauthorizedAccessException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
             }
         }
         catch (Exception ex)
