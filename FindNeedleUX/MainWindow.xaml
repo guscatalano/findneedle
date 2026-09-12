@@ -172,6 +172,16 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <!-- A persistent, clickable Home root: "Home › Run › Results". Without it the only way
+                         back to Home was the Back button (the old Quick menu's Welcome item went with that
+                         menu). Hidden on Home itself, where the title already says Home. -->
+                    <Button x:Name="BreadcrumbHome" Click="BreadcrumbHome_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" MinHeight="0" MinWidth="0" VerticalAlignment="Center"
+                            ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
+                        <TextBlock Text="Home" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </Button>
+                    <FontIcon x:Name="BreadcrumbHomeChevron" Glyph="&#xE76C;" FontSize="10" VerticalAlignment="Center"
+                              Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     <TextBlock x:Name="BreadcrumbSection" FontSize="13" VerticalAlignment="Center" AutomationProperties.AutomationId="BreadcrumbSection"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <FontIcon x:Name="BreadcrumbChevron" Glyph="&#xE76C;" FontSize="10" VerticalAlignment="Center"

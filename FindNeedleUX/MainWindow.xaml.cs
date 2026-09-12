@@ -172,6 +172,11 @@ public sealed partial class MainWindow : Window
         var info = FindNeedleUX.Services.PageCatalog.Find(CurrentBreadcrumbPageType())
                    ?? new FindNeedleUX.Services.PageInfo(FindNeedleUX.Services.PageCatalog.Home, "Home");
         bool sectionOnly = info.Section == info.Title;
+        bool onHome = info.Section == FindNeedleUX.Services.PageCatalog.Home;
+        // The Home root shows everywhere EXCEPT on Home (where the title already says it) — so the crumb
+        // always offers a way back and never reads "Home › Home".
+        if (BreadcrumbHome != null) BreadcrumbHome.Visibility = onHome ? Visibility.Collapsed : Visibility.Visible;
+        if (BreadcrumbHomeChevron != null) BreadcrumbHomeChevron.Visibility = onHome ? Visibility.Collapsed : Visibility.Visible;
         BreadcrumbSection.Text = sectionOnly ? "" : info.Section;
         BreadcrumbSection.Visibility = sectionOnly ? Visibility.Collapsed : Visibility.Visible;
         BreadcrumbChevron.Visibility = sectionOnly ? Visibility.Collapsed : Visibility.Visible;
@@ -192,6 +197,9 @@ public sealed partial class MainWindow : Window
         }
         UpdateWorkspaceChip();
     }
+
+    private void BreadcrumbHome_Click(object sender, RoutedEventArgs e)
+        => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
 
     private MenuBarItem SectionMenu(string section) => section switch
     {
