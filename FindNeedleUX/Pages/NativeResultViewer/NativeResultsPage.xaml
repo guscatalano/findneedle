@@ -688,9 +688,9 @@
                 </local:WrapPanelLite>
                 <Border x:Name="ActiveFiltersSection" Padding="12,6" Visibility="Collapsed"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
-                    <StackPanel Spacing="6">
+                    <StackPanel x:Name="ActiveFiltersBody" Spacing="6">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <TextBlock Text="ACTIVE FILTERS" Style="{StaticResource PaneSectionHeader}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="ActiveFiltersHeader" Text="ACTIVE FILTERS" Style="{StaticResource PaneSectionHeader}" VerticalAlignment="Center"/>
                             <TextBlock x:Name="ActiveFiltersCount" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
                                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                             <Button Content="Clear all" Click="ClearFiltersButton_Click"

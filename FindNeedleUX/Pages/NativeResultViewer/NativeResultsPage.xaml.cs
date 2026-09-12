@@ -1254,6 +1254,16 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             // Back into the rail, at the top, in order, before TopInputsRow.
             for (int i = 0; i < inputs.Length; i++) MoveTo(PaneSections, i, inputs[i]);
+            // Active filters back to its own strip under the inputs row (before Quick rules).
+            if (ActiveFiltersSection != null)
+            {
+                int after = PaneSections.Children.IndexOf(TopInputsRow) + 1;
+                MoveTo(PaneSections, after, ActiveFiltersSection);
+                ActiveFiltersSection.BorderThickness = new Thickness(0, 1, 0, 0);
+                ActiveFiltersSection.Padding = new Thickness(12, 6, 12, 6);
+                ActiveFiltersSection.VerticalAlignment = VerticalAlignment.Stretch;
+                ActiveFiltersSection.MaxWidth = double.PositiveInfinity;
+            }
             foreach (var s in inputs)
             {
                 s.BorderThickness = new Thickness(0, 0, 0, 1); // rule under each stacked section
@@ -1274,6 +1284,17 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             int overflowAt = TopOverflowSection != null ? TopInputsRow.Children.IndexOf(TopOverflowSection) : -1;
             MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, TimeSection);
             MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, LevelSection);
+            // Active filters sits right after "More" on line one (not as a full-width strip below,
+            // which cost a whole extra row the moment anything was filtered). Bounded width so its
+            // pills wrap inside the section instead of shoving Fields around.
+            if (ActiveFiltersSection != null)
+            {
+                MoveTo(TopInputsRow, -1, ActiveFiltersSection);
+                ActiveFiltersSection.BorderThickness = new Thickness(0, 0, 1, 0);
+                ActiveFiltersSection.Padding = new Thickness(10, 4, 10, 4);
+                ActiveFiltersSection.VerticalAlignment = VerticalAlignment.Center;
+                ActiveFiltersSection.MaxWidth = 560;
+            }
             MoveTo(TopInputsRow, -1, FieldsSection);
             foreach (var s in inputs)
             {
@@ -1306,6 +1327,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (LevelHeader != null) LevelHeader.Visibility = headerVis;
         if (FieldsHeader != null) FieldsHeader.Visibility = headerVis;
         if (MoreHeader != null) MoreHeader.Visibility = headerVis;
+        // In the band the count + "Clear all" stay (they carry information); only the caption goes.
+        if (ActiveFiltersHeader != null) ActiveFiltersHeader.Visibility = headerVis;
+        if (ActiveFiltersBody != null) ActiveFiltersBody.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
         if (FieldsSectionBody != null) FieldsSectionBody.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
         if (TimeRowPanel != null) TimeRowPanel.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
         if (TopOverflowSection != null) TopOverflowSection.Padding = compact ? new Thickness(10, 4, 10, 4) : new Thickness(12, 6, 12, 6);
