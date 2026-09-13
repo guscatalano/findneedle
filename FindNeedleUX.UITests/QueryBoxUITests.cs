@@ -122,7 +122,10 @@ namespace FindNeedleUX.UITests
                 Assert.IsTrue(WaitUntil(() => desktop.FindFirstDescendant(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName("level", PropertyConditionFlags.MatchSubstring))) != null, 8000),
                     "typing 'lev' should offer the 'level' field.");
 
-                // Accept it with Enter, then the operators are offered.
+                // Arrow onto the first completion and accept it with Enter (Enter with nothing highlighted
+                // is "search for this text"), then the operators are offered.
+                Keyboard.Type(VirtualKeyShort.DOWN);
+                Thread.Sleep(200);
                 Keyboard.Type(VirtualKeyShort.RETURN);
                 Assert.IsTrue(WaitUntil(() => SearchText(s.Window).StartsWith("level "), 5000), $"Enter should complete the field (text: '{SearchText(s.Window)}').");
                 Assert.IsTrue(WaitUntil(() => desktop.FindFirstDescendant(cf => cf.ByControlType(ControlType.ListItem).And(cf.ByName("regex", PropertyConditionFlags.MatchSubstring))) != null, 8000),
