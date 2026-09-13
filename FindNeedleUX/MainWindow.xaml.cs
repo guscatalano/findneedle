@@ -791,15 +791,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Reflect the workspace in the window caption: "FindNeedle — Untitled workspace (2 sources,
-    /// 1 rule)". Always visible, unlike the status strip which can be hidden.</summary>
+    /// <summary>Reflect the workspace in the window caption: "FindNeedle — Untitled workspace". Just the
+    /// name: the counts live on the workspace chip (and were the fourth copy of the same two numbers on
+    /// Home); the taskbar only has room for the name anyway.</summary>
     private void UpdateWindowTitle()
     {
         try
         {
-            var (name, sources, rules) = WorkspaceSummary();
-            Title = $"FindNeedle — {name} " +
-                    $"({sources} source{(sources == 1 ? "" : "s")}, {rules} rule file{(rules == 1 ? "" : "s")})";
+            var (name, _, _) = WorkspaceSummary();
+            Title = $"FindNeedle — {name}";
         }
         catch { /* title is cosmetic */ }
     }

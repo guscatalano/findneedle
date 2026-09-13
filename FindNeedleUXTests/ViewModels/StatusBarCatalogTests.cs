@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using FindNeedleUX.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -41,6 +41,31 @@ public class StatusBarCatalogTests
     {
         Assert.IsTrue(StatusBarCatalog.Defaults.Contains("run_view"), "Run (run + open results) is a default item");
         Assert.IsTrue(StatusBarCatalog.Defaults.All(StatusBarCatalog.IsValidId));
+    }
+
+    [TestMethod]
+    public void Defaults_AreRunState_NotWorkspaceComposition()
+    {
+        // Sources / Rule files are the workspace chip's job (and the Home card's); the strip's defaults
+        // are what a run produces. Both stay in the catalog so a user can add them back via the pencil.
+        CollectionAssert.AreEqual(new[] { "run_view", "lastrun", "perf", "outputfiles" }, StatusBarCatalog.Defaults.ToList());
+        Assert.IsTrue(StatusBarCatalog.IsValidId("locations"));
+        Assert.IsTrue(StatusBarCatalog.IsValidId("rules"));
+    }
+
+    [TestMethod]
+    public void StoredLegacyDefaults_FollowTheNewDefaults_ButRealCustomizationsStay()
+    {
+        // Exactly the old default set (with or without Storage appended) was never a real customization.
+        StatusBarCatalog.SetSelectedIds(new[] { "locations", "rules", "lastrun", "run_view", "outputfiles" });
+        CollectionAssert.AreEqual(StatusBarCatalog.Defaults.ToList(), StatusBarCatalog.GetSelectedIds());
+        StatusBarCatalog.SetSelectedIds(new[] { "locations", "rules", "lastrun", "run_view", "outputfiles", "perf" });
+        CollectionAssert.AreEqual(StatusBarCatalog.Defaults.ToList(), StatusBarCatalog.GetSelectedIds());
+        // Anything else is the user's choice and is kept as stored - including keeping Sources on purpose.
+        StatusBarCatalog.SetSelectedIds(new[] { "locations", "run_view", "lastrun" });
+        CollectionAssert.AreEqual(new[] { "locations", "run_view", "lastrun" }, StatusBarCatalog.GetSelectedIds());
+        StatusBarCatalog.SetSelectedIds(new[] { "rules", "locations", "lastrun", "run_view", "outputfiles" });
+        CollectionAssert.AreEqual(new[] { "rules", "locations", "lastrun", "run_view", "outputfiles" }, StatusBarCatalog.GetSelectedIds());
     }
 
     [TestMethod]

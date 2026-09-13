@@ -198,7 +198,7 @@
                     <Border x:Name="WorkspaceChip" CornerRadius="12" BorderThickness="1" Padding="10,2" MinHeight="24"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             Background="{ThemeResource LayerFillColorDefaultBrush}"
-                            ToolTipService.ToolTip="The current workspace — click to see its sources"
+                            ToolTipService.ToolTip="Workspace: its sources and rule files, rename, save, new"
                             AutomationProperties.Name="Workspace">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <TextBlock x:Name="WorkspaceChipName" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>

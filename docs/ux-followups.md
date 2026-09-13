@@ -58,6 +58,12 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
       first screen is "get a log in front of you"; tools matter once something is loaded. A stored
       selection made only of retired ids falls back to the defaults; the retired ids still work from the
       palette and MCP.
+- [x] **Status strip vs workspace chip.** "1 source · 0 rule files" was rendered four times on Home (title,
+      chip, workspace card, strip). Split by what changes when: the chip owns workspace composition (name,
+      counts, rename / save / new), the strip owns run state (Run/Stop · Last run · Storage · Outputs, in
+      that order), the window title is the name only, the Home card stays as the detailed view. Sources /
+      Rule files remain in the strip catalog for anyone who wants them via the pencil; a stored selection
+      that is exactly the old default set follows the new defaults, a real customization is kept.
 - [x] **A way to cancel a search.** The streaming open (the default) showed "Running search…" with no
       Cancel while a big .etl decoded, and Run ▸ Stop / Esc stayed disabled because nothing refreshed
       the running state. Now: the spinner's Cancel covers both paths, the status-bar Run turns into a

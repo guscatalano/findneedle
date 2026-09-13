@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -33,8 +33,13 @@ public static class StatusBarCatalog
         new StatusBarItem("mcp",         "MCP server"),
     };
 
+    // The strip is the RUN-STATE surface: what is running, what the last run produced, where it is
+    // stored, what it wrote. Workspace composition (sources / rule files) is the workspace chip's job
+    // in the breadcrumb bar (and the Home card's, with the actual items), so those two segments are not
+    // defaults any more - they stay in the catalog for anyone who wants them via the pencil. Order:
+    // action, then state, then artefacts.
     public static readonly IReadOnlyList<string> Defaults =
-        new[] { "locations", "rules", "lastrun", "run_view", "outputfiles" };
+        new[] { "run_view", "lastrun", "perf", "outputfiles" };
 
     private static readonly string DefaultPath = Path.Combine(
         FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
@@ -48,10 +53,28 @@ public static class StatusBarCatalog
     public static bool IsValidId(string id) => All.Any(a => a.Id == id);
     public static StatusBarItem Find(string id) => All.FirstOrDefault(a => a.Id == id);
 
+    /// <summary>The default set before the strip became run-state only. A stored selection that is
+    /// exactly this (optionally with the Storage segment appended) was never really customized - the
+    /// file is written whenever the pencil is used, even to add one item - so it follows the new defaults
+    /// rather than pinning the old duplication forever. Any other stored selection is the user's and is
+    /// left alone.</summary>
+    internal static readonly IReadOnlyList<string> LegacyDefaults =
+        new[] { "locations", "rules", "lastrun", "run_view", "outputfiles" };
+
     public static List<string> GetSelectedIds()
     {
         var ids = ReadRaw().Where(IsValidId).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        return ids.Count > 0 ? ids : Defaults.ToList();
+        if (ids.Count == 0) return Defaults.ToList();
+        if (IsLegacyDefaultSelection(ids)) return Defaults.ToList();
+        return ids;
+    }
+
+    private static bool IsLegacyDefaultSelection(List<string> ids)
+    {
+        if (ids.Count < LegacyDefaults.Count || ids.Count > LegacyDefaults.Count + 1) return false;
+        for (int i = 0; i < LegacyDefaults.Count; i++)
+            if (!string.Equals(ids[i], LegacyDefaults[i], StringComparison.OrdinalIgnoreCase)) return false;
+        return ids.Count == LegacyDefaults.Count || string.Equals(ids[^1], "perf", StringComparison.OrdinalIgnoreCase);
     }
 
     public static void SetSelectedIds(IEnumerable<string> ids)
