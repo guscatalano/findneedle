@@ -105,16 +105,26 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
 - [ ] **Walking the automation tree over a loaded grid pegs the UI thread for minutes.** Affects
       Narrator and any accessibility tool, not just test harnesses. Needs a virtualized automation
       peer for the grid rows (or peers that don't realize every row). Scope as its own piece of work.
+- [ ] **Switching the filter dock Left → Top at runtime breaks the UI Automation tree.** The screen is
+      right, but UIA enumeration of the window stops at the first Time chip (63 nodes instead of ~340):
+      the re-parented sections' cached peers still point at the old parent. Starting in Top mode is
+      fine, and Top → Left is fine. Raising StructureChanged / InvalidatePeer on the containers did not
+      help (Borders and StackPanels have no peers). Narrator would lose the band the same way. Fix
+      candidates: give each moved section a peered root (a ContentControl), or rebuild the sections
+      instead of moving them. The FlaUI dock test starts in Top mode to sidestep it.
 
-## 8. UI tests in CI (step 1 done; Deskhand is step 2)
+## 8. UI tests in CI
 
 - [x] **FlaUI smoke job.** `.github/workflows/ui-smoke.yml` runs the `UiSmoke`-tagged classes (8 classes,
       generated data, no LargeSamples) on windows-latest, non-blocking, with a desktop screenshot, the
       app's logs and a step summary as artifacts. Gate on it once it has been green for a while.
-- [ ] **Deskhand as the capture / OCR layer.** Download `deskhand.zip` from a pinned release, start
-      `Deskhand.Http` on loopback, and add screen-truth assertions (overlap, band height, readable
-      text) that UIA cannot see. Upload audit + episodes on failure. Prerequisite for anything beyond
-      the small samples: section 7 (the automation hang on a loaded grid).
+- [x] **More FlaUI coverage of the redesign** (`RedesignSmokeUITests`): Home Tools row (no
+      "Shortcuts", no card action repeated as a tile), breadcrumb Home root + workspace chip counts +
+      name-only title, filter dock (Top is compact with the Quick rules overflow; Left has the rail),
+      in-row details with the Filter in / Filter out / Follow / Tag / Copy bar and no RawLevel row for a
+      text log, and cancelling from the loading screen (Stop in the strip while running, stays Home,
+      "cancelled" in Last run).
+- Not doing a Deskhand capture / OCR layer (owner decision 2026-09-13): FlaUI tests are the lane.
 
 ## Parked (not UX, tracked so they are not lost)
 
