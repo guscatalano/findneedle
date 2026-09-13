@@ -889,11 +889,15 @@ public sealed partial class MainWindow : Window
             }
             case "perf":
             {
+                // Always present once chosen (the pencil lists it as "Storage / timing"; a segment that
+                // silently disappears before the first run looked like a broken setting). Before a run
+                // it reads "—"; after one, the storage tier. Click opens the timing report either way.
                 var storage = MiddleLayerService.GetSearchStorage();
-                if (storage == null) return null;
-                var tier = storage.GetType().Name.Replace("Storage", "");
+                var tier = storage == null ? "—" : storage.GetType().Name.Replace("Storage", "");
                 return MakeStatusSegment(Symbol.Repair, "Storage", tier,
-                    "Search storage tier — click for the timing / why-so-slow report", null,
+                    storage == null
+                        ? "No search yet. After a run: the storage tier the results live in — click for the timing / why-so-slow report"
+                        : "Search storage tier — click for the timing / why-so-slow report", null,
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage)));
             }
             case "connections":

@@ -85,7 +85,7 @@ public class StatusBarCatalogTests
         Assert.AreEqual("Sources", StatusBarCatalog.Find("locations").Label);
         Assert.AreEqual("Rule files", StatusBarCatalog.Find("rules").Label);
         Assert.AreEqual("Outputs", StatusBarCatalog.Find("outputfiles").Label);
-        Assert.AreEqual("Search timing", StatusBarCatalog.Find("perf").Label);
+        Assert.AreEqual("Storage / timing", StatusBarCatalog.Find("perf").Label);
         Assert.AreEqual("Auto rules", StatusBarCatalog.Find("autorules").Label);
     }
 

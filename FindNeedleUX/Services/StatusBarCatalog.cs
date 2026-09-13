@@ -26,7 +26,7 @@ public static class StatusBarCatalog
         new StatusBarItem("outputfiles", "Outputs"),
         new StatusBarItem("run_view",    "Run"),
         new StatusBarItem("stop",        "Stop"),
-        new StatusBarItem("perf",        "Search timing"),
+        new StatusBarItem("perf",        "Storage / timing"), // renders as "Storage: <tier>"; click = timing report
         new StatusBarItem("connections", "Connections"),
         new StatusBarItem("autorules",   "Auto rules"),
         new StatusBarItem("diagram",     "Diagram tools"),
