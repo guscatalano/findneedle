@@ -213,6 +213,55 @@ namespace FindNeedleUX.UITests
             finally { try { File.Delete(log); } catch { } }
         }
 
+        [TestMethod]
+        [Timeout(180000)]
+        public void Pivots_AddToTheQuery_AndReplaceTheSameAxis()
+        {
+            var log = WriteLog(100);
+            try
+            {
+                using var s = Launch($"\"{log}\" --viewer=native");
+                var grid = UiTestHelpers.WaitForPopulatedGrid(s.Window, 45000);
+                Assert.IsNotNull(grid, "the log did not load.");
+                var desktop = s.Automation.GetDesktop();
+
+                // Follow this provider (the only axis a text log has).
+                var row = grid.FindFirstChild(cf => cf.ByControlType(ControlType.DataItem));
+                row.Patterns.SelectionItem.Pattern.Select();
+                AutomationElement follow = null;
+                Assert.IsTrue(WaitUntil(() => (follow = grid.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button).And(cf.ByName("Follow ▾")))) != null, 10000), "no Follow ▾");
+                Invoke(follow);
+                AutomationElement item = null;
+                Assert.IsTrue(WaitUntil(() => (item = desktop.FindFirstDescendant(cf => cf.ByName("Follow this provider", PropertyConditionFlags.MatchSubstring))) != null, 8000), "no provider axis");
+                Invoke(item);
+                Assert.IsTrue(WaitUntil(() => SearchText(s.Window).StartsWith("provider == "), 10000), $"Follow should write a provider clause (text: '{SearchText(s.Window)}').");
+                Assert.IsTrue(WaitUntil(() => PagerTotal(s.Window) == 100, 10000));
+
+                // Then Filter in on Level: the provider clause stays, the level clause is added.
+                row = grid.FindFirstChild(cf => cf.ByControlType(ControlType.DataItem));
+                row.Patterns.SelectionItem.Pattern.Select();
+                AutomationElement filterIn = null;
+                Assert.IsTrue(WaitUntil(() => (filterIn = grid.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button).And(cf.ByName("Filter in ▾")))) != null, 10000), "no Filter in ▾");
+                Invoke(filterIn);
+                Assert.IsTrue(WaitUntil(() => (item = desktop.FindFirstDescendant(cf => cf.ByName("Level ==", PropertyConditionFlags.MatchSubstring))) != null, 8000), "no Level item");
+                Invoke(item);
+                Assert.IsTrue(WaitUntil(() => SearchText(s.Window).Contains(" AND level == "), 10000), $"Filter in should ADD to the query (text: '{SearchText(s.Window)}').");
+                StringAssert.StartsWith(SearchText(s.Window), "provider == ", "the earlier Follow clause is kept");
+
+                // Filter in on Level again (same value): nothing is duplicated.
+                var before = SearchText(s.Window);
+                row = grid.FindFirstChild(cf => cf.ByControlType(ControlType.DataItem));
+                row.Patterns.SelectionItem.Pattern.Select();
+                Assert.IsTrue(WaitUntil(() => (filterIn = grid.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button).And(cf.ByName("Filter in ▾")))) != null, 10000));
+                Invoke(filterIn);
+                Assert.IsTrue(WaitUntil(() => (item = desktop.FindFirstDescendant(cf => cf.ByName("Level ==", PropertyConditionFlags.MatchSubstring))) != null, 8000));
+                Invoke(item);
+                Thread.Sleep(1500);
+                Assert.AreEqual(before, SearchText(s.Window), "the same clause is not added twice");
+            }
+            finally { try { File.Delete(log); } catch { } }
+        }
+
         private static AutomationElement FindGoToBox(AutomationElement desktop)
         {
             // The flyout's TextBox has a long placeholder; the label above it reads "Go to time".

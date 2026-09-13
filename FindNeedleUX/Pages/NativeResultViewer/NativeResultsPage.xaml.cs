@@ -4006,7 +4006,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         Bullet("The count badge on the Filters label is how many filters are active — it stays visible when the pane is hidden. \"Clear all (incl. search & time)\" resets everything at once.");
 
         Section("Rows");
-        Bullet("Click a row to open its details (Details: In row). Under the detail: Filter in ▾ / Filter out ▾ add a predicate for one of the row's fields to the search box; Follow ▾ keeps only this row's activity, thread, process or provider, in time order (only the axes the row has); Around ▾ shows everything in the log within ±1 s / ±10 s / ±1 min / … of the row's time; Tag ▾ marks the row (Important / Question / Resolved / Note, plus a note); Copy ▾ copies the row as JSON, CSV or XML.");
+        Bullet("Click a row to open its details (Details: In row). Under the detail: Filter in ▾ / Filter out ▾ add a predicate for one of the row's fields to the search box; Follow ▾ narrows to this row's activity, thread, process or provider, in time order (only the axes the row has); Around ▾ narrows to ±1 s / ±10 s / ±1 min / … of the row's time; Tag ▾ marks the row (Important / Question / Resolved / Note, plus a note); Copy ▾ copies the row as JSON, CSV or XML.");
+        Bullet("Pivots ADD to the query: Follow this process, then Follow this provider, keeps both. A pivot on the same axis replaces the earlier one (another process, another window, another 'field == value'), so you never narrow to nothing. Remove a clause from its pill under Active filters, or edit the box.");
         Bullet("Right-click a row for the same actions, plus, with several rows selected, copy / tag / diagram the selection as a sequence.");
         Bullet("Right-click a column header for a Quick rule (this session): pull a value out of the Message into that column, or strip matching text — applied instantly, cleared on restart.");
         Bullet("Click a header to sort; drag headers to reorder; drag a header's right edge to resize.");
@@ -4162,8 +4163,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         foreach (var axis in NativeResultViewer.FollowCatalog.AxesFor(row.ActivityId, row.ProcessId, row.ThreadId, row.Provider))
         {
             var item = new MenuFlyoutItem { Text = axis.Caption, Icon = new SymbolIcon(Symbol.Link) };
-            var q = axis.Query;
-            item.Click += async (_, __) => await FollowQueryAsync(q);
+            var a = axis;
+            item.Click += async (_, __) => await FollowAxisAsync(a);
             items.Add(item);
         }
         if (items.Count == 0) items.Add(new MenuFlyoutItem { Text = "Nothing on this row to follow", IsEnabled = false });
@@ -4198,7 +4199,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private async System.Threading.Tasks.Task AroundRowAsync(LogLine row, TimeSpan window)
     {
-        await FollowQueryAsync(FindPluginCore.Searching.Query.LogQuery.AroundTimeText(row.LogTime, window));
+        // Adds to the current query (replacing an earlier time window): "what else happened then" within
+        // whatever you are already following; clear the other pills to widen to the whole log.
+        await AddClauseAsync(FindPluginCore.Searching.Query.LogQuery.AroundTime(row.LogTime, window),
+            FindPluginCore.Searching.Query.QueryEditor.IsTimeRange, timeOrder: true);
         // Land on the row itself (it sits inside the window by construction; page to it if the window is wide).
         int before = await System.Threading.Tasks.Task.Run(() => ViewModel.CountBefore(row.LogTime));
         int page = before / Math.Max(1, ViewModel.PageSize) + 1;
@@ -4317,6 +4321,32 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         _searchDebounceTimer.Stop();
         await RunSearchAsync();                 // one reload: this filter + the Time sort
         SyncSortArrowsFromViewModel();
+    }
+
+    /// <summary>Follow along one axis: ADD its clause to the current query, replacing an earlier clause
+    /// that pins the same fields (process B after process A means B, not nothing), then read in time order.</summary>
+    private async System.Threading.Tasks.Task FollowAxisAsync(NativeResultViewer.FollowAxis axis)
+    {
+        if (!FindPluginCore.Searching.Query.LogQuery.TryParse(axis.Query, out var clause, out _)) return;
+        var fields = axis.Fields;
+        await AddClauseAsync(clause, c => FindPluginCore.Searching.Query.QueryEditor.PinsAnyOf(c, fields), timeOrder: true);
+    }
+
+    /// <summary>The one way every pivot edits the search: add <paramref name="clause"/> to the box's
+    /// current query, dropping clauses <paramref name="replaces"/> says it supersedes, then apply.</summary>
+    private async System.Threading.Tasks.Task AddClauseAsync(FindPluginCore.Searching.Query.QueryNode clause,
+        Func<FindPluginCore.Searching.Query.QueryNode, bool> replaces, bool timeOrder)
+    {
+        var text = FindPluginCore.Searching.Query.QueryEditor.AddClause(SearchBox.Text ?? "", clause, replaces);
+        if (timeOrder) await FollowQueryAsync(text);
+        else
+        {
+            SearchBox.Text = text;
+            SearchBox.Focus(FocusState.Programmatic);
+            PlaceSearchCaretAtEnd();
+            _searchDebounceTimer.Stop();
+            await RunSearchAsync();
+        }
     }
 
     /// <summary>The Tag menu for one row (categories with a check on the active one, Add/Edit note, Clear) —
@@ -4654,20 +4684,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// then leaves the box focused with the cursor at the end so the user can edit it.</summary>
     private void AddSearchPredicate(string field, string value, bool negate, bool contains)
     {
-        // Sanitize for the query language: single line, no embedded double-quotes, bounded length.
-        var v = (value ?? "").Replace('"', '\'').Replace('\r', ' ').Replace('\n', ' ').Trim();
+        // Sanitize for the query language: single line, bounded length (quotes are escaped on the way out).
+        var v = (value ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
         if (v.Length > 200) v = v.Substring(0, 200);
-        string op = contains ? (negate ? "!~" : "~") : (negate ? "!=" : "==");
-        string predicate = $"{field} {op} \"{v}\"";
-
-        var existing = (SearchBox.Text ?? "").Trim();
-        var newText = existing.Length == 0 ? predicate : $"{existing} AND {predicate}";
-
-        SearchBox.Text = newText;
-        SearchBox.Focus(FocusState.Programmatic);
-        PlaceSearchCaretAtEnd();
-        _searchDebounceTimer.Stop();
-        _ = RunSearchAsync(); // commit + apply now, regardless of submit mode
+        var op = contains ? (negate ? FindPluginCore.Searching.Query.QueryOp.NotContains : FindPluginCore.Searching.Query.QueryOp.Contains)
+                          : (negate ? FindPluginCore.Searching.Query.QueryOp.Ne : FindPluginCore.Searching.Query.QueryOp.Eq);
+        var canonical = FindPluginCore.Searching.Query.LogQuery.Canonical(field) ?? field;
+        var clause = new FindPluginCore.Searching.Query.PredicateNode(canonical, op, v);
+        // "Filter in: field == X" after "field == Y" means X (a field cannot equal both); every other
+        // form narrows further, so it is simply added (an identical clause is not added twice).
+        Func<FindPluginCore.Searching.Query.QueryNode, bool> replaces = op == FindPluginCore.Searching.Query.QueryOp.Eq
+            ? c => FindPluginCore.Searching.Query.QueryEditor.PinsAnyOf(c, new[] { canonical })
+            : _ => false;
+        _ = AddClauseAsync(clause, replaces, timeOrder: false); // commit + apply now, regardless of submit mode
     }
 
     /// <summary>

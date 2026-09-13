@@ -248,12 +248,15 @@ public static class ActiveFilterCatalog
 }
 
 /// <summary>One way to follow a row: caption, and the query that isolates that sequence.</summary>
-public readonly record struct FollowAxis(string Caption, string Query);
+/// <summary>One way to follow a row. <see cref="Fields"/> are the query fields the axis pins; a later
+/// pivot that pins any of them replaces this clause instead of ANDing with it.</summary>
+public readonly record struct FollowAxis(string Caption, string Query, string[] Fields);
 
 /// <summary>
 /// Follow ▾ in the in-row detail: which axes a row can be followed along, and the query each runs.
-/// "Follow" replaces the search with a query that keeps only this row's activity / thread / process /
-/// provider and reads it in time order. Pure so the axis selection is unit-testable without WinUI.
+/// "Follow" ADDS a clause to the search that keeps only this row's activity / thread / process /
+/// provider (replacing an earlier clause on the same axis) and reads the result in time order. Pure so
+/// the axis selection is unit-testable without WinUI.
 /// An axis the row has no value for is NOT offered — an item that silently does nothing is worse than
 /// no item. Thread is paired with its process because thread ids only mean something within one.
 /// </summary>
@@ -269,16 +272,20 @@ public static class FollowCatalog
         var axes = new List<FollowAxis>();
         if (HasActivity(activityId))
             axes.Add(new FollowAxis("Follow this activity",
-                $"activityid == \"{activityId}\" OR relatedactivityid == \"{activityId}\""));
+                $"activityid == \"{activityId}\" OR relatedactivityid == \"{activityId}\"",
+                new[] { "activityid", "relatedactivityid" }));
         bool hasPid = !string.IsNullOrWhiteSpace(processId);
         bool hasTid = !string.IsNullOrWhiteSpace(threadId);
         if (hasPid && hasTid)
             axes.Add(new FollowAxis($"Follow this thread ({processId}:{threadId})",
-                $"processid == \"{processId}\" AND threadid == \"{threadId}\""));
+                $"processid == \"{processId}\" AND threadid == \"{threadId}\"",
+                new[] { "processid", "threadid" }));
         if (hasPid)
-            axes.Add(new FollowAxis($"Follow this process ({processId})", $"processid == \"{processId}\""));
+            axes.Add(new FollowAxis($"Follow this process ({processId})", $"processid == \"{processId}\"",
+                new[] { "processid", "threadid" })); // a new process drops the old thread too
         if (!string.IsNullOrWhiteSpace(provider))
-            axes.Add(new FollowAxis($"Follow this provider ({provider})", $"provider == \"{provider}\""));
+            axes.Add(new FollowAxis($"Follow this provider ({provider})", $"provider == \"{provider}\"",
+                new[] { "provider" }));
         return axes;
     }
 }

@@ -127,6 +127,33 @@ public sealed class PredicateNode : QueryNode
     public override string AppendSql(QuerySqlContext c) => c.PredicateSql(Field, Op, Value);
 }
 
+/// <summary>The "around a moment" clause: <c>time ~ "12:34:56" ±2s</c>. Kept as its own node so the
+/// query editor can write it back in that form (not as two ISO comparisons) and recognise it as a time
+/// window. A null window means the whole second the value names.</summary>
+public sealed class TimeAroundNode : QueryNode
+{
+    public DateTime Center;
+    public TimeSpan? Window;
+    public TimeAroundNode(DateTime center, TimeSpan? window) { Center = center; Window = window; }
+
+    public DateTime From => Window.HasValue ? Center - Window.Value : Floor(Center);
+    /// <summary>Exclusive when the whole-second form, inclusive when a ± window.</summary>
+    public DateTime To => Window.HasValue ? Center + Window.Value : Floor(Center).AddSeconds(1);
+    public bool ToInclusive => Window.HasValue;
+
+    private static DateTime Floor(DateTime t) => new(t.Year, t.Month, t.Day, t.Hour, t.Minute, t.Second, t.Kind);
+
+    public override bool Evaluate(Func<string, string> g)
+    {
+        var t = LogQuery.TryParseTime(g("time") ?? "");
+        if (!t.HasValue) return false;
+        return t.Value >= From && (ToInclusive ? t.Value <= To : t.Value < To);
+    }
+
+    public override string AppendSql(QuerySqlContext c)
+        => $"({c.PredicateSql("time", QueryOp.Ge, From.ToString("o"))} AND {c.PredicateSql("time", ToInclusive ? QueryOp.Le : QueryOp.Lt, To.ToString("o"))})";
+}
+
 /// <summary>Accumulates the parameterized SQL for a query and knows how each field maps to a column.</summary>
 public sealed class QuerySqlContext
 {
@@ -395,20 +422,19 @@ public static class LogQuery
         }
     }
 
-    /// <summary>The range query for "around this time": <c>time >= from AND time <= to</c>.</summary>
-    public static QueryNode AroundTime(DateTime center, TimeSpan window)
-        => new AndNode(new PredicateNode("time", QueryOp.Ge, (center - window).ToString("o")),
-                       new PredicateNode("time", QueryOp.Le, (center + window).ToString("o")));
+    /// <summary>The clause for "around this time": within ±window of center, inclusive.</summary>
+    public static QueryNode AroundTime(DateTime center, TimeSpan window) => new TimeAroundNode(center, window);
+
+    /// <summary>A window as a user would type it: 2s, 500ms, 1m, 1h.</summary>
+    public static string WindowText(TimeSpan window)
+        => window.TotalHours >= 1 && window.TotalHours == Math.Floor(window.TotalHours) ? $"{window.TotalHours:0}h"
+         : window.TotalMinutes >= 1 && window.TotalMinutes == Math.Floor(window.TotalMinutes) ? $"{window.TotalMinutes:0}m"
+         : window.TotalSeconds >= 1 && window.TotalSeconds == Math.Floor(window.TotalSeconds) ? $"{window.TotalSeconds:0}s"
+         : $"{window.TotalMilliseconds:0}ms";
 
     /// <summary>The query TEXT for "around this time", the way a user would type it.</summary>
     public static string AroundTimeText(DateTime center, TimeSpan window)
-    {
-        string w = window.TotalHours >= 1 && window.TotalHours == Math.Floor(window.TotalHours) ? $"{window.TotalHours:0}h"
-                 : window.TotalMinutes >= 1 && window.TotalMinutes == Math.Floor(window.TotalMinutes) ? $"{window.TotalMinutes:0}m"
-                 : window.TotalSeconds >= 1 && window.TotalSeconds == Math.Floor(window.TotalSeconds) ? $"{window.TotalSeconds:0}s"
-                 : $"{window.TotalMilliseconds:0}ms";
-        return $"time ~ \"{center:yyyy-MM-dd HH:mm:ss.fff}\" ±{w}";
-    }
+        => $"time ~ \"{center:yyyy-MM-dd HH:mm:ss.fff}\" ±{WindowText(window)}";
 
     public static string NormalizeTime(string value)
     {
@@ -603,19 +629,14 @@ public static class LogQuery
                         if (Cur.Type == TokType.Word && TryParseWindow(Cur.Text, out var window))
                         {
                             _p++;
-                            range = AroundTime(center, window);
+                            range = new TimeAroundNode(center, window);
                         }
                         else if (Cur.Type == TokType.Word && Cur.Text.StartsWith("±"))
                             throw new QueryParseException($"bad window '{Cur.Text}' (try ±2s, ±500ms, ±1m)");
                         else if (val.IndexOf('.') >= 0)
-                            range = AroundTime(center, TimeSpan.FromMilliseconds(0.5)); // named to the millisecond
+                            range = new TimeAroundNode(center, TimeSpan.FromMilliseconds(0.5)); // named to the millisecond
                         else
-                        {
-                            // No window: the whole second the value names.
-                            var sec = new DateTime(center.Year, center.Month, center.Day, center.Hour, center.Minute, center.Second, center.Kind);
-                            range = new AndNode(new PredicateNode("time", QueryOp.Ge, sec.ToString("o")),
-                                                new PredicateNode("time", QueryOp.Lt, sec.AddSeconds(1).ToString("o")));
-                        }
+                            range = new TimeAroundNode(center, null); // the whole second the value names
                         return op == QueryOp.Contains ? range : new NotNode(range);
                     }
                     return new PredicateNode(canonical, op, val);
