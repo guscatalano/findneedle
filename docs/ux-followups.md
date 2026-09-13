@@ -124,6 +124,12 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
       in-row details with the Filter in / Filter out / Follow / Tag / Copy bar and no RawLevel row for a
       text log, and cancelling from the loading screen (Stop in the strip while running, stays Home,
       "cancelled" in Last run).
+- [x] **Workspace flows** (`WorkspaceFlowUITests`, driven through the app's own MCP server, asserted
+      on the window): load a file, add a second (chip 2 sources, pager 400), clear (chip 0, no
+      locations), reload; open with a rule file (chip counts it, Rule filter toggle enabled, on = 40 of
+      200 rows, off = 200, remove rules = chip 0); save / clear / reopen a workspace (name on the chip,
+      sources and rows back); reopen a Recent search from Home after a clear (rows, chip, "from
+      cache"); the Sources button lists both loaded files.
 - Not doing a Deskhand capture / OCR layer (owner decision 2026-09-13): FlaUI tests are the lane.
 
 ## Parked (not UX, tracked so they are not lost)

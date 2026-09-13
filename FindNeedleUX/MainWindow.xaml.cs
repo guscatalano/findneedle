@@ -842,7 +842,9 @@ public sealed partial class MainWindow : Window
                 try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { }
                 if (liveCount >= 0)
                 {
-                    var suffix = MiddleLayerService.LastSearchReusedCache ? " (from cache)" : " (scanned)";
+                    // Viewing a Recent search (OpenCachedResult) is "from cache" too - no run happened at all.
+                    bool fromCache = MiddleLayerService.LastSearchReusedCache || MiddleLayerService.OpenCacheDbPath != null;
+                    var suffix = fromCache ? " (from cache)" : " (scanned)";
                     lastRun = MiddleLayerService.LastRunWasCancelled
                         ? $"cancelled ({liveCount:N0} row{(liveCount == 1 ? "" : "s")} kept)"
                         : $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
