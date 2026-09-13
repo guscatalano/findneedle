@@ -35,6 +35,7 @@ public sealed partial class PerformanceBenchmarkPage : Page
     public PerformanceBenchmarkPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => ShowMachine();
     }
 

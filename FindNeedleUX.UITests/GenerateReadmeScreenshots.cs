@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Capturing;
@@ -29,8 +29,7 @@ namespace FindNeedleUX.UITests
     {
         public TestContext TestContext { get; set; }
 
-        private static string RepoRoot()
-            => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        private static string RepoRoot() => UiTestHelpers.RepoRoot();
         private static string DemoLogs => Path.Combine(RepoRoot(), "Samples", "Demo", "logs");
         private static string OutDir => Path.Combine(RepoRoot(), "docs", "screenshots");
 

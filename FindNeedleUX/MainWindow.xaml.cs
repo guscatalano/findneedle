@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -59,8 +59,15 @@ public sealed partial class MainWindow : Window
             if (sim_wpp_scale != null) sim_wpp_scale.Visibility = Visibility.Collapsed;
             if (PreviewDevSeparator != null) PreviewDevSeparator.Visibility = Visibility.Collapsed;
         }
-        contentFrame.Navigated += (s, e) => { RefreshStatusStrip(); BuildQuickMenu(); BackButton.IsEnabled = contentFrame.CanGoBack; };
+        contentFrame.Navigated += (s, e) => { RefreshStatusStrip(); UpdateBreadcrumb(); BackButton.IsEnabled = contentFrame.CanGoBack; };
+        // The Rules hub swaps pages inside its own frame — keep "Workspace ▸ Rule files / Auto rules / …" honest.
+        FindNeedleUX.Pages.RulesPage.ActiveTabChanged += () => DispatcherQueue.TryEnqueue(UpdateBreadcrumb);
         MiddleLayerService.StateChanged += () => DispatcherQueue.TryEnqueue(RefreshStatusStrip);
+        ApplyCatalogLabels();
+        // The chip summarises the workspace ("2 sources · 1 rule file"), so clicking it opens a menu of the
+        // things it summarises. It used to jump straight to Sources, which left the rule files it mentions
+        // unreachable from here and the workspace name unchangeable anywhere in the app.
+        WorkspaceChip.Tapped += (_, _) => ShowWorkspaceChipMenu();
         // Unified "Step X of N · phase · detail" status: whenever the spinner is up (search or viewer
         // open), show the current flow phase. Detail (row counts etc.) flows in via FlowProgress.Detail.
         FindNeedlePluginLib.FlowProgress.Updated += OnFlowProgress;
@@ -68,18 +75,16 @@ public sealed partial class MainWindow : Window
         // Show WelcomePage on startup
         contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
         RefreshStatusStrip();
-        BuildQuickMenu();
-        // Keep the top "Quick" menu in sync when quick actions are edited on the welcome page.
-        FindNeedleUX.Services.QuickActionCatalog.Changed += () => DispatcherQueue.TryEnqueue(BuildQuickMenu);
+        UpdateBreadcrumb();
         ApplyPersistedStatusStripVisibility();
         ApplyTitleBarColor();
-        ApplyCommandPaletteAccelerator();
+        ApplyHotkeys();
         // Re-apply status-bar visibility + title-bar color when changed in Preferences.
         ResultsViewerSettings.Changed += () => DispatcherQueue.TryEnqueue(() =>
         {
             ApplyPersistedStatusStripVisibility();
             ApplyTitleBarColor();
-            ApplyCommandPaletteAccelerator();
+            ApplyHotkeys();
         });
         InitMcpIndicator();
 
@@ -117,47 +122,206 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    public void NavigateToQuickLogWithRules()
+    /// <summary>Home with the Tools tiles already in edit mode (the "Customize…" affordance).</summary>
+    public void NavigateToHomeCustomize()
+        => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage), FindNeedleUX.Pages.WelcomePage.CustomizeParameter);
+
+    /// <summary>Menu items that open a page take their label from <see cref="PageCatalog"/>, so the menu,
+    /// the breadcrumb, and the page heading are literally the same string. Items that are actions rather
+    /// than pages ("Open results", "Run search"…) keep their XAML text.</summary>
+    private void ApplyCatalogLabels()
     {
-        contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+        void Label(MenuFlyoutItem item, Type page, string suffix = "")
+        {
+            if (item != null) item.Text = FindNeedleUX.Services.PageCatalog.TitleOf(page) + suffix;
+        }
+        Label(cached_searches, typeof(FindNeedleUX.Pages.CachedSearchesPage));
+        Label(log_finder, typeof(FindNeedleUX.Pages.LogFinderPage));
+        Label(search_location, typeof(FindNeedleUX.Pages.SearchLocationsPage));
+        Label(rules, typeof(FindNeedleUX.Pages.SearchRulesPage));
+        Label(auto_rules, typeof(FindNeedleUX.Pages.AutoAddRulesPage));
+        Label(reformat_rules, typeof(FindNeedleUX.Pages.ReformatRulesPage));
+        Label(connections, typeof(FindNeedleUX.Pages.ConnectionsPage));
+        Label(results_processoroutput, typeof(FindNeedleUX.Pages.ProcessorOutputPage));
+        Label(results_statistics, typeof(FindNeedleUX.Pages.SearchStatisticsPage));
+        Label(wpp_symbols, typeof(FindNeedleUX.Pages.WppSymbolResolutionPage), "…");
+        Label(diagramtools, typeof(FindNeedleUX.Pages.DiagramToolsPage));
+        Label(search_plugins, typeof(FindNeedleUX.Pages.PluginsPage));
+        Label(systeminfo, typeof(FindNeedleUX.Pages.SystemInfoPage));
+        Label(logs, typeof(FindNeedleUX.Pages.LogsPage));
+        Label(perf_benchmark, typeof(FindNeedleUX.Pages.PerformanceBenchmarkPage), "…");
+        Label(about, typeof(FindNeedleUX.Pages.AboutPage));
     }
 
-    /// <summary>Populate the top "Quick" menu so it mirrors the welcome page: a "Welcome" entry to go
-    /// home, then the user's customized quick actions, then a "Customize…" shortcut. Rebuilt on each
-    /// navigation so it reflects edits made on the welcome page.</summary>
-    private string _quickMenuSig;
+    // ----- "You are here" breadcrumb + selected menu section -----
 
-    private void BuildQuickMenu()
+    /// <summary>The page type the breadcrumb should describe: the hosted page for hubs (Rules), else the
+    /// frame's current page.</summary>
+    private Type CurrentBreadcrumbPageType()
     {
-        if (QuickMenu == null) return;
+        if (contentFrame.Content is FindNeedleUX.Pages.RulesPage hub && hub.ActivePageType != null)
+            return hub.ActivePageType;
+        return contentFrame.Content?.GetType() ?? contentFrame.CurrentSourcePageType;
+    }
 
-        // Only rebuild when the selection actually changed — Navigated fires constantly and rebuilding
-        // every time piled up duplicate items. Clear reliably via RemoveAt (MenuBarItem.Items.Clear is
-        // flaky in WinUI).
-        var ids = FindNeedleUX.Services.QuickActionCatalog.GetSelectedIds();
-        var sig = string.Join(",", ids);
-        if (sig == _quickMenuSig && QuickMenu.Items.Count > 0) return;
-        _quickMenuSig = sig;
-        while (QuickMenu.Items.Count > 0) QuickMenu.Items.RemoveAt(QuickMenu.Items.Count - 1);
+    /// <summary>Refresh "<section> ▸ <title>" under the menu bar and highlight the section's MenuBarItem.
+    /// Reads PageCatalog — the same table the menu labels and page headings use.</summary>
+    private void UpdateBreadcrumb()
+    {
+        if (BreadcrumbTitle == null) return;
+        var info = FindNeedleUX.Services.PageCatalog.Find(CurrentBreadcrumbPageType())
+                   ?? new FindNeedleUX.Services.PageInfo(FindNeedleUX.Services.PageCatalog.Home, "Home");
+        bool sectionOnly = info.Section == info.Title;
+        bool onHome = info.Section == FindNeedleUX.Services.PageCatalog.Home;
+        // The Home root shows everywhere EXCEPT on Home (where the title already says it) — so the crumb
+        // always offers a way back and never reads "Home › Home".
+        if (BreadcrumbHome != null) BreadcrumbHome.Visibility = onHome ? Visibility.Collapsed : Visibility.Visible;
+        if (BreadcrumbHomeChevron != null) BreadcrumbHomeChevron.Visibility = onHome ? Visibility.Collapsed : Visibility.Visible;
+        BreadcrumbSection.Text = sectionOnly ? "" : info.Section;
+        BreadcrumbSection.Visibility = sectionOnly ? Visibility.Collapsed : Visibility.Visible;
+        BreadcrumbChevron.Visibility = sectionOnly ? Visibility.Collapsed : Visibility.Visible;
+        BreadcrumbTitle.Text = info.Title;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(BreadcrumbBar,
+            FindNeedleUX.Services.PageCatalog.Breadcrumb(info));
 
-        var home = new MenuFlyoutItem { Text = "🏠 Welcome" };
-        home.Click += (_, _) => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
-        QuickMenu.Items.Add(home);
-        QuickMenu.Items.Add(new MenuFlyoutSeparator());
-
-        foreach (var qaId in ids)
+        var selected = SectionMenu(info.Section);
+        foreach (var item in new[] { OpenMenu, WorkspaceMenu, RunMenu, ToolsMenu, DiagnosticsMenu, HelpMenu })
         {
-            var a = FindNeedleUX.Services.QuickActionCatalog.Find(qaId);
-            if (a == null) continue;
-            var mi = new MenuFlyoutItem { Text = $"{a.Emoji}  {a.Label}" };
-            mi.Click += (_, _) => RunQuickAction(a.Id);
-            QuickMenu.Items.Add(mi);
+            if (item == null) continue;
+            bool on = ReferenceEquals(item, selected);
+            // Subtle accent tint + accent text; hover/pressed still come from the template's visual states.
+            item.Background = on ? SectionSelectedBrush() : new SolidColorBrush(Colors.Transparent);
+            item.Foreground = on ? (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                                 : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+            item.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+        }
+        UpdateWorkspaceChip();
+    }
+
+    private void BreadcrumbHome_Click(object sender, RoutedEventArgs e)
+        => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
+
+    private MenuBarItem SectionMenu(string section) => section switch
+    {
+        FindNeedleUX.Services.PageCatalog.Open => OpenMenu,
+        FindNeedleUX.Services.PageCatalog.Workspace => WorkspaceMenu,
+        FindNeedleUX.Services.PageCatalog.Run => RunMenu,
+        FindNeedleUX.Services.PageCatalog.Tools => ToolsMenu,
+        FindNeedleUX.Services.PageCatalog.Diagnostics => DiagnosticsMenu,
+        FindNeedleUX.Services.PageCatalog.Help => HelpMenu,
+        _ => null,
+    };
+
+    private static Brush SectionSelectedBrush()
+    {
+        try
+        {
+            var accent = (Color)Application.Current.Resources["SystemAccentColor"];
+            return new SolidColorBrush(Color.FromArgb(0x22, accent.R, accent.G, accent.B));
+        }
+        catch { return new SolidColorBrush(Color.FromArgb(0x22, 0x00, 0x67, 0xC0)); }
+    }
+
+    /// <summary>(workspace name, source count, rule-file count) — one computation for the window caption and
+    /// the breadcrumb chip.</summary>
+    private static (string name, int sources, int rules) WorkspaceSummary()
+    {
+        int sources = 0, rules = 0;
+        try { sources = MiddleLayerService.Locations?.Count ?? 0; } catch { }
+        try { rules = MiddleLayerService.GetCurrentQuery()?.RulesConfigPaths?.Count ?? 0; } catch { }
+        return (MiddleLayerService.WorkspaceDisplayName, sources, rules);
+    }
+
+    private void UpdateWorkspaceChip()
+    {
+        if (WorkspaceChipName == null) return;
+        var (name, sources, rules) = WorkspaceSummary();
+        WorkspaceChipName.Text = name;
+        WorkspaceChipSummary.Text =
+            $"{sources} source{(sources == 1 ? "" : "s")} · {rules} rule file{(rules == 1 ? "" : "s")}";
+    }
+
+    /// <summary>
+    /// The workspace chip's menu: the things the chip actually names (sources, rule files), plus the
+    /// workspace-level commands. Counts are in the item text so you can see what you have without opening
+    /// the page.
+    /// </summary>
+    private void ShowWorkspaceChipMenu()
+    {
+        var (name, sources, rules) = WorkspaceSummary();
+        var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+
+        void Item(string text, Action onClick, bool enabled = true)
+        {
+            var mi = new MenuFlyoutItem { Text = text, IsEnabled = enabled };
+            mi.Click += (_, _) => onClick();
+            menu.Items.Add(mi);
         }
 
-        QuickMenu.Items.Add(new MenuFlyoutSeparator());
-        var customize = new MenuFlyoutItem { Text = "Customize quick actions…" };
-        customize.Click += (_, _) => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage));
-        QuickMenu.Items.Add(customize);
+        Item($"Sources ({sources})", () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)));
+        Item($"Rule files ({rules})", () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Item("Rename workspace…", async () => await RenameWorkspaceAsync());
+        Item("Save workspace", SaveCommand);
+        Item("New workspace", () => _ = ExecuteMenuActionAsync("NewWorkspace"));
+
+        menu.ShowAt(WorkspaceChip);
+    }
+
+    /// <summary>A workspace name is free text, so strip anything the file system would reject before
+    /// offering it as a file name. Null when nothing usable is left.</summary>
+    private static string SanitizeFileName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var cleaned = new string(name.Trim()
+            .Where(c => !System.IO.Path.GetInvalidFileNameChars().Contains(c)).ToArray()).Trim();
+        return cleaned.Length == 0 ? null : cleaned;
+    }
+
+    private bool _renameDialogOpen; // re-entrancy guard — a 2nd ContentDialog.ShowAsync while one is open failfasts
+
+    /// <summary>Name the current workspace. Before this the name came ONLY from the file name on save or
+    /// open, so an unsaved workspace was stuck as "Untitled workspace".</summary>
+    private async System.Threading.Tasks.Task RenameWorkspaceAsync()
+    {
+        if (_renameDialogOpen) return;
+        var box = new TextBox
+        {
+            Text = MiddleLayerService.WorkspaceName ?? "",
+            PlaceholderText = "Untitled workspace",
+            SelectionStart = (MiddleLayerService.WorkspaceName ?? "").Length,
+        };
+        var dlg = new ContentDialog
+        {
+            Title = "Rename workspace",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "A name for this set of sources and rule files. Leave it empty for \"Untitled workspace\".",
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12,
+                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                    },
+                    box,
+                },
+            },
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = RootGrid.XamlRoot,
+        };
+        _renameDialogOpen = true;
+        try
+        {
+            if (await dlg.ShowAsync() == ContentDialogResult.Primary)
+                MiddleLayerService.RenameWorkspace(box.Text);
+        }
+        catch (Exception ex) { Logger.Instance.Log($"Rename workspace failed: {ex.Message}"); }
+        finally { _renameDialogOpen = false; }
     }
 
     /// <summary>Run a welcome-page quick action by its catalog id (see QuickActionCatalog). Maps to the
@@ -168,7 +332,7 @@ public sealed partial class MainWindow : Window
         {
             case "open_file":         QuickFileOpen(); break;
             case "open_folder":       QuickFolderOpen(); break;
-            case "open_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage)); break;
+            case "open_rules":        OpenWithRules(); break;
             case "log_finder":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.LogFinderPage)); break;
             case "open_ado":          contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "ado"); break;
             case "open_github":       contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage), "github"); break;
@@ -177,7 +341,7 @@ public sealed partial class MainWindow : Window
             case "locations":         contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)); break;
             case "rules_config":      contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"); break;
             case "auto_rules":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "autoadd"); break;
-            case "run_search":        contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage)); break;
+            case "run_search":        RunAndViewResults(); break; // the tile says "Run search": run, do not navigate
             case "results":           NavigateWithSpinner(typeof(FindNeedleUX.Pages.NativeResultsPage)); break;
             case "processor_output":  contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)); break;
             case "diagram":           contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage)); break;
@@ -471,8 +635,9 @@ public sealed partial class MainWindow : Window
             if (!await MaybeOfferTriageAsync()) { ShowSpinner(false); return; } // cancelled → abort the open
 
             ShowSpinner(true, "Opening file...", showCancel: true);
-            await RunSearchWithProgress();
+            bool completed = await RunSearchWithProgress();
             ShowSpinner(false);
+            if (!completed) return; // cancelled: stay on Home rather than open an empty viewer
 
             // Only the native viewer remains; --viewer is accepted for back-compat but always native.
             contentFrame.Navigate(typeof(FindNeedleUX.Pages.NativeResultsPage));
@@ -590,9 +755,13 @@ public sealed partial class MainWindow : Window
         UpdateWindowTitle();
 
         // "Remap CSV columns…" is only relevant when the workspace is a single CSV/TSV file.
-        if (RemapCsvMenuItem != null)
-            RemapCsvMenuItem.Visibility = MiddleLayerService.GetLoadedCsv() != null
-                ? Visibility.Visible : Visibility.Collapsed;
+        var csvVis = MiddleLayerService.GetLoadedCsv() != null ? Visibility.Visible : Visibility.Collapsed;
+        if (RemapCsvMenuItem != null) RemapCsvMenuItem.Visibility = csvVis;
+        if (RemapCsvSeparator != null) RemapCsvSeparator.Visibility = csvVis;
+        // Run ▸ Stop (and its Esc accelerator) only while something is actually running.
+        if (stop_search != null) stop_search.IsEnabled = IsSearchRunning;
+        ApplyStopAccelerator();
+        UpdateWorkspaceChip();
 
         if (StatusSegments == null) return; // not yet realized
         StatusSegments.Children.Clear();
@@ -622,16 +791,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Reflect the workspace in the window caption: "FindNeedle — Untitled workspace (2 sources,
-    /// 1 rule)". Always visible, unlike the status strip which can be hidden.</summary>
+    /// <summary>Reflect the workspace in the window caption: "FindNeedle — Untitled workspace". Just the
+    /// name: the counts live on the workspace chip (and were the fourth copy of the same two numbers on
+    /// Home); the taskbar only has room for the name anyway.</summary>
     private void UpdateWindowTitle()
     {
         try
         {
-            int sources = MiddleLayerService.Locations?.Count ?? 0;
-            int rules = MiddleLayerService.GetCurrentQuery()?.RulesConfigPaths?.Count ?? 0;
-            Title = $"FindNeedle — {MiddleLayerService.WorkspaceDisplayName} " +
-                    $"({sources} source{(sources == 1 ? "" : "s")}, {rules} rule{(rules == 1 ? "" : "s")})";
+            var (name, _, _) = WorkspaceSummary();
+            Title = $"FindNeedle — {name}";
         }
         catch { /* title is cosmetic */ }
     }
@@ -664,8 +832,8 @@ public sealed partial class MainWindow : Window
                 var rulePaths = query?.RulesConfigPaths ?? new List<string>();
                 var tip = rulePaths.Count > 0
                     ? string.Join("\n", rulePaths.Select(p => { try { return System.IO.Path.GetFileName(p); } catch { return p; } }))
-                    : "No rules configured";
-                return MakeStatusSegment(Symbol.List, "Rules", rulePaths.Count.ToString(), tip, null,
+                    : "No rule files configured";
+                return MakeStatusSegment(Symbol.List, "Rule files", rulePaths.Count.ToString(), tip, null,
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files"));
             }
             case "lastrun":
@@ -674,8 +842,12 @@ public sealed partial class MainWindow : Window
                 try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { }
                 if (liveCount >= 0)
                 {
-                    var suffix = MiddleLayerService.LastSearchReusedCache ? " (cached)" : " (scanned)";
-                    lastRun = $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
+                    // Viewing a Recent search (OpenCachedResult) is "from cache" too - no run happened at all.
+                    bool fromCache = MiddleLayerService.LastSearchReusedCache || MiddleLayerService.OpenCacheDbPath != null;
+                    var suffix = fromCache ? " (from cache)" : " (scanned)";
+                    lastRun = MiddleLayerService.LastRunWasCancelled
+                        ? $"cancelled ({liveCount:N0} row{(liveCount == 1 ? "" : "s")} kept)"
+                        : $"{liveCount:N0} result{(liveCount == 1 ? "" : "s")}{suffix}";
                     hasResults = liveCount > 0;
                 }
                 else
@@ -699,16 +871,18 @@ public sealed partial class MainWindow : Window
                 if (query is FindPluginCore.Searching.NuSearchQuery nq && nq.GeneratedRuleOutputFiles != null) outFiles.AddRange(nq.GeneratedRuleOutputFiles);
                 var files = outFiles.Where(System.IO.File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 if (files.Count == 0) return null;
-                return MakeStatusSegment(Symbol.Document, "Output files", files.Count.ToString(),
+                return MakeStatusSegment(Symbol.Document, "Outputs", files.Count.ToString(),
                     string.Join("\n", files.Select(System.IO.Path.GetFileName)), Color.FromArgb(255, 46, 160, 67),
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)));
             }
             case "run_view":
-                return MakeStatusActionButton(Symbol.Play, "Run & View",
-                    "Run the search and open the results viewer", () => RunAndViewResults());
-            case "run":
-                return MakeStatusActionButton(Symbol.Refresh, "Run search",
-                    "Run the search (without opening the viewer)", () => RunSearchOnly());
+                // One slot, two states: while a search runs the Run action becomes Stop, so cancelling is
+                // always one click away in the status bar without configuring the separate Stop item.
+                if (IsSearchRunning)
+                    return MakeStatusActionButton(Symbol.Stop, "Stop", "Cancel the running search (Esc)",
+                        () => StopSearch(), Color.FromArgb(255, 196, 43, 28));
+                return MakeStatusActionButton(Symbol.Play, "Run",
+                    "Run the search and open the results", () => RunAndViewResults());
             case "stop":
             {
                 var btn = MakeStatusActionButton(Symbol.Stop, "Stop", "Cancel the running search", () => StopSearch());
@@ -717,11 +891,15 @@ public sealed partial class MainWindow : Window
             }
             case "perf":
             {
+                // Always present once chosen (the pencil lists it as "Storage / timing"; a segment that
+                // silently disappears before the first run looked like a broken setting). Before a run
+                // it reads "—"; after one, the storage tier. Click opens the timing report either way.
                 var storage = MiddleLayerService.GetSearchStorage();
-                if (storage == null) return null;
-                var tier = storage.GetType().Name.Replace("Storage", "");
+                var tier = storage == null ? "—" : storage.GetType().Name.Replace("Storage", "");
                 return MakeStatusSegment(Symbol.Repair, "Storage", tier,
-                    "Search storage tier — click for the timing / why-so-slow report", null,
+                    storage == null
+                        ? "No search yet. After a run: the storage tier the results live in — click for the timing / why-so-slow report"
+                        : "Search storage tier — click for the timing / why-so-slow report", null,
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchStatisticsPage)));
             }
             case "connections":
@@ -734,7 +912,7 @@ public sealed partial class MainWindow : Window
             case "autorules":
             {
                 var n = MiddleLayerService.LastAutoAddedRules?.Count ?? 0;
-                return MakeStatusSegment(Symbol.Bookmarks, "Auto-rules", n.ToString(),
+                return MakeStatusSegment(Symbol.Bookmarks, "Auto rules", n.ToString(),
                     "Rules auto-added to the last search", null,
                     () => contentFrame.Navigate(typeof(FindNeedleUX.Pages.AutoAddRulesPage)));
             }
@@ -749,17 +927,10 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _searchRunning;
-    private bool IsSearchRunning => _searchRunning || MiddleLayerService.CurrentStreamingSearch != null;
-
-    /// <summary>Run the current search without opening the viewer (status-bar "Run search").</summary>
-    public async void RunSearchOnly()
-    {
-        if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
-        { contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage)); return; }
-        _searchRunning = true; RefreshStatusStrip();
-        try { await RunSearchWithProgress(); }
-        finally { _searchRunning = false; RefreshStatusStrip(); }
-    }
+    // A finished streaming handle stays published (the viewer reads its source), so "running" means its
+    // search task is still going — otherwise Stop would stay lit after every streaming open.
+    private bool IsSearchRunning => _searchRunning
+        || (MiddleLayerService.CurrentStreamingSearch is { } h && !h.SearchTask.IsCompleted);
 
     /// <summary>Cancel the running search (streaming or progress) — status-bar "Stop".</summary>
     public void StopSearch()
@@ -835,9 +1006,10 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>A prominent action button for the status bar (icon + label), distinct from the info
-    /// segments — used for "Run & View".</summary>
-    private Button MakeStatusActionButton(Symbol icon, string label, string tooltip, Action onClick)
+    /// segments — used for "Run".</summary>
+    private Button MakeStatusActionButton(Symbol icon, string label, string tooltip, Action onClick, Color? tint = null)
     {
+        var accent = tint ?? Color.FromArgb(255, 46, 160, 67);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new SymbolIcon { Symbol = icon, RenderTransform = new ScaleTransform { ScaleX = 0.7, ScaleY = 0.7 }, RenderTransformOrigin = new global::Windows.Foundation.Point(0.5, 0.5) });
         row.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
@@ -846,15 +1018,16 @@ public sealed partial class MainWindow : Window
             Content = row,
             Padding = new Thickness(10, 2, 10, 2),
             MinHeight = 0,
-            Background = new SolidColorBrush(Color.FromArgb(30, 46, 160, 67)),
+            Background = new SolidColorBrush(Color.FromArgb(30, accent.R, accent.G, accent.B)),
         };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, label); // the content is a panel, so the button has no name of its own
         ToolTipService.SetToolTip(btn, tooltip);
         btn.Click += (_, _) => { try { onClick(); } catch { } };
         return btn;
     }
 
-    /// <summary>Run the current search (locations/rules) and open the results viewer — the status-bar
-    /// "Run & View" action.</summary>
+    /// <summary>Run the current search (sources/rule files) and open the results viewer — the status-bar
+    /// "Run" action.</summary>
     public async void RunAndViewResults()
     {
         if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
@@ -972,13 +1145,12 @@ public sealed partial class MainWindow : Window
     {
         switch (name)
         {
+            // One "New workspace": cancels a running search, drops sources/rules/results (the old Clear), then
+            // establishes a fresh empty query. "clearworkspace" stays as an alias for anything still sending it.
             case "newworkspace":
-                MiddleLayerService.NewWorkspace();
-                Logger.Instance.Log("Navigated: NewWorkspace (workspace reset)");
-                break;
             case "clearworkspace":
-                MiddleLayerService.ClearWorkspace();
-                Logger.Instance.Log("Cleared workspace (locations + filters removed, search cancelled)");
+                MiddleLayerService.NewWorkspace();
+                Logger.Instance.Log("New workspace (search cancelled, sources/rules/results cleared, fresh query)");
                 break;
             case "saveworkspace":
                 SaveCommand();
@@ -1000,13 +1172,10 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: LogFinderPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.LogFinderPage));
                 break;
-            // All rule configuration now lives behind one tabbed Rules hub.
+            // All rule configuration lives behind one tabbed Rules hub; each menu item opens its tab.
             case "rules":
-                Logger.Instance.Log("Navigated: RulesPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage));
-                break;
-            // Back-compat aliases (status bar / quick actions) → open the matching tab.
             case "search_rules":
+                Logger.Instance.Log("Navigated: RulesPage (files)");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "files");
                 break;
             case "reformat_rules":
@@ -1015,16 +1184,17 @@ public sealed partial class MainWindow : Window
             case "auto_rules":
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "autoadd");
                 break;
-            case "search_processors":
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "active");
-                break;
             case "search_plugins":
                 Logger.Instance.Log("Navigated: PluginsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.PluginsPage));
                 break;
             case "results_get":
-                Logger.Instance.Log("Navigated: RunSearchPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RunSearchPage));
+                // "Run search" RUNS. It used to navigate to RunSearchPage, where you had to press Run
+                // again — so the menu item, its F5 accelerator and Home's Run button all promised a run
+                // and delivered a page (the same two-step the Known logs card had). The status bar's Run
+                // already did the right thing; this is now the one run action everything shares.
+                Logger.Instance.Log("Run search (menu/F5)");
+                RunAndViewResults();
                 break;
             case "results_statistics":
                 Logger.Instance.Log("Navigated: SearchStatisticsPage");
@@ -1071,13 +1241,24 @@ public sealed partial class MainWindow : Window
                 Logger.Instance.Log("Navigated: DiagramToolsPage");
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
                 break;
-            case "rules_uml":
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.RulesPage), "uml");
+            case "rules_uml": // the Diagrams tab left the Rules hub; diagram tooling is Tools ▸ Diagram tools
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage));
                 break;
             case "logs":
+                // In the frame (not a separate window) so Back works and the breadcrumb says where you are.
                 Logger.Instance.Log("Navigated: LogsPage");
-                var logsWindow = new FindNeedleUX.Windows.LogsWindow();
-                logsWindow.Activate();
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.LogsPage));
+                break;
+            case "stop_search":
+                Logger.Instance.Log("Stop requested from the Run menu");
+                StopSearch();
+                break;
+            case "viewer_help":
+                // F1: the viewer's own help when it's open; otherwise the documentation.
+                if (contentFrame.Content is FindNeedleUX.Pages.NativeResultsPage viewer)
+                    await viewer.ShowHelpDialogAsync();
+                else
+                    await ExecuteMenuActionAsync("documentation");
                 break;
             case "openlogfile":
                 Logger.Instance.Log("Opened log file picker");
@@ -1092,8 +1273,8 @@ public sealed partial class MainWindow : Window
                 contentFrame.Navigate(typeof(FindNeedleUX.Pages.CachedSearchesPage));
                 break;
             case "openlogwithrules":
-                Logger.Instance.Log("Navigated: QuickLogWithRulesPage");
-                contentFrame.Navigate(typeof(FindNeedleUX.Pages.QuickLogWithRulesPage));
+                Logger.Instance.Log("Opened log + rules pickers");
+                OpenWithRules();
                 break;
             case "inspect_etl":
                 await InspectionService.InspectEtlAsync(this, (show, text) => ShowSpinner(show, text));
@@ -1122,36 +1303,58 @@ public sealed partial class MainWindow : Window
         FindNeedleUX.Services.PaletteCommand Cmd(string label, string cat, string kw, Func<System.Threading.Tasks.Task> run)
             => new() { Label = label, Category = cat, Keywords = kw, Run = run };
 
+        string T(Type page) => FindNeedleUX.Services.PageCatalog.TitleOf(page);
+        const string Open = FindNeedleUX.Services.PageCatalog.Open;
+        const string Workspace = FindNeedleUX.Services.PageCatalog.Workspace;
+        const string Run = FindNeedleUX.Services.PageCatalog.Run;
+        const string Tools = FindNeedleUX.Services.PageCatalog.Tools;
+        const string Diagnostics = FindNeedleUX.Services.PageCatalog.Diagnostics;
+        const string Help = FindNeedleUX.Services.PageCatalog.Help;
+
+        // Categories are exactly the menu titles, in menu order; page labels come from PageCatalog.
         return new()
         {
-            Cmd("Run Search", "Run & Results", "execute start go scan", menu("results_get")),
-            Cmd("Results (viewer)", "Run & Results", "view grid logs native", menu("results_viewnative")),
-            Cmd("Processor Output", "Run & Results", "generated output uml", menu("results_processoroutput")),
-            Cmd("Sources", "Configure", "locations add files folder data input", menu("search_location")),
-            Cmd("Log Finder", "Configure", "catalog predefined well-known", menu("log_finder")),
-            Cmd("Connections", "Configure", "kusto ado github online remote", menu("connections")),
-            Cmd("Rules", "Configure", "ruledsl filter enrichment field extraction", menu("rules")),
-            Cmd("Auto-add rules", "Configure", "automatic suggest", menu("auto_rules")),
-            Cmd("Active rules", "Configure", "processors stats matched timing", menu("search_processors")),
-            Cmd("New workspace", "Workspace", "reset fresh", menu("newworkspace")),
-            Cmd("Open workspace…", "Workspace", "load", menu("openworkspace")),
-            Cmd("Save workspace", "Workspace", "store persist", menu("saveworkspace")),
-            Cmd("Clear workspace", "Workspace", "empty remove", menu("clearworkspace")),
-            Cmd("Open log file…", "Open", "single pick browse", menu("openlogfile")),
-            Cmd("Open log folder…", "Open", "directory", menu("openlogfolder")),
-            Cmd("Open log with rules…", "Open", "quicklog", menu("openlogwithrules")),
-            Cmd("Cached Searches", "Open", "recent history reopen cache", menu("cached_searches")),
-            Cmd("Inspect ETL", "Tools", "providers triage etl", menu("inspect_etl")),
-            Cmd("Inspect Binary", "Tools", "pe tracelogging providers dll exe", menu("inspect_binary")),
-            Cmd("Diagram Tools", "Tools", "uml plantuml mermaid sequence", menu("diagramtools")),
-            Cmd("Plugins", "Tools", "extensions", menu("search_plugins")),
-            Cmd("System check", "Diagnostics", "health wdk symbols tracefmt", menu("systeminfo")),
-            Cmd("Logs", "Diagnostics", "app log troubleshoot", menu("logs")),
-            Cmd("Search statistics", "Diagnostics", "perf timing why slow performance", menu("results_statistics")),
-            Cmd("Settings", "App", "preferences options theme viewer colors", menu("settings_resultviewer")),
-            Cmd("Documentation", "Help", "docs github help", menu("documentation")),
-            Cmd("About", "Help", "version info", menu("about")),
-            Cmd("Welcome", "App", "home start intro", () => { contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage)); return System.Threading.Tasks.Task.CompletedTask; }),
+            Cmd("Open log file…", Open, "single pick browse", menu("openlogfile")),
+            Cmd("Open folder…", Open, "directory", menu("openlogfolder")),
+            Cmd("Open with rules…", Open, "quicklog rules file", menu("openlogwithrules")),
+            Cmd(T(typeof(FindNeedleUX.Pages.CachedSearchesPage)), Open, "recent history reopen cache cached", menu("cached_searches")),
+            Cmd(T(typeof(FindNeedleUX.Pages.LogFinderPage)), Open, "catalog predefined well-known finder", menu("log_finder")),
+            Cmd("New workspace", Open, "reset fresh clear", menu("newworkspace")),
+            Cmd("Open workspace…", Open, "load", menu("openworkspace")),
+            Cmd("Save workspace", Open, "store persist", menu("saveworkspace")),
+
+            Cmd(T(typeof(FindNeedleUX.Pages.SearchLocationsPage)), Workspace, "locations add files folder data input", menu("search_location")),
+            Cmd(T(typeof(FindNeedleUX.Pages.SearchRulesPage)), Workspace, "rules ruledsl filter enrichment", menu("rules")),
+            Cmd(T(typeof(FindNeedleUX.Pages.AutoAddRulesPage)), Workspace, "automatic suggest auto-add", menu("auto_rules")),
+            Cmd(T(typeof(FindNeedleUX.Pages.ReformatRulesPage)), Workspace, "reformat enrichment columns", menu("reformat_rules")),
+            Cmd(T(typeof(FindNeedleUX.Pages.ConnectionsPage)), Workspace, "kusto ado github online remote", menu("connections")),
+
+            Cmd("Run search", Run, "execute start go scan", menu("results_get")),
+            Cmd("Stop", Run, "cancel abort", menu("stop_search")),
+            Cmd("Open results", Run, "view grid logs native viewer results", menu("results_viewnative")),
+            Cmd(T(typeof(FindNeedleUX.Pages.ProcessorOutputPage)), Run, "generated output files uml diagram processor", menu("results_processoroutput")),
+            Cmd(T(typeof(FindNeedleUX.Pages.SearchStatisticsPage)), Run, "perf timing why slow performance statistics storage", menu("results_statistics")),
+
+            Cmd("Inspect ETL", Tools, "providers triage etl", menu("inspect_etl")),
+            Cmd("Inspect binary", Tools, "pe tracelogging providers dll exe", menu("inspect_binary")),
+            Cmd(T(typeof(FindNeedleUX.Pages.WppSymbolResolutionPage)) + "…", Tools, "wpp pdb tmf decode resolve", menu("wpp_symbols")),
+            Cmd(T(typeof(FindNeedleUX.Pages.DiagramToolsPage)), Tools, "uml plantuml mermaid sequence", menu("diagramtools")),
+            Cmd(T(typeof(FindNeedleUX.Pages.PluginsPage)), Tools, "extensions", menu("search_plugins")),
+
+            Cmd(T(typeof(FindNeedleUX.Pages.SystemInfoPage)), Diagnostics, "health wdk symbols tracefmt", menu("systeminfo")),
+            Cmd(T(typeof(FindNeedleUX.Pages.LogsPage)), Diagnostics, "logs troubleshoot", menu("logs")),
+            Cmd(T(typeof(FindNeedleUX.Pages.PerformanceBenchmarkPage)) + "…", Diagnostics, "perf machine compare", menu("perf_benchmark")),
+
+            Cmd("Viewer help", Help, "query syntax filters f1", menu("viewer_help")),
+            Cmd("Documentation", Help, "docs github help", menu("documentation")),
+            Cmd(T(typeof(FindNeedleUX.Pages.AboutPage)), Help, "version info", menu("about")),
+
+            Cmd(T(typeof(FindNeedleUX.Pages.ResultsViewerSettingsPage)), FindNeedleUX.Services.PageCatalog.Settings,
+                "preferences options theme viewer colors", menu("settings_resultviewer")),
+            Cmd(T(typeof(FindNeedleUX.Pages.WelcomePage)), FindNeedleUX.Services.PageCatalog.Home, "welcome start intro",
+                () => { contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage)); return System.Threading.Tasks.Task.CompletedTask; }),
+            Cmd("Customize Home tools…", FindNeedleUX.Services.PageCatalog.Home, "quick actions tiles edit home shortcuts",
+                () => { NavigateToHomeCustomize(); return System.Threading.Tasks.Task.CompletedTask; }),
         };
     }
 
@@ -1191,12 +1394,21 @@ public sealed partial class MainWindow : Window
         CacheCleanupBar.Message =
             $"Cached searches are using {FindNeedleUX.Services.CacheMaintenance.FormatBytes(bytes)} " +
             $"({files} file{(files == 1 ? "" : "s")}). Clearing frees the space; reopening those logs re-scans them.";
+        CacheCleanupBar.Visibility = Visibility.Visible;   // a closed InfoBar still keeps its Margin; see MainWindow.xaml
         CacheCleanupBar.IsOpen = true;
     }
 
     private void CacheCleanupBar_Closed(Microsoft.UI.Xaml.Controls.InfoBar sender,
         Microsoft.UI.Xaml.Controls.InfoBarClosedEventArgs args)
-    { /* dismissed = "not now" — leaves the preference at Ask, so it can surface again next launch. */ }
+    {
+        // Dismissed = "not now" — leaves the preference at Ask, so it can surface again next launch.
+        // Collapse the element too so its Margin stops reserving a band above the page.
+        sender.Visibility = Visibility.Collapsed;
+    }
+
+    private void RunFailedBar_Closed(Microsoft.UI.Xaml.Controls.InfoBar sender,
+        Microsoft.UI.Xaml.Controls.InfoBarClosedEventArgs args)
+        => sender.Visibility = Visibility.Collapsed;
 
     private void CacheCleanupNow_Click(object sender, RoutedEventArgs e)
     {
@@ -1231,17 +1443,48 @@ public sealed partial class MainWindow : Window
     // visual tree — WinUI then has no accelerator to render a "Ctrl+K" hint for, and no dead key to swallow.
     private Microsoft.UI.Xaml.Input.KeyboardAccelerator _paletteAccelerator;
 
-    /// <summary>Add the Ctrl+K accelerator when the command palette is enabled, remove it when not. Called at
-    /// startup and whenever settings change, so toggling the palette takes effect live (and stops showing a
-    /// shortcut hint the moment it's turned off).</summary>
-    private void ApplyCommandPaletteAccelerator()
+    /// <summary>Apply the keyboard-shortcut settings: add the Ctrl+K accelerator when the command palette is
+    /// enabled (remove it when not, so no dead shortcut hint is rendered), and enable/disable the menu
+    /// accelerators (Ctrl+O, Ctrl+S, F5, F1) with the master "keyboard shortcuts" switch. Called at startup
+    /// and whenever settings change, so toggles take effect live.</summary>
+    private void ApplyHotkeys()
     {
         if (RootGrid == null) return;
         _paletteAccelerator ??= CreatePaletteAccelerator();
-        bool enabled = ResultsViewerSettings.HotkeysEnabled && ResultsViewerSettings.CommandPaletteEnabled;
+        bool hotkeys = ResultsViewerSettings.HotkeysEnabled;
+        bool enabled = hotkeys && ResultsViewerSettings.CommandPaletteEnabled;
         bool present = RootGrid.KeyboardAccelerators.Contains(_paletteAccelerator);
         if (enabled && !present) RootGrid.KeyboardAccelerators.Add(_paletteAccelerator);
         else if (!enabled && present) RootGrid.KeyboardAccelerators.Remove(_paletteAccelerator);
+
+        foreach (var accel in new[] { OpenFileAccelerator, SaveWorkspaceAccelerator, RunSearchAccelerator, ViewerHelpAccelerator })
+            if (accel != null) accel.IsEnabled = hotkeys;
+        ApplyStopAccelerator();
+    }
+
+    // Esc → Stop is only registered while a search is running: a permanent Escape accelerator would swallow
+    // the key everywhere (dialogs, the palette, clearing a filter box). The menu item shows the hint regardless.
+    private Microsoft.UI.Xaml.Input.KeyboardAccelerator _stopAccelerator;
+
+    private void ApplyStopAccelerator()
+    {
+        if (RootGrid == null) return;
+        if (_stopAccelerator == null)
+        {
+            _stopAccelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = global::Windows.System.VirtualKey.Escape };
+            _stopAccelerator.Invoked += (_, args) =>
+            {
+                // Let Esc do its usual job when something more local wants it (palette, a text box, a dialog).
+                if (!IsSearchRunning || CommandPalettePanel.Visibility == Visibility.Visible) return;
+                if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(RootGrid.XamlRoot) is TextBox or AutoSuggestBox or ComboBox) return;
+                args.Handled = true;
+                StopSearch();
+            };
+        }
+        bool want = ResultsViewerSettings.HotkeysEnabled && IsSearchRunning;
+        bool present = RootGrid.KeyboardAccelerators.Contains(_stopAccelerator);
+        if (want && !present) RootGrid.KeyboardAccelerators.Add(_stopAccelerator);
+        else if (!want && present) RootGrid.KeyboardAccelerators.Remove(_stopAccelerator);
     }
 
     private Microsoft.UI.Xaml.Input.KeyboardAccelerator CreatePaletteAccelerator()
@@ -1258,8 +1501,8 @@ public sealed partial class MainWindow : Window
     private void CommandPaletteAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
         Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
     {
-        // Off by default — the palette only responds to Ctrl+K when the user opts in (Settings), and only
-        // when shortcuts are enabled at all. Leave the key unhandled when disabled so it isn't swallowed.
+        // The palette only responds to Ctrl+K while it's enabled (Settings; on by default), and only when
+        // shortcuts are enabled at all. Leave the key unhandled when disabled so it isn't swallowed.
         if (!FindNeedleUX.Services.ResultsViewerSettings.HotkeysEnabled) return;
         if (!FindNeedleUX.Services.ResultsViewerSettings.CommandPaletteEnabled) return;
         args.Handled = true;
@@ -1279,7 +1522,7 @@ public sealed partial class MainWindow : Window
     private void CloseCommandPalette() => CommandPalettePanel.Visibility = Visibility.Collapsed;
 
     /// <summary>Narrow the list to commands whose label/category/keywords contain every typed token. Ranks
-    /// label-prefix matches first so typing "run" surfaces "Run Search" at the top.</summary>
+    /// label-prefix matches first so typing "run" surfaces "Run search" at the top.</summary>
     private void FilterPalette(string query)
     {
         var q = (query ?? "").Trim().ToLowerInvariant();
@@ -1432,9 +1675,13 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private async Task RunSearchWithProgress(bool surfaceScan = false)
+    /// <summary>Run the search under the loading screen. Returns false when the user cancelled it
+    /// (Cancel / Run ▸ Stop / Esc / status-bar Stop), so callers can stay put instead of opening an
+    /// empty viewer over a run that was abandoned on purpose.</summary>
+    private async Task<bool> RunSearchWithProgress(bool surfaceScan = false)
     {
         _quickActionCts = new CancellationTokenSource();
+        _searchRunning = true; RefreshStatusStrip(); // enables Run ▸ Stop (+ Esc) and the status-bar Stop
         ShowSpinner(true, "Running search...", showCancel:true);
         // Register for progress updates
         var sink = MiddleLayerService.GetProgressEventSink();
@@ -1447,7 +1694,11 @@ public sealed partial class MainWindow : Window
         sink.RegisterForNumericProgress(OnNumericProgress);
         try
         {
-            await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, _quickActionCts.Token).Wait(), _quickActionCts.Token);
+            var cts = _quickActionCts;
+            await Task.Run(() => MiddleLayerService.RunSearch(surfaceScan, cts.Token).Wait(), cts.Token);
+            // The engine honours cancellation by ending the scan early and completing NORMALLY with whatever
+            // it had (often 0 rows) — it does not throw. So ask the token, not the exception path.
+            if (cts.IsCancellationRequested) throw new OperationCanceledException(cts.Token);
             var stats = MiddleLayerService.GetStats();
             var count = MiddleLayerService.GetFilteredRowCount();
             var cacheSuffix = MiddleLayerService.LastSearchReusedCache ? " (from cache)" : " (scanned)";
@@ -1457,14 +1708,17 @@ public sealed partial class MainWindow : Window
         {
             DispatcherQueue.TryEnqueue(() => SpinnerText.Text = "Search cancelled.");
             _lastRunSummary = "cancelled";
+            return false;
         }
         finally
         {
             ShowSpinner(false);
             _quickActionCts?.Dispose();
             _quickActionCts = null;
+            _searchRunning = false;
             DispatcherQueue.TryEnqueue(RefreshStatusStrip);
         }
+        return true;
     }
 
     /// <summary>
@@ -1535,11 +1789,7 @@ public sealed partial class MainWindow : Window
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var file = Win32FileDialog.OpenFile(hWnd, LogFileFilters());
         if (file != null)
-        {
-            MiddleLayerService.NewWorkspace();
-            MiddleLayerService.AddFolderLocation(file);
-            await OpenWithOptionalStreamingAsync("Opening file...");
-        }
+            await OpenIntoWorkspaceAsync(new[] { file }, label: "Opening file...");
     }
 
     /// <summary>"Open file" dialog filters, built from every registered IFileExtensionProcessor's
@@ -1576,85 +1826,136 @@ public sealed partial class MainWindow : Window
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var folderPath = Win32FileDialog.PickFolder(hWnd);
         if (folderPath != null)
+            await OpenIntoWorkspaceAsync(new[] { folderPath }, label: "Opening folder...");
+    }
+
+    /// <summary>"Open with rules…": pick a log, then a rules file, then open through the SAME path as every
+    /// other open (workspace policy → sources + a durable workspace rule → triage → streaming viewer).
+    /// Replaces the old QuickLogWithRulesPage, which was a third search flow that reset the workspace and
+    /// bypassed triage/streaming.</summary>
+    public async void OpenWithRules()
+    {
+        var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var file = Win32FileDialog.OpenFile(hWnd, LogFileFilters());
+        if (file == null) return;
+        var rules = Win32FileDialog.OpenFile(hWnd, new (string, string)[]
         {
-            MiddleLayerService.NewWorkspace();
-            MiddleLayerService.AddFolderLocation(folderPath);
-            await OpenWithOptionalStreamingAsync("Opening folder...");
-        }
+            ("Rule files", "*.rules.json;*.json"),
+            ("All files", "*.*"),
+        });
+        if (rules == null) return;
+        await OpenIntoWorkspaceAsync(new[] { file }, new[] { rules }, "Opening file with rules...");
     }
 
     /// <summary>
     /// Open a single file (or folder) path directly — used by file activation ("Open with → Find
-    /// Needle") and the command line. Mirrors <see cref="QuickFileOpen"/> but takes the path instead
-    /// of prompting. No-op for a missing path.
+    /// Needle") and the command line. Same policy as the pickers. No-op for a missing path.
     /// </summary>
-    public async System.Threading.Tasks.Task OpenPathAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path) || !(System.IO.File.Exists(path) || System.IO.Directory.Exists(path)))
-            return;
-        MiddleLayerService.NewWorkspace();
-        MiddleLayerService.AddFolderLocation(path); // handles a single file or a folder
-        await OpenWithOptionalStreamingAsync("Opening file...");
-    }
+    public Task OpenPathAsync(string path)
+        => OpenIntoWorkspaceAsync(new[] { path }, label: "Opening file...");
 
-    /// <summary>Open one or more dropped paths: new workspace, add each existing file/folder, open the
-    /// viewer once. Shared by drag-and-drop.</summary>
-    public System.Threading.Tasks.Task OpenPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
-        => LoadPathsAsync(paths, clearFirst: true);
+    /// <summary>Open one or more paths (drag-and-drop, automation) through the workspace policy.</summary>
+    public Task OpenPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+        => OpenIntoWorkspaceAsync(paths);
 
-    private async System.Threading.Tasks.Task LoadPathsAsync(
-        System.Collections.Generic.IReadOnlyList<string> paths, bool clearFirst)
+    private Task HandleDroppedPathsAsync(System.Collections.Generic.IReadOnlyList<string> paths)
+        => OpenIntoWorkspaceAsync(paths);
+
+    private bool _openChoiceDialogOpen; // re-entrancy guard — a 2nd ContentDialog.ShowAsync while one is open failfasts
+
+    /// <summary>
+    /// THE open path. Every way of getting a log in front of the user — Open log file…, Open folder…,
+    /// Open with rules…, a Recent search, a Known log, drag-and-drop, file activation — comes through here,
+    /// so they all behave the same: the workspace-open policy decides whether the paths are added to the
+    /// loaded workspace, replace it, or the user is asked (an empty workspace always just adds — never a
+    /// prompt); then the sources/rules are applied and the viewer opens (streaming if enabled), or, for a
+    /// Recent search, the cached results open without a rescan. Returns false when nothing was opened
+    /// (no valid path, or the user cancelled).
+    /// </summary>
+    public async Task<bool> OpenIntoWorkspaceAsync(
+        System.Collections.Generic.IReadOnlyList<string> paths,
+        System.Collections.Generic.IReadOnlyList<string> rulePaths = null,
+        string label = null,
+        string cachedDbPath = null,
+        string displayName = null)
     {
         var valid = new System.Collections.Generic.List<string>();
         if (paths != null)
             foreach (var p in paths)
                 if (!string.IsNullOrWhiteSpace(p) && (System.IO.File.Exists(p) || System.IO.Directory.Exists(p)))
                     valid.Add(p);
-        if (valid.Count == 0) return;
-        if (clearFirst) MiddleLayerService.NewWorkspace();
-        foreach (var p in valid) MiddleLayerService.AddFolderLocation(p);
-        await OpenWithOptionalStreamingAsync(valid.Count == 1 ? "Opening file..." : $"Opening {valid.Count} files...");
-    }
+        var rules = new System.Collections.Generic.List<string>();
+        if (rulePaths != null)
+            foreach (var r in rulePaths)
+                if (!string.IsNullOrWhiteSpace(r) && System.IO.File.Exists(r)) rules.Add(r);
+        if (valid.Count == 0 && cachedDbPath == null) return false;
 
-    /// <summary>Decide what a drop does when a workspace is already loaded: clear-and-open, add-to-existing,
-    /// or ask — per the user's "drag and drop" setting (default: prompt). Empty workspace always just opens.</summary>
-    private async System.Threading.Tasks.Task HandleDroppedPathsAsync(
-        System.Collections.Generic.IReadOnlyList<string> paths)
-    {
-        if (MiddleLayerService.Locations.Count == 0) { await LoadPathsAsync(paths, clearFirst: true); return; }
-
-        var mode = ResultsViewerSettings.DragDropMode;
-        if (mode == DragDropMode.Prompt)
+        var decided = WorkspaceOpenPolicy.Decide(MiddleLayerService.IsWorkspaceEmpty, ResultsViewerSettings.OpenIntoWorkspace);
+        if (decided == OpenIntoWorkspaceMode.Ask)
         {
-            var choice = await PromptDropChoiceAsync(paths.Count);
-            if (choice == null) return; // cancelled
-            mode = choice.Value;
+            // What the dialog calls the thing being opened: the caller's name (a Recent search whose source
+            // may be gone), else the file/folder name, else "N items".
+            string what = displayName;
+            if (string.IsNullOrWhiteSpace(what))
+                what = valid.Count == 1 ? System.IO.Path.GetFileName(valid[0].TrimEnd('\\', '/')) : $"{valid.Count} items";
+            if (string.IsNullOrWhiteSpace(what)) what = cachedDbPath != null ? "these results" : "it";
+            var choice = await PromptOpenChoiceAsync(what);
+            if (choice == null) return false; // cancelled — nothing touched
+            decided = choice.Value;
         }
-        await LoadPathsAsync(paths, clearFirst: mode == DragDropMode.ClearAndAdd);
+        Logger.Instance.Log($"Open into workspace: {decided} ({valid.Count} path(s), {rules.Count} rule file(s)"
+            + (cachedDbPath != null ? ", cached" : "") + ")");
+        MiddleLayerService.OpenIntoWorkspace(decided, valid, rules);
+
+        if (cachedDbPath != null)
+        {
+            // Recent search: show the cached results as they are — no rescan.
+            MiddleLayerService.OpenCachedResult(cachedDbPath);
+            await OpenViewerAsync();
+            return true;
+        }
+        label ??= valid.Count == 1 ? "Opening file..." : $"Opening {valid.Count} files...";
+        await OpenWithOptionalStreamingAsync(label);
+        return true;
     }
 
-    private async System.Threading.Tasks.Task<DragDropMode?> PromptDropChoiceAsync(int count)
+    /// <summary>The "Ask each time" dialog: Add to workspace / Replace workspace / Cancel. Guarded against
+    /// re-entrancy (a second open while the dialog is up is treated as cancelled). A dialog failure also
+    /// counts as Cancel — the workspace is never discarded without an explicit answer.</summary>
+    private async Task<OpenIntoWorkspaceMode?> PromptOpenChoiceAsync(string what)
     {
+        if (_openChoiceDialogOpen) return null;
+        _openChoiceDialogOpen = true;
         try
         {
+            int sources = 0, ruleFiles = 0;
+            try { sources = MiddleLayerService.Locations?.Count ?? 0; } catch { }
+            try { ruleFiles = MiddleLayerService.UserRulePaths.Count; } catch { }
             var dlg = new ContentDialog
             {
-                Title = count == 1 ? "Open dropped file" : $"Open {count} dropped files",
-                Content = "A workspace is already loaded. Add the file(s) to it, or clear it and open fresh?",
+                Title = "Open into the current workspace?",
+                Content = $"The workspace \"{MiddleLayerService.WorkspaceDisplayName}\" has {sources} source{(sources == 1 ? "" : "s")}"
+                        + $" and {ruleFiles} rule file{(ruleFiles == 1 ? "" : "s")}.\n\n"
+                        + $"Add {what} to it, or replace it with just {what}?",
                 PrimaryButtonText = "Add to workspace",
-                SecondaryButtonText = "Clear & open",
+                SecondaryButtonText = "Replace workspace",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = this.Content.XamlRoot,
             };
             return await dlg.ShowAsync() switch
             {
-                ContentDialogResult.Primary => DragDropMode.AddToExisting,
-                ContentDialogResult.Secondary => DragDropMode.ClearAndAdd,
-                _ => (DragDropMode?)null,
+                ContentDialogResult.Primary => OpenIntoWorkspaceMode.Add,
+                ContentDialogResult.Secondary => OpenIntoWorkspaceMode.Replace,
+                _ => (OpenIntoWorkspaceMode?)null,
             };
         }
-        catch { return DragDropMode.ClearAndAdd; } // dialog failed → safe default
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"Open-choice dialog failed: {ex.Message}");
+            return null;
+        }
+        finally { _openChoiceDialogOpen = false; }
     }
 
     // ----- CSV column remapping -----
@@ -1805,18 +2106,46 @@ public sealed partial class MainWindow : Window
 
             if (ResultsViewerSettings.StreamWhileLoading)
             {
-                ShowSpinner(true, label);
                 var handle = MiddleLayerService.RunSearchStreaming();
+                // The wait for the first rows is the long part of a big .etl open (the whole decode can
+                // run before a row lands), so it must be cancellable like the non-streaming run: the
+                // spinner's Cancel, Run ▸ Stop, Esc and the status-bar Stop all end in StopSearch().
+                ShowSpinner(true, label, showCancel: true);
+                RefreshStatusStrip(); // IsSearchRunning is now true → enables Run ▸ Stop (+ Esc) and the status-bar Stop
+                // When the streaming search ends (done, faulted or stopped) put the Stop controls back.
+                _ = handle.SearchTask.ContinueWith(_ => DispatcherQueue.TryEnqueue(RefreshStatusStrip));
                 await WaitForFirstRowsAsync(handle);
                 ShowSpinner(false);
+                // Stopped before anything arrived: there is nothing to show, so stay on the current page
+                // rather than opening an empty viewer.
+                if (handle.Cancellation.IsCancellationRequested && (handle.Source?.TotalCount ?? 0) == 0) return;
                 await OpenViewerAsync();
             }
             else
             {
                 ShowSpinner(true, label, showCancel: true);
-                await RunSearchWithProgress();
+                bool completed = await RunSearchWithProgress();
                 ShowSpinner(false);
+                if (!completed) return; // cancelled: nothing to show
                 await OpenViewerAsync();
+            }
+        }
+        catch (OperationCanceledException) { ShowSpinner(false); }
+        catch (Exception ex)
+        {
+            // BACKSTOP. Every caller of this method is an async
+            // void handler (RunAndViewResults, the open paths, drag-drop), so an escaping exception is
+            // reposted to the UI thread and the rethrow trips a WinUI failfast that
+            // App.UnhandledException cannot intercept — the window disappears with nothing logged.
+            // A failed run must end as a message.
+            ShowSpinner(false);
+            var reason = ex is AggregateException { InnerException: { } inner } ? inner : ex;
+            Logger.Instance.Log($"Run failed: {reason.GetType().Name}: {reason.Message}\n{ex}");
+            if (RunFailedBar != null)
+            {
+                RunFailedBar.Message = reason.Message;
+                RunFailedBar.Visibility = Visibility.Visible;
+                RunFailedBar.IsOpen = true;
             }
         }
         finally { MiddleLayerService.PendingScopeRulePath = null; } // don't carry the scope to the next open
@@ -2096,7 +2425,10 @@ public sealed partial class MainWindow : Window
     private async void SaveCommand()
     {
         var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var path = Win32FileDialog.SaveFile(hWnd, "SearchQuery",
+        // Default the file name to the workspace's name so a rename carries through to the save, instead
+        // of everything landing as "SearchQuery.json" and the name being silently replaced on save.
+        var suggested = SanitizeFileName(MiddleLayerService.WorkspaceName) ?? "SearchQuery";
+        var path = Win32FileDialog.SaveFile(hWnd, suggested,
             new (string, string)[] { ("Workspace JSON", "*.json") }, ".json");
         if (path == null) return;
         try
@@ -2229,15 +2561,17 @@ public sealed partial class MainWindow : Window
 
     private void CancelQuickActionButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_quickActionCts != null && !_quickActionCts.IsCancellationRequested)
-        {
-            // Cancellation only takes effect at the next checkpoint in the worker, which can be a
-            // moment away — give immediate visual confirmation that the click registered.
-            CancelQuickActionButton.IsEnabled = false;
-            CancelQuickActionButton.Content = "Cancelling…";
-            SpinnerText.Text = "Cancelling…";
-            _quickActionCts.Cancel();
-        }
+        // The spinner fronts either a progress-mode run (_quickActionCts) or a streaming run waiting for
+        // its first rows (CurrentStreamingSearch) — cancel whichever is live.
+        bool live = (_quickActionCts != null && !_quickActionCts.IsCancellationRequested)
+                 || (MiddleLayerService.CurrentStreamingSearch is { } h && !h.Cancellation.IsCancellationRequested);
+        if (!live) return;
+        // Cancellation only takes effect at the next checkpoint in the worker, which can be a
+        // moment away — give immediate visual confirmation that the click registered.
+        CancelQuickActionButton.IsEnabled = false;
+        CancelQuickActionButton.Content = "Cancelling…";
+        SpinnerText.Text = "Cancelling…";
+        StopSearch();
     }
 }
 

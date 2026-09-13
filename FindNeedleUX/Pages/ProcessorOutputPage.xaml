@@ -5,8 +5,9 @@
     xmlns:local="using:FindNeedleUX.Pages"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
-    <Grid Margin="16" RowSpacing="12">
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -20,13 +21,13 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" x:Name="ToggleListButton" Click="ToggleList_Click"
-                    VerticalAlignment="Top" Padding="8" Background="Transparent" BorderThickness="0"
+                    VerticalAlignment="Top" Width="32" Height="32" Padding="0" Margin="0,0,0,0" Background="Transparent" BorderThickness="0"
                     ToolTipService.ToolTip="Show/hide the list">
                 <FontIcon x:Name="ToggleListIcon" Glyph="&#xE700;" FontSize="16" />
             </Button>
-            <StackPanel Grid.Column="1" Spacing="2">
-                <TextBlock Text="Processor Output" FontSize="26" FontWeight="SemiBold" />
-                <TextBlock x:Name="SummaryText" FontSize="13" Foreground="Gray" TextWrapping="Wrap" />
+            <StackPanel Grid.Column="1" Spacing="4">
+                <TextBlock x:Name="PageHeading" Text="Outputs" Style="{StaticResource PageHeading}"/>
+                <TextBlock x:Name="SummaryText" Style="{StaticResource PageSubtitle}"/>
             </StackPanel>
             <StackPanel Grid.Column="2" VerticalAlignment="Top" HorizontalAlignment="Right" Spacing="4" MaxWidth="280">
                 <Button x:Name="GenerateButton" Click="Generate_Click" HorizontalAlignment="Right"
@@ -65,7 +66,7 @@
 
             <Border x:Name="ListBorder" Grid.Column="0"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8"
+                    BorderThickness="1" CornerRadius="4"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <ListView x:Name="OutputList"
                           SelectionMode="Single"
@@ -75,7 +76,7 @@
 
             <Border Grid.Column="1"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8"
+                    BorderThickness="1" CornerRadius="4"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <Grid x:Name="DetailHost" Padding="16" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" />
             </Border>
@@ -103,7 +104,7 @@
                 </Button>
             </Grid>
             <Border Grid.Row="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8">
+                    BorderThickness="1" CornerRadius="4">
                 <Grid x:Name="FullscreenHost" />
             </Border>
         </Grid>

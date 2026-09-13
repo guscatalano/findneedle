@@ -93,6 +93,20 @@ public class MiddleLayerService
     public static string WorkspaceDisplayName
         => string.IsNullOrWhiteSpace(WorkspaceName) ? "Untitled workspace" : WorkspaceName;
 
+    /// <summary>
+    /// Name the current workspace without saving it. Until this existed the name was derived ONLY from the
+    /// file name on save/open, so an unsaved workspace was permanently "Untitled workspace" with no way to
+    /// call it anything. Blank clears it back to untitled. Saving later still takes the name from the file
+    /// chosen in the save dialog (which now defaults to this name).
+    /// </summary>
+    public static void RenameWorkspace(string name)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        if (string.Equals(trimmed, WorkspaceName, StringComparison.Ordinal)) return;
+        WorkspaceName = trimmed;
+        NotifyStateChanged();
+    }
+
     public static void AddFolderLocation(string location)
     {
         // Don't add the same folder/file twice — repeated adds (e.g. an agent calling add_folder per run)
@@ -122,6 +136,78 @@ public class MiddleLayerService
         NotifyStateChanged();
     }
 
+    /// <summary>True when there is nothing a user could lose: no sources and no rule files (a loaded
+    /// workspace's rules, or rules added to the current query). <see cref="WorkspaceOpenPolicy"/> never
+    /// prompts for an empty workspace.</summary>
+    public static bool IsWorkspaceEmpty
+    {
+        get
+        {
+            if ((Locations?.Count ?? 0) > 0) return false;
+            if ((WorkspaceRulePaths?.Count ?? 0) > 0) return false;
+            try
+            {
+                // Peek at the existing query only — never force the lazy plugin load for this read.
+                var rules = SearchQueryUX?.IsLoaded == true ? SearchQueryUX.CurrentQuery?.RulesConfigPaths : null;
+                if (rules != null && rules.Count > 0) return false;
+            }
+            catch { /* treat as empty */ }
+            return true;
+        }
+    }
+
+    /// <summary>The rule files the user chose (as opposed to auto-added ones): the durable
+    /// <see cref="WorkspaceRulePaths"/> plus the query's rule paths minus <see cref="LastAutoAddedRules"/>.</summary>
+    public static List<string> UserRulePaths
+    {
+        get
+        {
+            var result = new List<string>();
+            void AddUnique(string p)
+            {
+                if (!string.IsNullOrWhiteSpace(p) && !result.Any(x => string.Equals(x, p, StringComparison.OrdinalIgnoreCase)))
+                    result.Add(p);
+            }
+            foreach (var p in WorkspaceRulePaths ?? new List<string>()) AddUnique(p);
+            try
+            {
+                var rules = SearchQueryUX?.IsLoaded == true ? SearchQueryUX.CurrentQuery?.RulesConfigPaths : null;
+                if (rules != null)
+                    foreach (var p in rules)
+                        if (!LastAutoAddedRules.Any(a => string.Equals(a, p, StringComparison.OrdinalIgnoreCase))
+                            && !string.Equals(p, PendingScopeRulePath, StringComparison.OrdinalIgnoreCase))
+                            AddUnique(p);
+            }
+            catch { /* best effort */ }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Apply an already-decided open (see <see cref="WorkspaceOpenPolicy.Decide"/>): Replace starts a fresh
+    /// workspace first, Add keeps everything; then the paths become sources and the rule files become
+    /// durable workspace rules (they survive every query rebuild). Ask must be resolved by the caller
+    /// before calling this — it is treated as Add here so nothing is ever discarded by accident.
+    /// This is the ONE place every open path (pickers, Open with rules, Recent searches, Known logs,
+    /// drag-and-drop, file activation) adds to the workspace.
+    /// </summary>
+    public static void OpenIntoWorkspace(OpenIntoWorkspaceMode decided, IEnumerable<string> paths, IEnumerable<string>? rulePaths = null)
+    {
+        if (decided == OpenIntoWorkspaceMode.Replace) NewWorkspace();
+        foreach (var p in paths ?? Enumerable.Empty<string>())
+            if (!string.IsNullOrWhiteSpace(p)) AddFolderLocation(p); // handles a single file or a folder
+        if (rulePaths != null)
+        {
+            foreach (var r in rulePaths)
+            {
+                if (string.IsNullOrWhiteSpace(r)) continue;
+                if (!WorkspaceRulePaths.Any(x => string.Equals(x, r, StringComparison.OrdinalIgnoreCase)))
+                    WorkspaceRulePaths.Add(r);
+            }
+        }
+        NotifyStateChanged();
+    }
+
     /// <summary>Remove all loaded locations + filters and cancel any in-flight search, so the workspace
     /// starts fresh. Surfaced as the "Clear workspace" button and the MCP clear_workspace tool.</summary>
     public static void ClearWorkspace()
@@ -134,6 +220,8 @@ public class MiddleLayerService
         ViewerQuickRulesStore.Clear(); // session right-click rules don't outlive the workspace
         OutputTimeFrom = OutputTimeTo = null;
         LastRunSummary = null;
+        LastRunWasCancelled = false;
+        LastRunCompletedAt = null;
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
         // Drop the previous run's rule-output state so the Processor Output page clears too.
         LastRuleOutputFiles.Clear();
@@ -197,13 +285,21 @@ public class MiddleLayerService
     /// <summary>Human-readable summary of the most recent search (row count + cache/scanned), set on
     /// every search path so the main window status strip's "Last run" is accurate. Null until a run.</summary>
     public static string? LastRunSummary { get; private set; }
+    /// <summary>True when the most recent run (progress or streaming) was stopped by the user before it
+    /// finished. The engine completes a cancelled scan normally with whatever it had, so without this
+    /// flag a stopped run is indistinguishable from an empty file.</summary>
+    public static bool LastRunWasCancelled { get; private set; }
 
-    /// <summary>The RuleDSL processor instances applied in the most recent search. The "Active rules"
-    /// page reads their per-run stats (matched count + tag counts) after the search completes.</summary>
+    /// <summary>Local time the most recent search finished (null until a run; cleared with the workspace).
+    /// The Home page's "Last run 2 minutes ago · N rows" line reads it.</summary>
+    public static DateTime? LastRunCompletedAt { get; private set; }
+
+    /// <summary>The RuleDSL processor instances applied in the most recent search. The viewer's
+    /// Sources dialog reads their per-run stats (matched count + tag counts) after the search completes.</summary>
     public static List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin> LastRuleProcessors { get; private set; } = new();
 
     /// <summary>Per-rule cost of in-scan field-extraction enrichment from the most recent fresh scan
-    /// (rule name → matches + ms). The Active rules page shows these so enrichment rules report real
+    /// (rule name → matches + ms). The viewer's Sources dialog shows these so enrichment rules report real
     /// match counts (not 0) and the user can see/disable a slow rule. Empty after a warm cache reuse.</summary>
     public static IReadOnlyList<FindPluginCore.Searching.NuSearchQuery.EnrichmentRuleStat> LastEnrichmentRuleStats { get; private set; }
         = new List<FindPluginCore.Searching.NuSearchQuery.EnrichmentRuleStat>();
@@ -439,7 +535,7 @@ public class MiddleLayerService
             }
 
             // Add RuleDSL processors for each rules config file. Keep references to the instances so the
-            // "Active rules" page can read their per-run stats (matched count + tag counts) after search.
+            // viewer's Sources dialog can read their per-run stats (matched count + tag counts) after search.
             LastRuleProcessors = new List<FindNeedleRuleDSL.FindNeedleRuleDSLPlugin>();
             if (query.RulesConfigPaths != null && query.RulesConfigPaths.Count > 0)
             {
@@ -890,11 +986,11 @@ public class MiddleLayerService
 
     public static Task<string> RunSearch(bool surfacescan = false, CancellationToken cancellationToken = default)
     {
-        // If a streaming search is in flight, its background task is still writing to a storage
-        // we're about to replace + dispose. Stop it first so the next UpdateSearchQuery call's
-        // storage cleanup doesn't yank the storage out from under a live writer.
-        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
-        CurrentStreamingSearch = null;
+        // If a streaming search is in flight, its background task is still writing to a storage we're
+        // about to replace + dispose. Stop it AND WAIT: this used to only signal cancellation and carry
+        // on, which is precisely the "yank the storage out from under a live writer" the comment warned
+        // about, since cancellation of an ETL decode is not immediate.
+        StopCurrentStreamingSearchAndWait();
         ClearOverrideStorage(); // a real search supersedes any cache being viewed
         LastStats = null;        // drop the previous file's decode/stats so its warning banner clears
         // Stop any background index build from a previous search before we wipe/replace storage.
@@ -915,6 +1011,7 @@ public class MiddleLayerService
                 query.SetDepthForAllLocations(SearchLocationDepth.Intermediate);
             }
         }
+        LastRunWasCancelled = false;
         if (cancellationToken != default)
         {
             SearchResults = SearchQueryUX.GetSearchResults(cancellationToken);
@@ -943,9 +1040,15 @@ public class MiddleLayerService
         try
         {
             var count = GetFilteredRowCount();
-            LastRunSummary = $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (cached)" : " (scanned)")}";
+            // A cancelled scan completes normally with whatever it had; say so instead of "0 results
+            // (scanned)", which reads as "the file was empty".
+            LastRunWasCancelled = cancellationToken.IsCancellationRequested;
+            LastRunSummary = LastRunWasCancelled
+                ? $"cancelled ({count:N0} row{(count == 1 ? "" : "s")} kept)"
+                : $"{count:N0} result{(count == 1 ? "" : "s")}{(LastSearchReusedCache ? " (from cache)" : " (scanned)")}";
         }
         catch { LastRunSummary = "done"; }
+        LastRunCompletedAt = DateTime.Now;
 
         // Background mode: Step2 skipped the FTS build so the viewer opens now; kick the batched
         // build off in the background (paging interleaves; substring search uses LIKE until ready).
@@ -1086,7 +1189,7 @@ public class MiddleLayerService
         try
         {
             // Per-rule enrichment cost from this scan (empty after a cache reuse). Captured before the
-            // early-return so the Active rules page can show real matches + ms.
+            // early-return so the viewer's Sources dialog can show real matches + ms.
             try { if (nu != null) LastEnrichmentRuleStats = nu.EnrichmentRuleStats; }
             catch { /* best-effort */ }
 
@@ -1349,6 +1452,7 @@ public class MiddleLayerService
         _workspaceCleared = false; // viewing a cache is a fresh result set
         OpenCacheDbPath = dbPath;
         LastStats = null; // the cache has no live SearchStatistics
+        LastRunWasCancelled = false; // a cached result is complete by definition
         NotifyStateChanged();
     }
 
@@ -1380,6 +1484,50 @@ public class MiddleLayerService
     /// </summary>
     public static StreamingSearchHandle? CurrentStreamingSearch { get; private set; }
 
+    /// <summary>How long to wait for a cancelled streaming search to unwind before giving up on it.
+    /// Long enough for a decode to reach its next cancellation check, short enough that a wedged search
+    /// cannot freeze the caller. Exposed for tests.</summary>
+    internal static int StopWaitMs = 15_000;
+
+    /// <summary>
+    /// Cancel the in-flight streaming search and wait, bounded, for its task to finish. Callers that are
+    /// about to replace or dispose the search's storage MUST use this rather than a bare Stop(): the
+    /// search task writes batches into that storage right up until it unwinds.
+    /// Returns true if it stopped, false if it outlived the wait (then it is left cancelled and orphaned —
+    /// worse than clean, better than deadlocking the UI).
+    /// </summary>
+    private static bool StopCurrentStreamingSearchAndWait()
+    {
+        var handle = CurrentStreamingSearch;
+        if (handle == null) return true;
+        try { handle.Stop(); } catch { /* already disposed */ }
+        try
+        {
+            // Wait() rethrows as AggregateException; a cancelled search is the EXPECTED outcome here.
+            if (!handle.SearchTask.Wait(StopWaitMs))
+            {
+                Logger.Instance.Log(
+                    $"Previous streaming search did not stop within {StopWaitMs}ms; continuing and leaving it orphaned.");
+                return false;
+            }
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is OperationCanceledException))
+        {
+            // Normal: that is what cancelling looks like.
+        }
+        catch (Exception ex)
+        {
+            // The previous search failed on its way out. It is finished, which is all we needed; record
+            // why rather than letting it disappear (this task is otherwise unobserved).
+            Logger.Instance.Log($"Previous streaming search ended with an error: {ex.GetBaseException().Message}");
+        }
+        finally
+        {
+            CurrentStreamingSearch = null;
+        }
+        return true;
+    }
+
     /// <summary>
     /// Streaming variant of <see cref="RunSearch"/>. Forces SQLite storage (only backend that's
     /// safe under concurrent read+write), constructs the storage on this thread, hands the
@@ -1389,10 +1537,17 @@ public class MiddleLayerService
     /// </summary>
     public static StreamingSearchHandle RunSearchStreaming(bool surfaceScan = false)
     {
-        // Cancel any in-flight streaming search before starting a new one. Without this, the
-        // previous search's background task would keep producing into an orphaned SqliteStorage,
-        // wasting CPU + disk and racing with the new search for the result handle.
-        try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
+        // Cancel any in-flight streaming search AND WAIT FOR IT TO ACTUALLY STOP. Cancelling alone was
+        // not enough: UpdateSearchQuery() below disposes the old query's storage while the previous
+        // search's background task is still inside Step2 writing batches into that same SqliteStorage.
+        // Disposing it under a live writer faults the search thread, and nothing observes that task, so
+        // the load just silently vanished. ETL decode only checks cancellation between phases, so on a
+        // multi-GB capture the gap between Cancel() and "actually stopped" is minutes, not milliseconds.
+        StopCurrentStreamingSearchAndWait();
+        // Stop any background FTS build from the previous search before storage is replaced. RunSearch
+        // has always done this; the streaming path did not, so the build kept writing to storage that was
+        // about to be disposed and its cancellation handle was overwritten, making it unstoppable.
+        CancelBackgroundIndexBuild();
         ClearOverrideStorage(); // a real search supersedes any cache being viewed
         LastStats = null;        // drop the previous file's decode/stats so its warning banner clears
 
@@ -1409,12 +1564,14 @@ public class MiddleLayerService
         var cts = new CancellationTokenSource();
         var storage = (SqliteStorage)nu.PrepareStorage(cts.Token);
         var source = PagedLogSourceFactory.CreateStreaming(storage);
+        LastRunWasCancelled = false;
 
         var task = Task.Run(() =>
         {
             try
             {
                 SearchResults = SearchQueryUX.GetSearchResults(cts.Token);
+                LastRunWasCancelled = cts.IsCancellationRequested; // stopped early: the rows so far are kept
                 CaptureStats(nu, storage); // decode done now → per-file decode info + counts are complete
                 NotifyStateChanged();
 

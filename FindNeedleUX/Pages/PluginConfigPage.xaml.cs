@@ -23,6 +23,7 @@ public sealed partial class PluginConfigPage : Page
     public PluginConfigPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => LoadPluginConfig();
     }
 

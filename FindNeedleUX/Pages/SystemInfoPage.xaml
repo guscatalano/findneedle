@@ -9,19 +9,19 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <ScrollViewer Padding="24">
-        <StackPanel MaxWidth="720" Spacing="8">
-            <TextBlock Text="System Check" FontSize="22" FontWeight="SemiBold"/>
-            <TextBlock Text="Environment and the external tools FindNeedle relies on. ✓ ready · ✗ missing · • info"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource PagePadding}" MaxWidth="1000" HorizontalAlignment="Left" Spacing="12">
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="PageHeading" Text="System check" Style="{StaticResource PageHeading}"/>
+                <TextBlock Text="Environment and the external tools FindNeedle relies on. ✓ ready · ✗ missing · • info"
+                           Style="{StaticResource PageSubtitle}"/>
+            </StackPanel>
 
-            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="8">
+            <Border Style="{StaticResource PageCard}" Padding="8">
                 <StackPanel x:Name="HealthList" Spacing="2"/>
             </Border>
 
-            <Button x:Name="RefreshButton" Content="Re-check" Click="Refresh_Click" Margin="0,8,0,0"/>
+            <Button x:Name="RefreshButton" Content="Re-check" Click="Refresh_Click"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

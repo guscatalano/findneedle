@@ -91,6 +91,26 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 
     private readonly object _knownProcessorsLock = new();
 
+    private readonly object _skippedLock = new();
+
+    /// <summary>
+    /// Files this load could not read, and why (see the try/catch in <see cref="ProcessFile"/>). Kept so a
+    /// folder of protected logs can report "N files skipped" instead of silently producing fewer rows —
+    /// opening C:\Windows\System32\winevt\Logs without elevation skips nearly every .evtx.
+    /// </summary>
+    public IReadOnlyList<(string File, string Reason)> SkippedFiles
+    {
+        get { lock (_skippedLock) return _skippedFiles.ToList(); }
+    }
+
+    private readonly List<(string File, string Reason)> _skippedFiles = new();
+
+    private void RecordSkippedFile(string file, string reason, Exception ex)
+    {
+        lock (_skippedLock) _skippedFiles.Add((file, reason));
+        Logger.Instance.Log($"Skipping '{Path.GetFileName(file)}': {reason} [{ex.GetType().Name}]");
+    }
+
     public void SetExtensionProcessorList(List<IFileExtensionProcessor> processors)
     {
 
@@ -135,6 +155,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         // Fresh load — drop any per-file instances from a previous LoadInMemory so re-loads don't
         // accumulate (which would double-count rows).
         lock (_knownProcessorsLock) { knownProcessors.Clear(); }
+        lock (_skippedLock) { _skippedFiles.Clear(); } // a re-load re-reads every file; don't carry stale skips
         procStats = new ReportFromComponent()
         {
             component = this.GetType().Name,
@@ -335,20 +356,46 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 if (_progressSink != null && processor is IReportProgress reportable)
                     reportable.SetProgressSink(_progressSink);
 
-                Logger.Instance.Log($"Opening file {file} with processor {processor.GetType().Name}");
-                processor.OpenFile(file);
-                if (cancellationToken.IsCancellationRequested) return;
-                if (processor.CheckFileFormat())
+                // ONE BAD FILE MUST NOT KILL THE WHOLE LOAD. These calls open and parse a real file, so
+                // they can throw for reasons that say nothing about the other files in the folder: no
+                // permission (C:\Windows\System32\winevt\Logs needs elevation for Security.evtx and
+                // friends), a lock held by another process, a truncated or corrupt log, a bad path.
+                //
+                // ProcessFile runs inside a Task per file and Step2 blocks on those tasks, so an escape
+                // here surfaced as an AggregateException on the search task. Nothing on the UI path
+                // caught it: it reached an async void handler, .NET reposted it to the dispatcher, and
+                // the rethrow tripped a WinUI failfast (0xC000027B) that App.UnhandledException cannot
+                // intercept — the app vanished with nothing in the log. Opening Known logs ▸ Windows
+                // Event Logs unelevated hit this every time.
+                //
+                // Skip the file, say so in the log, and keep going — the same thing this file already
+                // does for loggers extracted from a dump. Cancellation still propagates.
+                try
                 {
-                    Logger.Instance.Log($"File format valid for {file}, running DoPreProcessing and LoadInMemory");
-                    processor.DoPreProcessing(cancellationToken);
+                    Logger.Instance.Log($"Opening file {file} with processor {processor.GetType().Name}");
+                    processor.OpenFile(file);
                     if (cancellationToken.IsCancellationRequested) return;
-                    processor.LoadInMemory(cancellationToken);
-                    lock (_knownProcessorsLock) { knownProcessors.Add(processor); }
+                    if (processor.CheckFileFormat())
+                    {
+                        Logger.Instance.Log($"File format valid for {file}, running DoPreProcessing and LoadInMemory");
+                        processor.DoPreProcessing(cancellationToken);
+                        if (cancellationToken.IsCancellationRequested) return;
+                        processor.LoadInMemory(cancellationToken);
+                        lock (_knownProcessorsLock) { knownProcessors.Add(processor); }
+                    }
+                    else
+                    {
+                        Logger.Instance.Log($"File format invalid for {file} with processor {processor.GetType().Name}");
+                    }
                 }
-                else
+                catch (OperationCanceledException) { throw; } // the user stopped the search — not a file fault
+                catch (UnauthorizedAccessException ex)
                 {
-                    Logger.Instance.Log($"File format invalid for {file} with processor {processor.GetType().Name}");
+                    RecordSkippedFile(file, "no permission to read it (try running as administrator)", ex);
+                }
+                catch (Exception ex)
+                {
+                    RecordSkippedFile(file, ex.Message, ex);
                 }
             }
         }
@@ -515,19 +562,34 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         foreach (var processor in processors)
         {
             if (cancellationToken.IsCancellationRequested) break;
-            await processor.GetResultsWithCallback(results =>
+            // Same rule as ProcessFile: one file that cannot be read must not abort the whole scan.
+            // This is the SECOND place a protected .evtx threw from — reading rows, not opening the
+            // file — so fixing only the load path left the crash in place on a re-run.
+            try
             {
-                if (cancellationToken.IsCancellationRequested) return;
-                foreach (var result in results)
+                await processor.GetResultsWithCallback(results =>
                 {
-                    batch.Add(result);
-                    if (batch.Count == batchSize)
+                    if (cancellationToken.IsCancellationRequested) return;
+                    foreach (var result in results)
                     {
-                        onBatch(batch);
-                        batch = new List<ISearchResult>(batchSize);
+                        batch.Add(result);
+                        if (batch.Count == batchSize)
+                        {
+                            onBatch(batch);
+                            batch = new List<ISearchResult>(batchSize);
+                        }
                     }
-                }
-            }, cancellationToken, batchSize);
+                }, cancellationToken, batchSize);
+            }
+            catch (OperationCanceledException) { throw; } // the user stopped the search — not a file fault
+            catch (UnauthorizedAccessException ex)
+            {
+                RecordSkippedFile(processor.GetFileName(), "no permission to read it (try running as administrator)", ex);
+            }
+            catch (Exception ex)
+            {
+                RecordSkippedFile(processor.GetFileName(), ex.Message, ex);
+            }
         }
         if (batch.Count > 0)
         {

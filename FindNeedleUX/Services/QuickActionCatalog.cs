@@ -1,45 +1,43 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace FindNeedleUX.Services;
 
-/// <summary>One customizable welcome-page quick action: a stable id, a display label, and an emoji.
+/// <summary>One customizable Home "Tools" tile: a stable id, a display label, and an emoji.
 /// The id maps to <see cref="MainWindow.RunQuickAction"/>.</summary>
 public sealed record QuickAction(string Id, string Label, string Emoji);
 
 /// <summary>
-/// The catalog of available welcome-page quick actions plus the user's chosen subset/order.
+/// The catalog of available Home "Tools" tiles plus the user's chosen subset/order. The tiles are
+/// purely "jump to a tool": anything that already has a button in the Home cards (open a file / folder /
+/// with rules, Known logs, Recent searches, Run search, Open results) is deliberately NOT in this catalog,
+/// so the row never repeats the cards above it. Ids that used to be here are still accepted by
+/// <see cref="MainWindow.RunQuickAction"/> (the palette and MCP use them); they are just not pinnable.
 /// Persisted to a JSON file under <c>%LocalAppData%\FindNeedle\</c> (not WinRT LocalSettings, which
 /// throws when the app runs unpackaged) so customization actually sticks. A storage seam lets tests
 /// redirect persistence to a temp file.
 /// </summary>
 public static class QuickActionCatalog
 {
-    /// <summary>Every action a user can pin to the welcome page.</summary>
+    /// <summary>Every tool a user can pin to the Home Tools row. Ids are stable (persisted).</summary>
     public static readonly IReadOnlyList<QuickAction> All = new[]
     {
-        new QuickAction("open_file",        "Open Log File",       "📁"),
-        new QuickAction("open_folder",      "Open Folder",         "📂"),
-        new QuickAction("open_rules",       "Open Log with Rules", "📝"),
-        new QuickAction("log_finder",       "Log Finder",          "🧭"),
-        new QuickAction("open_ado",         "Open ADO Work Item",  "🔷"),
-        new QuickAction("open_github",      "Open GitHub Issue",   "🐙"),
-        new QuickAction("open_kusto",       "Open Kusto Query",    "🔎"),
-        new QuickAction("cached",           "Cached Searches",     "🕑"),
-        new QuickAction("locations",        "Configure Locations", "📍"),
-        new QuickAction("rules_config",     "Configure Rules",     "⚙️"),
-        new QuickAction("auto_rules",       "Auto-add Rules",      "✨"),
-        new QuickAction("run_search",       "Run Search",          "▶️"),
-        new QuickAction("results",          "View Results",        "📊"),
-        new QuickAction("processor_output", "Processor Output",    "🖼️"),
-        new QuickAction("diagram",          "Diagram Tools",       "📈"),
+        new QuickAction("locations",        "Sources",             "📍"),
+        new QuickAction("rules_config",     "Rule files",          "⚙️"),
+        new QuickAction("auto_rules",       "Auto rules",          "✨"),
         new QuickAction("inspect_etl",      "Inspect ETL",         "🔬"),
+        new QuickAction("diagram",          "Diagram tools",       "📈"),
+        new QuickAction("processor_output", "Outputs",             "🖼️"),
+        new QuickAction("open_ado",         "Open ADO work item",  "🔷"),
+        new QuickAction("open_github",      "Open GitHub issue",   "🐙"),
+        new QuickAction("open_kusto",       "Open Kusto query",    "🔎"),
     };
 
-    /// <summary>The default set shown until the user customizes.</summary>
-    public static readonly IReadOnlyList<string> Defaults = new[] { "open_file", "open_folder", "open_rules", "cached" };
+    /// <summary>The default set shown until the user customizes: the tools you reach for once a log is
+    /// loaded. (A stored selection that only names retired ids falls back to this.)</summary>
+    public static readonly IReadOnlyList<string> Defaults = new[] { "locations", "rules_config", "inspect_etl", "diagram", "processor_output" };
 
     private static readonly string DefaultPath = Path.Combine(
         FindNeedleCoreUtils.PackagedAppPaths.LocalAppData,
@@ -77,8 +75,8 @@ public static class QuickActionCatalog
         Changed?.Invoke();
     }
 
-    /// <summary>Raised after the selection changes (add/remove/reorder), so the welcome page and the
-    /// top "Quick" menu stay in sync.</summary>
+    /// <summary>Raised after the selection changes (add/remove/reorder), so anything mirroring the
+    /// welcome page's tiles can refresh.</summary>
     public static event Action Changed;
 
     /// <summary>Add an action to the end (no-op if unknown or already present). Returns the new list.</summary>

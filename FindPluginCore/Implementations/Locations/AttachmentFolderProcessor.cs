@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -109,5 +109,6 @@ public static class AttachmentFolderProcessor
         public string GetRecordId() => _inner.GetRecordId();
         public string GetProcessName() => _inner.GetProcessName();
         public string GetStructuredData() => _inner.GetStructuredData();
+        public string GetRawLevel() => _inner.GetRawLevel();
     }
 }

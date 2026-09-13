@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -116,12 +116,61 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // collapses into one (off-UI-thread) search instead of one per character.
         _searchDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _searchDebounceTimer.Tick += (_, _) => { _searchDebounceTimer.Stop(); _ = RunSearchAsync(); };
+        // Parse the box while the user types (a beat after the last key) so a malformed query is flagged
+        // before Enter - in Enter-to-search mode nothing else would say so until the search ran.
+        _queryPreviewTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+        _queryPreviewTimer.Tick += (_, _) => { _queryPreviewTimer.Stop(); PreviewQueryError(); };
+        // `tag == Important` needs the viewer's tags in both query backends.
+        FindPluginCore.Searching.Query.LogQuery.TagSnapshot = () =>
+            _rowTags.ToDictionary(kv => kv.Key, kv => (kv.Value.Name, kv.Value.Text));
     }
 
     private readonly Microsoft.UI.Xaml.DispatcherTimer _lazyIndexTimer;
     private bool _lazyPromptShown; // don't re-prompt for the >30s warning every keystroke
 
     private readonly Microsoft.UI.Xaml.DispatcherTimer _searchDebounceTimer;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer _queryPreviewTimer;
+
+    /// <summary>The AutoSuggestBox's inner TextBox (for caret placement and select-all); null until templated.</summary>
+    private TextBox SearchTextBox
+    {
+        get
+        {
+            try
+            {
+                var q = new Queue<DependencyObject>(); q.Enqueue(SearchBox);
+                while (q.Count > 0)
+                {
+                    var n = q.Dequeue();
+                    if (n is TextBox tb) return tb;
+                    int c = VisualTreeHelper.GetChildrenCount(n);
+                    for (int i = 0; i < c; i++) q.Enqueue(VisualTreeHelper.GetChild(n, i));
+                }
+            }
+            catch { }
+            return null;
+        }
+    }
+
+    private void PlaceSearchCaretAtEnd()
+    {
+        try { var tb = SearchTextBox; if (tb != null) tb.SelectionStart = (SearchBox.Text ?? "").Length; } catch { /* best-effort */ }
+    }
+
+    /// <summary>Flag a malformed structured query under the box as it is typed (cleared when it parses
+    /// or is plain text). The applied query's own error (from the view model) still wins once a search runs.</summary>
+    private void PreviewQueryError()
+    {
+        if (SearchQueryErrorText == null) return;
+        var text = SearchBox.Text ?? "";
+        if (FindPluginCore.Searching.Query.LogQuery.LooksStructured(text)
+            && !FindPluginCore.Searching.Query.LogQuery.TryParse(text, out _, out var err))
+        {
+            SearchQueryErrorText.Text = "⚠ " + err;
+            SearchQueryErrorText.Visibility = Visibility.Visible;
+        }
+        else UpdateSearchQueryError(); // back to the applied state (usually hidden)
+    }
     private System.Threading.CancellationTokenSource _searchCts; // cancels the in-flight search
 
     // ----- Adaptive search submit (live keystrokes vs Enter-to-search) -----
@@ -291,19 +340,26 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void UpdateRuleFilterToggleState()
     {
         if (RuleFilterToggle == null) return;
-        bool hasRules = (MiddleLayerService.LastRuleProcessors?.Count ?? 0) > 0;
+        int files = ActiveRuleFiles().Count;
+        bool hasRules = (MiddleLayerService.LastRuleProcessors?.Count ?? 0) > 0 && files > 0;
         RuleFilterToggle.IsEnabled = hasRules && !ViewModel.IsStreaming;
         RuleFilterToggle.IsChecked = ViewModel.RuleFilterActive;
+        // The caption says why the toggle is off when it can't be used (F4).
+        RuleFilterToggle.Content = NativeResultsPageViewModel.RuleFilterLabel(files, ViewModel.IsStreaming);
     }
+
+    /// <summary>Distinct rule files the last search applied (what the Rule filter would use).</summary>
+    private static List<string> ActiveRuleFiles() =>
+        MiddleLayerService.LastRuleProcessors?
+            .Select(p => p.RulesFilePath)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
 
     private async void RuleFilterToggle_Click(object sender, RoutedEventArgs e)
     {
         bool on = RuleFilterToggle.IsChecked == true;
-        var ruleFiles = MiddleLayerService.LastRuleProcessors?
-            .Select(p => p.RulesFilePath)
-            .Where(p => !string.IsNullOrEmpty(p))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList() ?? new System.Collections.Generic.List<string>();
+        var ruleFiles = ActiveRuleFiles();
 
         if (on && ruleFiles.Count == 0) { RuleFilterToggle.IsChecked = false; return; }
 
@@ -318,8 +374,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         finally
         {
             LoadingOverlay.Visibility = Visibility.Collapsed;
-        UpdateEmptyState();
-            RuleFilterToggle.IsEnabled = (MiddleLayerService.LastRuleProcessors?.Count ?? 0) > 0;
+            UpdateEmptyState();
+            bool wasChecked = RuleFilterToggle.IsChecked == true;
+            UpdateRuleFilterToggleState();      // re-enable + refresh the caption
+            RuleFilterToggle.IsChecked = wasChecked;
             RebindGrid();
         }
     }
@@ -368,6 +426,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (TaskNameFilterBox != null) TaskNameFilterBox.Text = "";
         if (MessageFilterBox != null) MessageFilterBox.Text = "";
         if (SourceFilterBox != null) SourceFilterBox.Text = "";
+        foreach (var box in _extraFieldBoxes.Values) box.Text = "";
         if (LevelFilterCombo != null) LevelFilterCombo.SelectedItem = null;
         ResetTimeFilterUiToAll();
     }
@@ -406,26 +465,533 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// <summary>Show a centered empty-state over the grid when a finished load has zero rows, so the user
     /// sees *why* it's blank instead of an empty grid. Distinguishes "no rows at all" (empty source /
     /// nothing decoded) from "filters hid everything" (offers Clear filters). No-op while loading.</summary>
-    // Active-filter count on the Filters toggle, so the user sees rows are being hidden even with the
-    // pane collapsed. Counts search + each per-field/level/time filter and the known-value multi-selects.
+    // ===== Active filters =====
+    // ONE source of truth for "what is narrowing this view": ActiveFilterCatalog.Build. The pane's
+    // removable pill list AND the count badge on the Filters segmented control both come from it, so
+    // the number on the toolbar can never disagree with the list in the pane (they used to be two
+    // separately hand-kept tallies, and they drifted).
+
+    /// <summary>Snapshot the filter inputs for the catalog. The time-preset chip lives only in the UI —
+    /// a preset leaves nothing behind in the view model but a From bound — so it's read from the chips
+    /// here, and only when the range still has a preset's shape (From set, To open).</summary>
+    private ActiveFilterState BuildActiveFilterState() => new()
+    {
+        Search = ViewModel.SearchText,
+        SearchIsQuery = ViewModel.SearchIsQuery, // a structured query gets named as one, not as a search term
+        Provider = ViewModel.ProviderFilter,
+        TaskName = ViewModel.TaskNameFilter,
+        Message = ViewModel.MessageFilter,
+        Source = ViewModel.SourceFilter,
+        Level = ViewModel.LevelFilter,
+        ProviderSet = ViewModel.ProviderFilterSet,
+        TaskNameSet = ViewModel.TaskNameFilterSet,
+        SourceSet = ViewModel.SourceFilterSet,
+        LevelSet = ViewModel.LevelFilterSet,
+        From = ViewModel.FromDate,
+        To = ViewModel.ToDate,
+        TimePreset = CheckedTimePresetLabel(),
+        ExtraFields = ViewModel.ExtraFieldFilters,
+        RuleFilterActive = ViewModel.RuleFilterActive,
+        RuleFileCount = ActiveRuleFiles().Count,
+        QuickRules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules
+            .Select(r => new QuickRuleView { Label = r.Label, Enabled = r.Enabled }).ToList(),
+    };
+
+    /// <summary>The checked relative-time chip ("24h"), or null when the range isn't one — "All",
+    /// no chip, or an absolute/zoomed range (which sets BOTH bounds; a preset only sets From).</summary>
+    private string CheckedTimePresetLabel()
+    {
+        if (TimePresetPanel == null || ViewModel.FromDate == null || ViewModel.ToDate != null) return null;
+        var chip = PresetChips().FirstOrDefault(c => c.IsChecked == true && !ReferenceEquals(c, TimePresetAll));
+        return chip?.Content as string;
+    }
+
+    private IReadOnlyList<ActiveFilter> BuildActiveFilters()
+        => ActiveFilterCatalog.Build(BuildActiveFilterState(), ClearActionFor);
+
+    // Active-filter badge on the Filters segmented control's label, so the user sees rows are being
+    // hidden even with the pane collapsed — now simply the length of the pill list.
     private void UpdateFiltersBadge()
     {
-        if (FiltersActiveBadge == null) return;
-        int n = 0;
-        if (!string.IsNullOrEmpty(ViewModel.SearchText)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.ProviderFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.TaskNameFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.MessageFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.SourceFilter)) n++;
-        if (!string.IsNullOrEmpty(ViewModel.LevelFilter)) n++;
-        if (ViewModel.LevelFilterSet?.Count > 0) n++;
-        if (ViewModel.FromDate != null) n++;
-        if (ViewModel.ToDate != null) n++;
-        if (ViewModel.ProviderFilterSet?.Count > 0) n++;
-        if (ViewModel.TaskNameFilterSet?.Count > 0) n++;
-        if (ViewModel.SourceFilterSet?.Count > 0) n++;
-        FiltersActiveBadgeText.Text = n.ToString();
-        FiltersActiveBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var active = BuildActiveFilters();
+        if (FiltersSegment != null) FiltersSegment.BadgeCount = active.Count;
+        RenderActiveFilters(active);
+        RenderQuickRules();
+    }
+
+    /// <summary>Redraw the pane's "Active filters" pills; hide the whole section when nothing is active.</summary>
+    private void RenderActiveFilters(IReadOnlyList<ActiveFilter> active)
+    {
+        if (ActiveFiltersHost == null || ActiveFiltersSection == null) return; // during initial parse
+        ActiveFiltersHost.Children.Clear();
+        ActiveFiltersSection.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (active.Count == 0) return;
+        if (ActiveFiltersCount != null)
+            ActiveFiltersCount.Text = active.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var f in active) ActiveFiltersHost.Children.Add(BuildFilterPill(f));
+    }
+
+    /// <summary>One pill: the constraint's label plus an X that removes exactly that constraint.</summary>
+    private UIElement BuildFilterPill(ActiveFilter f)
+    {
+        var text = new TextBlock
+        {
+            Text = f.Label,
+            FontSize = 12,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        // A shortened label must still be readable in full somewhere — a truncated boolean query is
+        // meaningless otherwise.
+        if (!string.IsNullOrEmpty(f.FullText))
+            ToolTipService.SetToolTip(text, f.FullText);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(text);
+        if (f.Clear != null)
+        {
+            var x = new Button
+            {
+                Content = "\u2715",
+                FontSize = 10,
+                Padding = new Thickness(5, 0, 5, 0),
+                MinWidth = 0,
+                MinHeight = 0,
+                Height = 20,
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            ToolTipService.SetToolTip(x, "Remove this filter");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(x, "Remove filter " + f.Label);
+            var clear = f.Clear;
+            x.Click += (_, _) => { clear(); UpdateFiltersBadge(); };
+            row.Children.Add(x);
+        }
+        return new Border
+        {
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 1, f.Clear != null ? 2 : 8, 1),
+            Child = row,
+            Tag = f.Kind + "/" + f.Key,
+        };
+    }
+
+    /// <summary>The "remove just this one" action behind each pill's X, by (kind, key).</summary>
+    private Action ClearActionFor(string kind, string key)
+    {
+        switch (kind)
+        {
+            case "search":
+                return () => { if (SearchBox != null) SearchBox.Text = ""; ViewModel.SearchText = ""; };
+
+            case "time":
+                if (key == "preset") return () => ClearTimeRange_Click(null, null);
+                if (key == "from") return () => ClearTimeBound(isFrom: true);
+                if (key == "to") return () => ClearTimeBound(isFrom: false);
+                return null;
+
+            case "level":
+                if (key == "set")
+                    return () => { ViewModel.SetKnownFilterSet("Level", null); SyncLevelChips(); };
+                return () =>
+                {
+                    if (LevelFilterCombo != null) LevelFilterCombo.SelectedItem = null;
+                    ViewModel.LevelFilter = "";
+                };
+
+            case "field":
+                return () => ClearFieldFilter(key);
+
+            case "rules":
+                return () =>
+                {
+                    if (RuleFilterToggle == null) return;
+                    RuleFilterToggle.IsChecked = false;
+                    RuleFilterToggle_Click(RuleFilterToggle, new RoutedEventArgs());
+                };
+
+            case "quickrule":
+                if (!int.TryParse(key, out var index)) return null;
+                return () => RemoveQuickRuleAt(index);
+        }
+        return null;
+    }
+
+    // ----- Quick rules section (session-only reshape rules; see ViewerQuickRulesStore) -----
+
+    /// <summary>Redraw the pane's quick-rule rows: label, an on/off switch that keeps the rule but stops
+    /// applying it, and a remove button.</summary>
+    private void RenderQuickRules()
+    {
+        UpdateTopOverflowCaption(); // the top-dock overflow mirrors the same store
+
+        if (QuickRulesHost == null) return; // during initial parse
+        QuickRulesHost.Children.Clear();
+        var rules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules;
+        if (rules.Count == 0)
+        {
+            QuickRulesHost.Children.Add(new TextBlock
+            {
+                Text = "None. Right-click a column header, or add one below.",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            });
+            return;
+        }
+        for (int i = 0; i < rules.Count; i++) QuickRulesHost.Children.Add(BuildQuickRuleRow(rules[i], i));
+    }
+
+    private UIElement BuildQuickRuleRow(FindNeedleUX.Services.ViewerQuickRule rule, int index)
+    {
+        var grid = new Grid { ColumnSpacing = 8, MinWidth = 220 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = rule.Label,
+            FontSize = 12,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Opacity = rule.Enabled ? 1.0 : 0.5,
+        };
+        ToolTipService.SetToolTip(label, rule.Label);
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+
+        var toggle = new ToggleSwitch
+        {
+            IsOn = rule.Enabled,
+            OnContent = null,
+            OffContent = null,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(toggle, "Apply this rule (off keeps it in the list without applying it)");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, "Enable quick rule " + rule.Label);
+        toggle.Toggled += (s, _) =>
+        {
+            rule.Enabled = ((ToggleSwitch)s).IsOn;
+            label.Opacity = rule.Enabled ? 1.0 : 0.5;
+            ViewModel.RefreshNow();   // rows rebuild with/without the rule — no re-scan
+            // Re-render OFF this event: UpdateFiltersBadge rebuilds these very rows, and swapping the
+            // switch out from under its own Toggled handler is asking for trouble.
+            DispatcherQueue.TryEnqueue(UpdateFiltersBadge);
+        };
+        Grid.SetColumn(toggle, 1);
+        grid.Children.Add(toggle);
+
+        var remove = new Button
+        {
+            Content = "\u2715",
+            FontSize = 10,
+            Padding = new Thickness(5, 0, 5, 0),
+            MinWidth = 0,
+            MinHeight = 0,
+            Height = 20,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(remove, "Remove this quick rule");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, "Remove quick rule " + rule.Label);
+        remove.Click += (_, _) => RemoveQuickRuleAt(index);
+        Grid.SetColumn(remove, 2);
+        grid.Children.Add(remove);
+
+        return new Border
+        {
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 2, 2, 2),
+            // Fills the narrow left pane; capped so the row doesn't stretch the full window width in
+            // the top dock, stranding the switch and the X at the far right edge.
+            MaxWidth = 420,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = grid,
+        };
+    }
+
+    private void RemoveQuickRuleAt(int index)
+    {
+        var rules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules;
+        if (index < 0 || index >= rules.Count) return;
+        FindNeedleUX.Services.ViewerQuickRulesStore.Remove(rules[index]);
+        ViewModel.RefreshNow();
+        // Off this event — the click came from a button inside the row we are about to replace.
+        DispatcherQueue.TryEnqueue(UpdateFiltersBadge);
+    }
+
+    /// <summary>"+ New quick rule": the SAME dialog the column-header right-click opens, with the target
+    /// column picked inside it instead of implied by which header was clicked.</summary>
+    private void NewQuickRule_Click(object sender, RoutedEventArgs e)
+        => _ = ShowColumnQuickRuleDialogAsync(null);
+
+    /// <summary>Drop one absolute time bound (and its pickers), keeping the other. With both gone the
+    /// preset chips go back to "All".</summary>
+    private void ClearTimeBound(bool isFrom)
+    {
+        _suppressTimeBounds = true;
+        try
+        {
+            if (isFrom)
+            {
+                if (FromDatePicker != null) FromDatePicker.Date = null;
+                if (FromTimePicker != null) FromTimePicker.SelectedTime = null;
+                UpdateTimeButtonLabel(FromTimeButton, FromTimePicker);
+            }
+            else
+            {
+                if (ToDatePicker != null) ToDatePicker.Date = null;
+                if (ToTimePicker != null) ToTimePicker.SelectedTime = null;
+                UpdateTimeButtonLabel(ToTimeButton, ToTimePicker);
+            }
+        }
+        catch { /* picker display is best-effort; the VM bound below is the real filter */ }
+        _suppressTimeBounds = false;
+
+        if (isFrom) ViewModel.FromDate = null; else ViewModel.ToDate = null;
+        if (ViewModel.FromDate == null && ViewModel.ToDate == null && TimePresetAll != null)
+            SelectOnlyPreset(TimePresetAll);
+    }
+
+    /// <summary>Clear one field constraint. <paramref name="key"/> is the catalog key: a canonical field
+    /// name ("provider") for the substring filter, or "provider:set" for its known-value OR-set.</summary>
+    private void ClearFieldFilter(string key)
+    {
+        bool isSet = key != null && key.EndsWith(":set", StringComparison.Ordinal);
+        var field = isSet ? key.Substring(0, key.Length - 4) : key;
+        switch (field)
+        {
+            case "provider":
+                if (isSet) ClearKnownSet("Provider", ProviderFilterMulti, ProviderFilterMultiList);
+                else { if (ProviderFilterBox != null) ProviderFilterBox.Text = ""; ViewModel.ProviderFilter = ""; SelectKnownComboAll(ProviderFilterCombo); }
+                break;
+            case "taskname":
+                if (isSet) ClearKnownSet("TaskName", TaskNameFilterMulti, TaskNameFilterMultiList);
+                else { if (TaskNameFilterBox != null) TaskNameFilterBox.Text = ""; ViewModel.TaskNameFilter = ""; SelectKnownComboAll(TaskNameFilterCombo); }
+                break;
+            case "source":
+                if (isSet) ClearKnownSet("Source", SourceFilterMulti, SourceFilterMultiList);
+                else { if (SourceFilterBox != null) SourceFilterBox.Text = ""; ViewModel.SourceFilter = ""; SelectKnownComboAll(SourceFilterCombo); }
+                break;
+            case "message":
+                if (MessageFilterBox != null) MessageFilterBox.Text = "";
+                ViewModel.MessageFilter = "";
+                break;
+            default:
+                // An added field (ProcessId, EventId, Channel…): one box, one predicate.
+                if (_extraFieldBoxes.TryGetValue(field ?? "", out var extraBox)) extraBox.Text = "";
+                ViewModel.SetExtraFieldFilter(field, "");
+                break;
+        }
+    }
+
+    // ===== Fields: which columns the pane filters on =====
+    // The four built-ins (Provider / TaskName / Message / Source) are laid out in XAML and hidden
+    // rather than destroyed when removed, because they are wired to dedicated FilterSpec slots and to
+    // the "Pick from values" known-value controls. Any other field the engine can filter is added as a
+    // row built here, whose value becomes a predicate ANDed into FilterSpec.Query.
+    private readonly Dictionary<string, FrameworkElement> _extraFieldRows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, TextBox> _extraFieldBoxes = new(StringComparer.OrdinalIgnoreCase);
+
+    private FrameworkElement BuiltInFieldGroup(string field) => field switch
+    {
+        "provider" => ProviderFieldGroup,
+        "taskname" => TaskNameFieldGroup,
+        "message" => MessageFieldGroup,
+        "source" => SourceFieldGroup,
+        _ => null,
+    };
+
+    private bool FieldIsShown(string field)
+    {
+        var g = BuiltInFieldGroup(field);
+        return g != null ? g.Visibility == Visibility.Visible : _extraFieldRows.ContainsKey(field);
+    }
+
+    /// <summary>The fields currently shown in the pane, canonical names, built-ins first in their fixed
+    /// order then added fields in the order they were added.</summary>
+    private List<string> ShownFields()
+    {
+        var shown = new List<string>();
+        foreach (var f in FilterFieldCatalog.BuiltIn) if (FieldIsShown(f)) shown.Add(f);
+        foreach (var f in _extraFieldRows.Keys) shown.Add(f);
+        return shown;
+    }
+
+    /// <summary>Remember which fields are shown so they come back next launch. Skipped while restoring so
+    /// the restore's own Show/Remove calls don't rewrite the setting mid-way.</summary>
+    private bool _restoringShownFields;
+    private void PersistShownFields()
+    {
+        if (_restoringShownFields) return;
+        ResultsViewerSettings.ShownFilterFields = ShownFields();
+    }
+
+    /// <summary>Bring the pane back to the saved field set (or the default four when nothing is saved).
+    /// Unknown names are ignored so a stale setting can never strand the pane.</summary>
+    private void RestoreShownFields()
+    {
+        var saved = ResultsViewerSettings.ShownFilterFields;
+        if (saved == null) return; // defaults: the four built-ins, already visible in XAML
+        _restoringShownFields = true;
+        try
+        {
+            var want = new HashSet<string>(saved, StringComparer.OrdinalIgnoreCase);
+            foreach (var f in FilterFieldCatalog.BuiltIn)
+                if (!want.Contains(f) && FieldIsShown(f)) RemoveFieldRow(f);
+            foreach (var f in saved)
+                if (FilterFieldCatalog.IsKnown(f) && !FieldIsShown(f)) ShowFieldRow(f);
+        }
+        finally { _restoringShownFields = false; }
+    }
+
+    /// <summary>"+ Add field": offer every filterable column not already on the pane.</summary>
+    private void AddFieldButton_Click(object sender, RoutedEventArgs e)
+    {
+        var flyout = new MenuFlyout();
+        foreach (var kv in FilterFieldCatalog.All)
+        {
+            if (FieldIsShown(kv.Key)) continue;
+            var item = new MenuFlyoutItem { Text = kv.Value, Tag = kv.Key };
+            item.Click += (s, _) => ShowFieldRow((string)((MenuFlyoutItem)s).Tag);
+            flyout.Items.Add(item);
+        }
+        if (flyout.Items.Count == 0)
+            flyout.Items.Add(new MenuFlyoutItem { Text = "Every filterable column is already shown", IsEnabled = false });
+        flyout.ShowAt(sender as FrameworkElement);
+    }
+
+    /// <summary>The X on a field row: stop filtering on that column and take the row away.</summary>
+    private void RemoveField_Click(object sender, RoutedEventArgs e)
+        => RemoveFieldRow(((FrameworkElement)sender).Tag as string);
+
+    private void ShowFieldRow(string field)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        var builtIn = BuiltInFieldGroup(field);
+        if (builtIn != null)
+        {
+            builtIn.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            if (_extraFieldRows.ContainsKey(field)) return;
+            var row = BuildExtraFieldRow(field);
+            _extraFieldRows[field] = row;
+            int at = AddFieldButton == null ? -1 : FilterRowPanel.Children.IndexOf(AddFieldButton);
+            if (at < 0) FilterRowPanel.Children.Add(row); else FilterRowPanel.Children.Insert(at, row);
+        }
+        RefreshFilterLayout(); // give the new row the current dock's sizing
+        PersistShownFields();
+    }
+
+    private void RemoveFieldRow(string field)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        var builtIn = BuiltInFieldGroup(field);
+        if (builtIn != null)
+        {
+            // Never leave a hidden filter narrowing the view: drop the value AND the known-value set.
+            ClearFieldFilter(field);
+            ClearFieldFilter(field + ":set");
+            builtIn.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            if (!_extraFieldRows.TryGetValue(field, out var row)) return;
+            FilterRowPanel.Children.Remove(row);
+            _extraFieldRows.Remove(field);
+            _extraFieldBoxes.Remove(field);
+            ViewModel.SetExtraFieldFilter(field, "");
+        }
+        UpdateFiltersBadge();
+        PersistShownFields();
+    }
+
+    /// <summary>A row for a field with no dedicated FilterSpec slot: label, substring box, remove.</summary>
+    private FrameworkElement BuildExtraFieldRow(string field)
+    {
+        var display = FilterFieldCatalog.DisplayOf(field);
+        var grid = new Grid { ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center, Tag = field };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var label = new TextBlock
+        {
+            Text = display,
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+
+        var box = new TextBox
+        {
+            Width = 140,
+            Height = 28,
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            PlaceholderText = display + "…",
+        };
+        box.TextChanged += (s, _) => { ViewModel.SetExtraFieldFilter(field, ((TextBox)s).Text); UpdateFiltersBadge(); };
+        Grid.SetColumn(box, 1);
+        grid.Children.Add(box);
+        _extraFieldBoxes[field] = box;
+
+        var remove = new Button
+        {
+            Content = "\u2715",
+            Tag = field,
+            FontSize = 10,
+            Padding = new Thickness(5, 0, 5, 0),
+            MinWidth = 0,
+            MinHeight = 0,
+            Height = 24,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(remove, $"Stop filtering on {display}");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, "Remove the " + display + " filter");
+        remove.Click += RemoveField_Click;
+        Grid.SetColumn(remove, 2);
+        grid.Children.Add(remove);
+
+        return grid;
+    }
+
+    /// <summary>Drop a known-value multi-select (and its list selection + button caption).</summary>
+    private void ClearKnownSet(string field, DropDownButton button, ListView list)
+    {
+        _suppressKnownCombo = true;
+        try { list?.SelectedItems.Clear(); } catch { /* list may not be realized yet */ }
+        _suppressKnownCombo = false;
+        UpdateMultiButtonLabel(field, button, list);
+        ViewModel.SetKnownFilterSet(field, null);
+    }
+
+    /// <summary>Point a known-value single-select combo back at its "(All)" row without re-filtering.</summary>
+    private void SelectKnownComboAll(ComboBox combo)
+    {
+        if (combo == null) return;
+        _suppressKnownCombo = true;
+        try { combo.SelectedItem = combo.Items.OfType<KnownFacetItem>().FirstOrDefault(i => i.IsAll); }
+        catch { /* not populated yet */ }
+        _suppressKnownCombo = false;
     }
 
     private void UpdateEmptyState()
@@ -582,23 +1148,42 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private bool _filtersExpanded = true;
     private FilterDock _filterDock = ResultsViewerSettings.DefaultFilterDock;
 
+    /// <summary>Reflect the pane's shown/hidden state in the "Filters: Left | Top | Hide" segmented
+    /// control and the layout. The pane is visible by default; Hide is only the way to get rid of it.</summary>
     private void ApplyFiltersToggleState(bool expanded)
     {
         _filtersExpanded = expanded;
-        FiltersToggle.IsChecked = expanded;
-        FiltersToggleGlyph.Text = expanded ? "▾" : "▸";
         RefreshFilterLayout();
     }
 
-    // ----- Filter pane docking (Top / Left) -----
-    private void FilterDockTop_Click(object sender, RoutedEventArgs e)  => SetFilterDock(FilterDock.Top);
-    private void FilterDockLeft_Click(object sender, RoutedEventArgs e) => SetFilterDock(FilterDock.Left);
+    /// <summary>Show/hide the filter pane and persist the choice (recorded against the current dock, so
+    /// a collapse is honored on the next open of the same layout — see ResultsViewerSettings.FiltersExpanded).</summary>
+    private void SetFiltersExpanded(bool expanded)
+    {
+        ApplyFiltersToggleState(expanded);
+        ResultsViewerSettings.FiltersExpanded = expanded;
+    }
+
+    /// <summary>"Filters: Left | Top | Hide" — Left/Top set the dock (expanding the pane if it was hidden);
+    /// Hide collapses it (the dock and every applied filter are kept). Segment order is defined by
+    /// <see cref="NativeResultsPageViewModel.FiltersSegmentIndexFor"/>.</summary>
+    private void FiltersSegment_SelectionChanged(object sender, int index)
+    {
+        switch (index)
+        {
+            case NativeResultsPageViewModel.FiltersSegLeft: SetFilterDock(FilterDock.Left); if (!_filtersExpanded) SetFiltersExpanded(true); break;
+            case NativeResultsPageViewModel.FiltersSegTop:  SetFilterDock(FilterDock.Top);  if (!_filtersExpanded) SetFiltersExpanded(true); break;
+            case NativeResultsPageViewModel.FiltersSegHide: SetFiltersExpanded(false); break;
+        }
+    }
 
     private void SetFilterDock(FilterDock dock)
     {
         _filterDock = dock;
-        RefreshFilterLayout();
         ResultsViewerSettings.FilterDock = dock; // persists + broadcasts (other open viewers re-lay-out)
+        // The shown/hidden state is per dock: a new dock comes up expanded unless it was deliberately
+        // collapsed under that same dock before. (Also re-lays-out.)
+        ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
     }
 
     /// <summary>
@@ -623,6 +1208,13 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             TopFilterHost.Content = FiltersPanel;
         }
 
+        // The pane was designed as a vertical RAIL of five stacked sections. As a band across the top,
+        // those same five stacked sections made a tall, hard-to-read block. The top dock therefore lays
+        // the three INPUT sections (Time / Level / Fields) out side by side as columns, keeps Active
+        // filters as a full-width strip beneath them, and drops Quick rules (still reachable from a
+        // column header). Less than the rail, on purpose.
+        ArrangeSectionsForDock(left);
+
         // Rows stack vertically when docked left (narrow column), horizontally when on top.
         // TimeRowPanel stays vertical in both docks — it's its own mini-layout (preset chips + a
         // collapsible custom range) that wraps internally via WrapPanelLite, so flipping it would
@@ -640,13 +1232,31 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             c.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
             c.Width = left ? double.NaN : topWidth;
         }
-        Field(ProviderFilterBox, 120); Field(TaskNameFilterBox, 140);
-        Field(MessageFilterBox, 220);  Field(SourceFilterBox, 140);
+        // Top-dock widths are sized so the whole Fields line (four fields + "+ Add field" + the
+        // Pick/Clear buttons) fits on one row at 1440px; wider and "+ Add field" clipped off the edge.
+        Field(ProviderFilterBox, 110); Field(TaskNameFilterBox, 120);
+        Field(MessageFilterBox, 180);  Field(SourceFilterBox, 120);
         Field(LevelFilterCombo, 140);
         // The "known value" controls (combos + multi-select dropdowns) need the same treatment, or in
         // left dock they'd keep their fixed width and look ragged next to the stretched text boxes.
-        Field(ProviderFilterCombo, 200); Field(TaskNameFilterCombo, 200); Field(SourceFilterCombo, 200);
+        Field(ProviderFilterCombo, 160); Field(TaskNameFilterCombo, 160); Field(SourceFilterCombo, 160);
         Field(ProviderFilterMulti, double.NaN); Field(TaskNameFilterMulti, double.NaN); Field(SourceFilterMulti, double.NaN);
+        // Each field is a 3-column Grid (label · control · remove). It fills the column in left dock so
+        // the control's star column can stretch; in top dock it hugs its content and sits in the row.
+        void Group(FrameworkElement g)
+        {
+            if (g == null) return;
+            g.HorizontalAlignment = left ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+            // Left dock: a shared label column so the boxes line up down the pane (Provider / TaskName /
+            // Message / Source labels differ in width, so Auto sizing left every box starting at a
+            // different x). Top dock: hug the label so the row stays compact.
+            // (MinWidth rather than a fixed width so a long label like RelatedActivityId still fits.)
+            if (g is Grid grid && grid.ColumnDefinitions.Count > 0)
+                grid.ColumnDefinitions[0].MinWidth = left ? 72 : 0;
+        }
+        Group(ProviderFieldGroup); Group(TaskNameFieldGroup); Group(MessageFieldGroup); Group(SourceFieldGroup);
+        foreach (var row in _extraFieldRows.Values) Group(row);
+        foreach (var box in _extraFieldBoxes.Values) Field(box, 140);
 
         // Host visibility follows the expand state; the inactive host stays collapsed.
         FiltersPanel.Visibility  = _filtersExpanded ? Visibility.Visible : Visibility.Collapsed;
@@ -660,9 +1270,171 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (FilterPaneSplitter != null)
             FilterPaneSplitter.Visibility = leftShown ? Visibility.Visible : Visibility.Collapsed;
 
-        // Toolbar reflection.
-        if (DockTopItem  != null) DockTopItem.IsChecked  = !left;
-        if (DockLeftItem != null) DockLeftItem.IsChecked = left;
+        // Toolbar reflection: the Filters segmented control shows Left / Top / Hide.
+        if (FiltersSegment != null) FiltersSegment.SelectedIndex = NativeResultsPageViewModel.FiltersSegmentIndexFor(_filterDock, _filtersExpanded);
+    }
+
+    /// <summary>
+    /// Put the pane's sections where the current dock wants them. LEFT: five sections stacked in
+    /// PaneSections, each closed by a bottom rule. TOP: Time / Level / Fields re-parented into
+    /// TopInputsRow (a wrapping horizontal row) as columns separated by a right rule, Active filters
+    /// left in PaneSections as a full-width strip under them, Quick rules collapsed. Idempotent —
+    /// called from every RefreshFilterLayout, it only moves what is in the wrong place.
+    /// </summary>
+    private void ArrangeSectionsForDock(bool left)
+    {
+        if (PaneSections == null || TopInputsRow == null) return;
+        var inputs = new[] { TimeSection, LevelSection, FieldsSection };
+        if (inputs.Any(s => s == null)) return;
+
+        // A section only ever lives in one of two panels, so ask THEM rather than FrameworkElement.Parent:
+        // Parent did not resolve to the panel here, so the old check fell through and Insert threw the
+        // WinUI "already has a parent" COMException on first layout (a launch crash in the left dock).
+        void MoveTo(Panel target, int insertAt, FrameworkElement el)
+        {
+            if (target.Children.Contains(el)) return;
+            var other = ReferenceEquals(target, PaneSections) ? (Panel)TopInputsRow : PaneSections;
+            other.Children.Remove(el); // no-op when it is not there
+            if (insertAt < 0 || insertAt > target.Children.Count) target.Children.Add(el);
+            else target.Children.Insert(insertAt, el);
+        }
+
+        if (left)
+        {
+            // Back into the rail, at the top, in order, before TopInputsRow.
+            for (int i = 0; i < inputs.Length; i++) MoveTo(PaneSections, i, inputs[i]);
+            // Active filters back to its own strip under the inputs row (before Quick rules).
+            if (ActiveFiltersSection != null)
+            {
+                int after = PaneSections.Children.IndexOf(TopInputsRow) + 1;
+                MoveTo(PaneSections, after, ActiveFiltersSection);
+                ActiveFiltersSection.BorderThickness = new Thickness(0, 1, 0, 0);
+                ActiveFiltersSection.Padding = new Thickness(12, 6, 12, 6);
+                ActiveFiltersSection.VerticalAlignment = VerticalAlignment.Stretch;
+                ActiveFiltersSection.MaxWidth = double.PositiveInfinity;
+            }
+            foreach (var s in inputs)
+            {
+                s.BorderThickness = new Thickness(0, 0, 0, 1); // rule under each stacked section
+                s.VerticalAlignment = VerticalAlignment.Stretch;
+                s.MinWidth = 0;
+                s.Padding = new Thickness(12, 6, 12, 6);
+            }
+            SetBandCompaction(false);
+            TopInputsRow.Visibility = Visibility.Collapsed;
+            if (TopOverflowSection != null) TopOverflowSection.Visibility = Visibility.Collapsed;
+            if (QuickRulesSection != null) QuickRulesSection.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            // Row order: Time | Level | More | Fields. Time and Level are short and share the first line
+            // with the "More" overflow; Fields is wide and takes the whole second line. (With More after
+            // Fields it wrapped onto a third line by itself.)
+            int overflowAt = TopOverflowSection != null ? TopInputsRow.Children.IndexOf(TopOverflowSection) : -1;
+            MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, TimeSection);
+            MoveTo(TopInputsRow, overflowAt < 0 ? -1 : overflowAt++, LevelSection);
+            // Active filters sits right after "More" on line one (not as a full-width strip below,
+            // which cost a whole extra row the moment anything was filtered). Bounded width so its
+            // pills wrap inside the section instead of shoving Fields around.
+            if (ActiveFiltersSection != null)
+            {
+                MoveTo(TopInputsRow, -1, ActiveFiltersSection);
+                ActiveFiltersSection.BorderThickness = new Thickness(0, 0, 1, 0);
+                ActiveFiltersSection.Padding = new Thickness(10, 4, 10, 4);
+                ActiveFiltersSection.VerticalAlignment = VerticalAlignment.Center;
+                ActiveFiltersSection.MaxWidth = 560;
+            }
+            MoveTo(TopInputsRow, -1, FieldsSection);
+            foreach (var s in inputs)
+            {
+                s.BorderThickness = new Thickness(0, 0, 1, 0); // rule BETWEEN the columns
+                s.VerticalAlignment = VerticalAlignment.Center;
+                s.MinWidth = 0;
+                s.Padding = new Thickness(10, 4, 10, 4);
+            }
+            SetBandCompaction(true);
+            TopInputsRow.Visibility = Visibility.Visible;
+            // The band carries less than the rail: quick rules move into the "More" overflow (and stay
+            // reachable from a column header).
+            if (QuickRulesSection != null) QuickRulesSection.Visibility = Visibility.Collapsed;
+            if (TopOverflowSection != null) TopOverflowSection.Visibility = Visibility.Visible;
+            UpdateTopOverflowCaption();
+        }
+    }
+
+    /// <summary>
+    /// The band is short because it drops what the rail spends rows on. Compact (top dock): no section
+    /// headers — the chips and boxes say what they are — and the Fields section lays its header buttons
+    /// (Pick from values / Clear fields) on the SAME line as the boxes instead of a row above them. The
+    /// Time section flips horizontal so "Custom range…" sits after the chips rather than under them.
+    /// Uncompacted (left rail): everything back to stacked with headers.
+    /// </summary>
+    private void SetBandCompaction(bool compact)
+    {
+        var headerVis = compact ? Visibility.Collapsed : Visibility.Visible;
+        if (TimeHeader != null) TimeHeader.Visibility = headerVis;
+        if (LevelHeader != null) LevelHeader.Visibility = headerVis;
+        if (FieldsHeader != null) FieldsHeader.Visibility = headerVis;
+        if (MoreHeader != null) MoreHeader.Visibility = headerVis;
+        // In the band the count + "Clear all" stay (they carry information); only the caption goes.
+        if (ActiveFiltersHeader != null) ActiveFiltersHeader.Visibility = headerVis;
+        if (ActiveFiltersBody != null) ActiveFiltersBody.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
+        if (FieldsSectionBody != null) FieldsSectionBody.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
+        if (TimeRowPanel != null) TimeRowPanel.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
+        if (TopOverflowSection != null) TopOverflowSection.Padding = compact ? new Thickness(10, 4, 10, 4) : new Thickness(12, 6, 12, 6);
+    }
+
+    /// <summary>"Quick rules ▾" / "Quick rules (2) ▾": the count of active session rules, so the band
+    /// still says something is applied even though the section itself is folded away.</summary>
+    private void UpdateTopOverflowCaption()
+    {
+        if (TopOverflowButton == null) return;
+        int n = FindNeedleUX.Services.ViewerQuickRulesStore.Rules.Count(r => r.Enabled);
+        TopOverflowButton.Content = n > 0 ? $"Quick rules ({n}) ▾" : "Quick rules ▾";
+    }
+
+    /// <summary>The top-dock overflow menu: the same quick-rule actions the rail's section offers —
+    /// each rule as a checkable item (apply / not), a Remove per rule, and New quick rule… — so the band
+    /// carries less on screen but nothing becomes unreachable.</summary>
+    private void TopOverflow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        var rules = FindNeedleUX.Services.ViewerQuickRulesStore.Rules;
+        if (rules.Count == 0)
+        {
+            menu.Items.Add(new MenuFlyoutItem { Text = "No quick rules this session", IsEnabled = false });
+        }
+        else
+        {
+            for (int i = 0; i < rules.Count; i++)
+            {
+                var rule = rules[i];
+                int index = i;
+                var sub = new MenuFlyoutSubItem { Text = rule.Label };
+                var apply = new ToggleMenuFlyoutItem { Text = "Apply", IsChecked = rule.Enabled };
+                apply.Click += (_, __) =>
+                {
+                    rule.Enabled = apply.IsChecked;
+                    ViewModel.RefreshNow();
+                    DispatcherQueue.TryEnqueue(() => { UpdateFiltersBadge(); UpdateTopOverflowCaption(); });
+                };
+                var remove = new MenuFlyoutItem { Text = "Remove", Icon = new SymbolIcon(Symbol.Delete) };
+                remove.Click += (_, __) =>
+                {
+                    RemoveQuickRuleAt(index);
+                    DispatcherQueue.TryEnqueue(UpdateTopOverflowCaption);
+                };
+                sub.Items.Add(apply);
+                sub.Items.Add(remove);
+                menu.Items.Add(sub);
+            }
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var add = new MenuFlyoutItem { Text = "New quick rule…", Icon = new SymbolIcon(Symbol.Add) };
+        add.Click += (_, __) => _ = ShowColumnQuickRuleDialogAsync(null);
+        menu.Items.Add(add);
+        menu.ShowAt(anchor);
     }
 
     private DetailsMode _detailsMode = DetailsMode.Inrow;
@@ -688,10 +1460,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         if (mode == DetailsMode.BottomPanel) RefreshDetailsPanel();
 
-        // Reflect in the toolbar.
-        if (DetailsInrowItem != null) DetailsInrowItem.IsChecked = mode == DetailsMode.Inrow;
-        if (DetailsPanelItem != null) DetailsPanelItem.IsChecked = mode == DetailsMode.BottomPanel;
-        if (DetailsPopupItem != null) DetailsPopupItem.IsChecked = mode == DetailsMode.Popup;
+        // Reflect in the toolbar: the Details segmented control shows In row | Panel | Popup.
+        if (DetailsSegment != null) DetailsSegment.SelectedIndex = NativeResultsPageViewModel.DetailsSegmentIndexFor(mode);
     }
 
     private void SetDetailsMode(DetailsMode mode)
@@ -700,9 +1470,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ResultsViewerSettings.DetailsMode = mode;
     }
 
-    private void DetailsModeInrow_Click(object sender, RoutedEventArgs e)       => SetDetailsMode(DetailsMode.Inrow);
-    private void DetailsModeBottomPanel_Click(object sender, RoutedEventArgs e) => SetDetailsMode(DetailsMode.BottomPanel);
-    private void DetailsModePopup_Click(object sender, RoutedEventArgs e)       => SetDetailsMode(DetailsMode.Popup);
+    private void DetailsSegment_SelectionChanged(object sender, int index)
+        => SetDetailsMode(NativeResultsPageViewModel.DetailsModeForSegment(index));
 
     private async void ResultsGrid_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
@@ -955,13 +1724,27 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                     ? $"Building search index… {done:N0} / {total:N0} ({Math.Min(100, (int)(done * 100L / total))}%)"
                     : "Building search index… starting…";
             }
+            else
+            {
+                ViewModel.IndexStatusText = "";
+            }
         });
     }
 
-    private void CancelIndexingButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>The banner's single Stop: while rows are streaming in it stops the load (what is loaded
+    /// stays); when only the background index build is running it cancels that instead.</summary>
+    private void StopProgressButton_Click(object sender, RoutedEventArgs e)
     {
-        MiddleLayerService.CancelBackgroundIndexBuild();
-        ViewModel.IsIndexing = false;
+        if (ViewModel.IsStreaming)
+        {
+            ViewModel.StopStreaming();
+            return;
+        }
+        if (ViewModel.IsIndexing)
+        {
+            MiddleLayerService.CancelBackgroundIndexBuild();
+            ViewModel.IsIndexing = false;
+        }
     }
 
     private void LazyIndexTimer_Tick(object sender, object e)
@@ -1002,11 +1785,6 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         MiddleLayerService.StartBackgroundIndexBuild();
         UpdateIndexingIndicator();
-    }
-
-    private void StopStreamingButton_Click(object sender, RoutedEventArgs e)
-    {
-        ViewModel.StopStreaming();
     }
 
     private void RefreshResults_Click(object sender, RoutedEventArgs e)
@@ -1186,8 +1964,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         TimeFormatConverter.Format = ResultsViewerSettings.TimeFormat;
         ViewModel.ApplyTheme(ResultsViewerSettings.ThemeName);
         RefreshSearchSubmitMode();
-        _filterDock = ResultsViewerSettings.FilterDock;
-        RefreshFilterLayout();
+        var dock = ResultsViewerSettings.FilterDock;
+        if (dock != _filterDock)
+        {
+            // Dock changed elsewhere (Settings page / another viewer window / MCP): switch layout and pick
+            // up the per-dock shown state. Otherwise leave the window's own shown/hidden state alone.
+            _filterDock = dock;
+            ApplyFiltersToggleState(ResultsViewerSettings.FiltersExpanded);
+        }
+        else
+        {
+            RefreshFilterLayout();
+        }
+        RestoreShownFields(); // the field rows the user added last time (defaults when nothing saved)
         _colorTaggedRows = ResultsViewerSettings.ColorTaggedRows;
         // "Show known" toggle: set visibility now; combos get populated after the data finishes loading.
         if (ShowKnownToggle != null)
@@ -1210,8 +1999,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         "Columns" => ColumnsButton,
         "Export" => ExportButton,
         "Sources" => SourcesButton,
-        "Filters" => FiltersToggle,
-        "View" => ViewButton,
+        // New ids on purpose: a "Filters"/"View" hide saved against the OLD hide/show button or View ▾ menu
+        // must not silently hide the first-level controls that replaced them.
+        "FilterPlacement" => FiltersSegment,
+        "DetailsMode" => DetailsSegment,
+        "RuleFilter" => RuleFilterToggle,
         "FilterPerf" => FilterPerfButton,
         "Status" => StatusText,
         _ => null,
@@ -1219,14 +2011,15 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private static string ToolbarButtonLabel(string id) => id switch
     {
-        "SearchHelp" => "Search syntax help (?)",
+        "SearchHelp" => "Viewer help (?)",
         "Columns" => "Columns",
         "Export" => "Export",
         "Sources" => "Sources",
-        "Filters" => "Filters toggle",
-        "View" => "View menu",
-        "FilterPerf" => "Filter timing (⏱)",
-        "Status" => "Status text (x / y results)",
+        "FilterPlacement" => "Filters: Left | Top | Hide",
+        "DetailsMode" => "Details: In row | Panel | Popup",
+        "RuleFilter" => "Rule filter",
+        "FilterPerf" => "Filter timing (⏱, bottom bar)",
+        "Status" => "Status text (x / y results, bottom bar)",
         _ => id,
     };
 
@@ -1340,8 +2133,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         switch (id)
         {
             case "Sources": ShowLoadedSources_Click(el, new RoutedEventArgs()); break;
-            case "Filters":
-                if (el is ToggleButton tb) { tb.IsChecked = !(tb.IsChecked ?? false); FiltersToggle_Click(tb, new RoutedEventArgs()); }
+            case "SearchHelp": _ = ShowHelpDialogAsync(); break;
+            case "RuleFilter":
+                if (RuleFilterToggle.IsEnabled) { RuleFilterToggle.IsChecked = RuleFilterToggle.IsChecked != true; RuleFilterToggle_Click(RuleFilterToggle, new RoutedEventArgs()); }
+                break;
+            case "FilterPlacement":
+            case "DetailsMode":
+                // A hidden segmented control: offer its options as a menu on the ⋯ button.
+                if (el is SegmentedControl seg)
+                {
+                    var menu = new MenuFlyout();
+                    var options = seg.Options;
+                    for (int i = 0; i < options.Count; i++)
+                    {
+                        int idx = i;
+                        var item = new RadioMenuFlyoutItem { Text = options[i], GroupName = id, IsChecked = seg.SelectedIndex == i };
+                        item.Click += (_, __) =>
+                        {
+                            if (id == "FilterPlacement") FiltersSegment_SelectionChanged(seg, idx);
+                            else DetailsSegment_SelectionChanged(seg, idx);
+                        };
+                        menu.Items.Add(item);
+                    }
+                    menu.ShowAt(OverflowButton);
+                }
                 break;
         }
     }
@@ -1435,15 +2250,24 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 ?? new System.Collections.Generic.List<string>());
             foreach (var a in autoAdded)
                 if (!rules.Any(x => string.Equals(x, a, StringComparison.OrdinalIgnoreCase))) rules.Add(a);
+            // Runtime status per rule set (what it contains, how many results it matched, per-rule
+            // field-extraction cost) — recorded by the last run. This used to be the Rules hub's "Active"
+            // tab; it is status about THIS load, so it lives here beside "which sources loaded".
+            var active = FindNeedleUX.Services.ActiveRuleSummary.Build();
+            var activeByPath = new System.Collections.Generic.Dictionary<string, FindNeedleUX.Services.ActiveRuleInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach (var a in active) activeByPath.TryAdd(a.FilePath, a);
+            // A processor with no file (the built-in default) is only known from the run — list it too.
+            foreach (var a in active)
+                if (!rules.Any(x => string.Equals(x, a.FilePath, StringComparison.OrdinalIgnoreCase))) rules.Add(a.FilePath);
 
             var panel = new StackPanel { Spacing = 10 };
 
             // Copy buttons (kept inside the content so the dialog stays open after copying).
             var copyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             var copyText = new Button { Content = "Copy as text" };
-            copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules, autoAdded));
+            copyText.Click += (_, __) => CopyToClipboard(SourcesAsText(locInfo, rules, autoAdded, activeByPath));
             var copyJson = new Button { Content = "Copy as JSON" };
-            copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules, autoAdded));
+            copyJson.Click += (_, __) => CopyToClipboard(SourcesAsJson(locInfo, rules, autoAdded, activeByPath));
             copyRow.Children.Add(copyText);
             copyRow.Children.Add(copyJson);
             panel.Children.Add(copyRow);
@@ -1454,7 +2278,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             var togglesHost = new StackPanel();
             panel.Children.Add(togglesHost);
 
-            panel.Children.Add(SourcesHeader($"Locations ({locInfo.Count})"));
+            panel.Children.Add(SourcesHeader($"Sources ({locInfo.Count})"));
             if (locInfo.Count == 0)
                 panel.Children.Add(SourcesNote("No locations loaded."));
             else
@@ -1463,11 +2287,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
             panel.Children.Add(SourcesHeader($"Rules ({rules.Count})"));
             if (rules.Count == 0)
-                panel.Children.Add(SourcesNote("No rule files loaded."));
+            {
+                panel.Children.Add(SourcesNote("No rule files loaded. Add rules in Workspace ▸ Rule files, or enable Auto rules, then run a search."));
+            }
             else
+            {
+                if (active.Count > 0)
+                    panel.Children.Add(SourcesNote(
+                        $"{active.Count} rule set{(active.Count == 1 ? "" : "s")} active · "
+                        + $"{active.Sum(a => a.Matched):N0} total matches in the last search."));
                 foreach (var r in rules)
-                    panel.Children.Add(SourcesItem(
-                        System.IO.Path.GetFileName(r) + (autoAdded.Contains(r) ? "   — auto-added" : ""), r));
+                {
+                    activeByPath.TryGetValue(r, out var info);
+                    bool isAuto = autoAdded.Contains(r) || (info?.AutoAdded ?? false);
+                    string title = string.IsNullOrWhiteSpace(info?.Title) ? System.IO.Path.GetFileName(r) : info.Title;
+                    panel.Children.Add(SourcesRuleItem(title + (isAuto ? "   — auto-added" : ""), r, info));
+                }
+            }
 
             var dialog = new ContentDialog
             {
@@ -1593,10 +2429,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private static string SourcesAsText(
         System.Collections.Generic.List<(string name, string description)> locs,
         System.Collections.Generic.List<string> rules,
-        System.Collections.Generic.HashSet<string> autoAdded)
+        System.Collections.Generic.HashSet<string> autoAdded,
+        System.Collections.Generic.Dictionary<string, FindNeedleUX.Services.ActiveRuleInfo> active)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"Locations ({locs.Count}):");
+        sb.AppendLine($"Sources ({locs.Count}):");
         if (locs.Count == 0) sb.AppendLine("  (none)");
         foreach (var (name, desc) in locs)
         {
@@ -1606,19 +2443,43 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         sb.AppendLine($"Rules ({rules.Count}):");
         if (rules.Count == 0) sb.AppendLine("  (none)");
         foreach (var r in rules)
-            sb.AppendLine($"  - {r}{(autoAdded.Contains(r) ? "   (auto-added)" : "")}");
+        {
+            active.TryGetValue(r, out var info);
+            bool isAuto = autoAdded.Contains(r) || (info?.AutoAdded ?? false);
+            sb.AppendLine($"  - {r}{(isAuto ? "   (auto-added)" : "")}");
+            if (info == null) continue;
+            sb.AppendLine($"      {info.MatchedSummary}");
+            if (!string.IsNullOrEmpty(info.StructureSummary)) sb.AppendLine($"      {info.StructureSummary}");
+            if (!string.IsNullOrEmpty(info.TagSummary)) sb.AppendLine($"      {info.TagSummary}");
+            foreach (var line in info.TimingSummary.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                sb.AppendLine($"        {line}");
+        }
         return sb.ToString();
     }
 
     private static string SourcesAsJson(
         System.Collections.Generic.List<(string name, string description)> locs,
         System.Collections.Generic.List<string> rules,
-        System.Collections.Generic.HashSet<string> autoAdded)
+        System.Collections.Generic.HashSet<string> autoAdded,
+        System.Collections.Generic.Dictionary<string, FindNeedleUX.Services.ActiveRuleInfo> active)
     {
         var payload = new
         {
             locations = locs.ConvertAll(l => new { name = l.name, description = l.description }),
-            rules = rules.ConvertAll(r => new { path = r, autoAdded = autoAdded.Contains(r) }),
+            rules = rules.ConvertAll(r =>
+            {
+                active.TryGetValue(r, out var info);
+                return new
+                {
+                    path = r,
+                    autoAdded = autoAdded.Contains(r) || (info?.AutoAdded ?? false),
+                    title = info?.Title,
+                    matched = info?.Matched,
+                    structure = info?.StructureSummary,
+                    tags = info?.TagSummary,
+                    timing = info?.TimingSummary,
+                };
+            }),
         };
         return System.Text.Json.JsonSerializer.Serialize(payload,
             new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
@@ -1635,6 +2496,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private static TextBlock SourcesNote(string text) => new()
     {
         Text = text,
+        TextWrapping = TextWrapping.Wrap,
         Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         Margin = new Thickness(8, 0, 0, 0),
     };
@@ -1657,12 +2519,40 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return sp;
     }
 
-    private void FiltersToggle_Click(object sender, RoutedEventArgs e)
+    /// <summary>A rule-file line in the Sources dialog: the plain <see cref="SourcesItem"/> plus, when the
+    /// last run recorded this rule set, its runtime status (matched count, structure, tags, per-rule cost).</summary>
+    private static FrameworkElement SourcesRuleItem(string title, string path, FindNeedleUX.Services.ActiveRuleInfo? info)
     {
-        var expanded = FiltersToggle.IsChecked == true;
-        ApplyFiltersToggleState(expanded);
-        ResultsViewerSettings.FiltersExpanded = expanded;
+        var sp = (StackPanel)SourcesItem(title, path);
+        if (info == null) return sp;
+        var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var detail = new StackPanel { Spacing = 1, Margin = new Thickness(12, 2, 0, 4) };
+        detail.Children.Add(new TextBlock
+        {
+            Text = info.MatchedSummary,
+            FontSize = 12,
+            FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        if (!string.IsNullOrEmpty(info.StructureSummary))
+            detail.Children.Add(new TextBlock { Text = info.StructureSummary, FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrEmpty(info.TagSummary))
+            detail.Children.Add(new TextBlock { Text = info.TagSummary, FontSize = 12, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrEmpty(info.TimingSummary))
+            detail.Children.Add(new TextBlock
+            {
+                Text = info.TimingSummary,
+                FontSize = 12,
+                FontFamily = new FontFamily("Consolas"),
+                Foreground = secondary,
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+            });
+        sp.Children.Add(detail);
+        return sp;
     }
+
+    private void FiltersToggle_Click(object sender, RoutedEventArgs e) => SetFiltersExpanded(!_filtersExpanded);
 
     private void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1714,6 +2604,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (Show("Message"))     yield return ("Message",     line.Message);
         if (Show("Source"))      yield return ("Source",      line.Source);
         if (Show("Level"))       yield return ("Level",       line.Level);
+        // The unmapped source value (ETW TraceEventLevel 1..5, Event Log Level byte) — only when the
+        // source has one, so plain-text rows don't get an empty row.
+        if (Show("RawLevel") && !string.IsNullOrEmpty(line.RawLevel))
+                                 yield return ("RawLevel",    line.RawLevel);
         if (Show("MachineName")) yield return ("MachineName", line.MachineName);
         if (Show("Username"))    yield return ("Username",    line.Username);
         if (Show("OpCode"))      yield return ("OpCode",      line.OpCode);
@@ -1798,7 +2692,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         AppendReformattedMessage(g, line);
     }
 
-    /// <summary>Append a "Reformatted" section when an enabled message-reformat rule applies to this
+    /// <summary>Append a "Field extraction" section when an enabled field-extraction rule applies to this
     /// row's Message — breaks a dense one-line blob (e.g. a DISM line) into readable named fields.
     /// Generic: driven by <see cref="MessageReformatCatalog"/>, which the user can edit/extend.</summary>
     private void AppendReformattedMessage(Grid g, LogLine line)
@@ -1812,7 +2706,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var header = new TextBlock
         {
-            Text = $"Reformatted — {r.RuleName} ({r.Fields.Count})",
+            Text = $"Field extraction — {r.RuleName} ({r.Fields.Count})",
             FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 10, 0, 2),
         };
@@ -2077,15 +2971,104 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (ctrl && e.Key == global::Windows.System.VirtualKey.F)
         {
             SearchBox.Focus(FocusState.Programmatic);
-            SearchBox.SelectAll();
+            try { SearchTextBox?.SelectAll(); } catch { }
+            e.Handled = true;
+            return;
+        }
+        if (ctrl && e.Key == global::Windows.System.VirtualKey.G)
+        {
+            ShowGoToTime();
             e.Handled = true;
             return;
         }
     }
 
-    // ----- Search + filter inputs -----
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    // ----- Go to time (Ctrl+G) -----
+    // Jump the grid to a moment: an absolute timestamp, or an offset from the selected row ("+30s",
+    // "-2m"). No filter is applied; the grid is put in time order and paged to the first row at or
+    // after that time, which is then selected.
+
+    private void ShowGoToTime()
     {
+        var selected = ResultsGrid.SelectedItem as LogLine;
+        var box = new TextBox
+        {
+            PlaceholderText = selected != null ? "12:34:56.789, 2026-01-15 12:34:56, or +30s / -2m from the selected row" : "12:34:56.789 or 2026-01-15 12:34:56",
+            MinWidth = 420,
+        };
+        var hint = new TextBlock
+        {
+            Text = selected != null ? $"Selected row: {selected.Time}" : "Tip: select a row first to jump relative to it (+30s, -500ms, +1h).",
+            FontSize = 12, Opacity = 0.75, Margin = new Thickness(0, 6, 0, 0),
+        };
+        var panel = new StackPanel { Spacing = 2 };
+        panel.Children.Add(new TextBlock { Text = "Go to time", FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(box);
+        panel.Children.Add(hint);
+        var flyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+        box.KeyDown += async (_, ke) =>
+        {
+            if (ke.Key == global::Windows.System.VirtualKey.Enter)
+            {
+                ke.Handled = true;
+                var target = ParseGoToTime(box.Text, selected?.LogTime);
+                if (target == null) { hint.Text = "Not a time. Try 12:34:56, 2026-01-15 12:34:56, or +30s from the selected row."; return; }
+                flyout.Hide();
+                await GoToTimeAsync(target.Value);
+            }
+        };
+        flyout.ShowAt(SearchBox);
+        box.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>"+30s" / "-2m" relative to <paramref name="anchor"/>, else an absolute (date-less times land on the data's day).</summary>
+    internal static DateTime? ParseGoToTime(string text, DateTime? anchor)
+    {
+        text = (text ?? "").Trim();
+        if (text.Length == 0) return null;
+        if ((text[0] == '+' || text[0] == '-') && anchor != null
+            && FindPluginCore.Searching.Query.LogQuery.TryParseWindow(text.Substring(1), out var delta))
+            return text[0] == '+' ? anchor.Value + delta : anchor.Value - delta;
+        return FindPluginCore.Searching.Query.LogQuery.TryParseTime(text);
+    }
+
+    private async System.Threading.Tasks.Task GoToTimeAsync(DateTime target)
+    {
+        // Position only makes sense in time order.
+        if (!string.Equals(ViewModel.SortColumn, "Time", StringComparison.OrdinalIgnoreCase) || ViewModel.SortDescending)
+        {
+            ViewModel.SetSortState("Time", false);
+            await ViewModel.ApplyFiltersAsync(System.Threading.CancellationToken.None);
+            SyncSortArrowsFromViewModel();
+        }
+        int before = await System.Threading.Tasks.Task.Run(() => ViewModel.CountBefore(target));
+        int pageSize = Math.Max(1, ViewModel.PageSize);
+        int page = before / pageSize + 1;
+        await ViewModel.GoToPageAndWaitAsync(page);
+        // Select the first row at or after the target on that page.
+        LogLine hit = null;
+        foreach (var l in ViewModel.Results)
+            if (l.LogTime >= target) { hit = l; break; }
+        if (hit != null)
+        {
+            ResultsGrid.SelectedItem = hit;
+            try { ResultsGrid.ScrollIntoView(hit, null); } catch { }
+        }
+    }
+
+    // ----- Search + filter inputs -----
+    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            // Completion for the query language; nothing for a plain substring so the popup never nags.
+            var suggestions = NativeResultViewer.QuerySuggestions.For(sender.Text);
+            sender.ItemsSource = suggestions.Count > 0 ? suggestions : null;
+            _queryPreviewTimer.Stop();
+            _queryPreviewTimer.Start();
+        }
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.SuggestionChosen)
+            return; // the completed text is not a search yet; the user keeps typing
         if (RequireEnterToSearch())
         {
             // Enter-to-search mode: don't run a search mid-typing. Just surface the hint so the
@@ -2116,12 +3099,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void SearchBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == global::Windows.System.VirtualKey.Enter)
+        // Enter is handled by QuerySubmitted (which also knows whether a suggestion was picked).
+    }
+
+    private void SearchBox_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+    {
+        // TextMemberPath writes the completed text; put the caret after it so typing continues.
+        DispatcherQueue.TryEnqueue(PlaceSearchCaretAtEnd);
+    }
+
+    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        if (args.ChosenSuggestion != null)
         {
-            e.Handled = true;
-            _searchDebounceTimer.Stop();
-            _ = RunSearchAsync(); // commit now, regardless of mode
+            // Enter on a highlighted completion: accept it, offer the next step, don't search yet.
+            sender.ItemsSource = null;
+            var next = NativeResultViewer.QuerySuggestions.For(sender.Text);
+            if (next.Count > 0) { sender.ItemsSource = next; sender.IsSuggestionListOpen = true; }
+            PlaceSearchCaretAtEnd();
+            return;
         }
+        sender.ItemsSource = null;
+        _searchDebounceTimer.Stop();
+        _queryPreviewTimer.Stop();
+        _ = RunSearchAsync(); // commit now, regardless of mode
     }
 
     /// <summary>
@@ -2696,11 +3697,16 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return list;
     }
 
-    // Stacked severity order (bottom → top): Critical, Error, Warning, Info, Verbose, Debug, then anything else.
-    private static readonly Dictionary<string, int> _levelRank = new(StringComparer.OrdinalIgnoreCase)
-    { {"Critical",0},{"Error",1},{"Warning",2},{"Info",3},{"Information",3},{"Verbose",4},{"Debug",5} };
+    // Stacked severity order (bottom → top), ranked off the Level enum so the time strip and the level
+    // chips agree. The old hand-written table led with "Critical", a name this app never emits — its enum
+    // name is "Catastrophic" — so the most severe level fell to the BOTTOM of the order. These aliases
+    // only cover level names that arrive from foreign log formats.
+    private static readonly Dictionary<string, int> _levelAliases = new(StringComparer.OrdinalIgnoreCase)
+    { {"Critical",0},{"Fatal",0},{"Information",3},{"Debug",4} };
+    private static int LevelRank(string level)
+        => _levelAliases.TryGetValue(level, out var alias) ? alias : NativeResultsPageViewModel.LevelRank(level);
     private static IEnumerable<string> OrderedLevels(Dictionary<string, int> levels)
-        => levels.Keys.OrderBy(k => _levelRank.TryGetValue(k, out var r) ? r : 99).ThenBy(k => k, StringComparer.OrdinalIgnoreCase);
+        => levels.Keys.OrderBy(LevelRank).ThenBy(k => k, StringComparer.OrdinalIgnoreCase);
 
     private void DrawTimeStrip()
     {
@@ -2874,6 +3880,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void ResetColumnFilters_Click(object sender, RoutedEventArgs e)
     {
         ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
+        foreach (var box in _extraFieldBoxes.Values) box.Text = "";
         LevelFilterCombo.SelectedItem = null;
         ViewModel.LevelFilter = "";
         ViewModel.SetKnownFilterSet("Level", null);
@@ -2890,6 +3897,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         SearchBox.Text = "";
         ProviderFilterBox.Text = TaskNameFilterBox.Text = MessageFilterBox.Text = SourceFilterBox.Text = "";
+        foreach (var box in _extraFieldBoxes.Values) box.Text = "";
         LevelFilterCombo.SelectedItem = null;
         ResetTimeFilterUiToAll();
         ViewModel.ClearFilters();
@@ -2922,28 +3930,100 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     }
 
     // ----- Help dialog -----
-    private async void HelpButton_Click(object sender, RoutedEventArgs e)
+    private void HelpButton_Click(object sender, RoutedEventArgs e) => _ = ShowHelpDialogAsync();
+
+    /// <summary>
+    /// The viewer's ONE help surface: the "?" next to the search box, More (⋯) ▸ Help, and Help ▸ Viewer help
+    /// (F1, via MainWindow) all open this. It merges the former query-syntax flyout with the filters /
+    /// navigation notes, and is written from the current toolbar and filter pane — keep it true when
+    /// those change.
+    /// </summary>
+    public async System.Threading.Tasks.Task ShowHelpDialogAsync()
     {
-        var stack = new StackPanel { Spacing = 6 };
-        void Bullet(string s) => stack.Children.Add(new TextBlock { Text = "• " + s, TextWrapping = TextWrapping.Wrap });
-        Bullet("Top searchbox — case-insensitive, all columns. Ctrl+F to focus.");
-        Bullet("Per-column filters — type Provider/TaskName/Message/Source. Level is a dropdown.");
-        Bullet("Time range — pick From/To; rows outside are hidden. Clear to remove.");
-        Bullet("Columns ▾ — toggle which columns are visible.");
-        Bullet("Drag column headers to reorder; drag the right edge to resize.");
-        Bullet("Click column headers to sort.");
-        Bullet("Level chips — click to edit that level's row background color.");
-        Bullet("Click a row to expand details; use Copy as JSON to copy the full LogLine.");
-        Bullet("Export CSV — saves the currently visible (filtered) rows, only currently visible columns.");
-        Bullet("Details modes (toolbar): Inrow expand, bottom panel, or double-click popup.");
-        var dialog = new ContentDialog
+        if (_helpDialogOpen) return; // a second ShowAsync while one is open fail-fasts in WinUI
+        _helpDialogOpen = true;
+        try
         {
-            Title = "Filtering & navigation",
-            Content = stack,
-            CloseButtonText = "Close",
-            XamlRoot = this.XamlRoot
-        };
-        await dialog.ShowAsync();
+            var dialog = new ContentDialog
+            {
+                Title = "Results viewer help",
+                Content = new ScrollViewer { Content = BuildHelpContent(), MaxHeight = 560, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = this.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        catch { /* another dialog may be open */ }
+        finally { _helpDialogOpen = false; }
+    }
+
+    private bool _helpDialogOpen;
+
+    /// <summary>The help dialog's body. Sections mirror the viewer top-to-bottom: search box, filter pane,
+    /// rows, toolbar, shortcuts.</summary>
+    private static UIElement BuildHelpContent()
+    {
+        var stack = new StackPanel { Spacing = 4, MaxWidth = 560 };
+        var secondary = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+
+        void Section(string title) => stack.Children.Add(new TextBlock
+        {
+            Text = title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14,
+            Margin = new Thickness(0, stack.Children.Count == 0 ? 0 : 10, 0, 2),
+        });
+        void Bullet(string s) => stack.Children.Add(new TextBlock { Text = "• " + s, TextWrapping = TextWrapping.Wrap });
+        void Note(string s) => stack.Children.Add(new TextBlock { Text = s, TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = secondary });
+        void Mono(string s) => stack.Children.Add(new TextBlock
+        {
+            Text = s, FontFamily = new FontFamily("Consolas"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true, Margin = new Thickness(12, 0, 0, 0),
+        });
+
+        Section("Search box");
+        Bullet("Plain text searches every column (case-insensitive). Add a field + operator, or AND / OR, and it becomes a structured query. Ctrl+F focuses the box.");
+        Note("Examples:");
+        Mono("error");
+        Mono("msg != \"this\" AND taskname == \"that\"");
+        Mono("level == Error OR provider ~ Kernel");
+        Mono("(pid == 1234 OR pid == 5678) AND NOT msg ~ debug");
+        Mono("time >= \"2024-01-15 09:00\"");
+        Mono("time ~ 12:34:56 ±2s              (everything within 2 s of that moment; no ± = that whole second)");
+        Mono("msg =~ \"^Err(or)?\\s+\\d+\"        (regex, case-insensitive)");
+        Mono("tag == Important   ·   tag ~ leak   (your tags; == matches the tag, ~ searches the note too)");
+        Mono("data.ProcessId == 4                (a field of the structured payload, by key)");
+        Note("Operators:  ==  equals   !=  not-equals   ~  contains   !~  not-contains   =~  regex   > < >= <=  compare (time / number). " +
+             "Combine with AND, OR, NOT and parentheses; quote values that contain spaces. Fields and operators complete as you type; " +
+             "a date-less time means that time on the log's day.");
+        Note("Fields: msg, taskname, provider, source, level, rawlevel, pid, tid, aid, raid, eventid, channel, machine, user, opcode, time, tag, data.<key>.");
+        Bullet("Ctrl+G — go to a time: an absolute timestamp, or +30s / -2m from the selected row. Puts the grid in time order and lands on the first row at or after it (no filter).");
+        Note("On a large log the box switches to Enter-to-search (a hint appears next to it) so typing doesn't re-query on every key.");
+
+        Section("Filter pane (Filters: Left | Top | Hide)");
+        Bullet("Time — presets 15m, 1h, 6h, 24h, 7d, All (anchored to the log's latest event), or Custom ▾ for an exact From/To date and time. Clear removes the range.");
+        Bullet("Filter — type into Provider, TaskName, Message, Source; or turn on \"Pick from values\" to choose from the values actually present. \"Clear fields\" resets just these.");
+        Bullet("Level chips — click a chip to show only that level (click again to clear). Row colours are edited in Settings ▸ Appearance ▸ Level colours, not here.");
+        Bullet("The count badge on the Filters label is how many filters are active — it stays visible when the pane is hidden. \"Clear all (incl. search & time)\" resets everything at once.");
+
+        Section("Rows");
+        Bullet("Click a row to open its details (Details: In row). Under the detail: Filter in ▾ / Filter out ▾ add a predicate for one of the row's fields to the search box; Follow ▾ narrows to this row's activity, thread, process or provider, in time order (only the axes the row has); Around ▾ narrows to ±1 s / ±10 s / ±1 min / … of the row's time; Tag ▾ marks the row (Important / Question / Resolved / Note, plus a note); Copy ▾ copies the row as JSON, CSV or XML.");
+        Bullet("Pivots ADD to the query: Follow this process, then Follow this provider, keeps both. A pivot on the same axis replaces the earlier one (another process, another window, another 'field == value'), so you never narrow to nothing. Remove a clause from its pill under Active filters, or edit the box.");
+        Bullet("Right-click a row for the same actions, plus, with several rows selected, copy / tag / diagram the selection as a sequence.");
+        Bullet("Right-click a column header for a Quick rule (this session): pull a value out of the Message into that column, or strip matching text — applied instantly, cleared on restart.");
+        Bullet("Click a header to sort; drag headers to reorder; drag a header's right edge to resize.");
+
+        Section("Toolbar");
+        Bullet("Filters: Left | Top | Hide — where the filter pane sits; Hide collapses it (filters stay applied).");
+        Bullet("Details: In row | Panel | Popup — details expand inline, dock in a panel below the grid, or open in a dialog on double-click.");
+        Bullet("Rule filter — hides rows excluded by the active rule files (Workspace ▸ Rule files). Its label says why when it can't be turned on: no rule files loaded, or still loading.");
+        Bullet("Columns ▾ — show/hide columns and the time strip (events over time; click a bar to zoom the time window).");
+        Bullet("Export — CSV / JSON / XML of the currently filtered rows, visible columns only.");
+        Bullet("Sources — which sources and rule files this search loaded.");
+        Bullet("While a search is still loading, the banner above the grid shows the running count; Refresh folds new rows into a filtered view; Stop keeps what is loaded. \"Index building in background\" means text search uses a slower scan until it finishes.");
+
+        Section("Shortcuts");
+        Bullet("Ctrl+K — command palette (every menu action by name).  F1 — this help.  Ctrl+F — search box.  Esc — close a popup.");
+        return stack;
     }
 
     private void OnColumnVisibilityChanged(ColumnEntry entry) => ApplyColumnVisibility(entry);
@@ -3034,13 +4114,273 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
     }
 
-    // ----- Row details -----
-    private void CopyJson_Click(object sender, RoutedEventArgs e)
+    // ----- Row details: the action row under an expanded in-row detail -----
+    // Each button's DataContext is the row (the RowDetailsTemplate binds to the LogLine); flyouts are
+    // built on click and anchored to the button, so the template stays plain XAML.
+
+    private static LogLine RowOf(object sender) => (sender as FrameworkElement)?.DataContext as LogLine;
+
+    // (field query name, caption, value, contains?) for every filterable field the row has a value for.
+    private static IEnumerable<(string Field, string Caption, string Value, bool Contains)> FilterableFields(LogLine row)
     {
-        if (sender is FrameworkElement fe && fe.DataContext is LogLine line)
+        (string, string, string, bool) F(string header, string caption, string value)
+            => (QueryFieldForColumn(header), caption, value, header == "Message");
+        var all = new[]
         {
-            CopyToClipboard(RowAsJson(line));
+            F("Provider", "Provider", row.Provider), F("TaskName", "TaskName", row.TaskName),
+            F("Level", "Level", row.Level), F("Message", "Message", row.Message),
+            F("Source", "Source", row.Source), F("ProcessId", "ProcessId", row.ProcessId),
+            F("ThreadId", "ThreadId", row.ThreadId), F("EventId", "EventId", row.EventId),
+            F("Channel", "Channel", row.Channel), F("OpCode", "OpCode", row.OpCode),
+        };
+        return all.Where(t => t.Item1 != null && !string.IsNullOrWhiteSpace(t.Item3));
+    }
+
+    // The row actions (Filter in / Filter out / Follow / Tag / Copy) are built once here and offered in
+    // two places with the same items: the buttons under the in-row detail, and the row's right-click
+    // menu (as submenus). One builder per action so the two never drift.
+
+    /// <summary>One "Field op "value"" item per filterable field the row has a value for.</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildFilterItems(LogLine row, bool negate)
+    {
+        var items = new List<MenuFlyoutItemBase>();
+        foreach (var (field, caption, value, contains) in FilterableFields(row))
+        {
+            var preview = value.Length > 40 ? value.Substring(0, 40) + "…" : value;
+            string op = contains ? (negate ? "!~" : "~") : (negate ? "!=" : "==");
+            var item = new MenuFlyoutItem { Text = $"{caption} {op} \"{preview}\"" };
+            item.Click += (_, __) => AddSearchPredicate(field, value, negate: negate, contains: contains);
+            items.Add(item);
         }
+        if (items.Count == 0) items.Add(new MenuFlyoutItem { Text = "No filterable values on this row", IsEnabled = false });
+        return items;
+    }
+
+    /// <summary>One item per axis the row can be followed along (activity / thread / process / provider).</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildFollowItems(LogLine row)
+    {
+        var items = new List<MenuFlyoutItemBase>();
+        foreach (var axis in NativeResultViewer.FollowCatalog.AxesFor(row.ActivityId, row.ProcessId, row.ThreadId, row.Provider))
+        {
+            var item = new MenuFlyoutItem { Text = axis.Caption, Icon = new SymbolIcon(Symbol.Link) };
+            var a = axis;
+            item.Click += async (_, __) => await FollowAxisAsync(a);
+            items.Add(item);
+        }
+        if (items.Count == 0) items.Add(new MenuFlyoutItem { Text = "Nothing on this row to follow", IsEnabled = false });
+        return items;
+    }
+
+    /// <summary>"Around" windows offered for a row: everything in the log within ±w of its time.</summary>
+    private static readonly (string Caption, TimeSpan Window)[] AroundWindows =
+    {
+        ("±1 second", TimeSpan.FromSeconds(1)), ("±10 seconds", TimeSpan.FromSeconds(10)),
+        ("±1 minute", TimeSpan.FromMinutes(1)), ("±10 minutes", TimeSpan.FromMinutes(10)),
+    };
+
+    /// <summary>One item per window, plus Custom…; each replaces the search with a time range around the
+    /// row (the whole log, not the current filter: the point is to see what ELSE happened then), puts the
+    /// grid in time order and re-selects the row.</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildAroundItems(LogLine row)
+    {
+        var items = new List<MenuFlyoutItemBase>();
+        foreach (var (caption, window) in AroundWindows)
+        {
+            var item = new MenuFlyoutItem { Text = caption, Icon = new SymbolIcon(Symbol.Clock) };
+            var w = window;
+            item.Click += async (_, __) => await AroundRowAsync(row, w);
+            items.Add(item);
+        }
+        var custom = new MenuFlyoutItem { Text = "Custom…" };
+        custom.Click += async (_, __) => await AroundRowCustomAsync(row);
+        items.Add(custom);
+        return items;
+    }
+
+    private async System.Threading.Tasks.Task AroundRowAsync(LogLine row, TimeSpan window)
+    {
+        // Adds to the current query (replacing an earlier time window): "what else happened then" within
+        // whatever you are already following; clear the other pills to widen to the whole log.
+        await AddClauseAsync(FindPluginCore.Searching.Query.LogQuery.AroundTime(row.LogTime, window),
+            FindPluginCore.Searching.Query.QueryEditor.IsTimeRange, timeOrder: true);
+        // Land on the row itself (it sits inside the window by construction; page to it if the window is wide).
+        int before = await System.Threading.Tasks.Task.Run(() => ViewModel.CountBefore(row.LogTime));
+        int page = before / Math.Max(1, ViewModel.PageSize) + 1;
+        if (page != ViewModel.CurrentPage) await ViewModel.GoToPageAndWaitAsync(page);
+        foreach (var l in ViewModel.Results)
+            if (l.RowId == row.RowId) { ResultsGrid.SelectedItem = l; try { ResultsGrid.ScrollIntoView(l, null); } catch { } break; }
+    }
+
+    private async System.Threading.Tasks.Task AroundRowCustomAsync(LogLine row)
+    {
+        var box = new TextBox { Text = "5s", PlaceholderText = "e.g. 500ms, 5s, 2m, 1h", MinWidth = 200 };
+        var dialog = new ContentDialog
+        {
+            Title = "Around this row",
+            Content = new StackPanel { Spacing = 8, Children = { new TextBlock { Text = $"Show everything within ± this much of {row.Time}:" }, box } },
+            PrimaryButtonText = "Show", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+        };
+        try
+        {
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        }
+        catch { return; } // a dialog is already open
+        if (FindPluginCore.Searching.Query.LogQuery.TryParseWindow(box.Text, out var w)) await AroundRowAsync(row, w);
+    }
+
+    private void RowDetailAround_Click(object sender, RoutedEventArgs e)
+    {
+        var row = RowOf(sender);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        foreach (var item in BuildAroundItems(row)) menu.Items.Add(item);
+        menu.ShowAt(anchor);
+    }
+
+    /// <summary>Copy the row as JSON / CSV / XML.</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildCopyItems(LogLine row)
+    {
+        MenuFlyoutItem Make(string text, Func<LogLine, string> fmt)
+        {
+            var item = new MenuFlyoutItem { Text = text };
+            item.Click += (_, __) => CopyToClipboard(fmt(row));
+            return item;
+        }
+        return new MenuFlyoutItemBase[] { Make("Copy as JSON", RowAsJson), Make("Copy as CSV", RowAsCsv), Make("Copy as XML", RowAsXml) };
+    }
+
+    private void ShowFilterFieldMenu(object sender, bool negate)
+    {
+        var row = RowOf(sender);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        foreach (var item in BuildFilterItems(row, negate)) menu.Items.Add(item);
+        menu.ShowAt(anchor);
+    }
+
+    private void RowDetailFilterIn_Click(object sender, RoutedEventArgs e) => ShowFilterFieldMenu(sender, negate: false);
+    private void RowDetailFilterOut_Click(object sender, RoutedEventArgs e) => ShowFilterFieldMenu(sender, negate: true);
+
+    // ----- Follow ▾: isolate the sequence this row belongs to, along one axis -----
+    // "Follow" means: replace the search with a query that keeps only this row's activity / process /
+    // thread / provider, and sort by Time, so the grid reads as that one sequence. It was a single
+    // "Follow this activity" button; the other axes are the same operation on a different field, so
+    // they are one flyout like Filter in ▾ rather than a row of buttons. Only axes the row has a value
+    // for are offered — an item that silently does nothing is worse than no item.
+
+    private void RowDetailFollow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button b) return;
+        var row = RowOf(sender);
+        bool any = row != null && NativeResultViewer.FollowCatalog.AxesFor(row.ActivityId, row.ProcessId, row.ThreadId, row.Provider).Count > 0;
+        b.IsEnabled = any;
+        if (!any) ToolTipService.SetToolTip(b, "This row has no activity, process, thread or provider to follow");
+    }
+
+    private void RowDetailFollow_Click(object sender, RoutedEventArgs e)
+    {
+        var row = RowOf(sender);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        foreach (var item in BuildFollowItems(row)) menu.Items.Add(item);
+        menu.ShowAt(anchor);
+    }
+
+    private void RowDetailTag_Click(object sender, RoutedEventArgs e)
+    {
+        var row = RowOf(sender);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        void RefreshRow()
+        {
+            RerenderRowsPreservingView();
+            try { ResultsGrid.ScrollIntoView(row, null); } catch { /* row may be off-page */ }
+        }
+        foreach (var item in BuildTagMenuItems(row.RowId, RefreshRow)) menu.Items.Add(item);
+        menu.ShowAt(anchor);
+    }
+
+    private void RowDetailCopy_Click(object sender, RoutedEventArgs e)
+    {
+        var row = RowOf(sender);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        foreach (var item in BuildCopyItems(row)) menu.Items.Add(item);
+        menu.ShowAt(anchor);
+    }
+
+    /// <summary>Follow along any axis: replace the search with <paramref name="q"/> and read the result in
+    /// time order, in one reload.</summary>
+    private async System.Threading.Tasks.Task FollowQueryAsync(string q)
+    {
+        ViewModel.SetSortState("Time", false); // chronological, without a separate reload
+        SearchBox.Text = q;
+        SearchBox.Focus(FocusState.Programmatic);
+        PlaceSearchCaretAtEnd();
+        _searchDebounceTimer.Stop();
+        await RunSearchAsync();                 // one reload: this filter + the Time sort
+        SyncSortArrowsFromViewModel();
+    }
+
+    /// <summary>Follow along one axis: ADD its clause to the current query, replacing an earlier clause
+    /// that pins the same fields (process B after process A means B, not nothing), then read in time order.</summary>
+    private async System.Threading.Tasks.Task FollowAxisAsync(NativeResultViewer.FollowAxis axis)
+    {
+        if (!FindPluginCore.Searching.Query.LogQuery.TryParse(axis.Query, out var clause, out _)) return;
+        var fields = axis.Fields;
+        await AddClauseAsync(clause, c => FindPluginCore.Searching.Query.QueryEditor.PinsAnyOf(c, fields), timeOrder: true);
+    }
+
+    /// <summary>The one way every pivot edits the search: add <paramref name="clause"/> to the box's
+    /// current query, dropping clauses <paramref name="replaces"/> says it supersedes, then apply.</summary>
+    private async System.Threading.Tasks.Task AddClauseAsync(FindPluginCore.Searching.Query.QueryNode clause,
+        Func<FindPluginCore.Searching.Query.QueryNode, bool> replaces, bool timeOrder)
+    {
+        var text = FindPluginCore.Searching.Query.QueryEditor.AddClause(SearchBox.Text ?? "", clause, replaces);
+        if (timeOrder) await FollowQueryAsync(text);
+        else
+        {
+            SearchBox.Text = text;
+            SearchBox.Focus(FocusState.Programmatic);
+            PlaceSearchCaretAtEnd();
+            _searchDebounceTimer.Stop();
+            await RunSearchAsync();
+        }
+    }
+
+    /// <summary>The Tag menu for one row (categories with a check on the active one, Add/Edit note, Clear) —
+    /// shared by the right-click menu's Tag submenu and the in-row detail's Tag ▾ button.</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildTagMenuItems(long key, Action refreshRow)
+    {
+        _rowTags.TryGetValue(key, out var currentTag);
+        foreach (var (name, _) in TagOptions)
+        {
+            var capturedName = name;
+            var item = new MenuFlyoutItem { Text = name };
+            if (!string.IsNullOrEmpty(currentTag.Name) && string.Equals(currentTag.Name, name, StringComparison.OrdinalIgnoreCase))
+                item.Icon = new SymbolIcon(Symbol.Accept); // checkmark on the active tag
+            // Changing the category preserves any existing note.
+            item.Click += (_, __) =>
+            {
+                var note = _rowTags.TryGetValue(key, out var ex) ? ex.Text : null;
+                _rowTags[key] = new RowTag(capturedName, note);
+                refreshRow();
+            };
+            yield return item;
+        }
+        yield return new MenuFlyoutSeparator();
+        var noteItem = new MenuFlyoutItem
+        {
+            Text = string.IsNullOrEmpty(currentTag.Text) ? "Add note…" : "Edit note…",
+            Icon = new SymbolIcon(Symbol.Edit),
+        };
+        noteItem.Click += async (_, __) => await EditTagNoteAsync(key, refreshRow);
+        yield return noteItem;
+        yield return new MenuFlyoutSeparator();
+        var clearTag = new MenuFlyoutItem { Text = "Clear tag" };
+        clearTag.Click += (_, __) => { _rowTags.Remove(key); refreshRow(); };
+        yield return clearTag;
     }
 
     // ----- Row right-click context menu -----
@@ -3233,78 +4573,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
-        // ----- Follow the ActivityId → reconstruct that one activity as a sequence -----
-        if (HasActivity(row.ActivityId))
-        {
-            var aid = row.ActivityId;
-
-            // Filter the grid to this activity's causal sequence: every event in the activity, PLUS the
-            // start events of the child activities it spawned (which carry it as RelatedActivityId), in
-            // time order. Uses the structured query DSL — no capped in-memory gather, so it works across
-            // the full paged result set.
-            var followAct = new MenuFlyoutItem { Text = "Follow this activity (filter to sequence)", Icon = new SymbolIcon(Symbol.Link) };
-            followAct.Click += async (_, __) =>
-            {
-                var q = $"activityid == \"{aid}\" OR relatedactivityid == \"{aid}\"";
-                ViewModel.SetSortState("Time", false); // chronological, without a separate reload
-                SearchBox.Text = q;
-                SearchBox.Focus(FocusState.Programmatic);
-                try { SearchBox.SelectionStart = q.Length; } catch { /* cursor position is best-effort */ }
-                _searchDebounceTimer.Stop();
-                await RunSearchAsync();                 // one reload: this filter + the Time sort
-                SyncSortArrowsFromViewModel();
-            };
-            flyout.Items.Add(followAct);
-
-            var diagAct = new MenuFlyoutItem { Text = "Diagram this activity (ActivityId)", Icon = new SymbolIcon(Symbol.View) };
-            diagAct.Click += (_, __) =>
-            {
-                var activityRows = ViewModel.GatherByActivityId(aid);
-                if (activityRows.Count == 0)
-                {
-                    _ = ShowDiagramInfoAsync("No events", "No loaded rows share this ActivityId.");
-                    return;
-                }
-                DiagramSelectedRows(activityRows, r => FirstNonBlank(r.Provider, r.ProcessName, "unknown"), DefaultDiagramLabel);
-            };
-            flyout.Items.Add(diagAct);
-            flyout.Items.Add(new MenuFlyoutSeparator());
-        }
-
-        // ----- Tag (mark this row) -----
-        var key = row.RowId;
-        var tagSub = new MenuFlyoutSubItem { Text = "Tag" };
-        _rowTags.TryGetValue(key, out var currentTag);
-        foreach (var (name, _) in TagOptions)
-        {
-            var capturedName = name;
-            var item = new MenuFlyoutItem { Text = name };
-            if (!string.IsNullOrEmpty(currentTag.Name) && string.Equals(currentTag.Name, name, StringComparison.OrdinalIgnoreCase))
-                item.Icon = new SymbolIcon(Symbol.Accept); // checkmark on the active tag
-            // Changing the category preserves any existing note.
-            item.Click += (_, __) =>
-            {
-                var note = _rowTags.TryGetValue(key, out var ex) ? ex.Text : null;
-                _rowTags[key] = new RowTag(capturedName, note);
-                RefreshRow();
-            };
-            tagSub.Items.Add(item);
-        }
-        tagSub.Items.Add(new MenuFlyoutSeparator());
-        var noteItem = new MenuFlyoutItem
-        {
-            Text = string.IsNullOrEmpty(currentTag.Text) ? "Add note…" : "Edit note…",
-            Icon = new SymbolIcon(Symbol.Edit),
-        };
-        noteItem.Click += async (_, __) => await EditTagNoteAsync(key, RefreshRow);
-        tagSub.Items.Add(noteItem);
-        tagSub.Items.Add(new MenuFlyoutSeparator());
-        var clearTag = new MenuFlyoutItem { Text = "Clear tag" };
-        clearTag.Click += (_, __) => { _rowTags.Remove(key); RefreshRow(); };
-        tagSub.Items.Add(clearTag);
-        flyout.Items.Add(tagSub);
-        flyout.Items.Add(new MenuFlyoutSeparator());
-
+        // ----- The clicked cell first: its value is the most specific thing under the cursor. -----
         if (!string.IsNullOrEmpty(cellColumnHeader))
         {
             var cellValue = GetRowField(row, cellColumnHeader);
@@ -3341,17 +4610,50 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
-        var copyJson = new MenuFlyoutItem { Text = "Copy row as JSON" };
-        copyJson.Click += (_, __) => CopyToClipboard(RowAsJson(row));
-        flyout.Items.Add(copyJson);
+        // ----- The same row actions as the buttons under the in-row detail: Filter in / Filter out /
+        // Follow / Tag / Copy — as submenus, so the right-click menu is complete on its own. -----
+        var filterInSub = new MenuFlyoutSubItem { Text = "Filter in", Icon = new SymbolIcon(Symbol.Filter) };
+        foreach (var item in BuildFilterItems(row, negate: false)) filterInSub.Items.Add(item);
+        flyout.Items.Add(filterInSub);
 
-        var copyCsv = new MenuFlyoutItem { Text = "Copy row as CSV" };
-        copyCsv.Click += (_, __) => CopyToClipboard(RowAsCsv(row));
-        flyout.Items.Add(copyCsv);
+        var filterOutSub = new MenuFlyoutSubItem { Text = "Filter out" };
+        foreach (var item in BuildFilterItems(row, negate: true)) filterOutSub.Items.Add(item);
+        flyout.Items.Add(filterOutSub);
 
-        var copyXml = new MenuFlyoutItem { Text = "Copy row as XML" };
-        copyXml.Click += (_, __) => CopyToClipboard(RowAsXml(row));
-        flyout.Items.Add(copyXml);
+        var followSub = new MenuFlyoutSubItem { Text = "Follow", Icon = new SymbolIcon(Symbol.Link) };
+        foreach (var item in BuildFollowItems(row)) followSub.Items.Add(item);
+        flyout.Items.Add(followSub);
+
+        var aroundSub = new MenuFlyoutSubItem { Text = "Around", Icon = new SymbolIcon(Symbol.Clock) };
+        foreach (var item in BuildAroundItems(row)) aroundSub.Items.Add(item);
+        flyout.Items.Add(aroundSub);
+
+        var tagSub = new MenuFlyoutSubItem { Text = "Tag", Icon = new SymbolIcon(Symbol.Tag) };
+        foreach (var item in BuildTagMenuItems(row.RowId, RefreshRow)) tagSub.Items.Add(item);
+        flyout.Items.Add(tagSub);
+
+        var copySub = new MenuFlyoutSubItem { Text = "Copy row", Icon = new SymbolIcon(Symbol.Copy) };
+        foreach (var item in BuildCopyItems(row)) copySub.Items.Add(item);
+        flyout.Items.Add(copySub);
+
+        // ----- Diagram the ActivityId → reconstruct that one activity as a sequence -----
+        if (HasActivity(row.ActivityId))
+        {
+            var aid = row.ActivityId;
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            var diagAct = new MenuFlyoutItem { Text = "Diagram this activity (ActivityId)", Icon = new SymbolIcon(Symbol.View) };
+            diagAct.Click += (_, __) =>
+            {
+                var activityRows = ViewModel.GatherByActivityId(aid);
+                if (activityRows.Count == 0)
+                {
+                    _ = ShowDiagramInfoAsync("No events", "No loaded rows share this ActivityId.");
+                    return;
+                }
+                DiagramSelectedRows(activityRows, r => FirstNonBlank(r.Provider, r.ProcessName, "unknown"), DefaultDiagramLabel);
+            };
+            flyout.Items.Add(diagAct);
+        }
 
         // Anchor on ResultsGrid and position at the click point so the menu lands under the
         // cursor regardless of which visual-tree descendant raised the event.
@@ -3382,20 +4684,19 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// then leaves the box focused with the cursor at the end so the user can edit it.</summary>
     private void AddSearchPredicate(string field, string value, bool negate, bool contains)
     {
-        // Sanitize for the query language: single line, no embedded double-quotes, bounded length.
-        var v = (value ?? "").Replace('"', '\'').Replace('\r', ' ').Replace('\n', ' ').Trim();
+        // Sanitize for the query language: single line, bounded length (quotes are escaped on the way out).
+        var v = (value ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
         if (v.Length > 200) v = v.Substring(0, 200);
-        string op = contains ? (negate ? "!~" : "~") : (negate ? "!=" : "==");
-        string predicate = $"{field} {op} \"{v}\"";
-
-        var existing = (SearchBox.Text ?? "").Trim();
-        var newText = existing.Length == 0 ? predicate : $"{existing} AND {predicate}";
-
-        SearchBox.Text = newText;
-        SearchBox.Focus(FocusState.Programmatic);
-        try { SearchBox.SelectionStart = newText.Length; } catch { /* cursor position is best-effort */ }
-        _searchDebounceTimer.Stop();
-        _ = RunSearchAsync(); // commit + apply now, regardless of submit mode
+        var op = contains ? (negate ? FindPluginCore.Searching.Query.QueryOp.NotContains : FindPluginCore.Searching.Query.QueryOp.Contains)
+                          : (negate ? FindPluginCore.Searching.Query.QueryOp.Ne : FindPluginCore.Searching.Query.QueryOp.Eq);
+        var canonical = FindPluginCore.Searching.Query.LogQuery.Canonical(field) ?? field;
+        var clause = new FindPluginCore.Searching.Query.PredicateNode(canonical, op, v);
+        // "Filter in: field == X" after "field == Y" means X (a field cannot equal both); every other
+        // form narrows further, so it is simply added (an identical clause is not added twice).
+        Func<FindPluginCore.Searching.Query.QueryNode, bool> replaces = op == FindPluginCore.Searching.Query.QueryOp.Eq
+            ? c => FindPluginCore.Searching.Query.QueryEditor.PinsAnyOf(c, new[] { canonical })
+            : _ => false;
+        _ = AddClauseAsync(clause, replaces, timeOrder: false); // commit + apply now, regardless of submit mode
     }
 
     /// <summary>
@@ -3489,19 +4790,31 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         catch { return null; }
     }
 
+    /// <summary>The columns "+ New quick rule" offers as a target. Message is the strip-only case (its
+    /// own column can't be set by an extract rule); the rest are the enrichment fields a rule can fill.</summary>
+    private static readonly string[] QuickRuleTargetColumns =
+        { "Message", "TaskName", "Provider", "ProcessId", "ProcessName", "ThreadId", "EventId", "ActivityId", "Channel", "OpCode" };
+
+    /// <summary>
+    /// The viewer's ONE quick-rule dialog. <paramref name="column"/> names the target column when the
+    /// user right-clicked that column's header; pass null for the filter pane's "+ New quick rule",
+    /// which adds a column picker to this same dialog rather than forking a second one.
+    /// </summary>
     private async System.Threading.Tasks.Task ShowColumnQuickRuleDialogAsync(string column)
     {
-        var settable = SettableFieldFor(column);
+        string col = column ?? "Message";
+        string settable = SettableFieldFor(col);
         var samples = ViewModel.Results.Select(r => r.Message).Where(s => !string.IsNullOrEmpty(s)).Take(12).ToList();
 
         var pattern = new TextBox
         {
-            PlaceholderText = @"regex — e.g. PID=(?<v>\d+)   (the (?<v>…) group is the captured value)",
+            // Short enough to fit the dialog's box: the old placeholder ran off the right edge mid-sentence.
+            PlaceholderText = @"Regex with a (?<v>…) group, e.g. PID=(?<v>\d+)",
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
         };
         var extractRadio = new RadioButton
         {
-            Content = settable != null ? $"Extract a value into the {column} column" : $"Extract (the {column} column can't be set)",
+            Content = settable != null ? $"Extract a value into the {col} column" : $"Extract (the {col} column can't be set)",
             IsChecked = settable != null, IsEnabled = settable != null, GroupName = "qr",
         };
         var stripRadio = new RadioButton { Content = "Strip the matched text from the Message", IsChecked = settable == null, GroupName = "qr" };
@@ -3515,7 +4828,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             if (string.IsNullOrWhiteSpace(pattern.Text)) { preview.Text = "Type a regex to preview…"; return; }
             bool extract = extractRadio.IsChecked == true && settable != null;
-            var rule = BuildQuickRule(column, settable ?? column, pattern.Text, extract);
+            var rule = BuildQuickRule(col, settable ?? col, pattern.Text, extract);
             if (rule == null) { preview.Text = "⚠ Invalid regex"; return; }
             var sb = new System.Text.StringBuilder();
             int shown = 0, changed = 0;
@@ -3525,7 +4838,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                 if (matched) changed++;
                 if (shown < 8 && (matched || shown < 3))
                 {
-                    var val = extract && !string.IsNullOrEmpty(captured) ? $"   → {column}={captured}" : "";
+                    var val = extract && !string.IsNullOrEmpty(captured) ? $"   → {col}={captured}" : "";
                     sb.Append("• ").Append(TruncMid(msg, 92)).Append('\n');
                     sb.Append("   ⇒ ").Append(TruncMid(after, 92)).Append(val).Append("\n\n");
                     shown++;
@@ -3541,10 +4854,36 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         var panel = new StackPanel { Spacing = 8, MinWidth = 480 };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Pull a value out of the Message into the {column} column, or strip matching text. Applies to the open results instantly — no re-scan; cleared on restart.",
+            Text = column != null
+                ? $"Pull a value out of the Message into the {column} column, or strip matching text. Applies to the open results instantly — no re-scan; cleared on restart."
+                : "Pull a value out of the Message into a column, or strip matching text. Applies to the open results instantly — no re-scan; cleared on restart.",
             TextWrapping = TextWrapping.Wrap, FontSize = 12,
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         });
+        // Opened from the filter pane rather than a column header: pick the target column here. Only
+        // this control differs — everything below is the same dialog the header right-click shows.
+        if (column == null)
+        {
+            var target = new ComboBox
+            {
+                Header = "Target column",
+                ItemsSource = QuickRuleTargetColumns,
+                SelectedItem = col,
+                MinWidth = 200,
+            };
+            target.SelectionChanged += (_, _) =>
+            {
+                col = target.SelectedItem as string ?? "Message";
+                settable = SettableFieldFor(col);
+                extractRadio.Content = settable != null
+                    ? $"Extract a value into the {col} column"
+                    : $"Extract (the {col} column can't be set)";
+                extractRadio.IsEnabled = settable != null;
+                if (settable == null) stripRadio.IsChecked = true;
+                Refresh();
+            };
+            panel.Children.Add(target);
+        }
         panel.Children.Add(pattern);
         panel.Children.Add(extractRadio);
         panel.Children.Add(stripRadio);
@@ -3559,7 +4898,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         bool anyActive = FindNeedleUX.Services.ViewerQuickRulesStore.Any;
         var dlg = new ContentDialog
         {
-            Title = $"Quick rule — {column}",
+            Title = column != null ? $"Quick rule — {column}" : "Quick rule",
             Content = new ScrollViewer { Content = panel, MaxHeight = 440 },
             PrimaryButtonText = "Apply",
             SecondaryButtonText = anyActive ? "Clear all quick rules" : null,
@@ -3573,14 +4912,16 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             FindNeedleUX.Services.ViewerQuickRulesStore.Clear();
             ViewModel.RefreshNow();
+            UpdateFiltersBadge();
             return;
         }
         if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(pattern.Text)) return;
         bool ex2 = extractRadio.IsChecked == true && settable != null;
-        var rule = BuildQuickRule(column, settable ?? column, pattern.Text, ex2);
+        var rule = BuildQuickRule(col, settable ?? col, pattern.Text, ex2);
         if (rule == null) return;
         FindNeedleUX.Services.ViewerQuickRulesStore.Add(rule);
         ViewModel.RefreshNow(); // re-fetch the current page → rows rebuild with the rule applied (no re-scan)
+        UpdateFiltersBadge();   // the pane's Quick rules list + the Active filters pill for it
     }
 
     private static string TryGetCellColumnHeader(CommunityToolkit.WinUI.UI.Controls.DataGridCell cell)
@@ -3689,6 +5030,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         AppendXmlField(sb, "Message",     line.Message);
         AppendXmlField(sb, "Source",      line.Source);
         AppendXmlField(sb, "Level",       line.Level);
+        AppendXmlField(sb, "RawLevel",    line.RawLevel);
         AppendXmlField(sb, "MachineName", line.MachineName);
         AppendXmlField(sb, "Username",    line.Username);
         AppendXmlField(sb, "OpCode",      line.OpCode);
@@ -3818,6 +5160,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             dto.OpCode = l.OpCode;
             dto.SearchableData = l.SearchableData;
             dto.StructuredData = l.StructuredData; // decoded EventData / TraceLogging fields for the agent
+            dto.RawLevel = l.RawLevel;
 
             dto.ProcessName = l.ProcessName;
             dto.ActivityId = l.ActivityId;

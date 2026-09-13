@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
@@ -69,8 +69,9 @@ namespace FindPluginCore.Implementations.Storage
         // ingest, not up front; bumped so an old v8 cache (AUTOINCREMENT + eager indexes) rebuilds rather
         // than being reused. v10: BlankRedundantSearchableData stores NULL for a SearchableData that dups
         // Message; new code reconstructs it, but a pre-v10 build would throw on the NULL — bumped so an old
-        // build rebuilds rather than reuse+crash. Old caches rescan; EnsureColumns migrates.
-        public const int CacheSchemaVersion = 10;
+        // build rebuilds rather than reuse+crash. v11: RawLevel (the source's unmapped severity value) added to the
+        // extended columns; bumped so old caches rebuild and carry it. Old caches rescan; EnsureColumns migrates.
+        public const int CacheSchemaVersion = 11;
 
         /// <summary>
         /// True if the constructor was given a DB file whose <c>_meta</c> matched the source
@@ -148,6 +149,10 @@ namespace FindPluginCore.Implementations.Storage
         {
             _connection = new SqliteConnection($"Data Source={_dbPath}");
             _connection.Open();
+            // `field =~ pattern` in the viewer's query language compiles to `col REGEXP @p`; SQLite has the
+            // operator but no implementation, so supply the same matcher the in-memory path uses.
+            _connection.CreateFunction("regexp", (string pattern, string input) =>
+                FindPluginCore.Searching.Query.LogQuery.RegexMatches(pattern, input), isDeterministic: true);
             try
             {
                 ApplyBulkInsertPragmas();
@@ -263,7 +268,8 @@ namespace FindPluginCore.Implementations.Storage
                     ProviderGuid TEXT,
                     RecordId TEXT,
                     ProcessName TEXT,
-                    StructuredData TEXT
+                    StructuredData TEXT,
+                    RawLevel TEXT
                 );
                 CREATE TABLE IF NOT EXISTS FilteredResults (
                     {idCol},
@@ -287,7 +293,8 @@ namespace FindPluginCore.Implementations.Storage
                     ProviderGuid TEXT,
                     RecordId TEXT,
                     ProcessName TEXT,
-                    StructuredData TEXT
+                    StructuredData TEXT,
+                    RawLevel TEXT
                 );
             ";
             cmd.ExecuteNonQuery();
@@ -321,7 +328,7 @@ namespace FindPluginCore.Implementations.Storage
             }
             foreach (var col in new[] { "ProcessId", "ThreadId", "ActivityId",
                                         "EventId", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId",
-                                        "ProcessName", "StructuredData" })
+                                        "ProcessName", "StructuredData", "RawLevel" })
             {
                 if (existing.Contains(col)) continue;
                 using var a = _connection.CreateCommand();
@@ -1460,7 +1467,7 @@ namespace FindPluginCore.Implementations.Storage
                                    OpCode, Source, SearchableData, Message, ResultSource,
                                    ProcessId, ThreadId, ActivityId,
                                    EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId,
-                                   ProcessName, StructuredData;
+                                   ProcessName, StructuredData, RawLevel;
         }
 
         /// <summary>
@@ -1471,8 +1478,8 @@ namespace FindPluginCore.Implementations.Storage
         // The 11 ETW/EventLog "extended" columns — empty for plain-text logs. A narrow insert omits them,
         // so a plain-text row binds 10 params instead of 21 (the per-param bind machinery was ~14.5% of the
         // ingest+index workload in a CPU profile). Omitted columns default to NULL and read back as "".
-        private const string ExtendedCols = "ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData";
-        private const string ExtendedVals = "@ProcessId, @ThreadId, @ActivityId, @EventId, @Keywords, @RelatedActivityId, @Channel, @ProviderGuid, @RecordId, @ProcessName, @StructuredData";
+        private const string ExtendedCols = "ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData, RawLevel";
+        private const string ExtendedVals = "@ProcessId, @ThreadId, @ActivityId, @EventId, @Keywords, @RelatedActivityId, @Channel, @ProviderGuid, @RecordId, @ProcessName, @StructuredData, @RawLevel";
 
         private SqliteCommand CreatePreparedInsert(string table, SqliteTransaction tx, out InsertParams p, bool withId = false, bool narrow = false)
         {
@@ -1512,6 +1519,7 @@ namespace FindPluginCore.Implementations.Storage
                 p.RecordId          = cmd.Parameters.Add("@RecordId",          SqliteType.Text);
                 p.ProcessName       = cmd.Parameters.Add("@ProcessName",       SqliteType.Text);
                 p.StructuredData    = cmd.Parameters.Add("@StructuredData",    SqliteType.Text);
+                p.RawLevel          = cmd.Parameters.Add("@RawLevel",          SqliteType.Text);
             }
             if (withId) p.Id = cmd.Parameters.Add("@Id", SqliteType.Integer);
             cmd.Prepare();
@@ -1549,6 +1557,7 @@ namespace FindPluginCore.Implementations.Storage
                 p.RecordId.Value          = r.GetRecordId() ?? "";
                 p.ProcessName.Value       = r.GetProcessName() ?? "";
                 p.StructuredData.Value    = r.GetStructuredData() ?? "";
+                p.RawLevel.Value          = r.GetRawLevel() ?? "";
             }
             cmd.ExecuteNonQuery();
         }
@@ -1561,7 +1570,7 @@ namespace FindPluginCore.Implementations.Storage
               && string.IsNullOrEmpty(r.GetKeywords()) && string.IsNullOrEmpty(r.GetRelatedActivityId())
               && string.IsNullOrEmpty(r.GetChannel()) && string.IsNullOrEmpty(r.GetProviderGuid())
               && string.IsNullOrEmpty(r.GetRecordId()) && string.IsNullOrEmpty(r.GetProcessName())
-              && string.IsNullOrEmpty(r.GetStructuredData()));
+              && string.IsNullOrEmpty(r.GetStructuredData()) && string.IsNullOrEmpty(r.GetRawLevel()));
 
         /// <summary>Increment the running level map for one just-inserted filtered row. Called under
         /// _sync (inside BulkInsert). A level outside the array invalidates the map so reads fall back
@@ -1612,7 +1621,7 @@ namespace FindPluginCore.Implementations.Storage
             lock (_sync)
             {
                 var cmd = _connection.CreateCommand();
-                cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData FROM {table}";
+                cmd.CommandText = $"SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData, RawLevel FROM {table}";
                 using var reader = cmd.ExecuteReader();
                 var batch = new List<ISearchResult>(batchSize);
                 while (reader.Read())
@@ -1708,7 +1717,7 @@ namespace FindPluginCore.Implementations.Storage
                 cmd.CommandText =
                     "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
                     "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, " +
-                    "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData FROM FilteredResults " +
+                    "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData, RawLevel FROM FilteredResults " +
                     $"{where} {orderBy} LIMIT @limit OFFSET @offset";
                 BindParams(cmd, ps);
                 cmd.Parameters.AddWithValue("@limit", limit);
@@ -1739,7 +1748,7 @@ namespace FindPluginCore.Implementations.Storage
             const string select =
                 "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
                 "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, " +
-                "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData FROM FilteredResults ";
+                "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData, RawLevel FROM FilteredResults ";
             lock (_sync)
             {
                 List<ISearchResult> Run(bool ftsAvailable)
@@ -1877,7 +1886,7 @@ namespace FindPluginCore.Implementations.Storage
                 cmd.CommandText =
                     "SELECT LogTime, MachineName, Level, Username, TaskName, OpCode, Source, " +
                     "SearchableData, Message, ResultSource, Id, ProcessId, ThreadId, ActivityId, " +
-                    "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData FROM FilteredResults WHERE Id = @id LIMIT 1";
+                    "EventId, Keywords, RelatedActivityId, Channel, ProviderGuid, RecordId, ProcessName, StructuredData, RawLevel FROM FilteredResults WHERE Id = @id LIMIT 1";
                 cmd.Parameters.AddWithValue("@id", id);
                 using var reader = cmd.ExecuteReader();
                 return reader.Read() ? new SqliteSearchResult(reader) : null;
@@ -2257,6 +2266,7 @@ namespace FindPluginCore.Implementations.Storage
             private readonly string _recordId;
             private readonly string _processName;
             private readonly string _structuredData;
+            private readonly string _rawLevel;
 
             public SqliteSearchResult(IDataRecord record)
             {
@@ -2287,6 +2297,7 @@ namespace FindPluginCore.Implementations.Storage
                 _recordId          = record.FieldCount > 19 && !record.IsDBNull(19) ? record.GetString(19) : "";
                 _processName       = record.FieldCount > 20 && !record.IsDBNull(20) ? record.GetString(20) : "";
                 _structuredData    = record.FieldCount > 21 && !record.IsDBNull(21) ? record.GetString(21) : "";
+                _rawLevel          = record.FieldCount > 22 && !record.IsDBNull(22) ? record.GetString(22) : "";
             }
 
             public DateTime GetLogTime() => _logTime;
@@ -2312,6 +2323,7 @@ namespace FindPluginCore.Implementations.Storage
             public string GetRecordId() => _recordId;
             public string GetProcessName() => _processName;
             public string GetStructuredData() => _structuredData;
+            public string GetRawLevel() => _rawLevel;
         }
     }
 }

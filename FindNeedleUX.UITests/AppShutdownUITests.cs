@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.UIA3;
 using System.Diagnostics;
@@ -17,6 +17,7 @@ namespace FindNeedleUX.UITests
     [TestClass]
     [TestCategory("UITests")]
     [TestCategory("SkipCI")]
+    [TestCategory("UiSmoke")] // self-contained (generated data, small): runs in the CI ui-smoke job
     public class AppShutdownUITests
     {
         // Graceful exit was ~1s in practice; budget is generous headroom but still catches a true hang.

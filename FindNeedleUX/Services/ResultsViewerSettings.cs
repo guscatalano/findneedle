@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -51,10 +51,38 @@ public static class ResultsViewerSettings
         set { Data.TimeFormat = value; Save(); Changed?.Invoke(); }
     }
 
+    /// <summary>
+    /// Whether the result viewer's filter pane is shown. Default TRUE: the pane is meant to simply be
+    /// there (docked left, see <see cref="DefaultFilterDock"/>), not something the user discovers behind a
+    /// toggle. A collapse is remembered PER DOCK — it's recorded together with the dock it was made under
+    /// (<c>FiltersExpandedDock</c>) and only honored while that dock is still active:
+    ///  - Deliberate collapse of the left pane → stays collapsed on the next open (same dock).
+    ///  - Switching dock (Top ↔ Left) → the pane comes back expanded; a collapse of the top ROW says
+    ///    nothing about wanting the left RAIL hidden (and vice-versa).
+    ///  - Legacy value: builds before this field existed defaulted the filters to a full row ACROSS THE
+    ///    TOP, and collapsing that row was the natural thing to do — but with no dock recorded that
+    ///    stale <c>false</c> would silently hide the new left pane and leave the toolbar toggle as the
+    ///    only way to reveal it. So a saved value with NO recorded dock is treated as "not a choice about
+    ///    this layout" and reset to expanded (a one-time reset: the next collapse records the dock and
+    ///    sticks from then on).
+    /// No Changed broadcast: per-window UI state.
+    /// </summary>
+    public const bool DefaultFiltersExpanded = true;
     public static bool FiltersExpanded
     {
-        get => Data.FiltersExpanded ?? true;
-        set { Data.FiltersExpanded = value; Save(); /* no Changed: per-window UI state */ }
+        get
+        {
+            if (Data.FiltersExpanded is not bool saved) return DefaultFiltersExpanded;
+            if (!string.Equals(Data.FiltersExpandedDock, FilterDock.ToString(), StringComparison.OrdinalIgnoreCase))
+                return DefaultFiltersExpanded; // legacy (no dock recorded) or recorded under the other dock
+            return saved;
+        }
+        set
+        {
+            Data.FiltersExpanded = value;
+            Data.FiltersExpandedDock = FilterDock.ToString();
+            Save();
+        }
     }
 
     /// <summary>
@@ -231,11 +259,10 @@ public static class ResultsViewerSettings
     }
 
     /// <summary>
-    /// Whether the Ctrl+K command palette is active. Default OFF — the accelerator does nothing unless a
-    /// user opts in (some people hit Ctrl+K expecting a different action and were surprised by the palette).
-    /// Also requires <see cref="HotkeysEnabled"/>.
+    /// Whether the Ctrl+K command palette is active. Default ON — it's the keyboard way to reach any page
+    /// or action; turn it off here if Ctrl+K should do nothing. Also requires <see cref="HotkeysEnabled"/>.
     /// </summary>
-    public const bool DefaultCommandPaletteEnabled = false;
+    public const bool DefaultCommandPaletteEnabled = true;
     public static bool CommandPaletteEnabled
     {
         get => Data.CommandPaletteEnabled ?? DefaultCommandPaletteEnabled;
@@ -266,6 +293,22 @@ public static class ResultsViewerSettings
     // Default to a LEFT dock: for a first-time user a full row of filters across the top reads as
     // overwhelming, whereas a left rail is calmer and leaves the results as the focus. Users who
     // prefer the top layout can switch (and their choice persists).
+    /// <summary>
+    /// Which field filters the pane shows, as canonical names (see FilterFieldCatalog). Null means the
+    /// default four. Persisted so a field you added is still there after a restart — until this existed
+    /// the pane came back with the default four every launch, which made "+ Add field" feel like it
+    /// forgot. Per-window UI state: no Changed broadcast.
+    /// </summary>
+    public static IReadOnlyList<string> ShownFilterFields
+    {
+        get => Data.ShownFilterFields;
+        set
+        {
+            Data.ShownFilterFields = value == null ? null : new List<string>(value);
+            Save();
+        }
+    }
+
     public const FilterDock DefaultFilterDock = FilterDock.Left;
     public static FilterDock FilterDock
     {
@@ -368,15 +411,19 @@ public static class ResultsViewerSettings
         set { Data.FileContextMenuEnabled = value; Save(); }
     }
 
-    /// <summary>What happens when a file/folder is dropped onto the viewer while a workspace is already
-    /// loaded: Prompt (ask each time, default), ClearAndAdd, or AddToExisting. Applied per-drop (no Changed).</summary>
-    public const DragDropMode DefaultDragDropMode = DragDropMode.Prompt;
-    public static DragDropMode DragDropMode
+    /// <summary>What happens when you open another log (file/folder picker, Open with rules, a Recent
+    /// search, a Known log, or a drop) while a workspace is already loaded: Add (default — sources and
+    /// rule files are kept), Replace, or Ask each time. An empty workspace never prompts (see
+    /// <see cref="WorkspaceOpenPolicy"/>). Generalises the old drag-and-drop-only setting; a persisted
+    /// legacy <c>DragDropMode</c> value is honoured until the user picks a new mode. Broadcasts Changed so
+    /// the Home page and the Settings page stay in sync.</summary>
+    public const OpenIntoWorkspaceMode DefaultOpenIntoWorkspace = OpenIntoWorkspaceMode.Add;
+    public static OpenIntoWorkspaceMode OpenIntoWorkspace
     {
-        get => !string.IsNullOrEmpty(Data.DragDropMode)
-               && Enum.TryParse<DragDropMode>(Data.DragDropMode, ignoreCase: true, out var p)
-            ? p : DefaultDragDropMode;
-        set { Data.DragDropMode = value.ToString(); Save(); }
+        get => WorkspaceOpenPolicy.Parse(Data.OpenIntoWorkspace)
+               ?? WorkspaceOpenPolicy.FromLegacyDragDropValue(Data.DragDropMode)
+               ?? DefaultOpenIntoWorkspace;
+        set { Data.OpenIntoWorkspace = value.ToString(); Save(); Changed?.Invoke(); }
     }
 
     /// <summary>TCP port for the in-app MCP server (bound to 127.0.0.1 only).</summary>
@@ -582,7 +629,7 @@ public static class ResultsViewerSettings
     /// <summary>Canonical ordered set of fields the row-details panel can show.</summary>
     public static readonly IReadOnlyList<string> DetailFieldNames = new[]
     {
-        "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level",
+        "Index", "Time", "Provider", "TaskName", "Message", "Source", "Level", "RawLevel",
         "MachineName", "Username", "OpCode", "ProcessId", "ProcessName", "ThreadId", "ActivityId",
         "EventId", "Keywords", "RelatedActivityId", "Channel", "ProviderGuid", "RecordId", "Tag",
     };
@@ -738,7 +785,7 @@ public static class ResultsViewerSettings
     /// <summary>Toolbar buttons the user can show/hide (stable ids). The search box and the More (⋯)
     /// menu are always shown and not in this list.</summary>
     public static readonly IReadOnlyList<string> ToolbarButtonIds =
-        new[] { "SearchHelp", "Columns", "Export", "Sources", "Filters", "View", "FilterPerf", "Status" };
+        new[] { "SearchHelp", "Columns", "Export", "Sources", "FilterPlacement", "DetailsMode", "RuleFilter", "FilterPerf", "Status" };
 
     /// <summary>Per-button toolbar visibility (all shown by default), merged with the defaults.</summary>
     public static IReadOnlyDictionary<string, bool> ToolbarButtonVisibility
@@ -838,15 +885,39 @@ public static class ResultsViewerSettings
 
     private static SettingsData Load()
     {
-        try
+        // Two very different failures used to share one `catch { start fresh }`:
+        //  - a CORRUPT file (JSON that will not parse) — starting fresh is right;
+        //  - a TRANSIENT I/O failure (sharing violation while another process, an indexer or
+        //    antivirus has the file open, or a write's File.Replace mid-swap) — starting fresh is
+        //    WRONG: it hands back defaults, and the very next Save() writes those defaults over the
+        //    user's real settings. Silent settings loss, and exactly the collision that becomes
+        //    likely once more than one instance can run.
+        // So I/O errors are retried briefly; only a parse failure is treated as corrupt.
+        if (!File.Exists(_settingsPath)) return new SettingsData();
+
+        const int attempts = 6;
+        for (int i = 1; i <= attempts; i++)
         {
-            if (File.Exists(_settingsPath))
+            try
             {
                 var json = File.ReadAllText(_settingsPath);
                 return JsonSerializer.Deserialize<SettingsData>(json) ?? new SettingsData();
             }
+            catch (JsonException ex)
+            {
+                FindNeedlePluginLib.Logger.Instance.Log(
+                    $"WARNING: viewer-settings.json is not valid JSON; starting with defaults ({ex.Message})");
+                return new SettingsData();
+            }
+            catch (IOException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
+            catch (UnauthorizedAccessException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
+            catch (Exception ex)
+            {
+                FindNeedlePluginLib.Logger.Instance.Log(
+                    $"WARNING: could not read {_settingsPath} after {i} attempt(s); using defaults for this session ({ex.GetType().Name}: {ex.Message})");
+                return new SettingsData();
+            }
         }
-        catch { /* corrupt file => start fresh */ }
         return new SettingsData();
     }
 
@@ -856,8 +927,39 @@ public static class ResultsViewerSettings
         {
             var dir = Path.GetDirectoryName(_settingsPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(_settingsPath,
-                JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true }));
+            var json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
+
+            // ATOMIC: write a temp file next to the target, then swap it in. A plain WriteAllText
+            // truncates the real file first, so any reader that lands in that window sees an empty or
+            // half-written file, fails to parse, and silently falls back to defaults — i.e. the user's
+            // settings appear to reset themselves. The window is small with one process and wide open
+            // with several, which matters now that running more than one instance is on the table.
+            var tmp = _settingsPath + ".tmp";
+            File.WriteAllText(tmp, json);
+            // The swap needs exclusive access to both files for an instant, and a search indexer or
+            // antivirus opening the just-written temp file (or the destination) makes it throw. Giving up
+            // on the first throw left the on-disk file silently STALE — the setting "didn't stick" — and
+            // is what made the settings tests flake in the full suite. Retry briefly, like Load does.
+            const int attempts = 6;
+            for (int i = 1; i <= attempts; i++)
+            {
+                try
+                {
+                    if (File.Exists(_settingsPath))
+                    {
+                        // Replace keeps the destination's identity and is atomic where the filesystem
+                        // supports it. No backup file: we already hold the full contents in memory.
+                        File.Replace(tmp, _settingsPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                    }
+                    else
+                    {
+                        File.Move(tmp, _settingsPath);
+                    }
+                    break;
+                }
+                catch (IOException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
+                catch (UnauthorizedAccessException) when (i < attempts) { System.Threading.Thread.Sleep(40 * i); }
+            }
         }
         catch (Exception ex)
         {
@@ -875,6 +977,7 @@ public static class ResultsViewerSettings
         public string TitleBarCustomColor { get; set; }
         public Dictionary<string, string> LevelColors { get; set; }
         public bool? FiltersExpanded { get; set; }
+        public string FiltersExpandedDock { get; set; } // dock FiltersExpanded was recorded under (null = legacy)
         public Dictionary<string, bool> ColumnVisibility { get; set; }
         public int? PageSize { get; set; }
         public string DefaultResultViewer { get; set; }
@@ -888,6 +991,7 @@ public static class ResultsViewerSettings
         public bool? CommandPaletteEnabled { get; set; }
         public string SearchSubmitMode { get; set; }
         public string FilterDock { get; set; }
+        public List<string> ShownFilterFields { get; set; } // canonical field names in the pane; null = the default four
         public bool? ShowStepHistory { get; set; }
         public bool? StreamWhileLoading { get; set; }
         public string LoadingAnimation { get; set; }
@@ -901,7 +1005,8 @@ public static class ResultsViewerSettings
         public int? McpServerPort { get; set; }
         public bool? FileOpenWithEnabled { get; set; }
         public bool? FileContextMenuEnabled { get; set; }
-        public string DragDropMode { get; set; }
+        public string DragDropMode { get; set; }      // legacy (pre-Home) drag-and-drop-only value; read for migration only
+        public string OpenIntoWorkspace { get; set; }
         public bool? EnrichmentEnabled { get; set; }
         public string TraceFormatSearchPath { get; set; }
         public string SymbolPath { get; set; }

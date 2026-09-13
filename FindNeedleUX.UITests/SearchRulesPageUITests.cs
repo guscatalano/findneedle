@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
@@ -22,6 +22,7 @@ namespace FindNeedleUX.UITests
     [TestClass]
     [TestCategory("UITests")]
     [TestCategory("SkipCI")]
+    [TestCategory("UiSmoke")] // self-contained (generated data, small): runs in the CI ui-smoke job
     public class SearchRulesPageUITests
     {
         private static Application _app;
@@ -30,46 +31,7 @@ namespace FindNeedleUX.UITests
         private const string AppName = "FindNeedleUX";
 
 
-        private static string GetAppExecutablePath()
-        {
-            // Get the solution directory by going up from the test output folder
-            var testDir = AppContext.BaseDirectory;
-            var solutionDir = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", ".."));
-            
-            // Try common build output locations (FindNeedleUX uses win-x64 RuntimeIdentifier)
-            string[] possiblePaths = new[]
-            {
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-            };
-
-            // Find the most recently modified executable to ensure we use the latest build
-            string newestPath = null;
-            DateTime newestTime = DateTime.MinValue;
-            
-            foreach (var path in possiblePaths)
-            {
-                if (File.Exists(path))
-                {
-                    var modTime = File.GetLastWriteTime(path);
-                    if (modTime > newestTime)
-                    {
-                        newestTime = modTime;
-                        newestPath = path;
-                    }
-                }
-            }
-            
-            if (newestPath != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"Selected executable: {newestPath} (modified: {newestTime})");
-                return newestPath;
-            }
-
-            throw new FileNotFoundException($"Could not find FindNeedleUX.exe in expected locations. Searched: {string.Join(", ", possiblePaths)}");
-        }
+        private static string GetAppExecutablePath() => UiTestHelpers.GetAppExecutablePath();
 
 
         [ClassInitialize]
@@ -92,7 +54,7 @@ namespace FindNeedleUX.UITests
                 _mainWindow = _app.GetMainWindow(_automation);
                 Assert.IsNotNull(_mainWindow, "Failed to get main window");
                 
-                // Navigate to SearchRulesPage via menu: Configure -> Rules
+                // Navigate to SearchRulesPage via menu: Workspace -> Rule files
                 NavigateToSearchRulesPage();
             }
             catch (Exception ex)
@@ -103,26 +65,21 @@ namespace FindNeedleUX.UITests
 
         private static void NavigateToSearchRulesPage()
         {
-            // Open the "Configure" top-level menu (the Rules page lives under it).
-            var configureMenu = _mainWindow.FindFirstDescendant(cf => cf.ByName("Configure"));
-            Assert.IsNotNull(configureMenu, "Configure menu should exist");
-            configureMenu.Click();
+            // Open the "Workspace" top-level menu (the rule pages live under it).
+            var workspaceMenu = _mainWindow.FindFirstDescendant(cf => cf.ByName("Workspace"));
+            Assert.IsNotNull(workspaceMenu, "Workspace menu should exist");
+            workspaceMenu.Click();
             Thread.Sleep(500);
 
-            // Click the "Rules" flyout item (x:Name="rules" → AutomationId "rules"; fall back to its text).
+            // Click the "Rule files" flyout item (Name="rules" → AutomationId "rules"; fall back to its text).
             var rulesMenuItem = _mainWindow.FindFirstDescendant(cf => cf.ByAutomationId("rules"))
-                ?? _mainWindow.FindFirstDescendant(cf => cf.ByName("Rules"));
-            Assert.IsNotNull(rulesMenuItem, "Rules menu item should exist");
+                ?? _mainWindow.FindFirstDescendant(cf => cf.ByName("Rule files"));
+            Assert.IsNotNull(rulesMenuItem, "Rule files menu item should exist");
             rulesMenuItem.Click();
-            Thread.Sleep(1000);
 
-            // The Rules hub opens on its "Active" tab; SearchRulesPage lives under the "Rule files" tab.
-            var filesTab = _mainWindow.FindFirstDescendant(cf => cf.ByName("Rule files"));
-            Assert.IsNotNull(filesTab, "Rule files tab should exist");
-            filesTab.Click();
-
-            // Wait for the tab's frame to navigate to SearchRulesPage
-            Thread.Sleep(1000);
+            // The menu item opens the Rules hub directly on its "Rule files" tab (SearchRulesPage). Wait for
+            // the hub's inner frame to navigate.
+            Thread.Sleep(1500);
         }
 
 

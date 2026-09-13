@@ -1,4 +1,4 @@
-using FlaUI.Core.AutomationElements;
+﻿using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using System;
 using System.Collections.Generic;
@@ -18,22 +18,39 @@ namespace FindNeedleUX.UITests
     /// </summary>
     internal static class UiTestHelpers
     {
+        /// <summary>The app under test. FINDNEEDLE_UITEST_APP names it outright (CI passes the exact build);
+        /// otherwise the newest FindNeedleUX.exe under the repo's build outputs, whichever configuration or
+        /// platform folder produced it (bin\Debug, bin\x64\Debug, ...).</summary>
         public static string GetAppExecutablePath()
         {
-            var testDir = AppContext.BaseDirectory;
-            var solutionDir = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", ".."));
+            var explicitPath = Environment.GetEnvironmentVariable("FINDNEEDLE_UITEST_APP");
+            if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath)) return explicitPath;
+
+            var solutionDir = RepoRoot();
+            const string tfm = "net8.0-windows10.0.19041.0";
             string[] candidates =
             {
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
+                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", tfm, "win-x64", "FindNeedleUX.exe"),
+                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", tfm, "win-x64", "FindNeedleUX.exe"),
+                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", tfm, "FindNeedleUX.exe"),
+                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", tfm, "FindNeedleUX.exe"),
+                Path.Combine(solutionDir, "FindNeedleUX", "bin", "x64", "Debug", tfm, "win-x64", "FindNeedleUX.exe"),
+                Path.Combine(solutionDir, "FindNeedleUX", "bin", "x64", "Release", tfm, "win-x64", "FindNeedleUX.exe"),
             };
             string newest = null; DateTime newestTime = DateTime.MinValue;
             foreach (var p in candidates)
                 if (File.Exists(p) && File.GetLastWriteTime(p) > newestTime) { newestTime = File.GetLastWriteTime(p); newest = p; }
             if (newest != null) return newest;
             throw new FileNotFoundException($"Could not find FindNeedleUX.exe. Searched: {string.Join(", ", candidates)}");
+        }
+
+        /// <summary>The repository root: walk up from the test output until the solution file is found, so the
+        /// answer is the same whether the tests were built into bin\Debug or bin\x64\Debug.</summary>
+        public static string RepoRoot()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "findneedle.sln"))) dir = dir.Parent;
+            return dir?.FullName ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
         }
 
         /// <summary>Write a log in the "[yyyy-MM-dd HH:mm:ss] LEVEL: msg" format the plain-text plugin parses.</summary>

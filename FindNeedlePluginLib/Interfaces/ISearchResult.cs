@@ -78,6 +78,12 @@ public interface ISearchResult
     /// <summary>Friendly originating process name (ETW ProcessName), or "" if unknown.</summary>
     public string GetProcessName() => "";
 
+    /// <summary>The source's own severity value BEFORE it was mapped onto <see cref="Level"/> — the
+    /// ETW TraceEventLevel byte ("2"), the Event Log Level ("4"), a WPP meta level — or "" when the
+    /// source has no separate raw value (plain text). Shown in the row details so a user can see the
+    /// original number the coarse Level came from.</summary>
+    public string GetRawLevel() => "";
+
     /// <summary>
     /// The event's structured payload as a JSON object of name→value pairs (parsed EventData/UserData
     /// for the Event Log, named properties for ETW), or "" if none. Shown as an expandable key/value

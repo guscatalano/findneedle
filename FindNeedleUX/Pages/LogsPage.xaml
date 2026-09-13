@@ -6,48 +6,115 @@
     xmlns:local="using:FindNeedleUX.Pages"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid>
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="10,10,10,0" Spacing="2">
-            <TextBlock Text="Logs" FontSize="20" FontWeight="SemiBold"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Text="FindNeedle's own diagnostic log for this run — turn on Debug Logging to capture more detail. (This is the app's log, not the logs you're analyzing.)"/>
-        </StackPanel>
-
-        <StackPanel Orientation="Horizontal" Margin="10" Grid.Row="1" Spacing="10">
-            <ToggleSwitch x:Name="DebugToggleSwitch" Header="Debug Logging" Toggled="DebugToggleSwitch_Toggled"/>
-            <TextBlock x:Name="DebugStatusText" Margin="10,0,0,0" VerticalAlignment="Center"/>
-            <Button Content="Copy Selected" Click="CopySelected_Click" VerticalAlignment="Center"/>
-            <Button Content="Copy All" Click="CopyAll_Click" VerticalAlignment="Center"/>
-            <Button Content="Clear" Click="Clear_Click" VerticalAlignment="Center"/>
-        </StackPanel>
-
-        <Grid Grid.Row="2">
-            <ListView x:Name="LogListView"
-               SelectionMode="Extended"
-               IsItemClickEnabled="False"
-               Margin="10"
-               FontFamily="Consolas"
-               FontSize="12"
-               ItemsSource="{x:Bind LogLines, Mode=OneWay}">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" TextWrapping="NoWrap" IsTextSelectionEnabled="True"/>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-            <TextBlock x:Name="EmptyLogsText" Visibility="Collapsed"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
-                       TextWrapping="Wrap" MaxWidth="360"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                       Text="No log entries yet. Enable Debug Logging to capture more detail."/>
+        <!-- Header: title/subtitle on the left, capture toggle on the right -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock x:Name="PageHeading" Text="App log" Style="{StaticResource PageHeading}"/>
+                <TextBlock Style="{StaticResource PageSubtitle}"
+                           Text="FindNeedle's OWN diagnostic log for this run — this is the app's log, not the logs you're analyzing."/>
+            </StackPanel>
+            <!-- One row: label, then the switch. The switch's Header stacked the label above it and the
+                 separate "on/off" text floated at the far right edge, half-way between the two. -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="16,0,0,0">
+                <TextBlock Text="Debug logging" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <ToggleSwitch x:Name="DebugToggleSwitch" OnContent="On" OffContent="Off" MinWidth="0"
+                              AutomationProperties.Name="Debug logging" Toggled="DebugToggleSwitch_Toggled"/>
+                <TextBlock x:Name="DebugStatusText" VerticalAlignment="Center" Visibility="Collapsed"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12"/>
+            </StackPanel>
         </Grid>
+
+        <!-- Command bar: filter / level / follow on the left; copy / clear / count on the right -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBox x:Name="SearchBox" Width="260" PlaceholderText="Filter…" TextChanged="SearchBox_TextChanged"
+                         VerticalAlignment="Center"/>
+                <ComboBox x:Name="LevelFilter" Width="170" SelectedIndex="0"
+                          SelectionChanged="LevelFilter_SelectionChanged" VerticalAlignment="Center"
+                          ToolTipService.ToolTip="Show only entries at or above this severity">
+                    <ComboBoxItem Content="All levels"/>
+                    <ComboBoxItem Content="Warnings &amp; errors"/>
+                    <ComboBoxItem Content="Errors only"/>
+                </ComboBox>
+                <ToggleButton x:Name="FollowButton" IsChecked="True" Click="Follow_Click" VerticalAlignment="Center"
+                              ToolTipService.ToolTip="Auto-scroll to the newest entry">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE74B;" FontSize="13"/>
+                        <TextBlock Text="Follow"/>
+                    </StackPanel>
+                </ToggleButton>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock x:Name="CountText" VerticalAlignment="Center" Margin="0,0,4,0"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" FontSize="12"/>
+                <Button Content="Copy selected" Click="CopySelected_Click"/>
+                <Button Content="Copy all" Click="CopyAll_Click"/>
+                <Button Content="Save…" Click="Save_Click"
+                        ToolTipService.ToolTip="Save the shown entries to a .txt file"/>
+                <Button Content="Clear" Click="Clear_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Entries -->
+        <Border Grid.Row="2" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                CornerRadius="4" Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <Grid>
+                <ListView x:Name="LogListView"
+                          SelectionMode="Extended"
+                          IsItemClickEnabled="False"
+                          Padding="0,4">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="MinHeight" Value="0"/>
+                            <Setter Property="Padding" Value="8,1"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="local:LogEntry">
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Rectangle Grid.Column="0" Width="3" RadiusX="1.5" RadiusY="1.5"
+                                           Fill="{x:Bind AccentBrush}"/>
+                                <TextBlock Grid.Column="1" Text="{x:Bind Time}" FontFamily="Consolas" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Top"/>
+                                <TextBlock Grid.Column="2" Text="{x:Bind Message}" FontFamily="Consolas" FontSize="12"
+                                           Foreground="{x:Bind MessageBrush}" TextWrapping="Wrap"
+                                           IsTextSelectionEnabled="True"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <TextBlock x:Name="EmptyLogsText" Visibility="Collapsed"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                           TextWrapping="Wrap" MaxWidth="380"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           Text="No matching log entries. Adjust the filter, or enable Debug logging to capture more detail."/>
+            </Grid>
+        </Border>
     </Grid>
 </Page>

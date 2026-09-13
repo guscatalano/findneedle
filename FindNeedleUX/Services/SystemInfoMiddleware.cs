@@ -146,7 +146,7 @@ public class SystemInfoMiddleware
         bool umlOk = umlAvailable.Count > 0;
         list.Add(new("UML diagram generation",
             umlOk ? "available: " + string.Join(", ", umlAvailable)
-                  : "no renderer installed — install Mermaid or PlantUML under Diagram Tools",
+                  : "no renderer installed — install Mermaid or PlantUML under Tools ▸ Diagram tools",
             umlOk));
 
         return list;

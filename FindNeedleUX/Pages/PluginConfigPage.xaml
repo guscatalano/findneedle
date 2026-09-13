@@ -9,38 +9,50 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="16" RowSpacing="8">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0">
+        <StackPanel Grid.Row="0" Spacing="4">
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Button Click="Back_Click" ToolTipService.ToolTip="Back to plugins">
+                <Button Click="Back_Click" ToolTipService.ToolTip="Back to plugins" Width="32" Height="32" Padding="0"
+                        AutomationProperties.Name="Back to plugins">
                     <FontIcon Glyph="&#xE72B;" FontSize="14"/>
                 </Button>
-                <TextBlock Text="Plugin configuration (DLLs)" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <!-- Heading text comes from PageCatalog (code-behind) so it matches the menu/breadcrumb. -->
+                <TextBlock x:Name="PageHeading" Text="Plugin configuration" Style="{StaticResource PageHeading}" VerticalAlignment="Center"/>
             </StackPanel>
             <TextBlock Text="DLLs FindNeedle loads at startup. Edit, enable/disable, or add plugin assemblies, then Save. Use “Reload all plugins” on the Plugins page to apply."
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"/>
+                       Style="{StaticResource PageSubtitle}"/>
         </StackPanel>
 
-        <Border Grid.Row="1"
-                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                CornerRadius="6" Padding="8">
+        <Border Grid.Row="1" Style="{StaticResource PageCard}" Padding="8">
             <ListView x:Name="PluginConfigListView" ItemsSource="{x:Bind PluginConfigEntries, Mode=TwoWay}"
                       SelectionMode="Single" SelectedItem="{x:Bind SelectedPluginConfigEntry, Mode=TwoWay}">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:PluginConfigEntryViewModel">
-                        <StackPanel Orientation="Horizontal" Spacing="4" Padding="0,3,0,3">
-                            <TextBox Text="{x:Bind Name, Mode=TwoWay}" Width="180" PlaceholderText="Name"/>
-                            <TextBox Text="{x:Bind Path, Mode=TwoWay}" Width="340" PlaceholderText="Path to .dll"/>
-                            <Button Content="…" Width="32" Click="PickPluginFile_Click" Tag="{x:Bind}"/>
-                            <CheckBox IsChecked="{x:Bind Enabled, Mode=TwoWay}" Content="Enabled" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <!-- The path box takes the remaining width instead of a fixed 340px. -->
+                        <Grid ColumnSpacing="8" Padding="0,3,0,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind Name, Mode=TwoWay}" PlaceholderText="Name"/>
+                            <TextBox Grid.Column="1" Text="{x:Bind Path, Mode=TwoWay}" PlaceholderText="Path to .dll"/>
+                            <Button Grid.Column="2" Content="…" Width="32" Click="PickPluginFile_Click" Tag="{x:Bind}"
+                                    AutomationProperties.Name="Pick plugin file"/>
+                            <CheckBox Grid.Column="3" IsChecked="{x:Bind Enabled, Mode=TwoWay}" Content="Enabled" VerticalAlignment="Center" MinWidth="0"/>
+                        </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>

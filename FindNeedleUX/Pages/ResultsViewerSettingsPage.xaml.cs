@@ -47,11 +47,11 @@ public sealed partial class ResultsViewerSettingsPage : Page
         if (PanelAppearance == null) return;
         bool all = tag == "all";
         PanelAppearance.Visibility   = all || tag == "appearance"   ? Visibility.Visible : Visibility.Collapsed;
-        PanelGeneral.Visibility      = all || tag == "general"      ? Visibility.Visible : Visibility.Collapsed;
-        PanelSearch.Visibility       = all || tag == "search"       ? Visibility.Visible : Visibility.Collapsed;
-        PanelColumns.Visibility      = all || tag == "columns"      ? Visibility.Visible : Visibility.Collapsed;
+        PanelViewer.Visibility       = all || tag == "viewer"       ? Visibility.Visible : Visibility.Collapsed;
+        PanelLoading.Visibility      = all || tag == "loading"      ? Visibility.Visible : Visibility.Collapsed;
         PanelDecoding.Visibility     = all || tag == "decoding"     ? Visibility.Visible : Visibility.Collapsed;
         PanelIntegrations.Visibility = all || tag == "integrations" ? Visibility.Visible : Visibility.Collapsed;
+        PanelApp.Visibility          = all || tag == "app"          ? Visibility.Visible : Visibility.Collapsed;
         PanelLogs.Visibility         = all || tag == "logs"         ? Visibility.Visible : Visibility.Collapsed;
 
         // A prior search filter may have collapsed individual cards — restore them.
@@ -60,12 +60,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
         CategoryTitle.Text = tag switch
         {
             "all"          => "All settings",
-            "general"      => "General",
-            "search"       => "Search",
-            "columns"      => "Columns",
+            "viewer"       => "Viewer",
+            "loading"      => "Loading & cache",
             "decoding"     => "Decoding (WPP symbols)",
             "integrations" => "Integrations",
-            "logs"         => "Logs",
+            "app"          => "App",
+            "logs"         => "Support",
             _              => "Appearance",
         };
     }
@@ -91,12 +91,12 @@ public sealed partial class ResultsViewerSettingsPage : Page
         var panels = new (Panel panel, string category)[]
         {
             (PanelAppearance,   "Appearance"),
-            (PanelGeneral,      "General"),
-            (PanelSearch,       "Search"),
-            (PanelColumns,      "Columns"),
+            (PanelViewer,       "Viewer"),
+            (PanelLoading,      "Loading & cache"),
             (PanelDecoding,     "Decoding"),
             (PanelIntegrations, "Integrations"),
-            (PanelLogs,         "Logs"),
+            (PanelApp,          "App"),
+            (PanelLogs,         "Support"),
         };
         foreach (var (panel, category) in panels)
         {
@@ -155,8 +155,8 @@ public sealed partial class ResultsViewerSettingsPage : Page
         }
 
         // Show every category panel so matches from any category appear, then hide non-matching cards.
-        PanelAppearance.Visibility = PanelGeneral.Visibility = PanelSearch.Visibility =
-            PanelColumns.Visibility = PanelDecoding.Visibility = PanelIntegrations.Visibility =
+        PanelAppearance.Visibility = PanelViewer.Visibility = PanelLoading.Visibility =
+            PanelDecoding.Visibility = PanelIntegrations.Visibility = PanelApp.Visibility =
             PanelLogs.Visibility = Visibility.Visible;
 
         int matches = 0;
@@ -181,8 +181,9 @@ public sealed partial class ResultsViewerSettingsPage : Page
         var allItem = SettingsNav.MenuItems.OfType<NavigationViewItem>()
             .FirstOrDefault(i => (i.Tag as string) == "all");
         if (allItem != null) SettingsNav.SelectedItem = allItem;
-        PanelAppearance.Visibility = PanelGeneral.Visibility = PanelSearch.Visibility =
-            PanelColumns.Visibility = PanelDecoding.Visibility = PanelIntegrations.Visibility = Visibility.Visible;
+        PanelAppearance.Visibility = PanelViewer.Visibility = PanelLoading.Visibility =
+            PanelDecoding.Visibility = PanelIntegrations.Visibility = PanelApp.Visibility =
+            PanelLogs.Visibility = Visibility.Visible;
         CategoryTitle.Text = e.Category;
 
         var card = e.Card;
@@ -243,8 +244,8 @@ public sealed partial class ResultsViewerSettingsPage : Page
             SelectComboItemByTag(TitleBarModeCombo, ResultsViewerSettings.TitleBarColorMode);
             UpdateTitleBarCustomPanel();
 
-            // --- Drag and drop ---
-            SelectComboItemByTag(DragDropModeCombo, ResultsViewerSettings.DragDropMode.ToString());
+            // --- Open into workspace (Add / Replace / Ask) ---
+            SelectOpenIntoWorkspaceRadio();
 
             // --- Scrollbar size ---
             SelectComboItemByTag(ScrollBarSizeCombo,
@@ -305,7 +306,6 @@ public sealed partial class ResultsViewerSettingsPage : Page
             // --- Row tags ---
             ColorTaggedRowsCheck.IsChecked = ResultsViewerSettings.ColorTaggedRows;
             ScrollToTopOnPageChangeCheck.IsChecked = ResultsViewerSettings.ScrollToTopOnPageChange;
-            ShowWelcomeIntroCheck.IsChecked = ResultsViewerSettings.ShowWelcomeIntro;
             ShowStatusBarCheck.IsChecked = ResultsViewerSettings.ShowStatusBar;
 
             // --- MCP server ---
@@ -327,7 +327,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
                     + "Use \"Manage defaults in Windows…\" to choose FindNeedle per file type.";
             }
 
-            // --- WPP symbols: managed on the dedicated Diagnostics → WPP symbol resolution page ---
+            // --- WPP symbols: managed on the dedicated Tools ▸ Symbols (WPP) page ---
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged -= OnMcpStatusChanged;
             FindNeedleUX.Services.Mcp.McpServerHost.StatusChanged += OnMcpStatusChanged;
 
@@ -482,13 +482,25 @@ public sealed partial class ResultsViewerSettingsPage : Page
         }
     }
 
-    // ----- Drag and drop -----
-    private void DragDropModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    // ----- Open into workspace (Add / Replace / Ask) -----
+    private void SelectOpenIntoWorkspaceRadio()
+    {
+        var current = ResultsViewerSettings.OpenIntoWorkspace.ToString();
+        for (int i = 0; i < OpenIntoWorkspaceRadios.Items.Count; i++)
+            if (OpenIntoWorkspaceRadios.Items[i] is RadioButton rb && string.Equals(rb.Tag as string, current, StringComparison.OrdinalIgnoreCase))
+            {
+                OpenIntoWorkspaceRadios.SelectedIndex = i;
+                return;
+            }
+    }
+
+    private void OpenIntoWorkspaceRadios_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressEvents) return;
-        if (DragDropModeCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
-            && Enum.TryParse<FindNeedleUX.Services.DragDropMode>(tag, out var mode))
-            ResultsViewerSettings.DragDropMode = mode;
+        if (OpenIntoWorkspaceRadios.SelectedItem is RadioButton rb
+            && FindNeedleUX.Services.WorkspaceOpenPolicy.Parse(rb.Tag as string) is { } mode
+            && mode != ResultsViewerSettings.OpenIntoWorkspace)
+            ResultsViewerSettings.OpenIntoWorkspace = mode;
     }
 
     // ----- Title bar color -----
@@ -844,12 +856,6 @@ public sealed partial class ResultsViewerSettingsPage : Page
         ResultsViewerSettings.ScrollToTopOnPageChange = ScrollToTopOnPageChangeCheck.IsChecked == true;
     }
 
-    private void ShowWelcomeIntroCheck_Changed(object sender, RoutedEventArgs e)
-    {
-        if (_suppressEvents) return;
-        ResultsViewerSettings.ShowWelcomeIntro = ShowWelcomeIntroCheck.IsChecked == true;
-    }
-
     private void ShowStatusBarCheck_Changed(object sender, RoutedEventArgs e)
     {
         if (_suppressEvents) return;
@@ -1001,7 +1007,7 @@ public sealed partial class ResultsViewerSettingsPage : Page
     }
 
     // ----- WPP / tracefmt TMF path -----
-    // WPP symbol decoding now lives on its dedicated diagnostics page (Diagnostics → WPP symbol
+    // WPP symbol decoding now lives on its dedicated page (Tools ▸ Symbols (WPP)
     // resolution) so this settings section stays a single link instead of duplicating that UI.
     private void OpenWppSymbols_Click(object sender, RoutedEventArgs e)
         => FindNeedleUX.Services.MainWindowActions.NavigateToWppSymbols();

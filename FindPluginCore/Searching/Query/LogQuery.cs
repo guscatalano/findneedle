@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -18,10 +18,11 @@ namespace FindPluginCore.Searching.Query;
 /// drift: <see cref="QueryNode.Evaluate"/> (row predicate) and <see cref="QueryNode.AppendSql"/>
 /// (parameterized SQL WHERE fragment).
 /// </summary>
-public enum QueryOp { Eq, Ne, Contains, NotContains, Gt, Lt, Ge, Le }
+public enum QueryOp { Eq, Ne, Contains, NotContains, Gt, Lt, Ge, Le, Regex }
 
-/// <summary>How a field's value is stored / compared (Level is an int enum in SQL; Time is an ISO string).</summary>
-public enum FieldKind { Text, Level, Time }
+/// <summary>How a field's value is stored / compared (Level is an int enum in SQL; Time is an ISO string;
+/// Tag lives in the viewer, not the store; Data is a key inside the StructuredData JSON).</summary>
+public enum FieldKind { Text, Level, Time, Tag, Data }
 
 public abstract class QueryNode
 {
@@ -77,31 +78,43 @@ public sealed class PredicateNode : QueryNode
 
     public override bool Evaluate(Func<string, string> g)
     {
-        var actual = g(Field) ?? "";
-        switch (Op)
+        if (LogQuery.KindOf(Field) == FieldKind.Tag)
         {
-            case QueryOp.Eq:          return string.Equals(actual, Value, StringComparison.OrdinalIgnoreCase);
-            case QueryOp.Ne:          return !string.Equals(actual, Value, StringComparison.OrdinalIgnoreCase);
-            case QueryOp.Contains:    return actual.IndexOf(Value, StringComparison.OrdinalIgnoreCase) >= 0;
-            case QueryOp.NotContains: return actual.IndexOf(Value, StringComparison.OrdinalIgnoreCase) < 0;
-            default:                  return CompareOrdered(actual);
+            // Tags are viewer state keyed by the row's stable id; the row exposes that id as "rowid".
+            long.TryParse(g("rowid") ?? "", NumberStyles.Integer, CultureInfo.InvariantCulture, out var id);
+            return LogQuery.TagMatches(id, Op, Value);
+        }
+        return Matches(g(Field) ?? "", Op, Value, LogQuery.KindOf(Field));
+    }
+
+    /// <summary>The one comparison every backend uses (in-memory rows, tag lookups).</summary>
+    internal static bool Matches(string actual, QueryOp op, string value, FieldKind kind)
+    {
+        switch (op)
+        {
+            case QueryOp.Eq:          return string.Equals(actual, value, StringComparison.OrdinalIgnoreCase);
+            case QueryOp.Ne:          return !string.Equals(actual, value, StringComparison.OrdinalIgnoreCase);
+            case QueryOp.Contains:    return actual.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+            case QueryOp.NotContains: return actual.IndexOf(value, StringComparison.OrdinalIgnoreCase) < 0;
+            case QueryOp.Regex:       return LogQuery.RegexMatches(value, actual);
+            default:                  return CompareOrdered(actual, op, value, kind);
         }
     }
 
-    private bool CompareOrdered(string actual)
+    private static bool CompareOrdered(string actual, QueryOp op, string value, FieldKind kind)
     {
         int cmp;
         var av = LogQuery.TryParseTime(actual);
-        var bv = LogQuery.TryParseTime(Value);
-        if (LogQuery.KindOf(Field) == FieldKind.Time && av.HasValue && bv.HasValue)
+        var bv = LogQuery.TryParseTime(value);
+        if (kind == FieldKind.Time && av.HasValue && bv.HasValue)
             cmp = DateTime.Compare(av.Value, bv.Value);
         else if (double.TryParse(actual, NumberStyles.Any, CultureInfo.InvariantCulture, out var an)
-                 && double.TryParse(Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var bn))
+                 && double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var bn))
             cmp = an.CompareTo(bn);
         else
-            cmp = string.Compare(actual, Value, StringComparison.OrdinalIgnoreCase);
+            cmp = string.Compare(actual, value, StringComparison.OrdinalIgnoreCase);
 
-        return Op switch
+        return op switch
         {
             QueryOp.Gt => cmp > 0,
             QueryOp.Lt => cmp < 0,
@@ -112,6 +125,33 @@ public sealed class PredicateNode : QueryNode
     }
 
     public override string AppendSql(QuerySqlContext c) => c.PredicateSql(Field, Op, Value);
+}
+
+/// <summary>The "around a moment" clause: <c>time ~ "12:34:56" ±2s</c>. Kept as its own node so the
+/// query editor can write it back in that form (not as two ISO comparisons) and recognise it as a time
+/// window. A null window means the whole second the value names.</summary>
+public sealed class TimeAroundNode : QueryNode
+{
+    public DateTime Center;
+    public TimeSpan? Window;
+    public TimeAroundNode(DateTime center, TimeSpan? window) { Center = center; Window = window; }
+
+    public DateTime From => Window.HasValue ? Center - Window.Value : Floor(Center);
+    /// <summary>Exclusive when the whole-second form, inclusive when a ± window.</summary>
+    public DateTime To => Window.HasValue ? Center + Window.Value : Floor(Center).AddSeconds(1);
+    public bool ToInclusive => Window.HasValue;
+
+    private static DateTime Floor(DateTime t) => new(t.Year, t.Month, t.Day, t.Hour, t.Minute, t.Second, t.Kind);
+
+    public override bool Evaluate(Func<string, string> g)
+    {
+        var t = LogQuery.TryParseTime(g("time") ?? "");
+        if (!t.HasValue) return false;
+        return t.Value >= From && (ToInclusive ? t.Value <= To : t.Value < To);
+    }
+
+    public override string AppendSql(QuerySqlContext c)
+        => $"({c.PredicateSql("time", QueryOp.Ge, From.ToString("o"))} AND {c.PredicateSql("time", ToInclusive ? QueryOp.Le : QueryOp.Lt, To.ToString("o"))})";
 }
 
 /// <summary>Accumulates the parameterized SQL for a query and knows how each field maps to a column.</summary>
@@ -134,6 +174,27 @@ public sealed class QuerySqlContext
     public string PredicateSql(string field, QueryOp op, string value)
     {
         var (col, kind) = LogQuery.ColumnOf(field);
+
+        if (kind == FieldKind.Tag)
+        {
+            // Tags are not in the store. Decide per tagged row with the same comparison the in-memory
+            // path uses, then express the answer as an Id list. Untagged rows compare as "" (so
+            // `tag != Important` and `NOT tag ~ x` include them, `tag == Important` does not).
+            var tags = LogQuery.TagSnapshot?.Invoke();
+            bool untaggedMatch = LogQuery.TagMatchesText("", "", op, value);
+            var matched = new List<long>(); var unmatched = new List<long>();
+            if (tags != null)
+                foreach (var kv in tags)
+                    (LogQuery.TagMatchesText(kv.Value.Name, kv.Value.Text, op, value) ? matched : unmatched).Add(kv.Key);
+            var list = untaggedMatch ? unmatched : matched;
+            if (list.Count == 0) return untaggedMatch ? "1=1" : "1=0";
+            var sb = new StringBuilder(untaggedMatch ? "(Id NOT IN (" : "(Id IN (");
+            for (int i = 0; i < list.Count; i++) { if (i > 0) sb.Append(','); sb.Append(list[i].ToString(CultureInfo.InvariantCulture)); }
+            return sb.Append("))").ToString();
+        }
+
+        if (op == QueryOp.Regex)
+            return $"{col} REGEXP {Add(value)}"; // REGEXP is registered on the connection (SqliteStorage)
 
         if (kind == FieldKind.Level && (op == QueryOp.Eq || op == QueryOp.Ne))
         {
@@ -193,7 +254,23 @@ public static class LogQuery
             ["username"] = ("Username", FieldKind.Text),
             ["opcode"] = ("OpCode", FieldKind.Text),
             ["time"] = ("LogTime", FieldKind.Time),
+            ["rawlevel"] = ("RawLevel", FieldKind.Text),
+            ["tag"] = ("Id", FieldKind.Tag),
         };
+
+    /// <summary>Prefix for structured-payload fields: <c>data.ProcessId == 4</c> reads the ProcessId key of
+    /// the row's StructuredData JSON (json_extract in SQLite, a dictionary lookup in memory).</summary>
+    public const string DataPrefix = "data.";
+
+    private static bool IsDataField(string name)
+        => name != null && name.StartsWith(DataPrefix, StringComparison.OrdinalIgnoreCase) && name.Length > DataPrefix.Length;
+
+    /// <summary>A data key is spliced into the SQL path expression, so only plain identifier characters are allowed.</summary>
+    private static bool IsSafeDataKey(string key)
+    {
+        foreach (var ch in key) if (!(char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' || ch == '.')) return false;
+        return key.Length > 0;
+    }
 
     /// <summary>Aliases the user can type → canonical field name.</summary>
     private static readonly Dictionary<string, string> Alias =
@@ -214,15 +291,88 @@ public static class LogQuery
             ["user"] = "username", ["username"] = "username",
             ["opcode"] = "opcode",
             ["time"] = "time", ["timestamp"] = "time",
+            ["rawlevel"] = "rawlevel", ["raw"] = "rawlevel",
+            ["tag"] = "tag", ["tags"] = "tag",
         };
+
+    /// <summary>Supplies the viewer's row tags (stable row id → name + note) so `tag` predicates can be
+    /// answered in both backends. Null when no viewer is attached.</summary>
+    public static Func<IReadOnlyDictionary<long, (string Name, string Text)>> TagSnapshot { get; set; }
+
+    /// <summary>The date a date-less time (<c>time ~ 12:34:56</c>) is resolved against - the loaded data's
+    /// day, set by the viewer. Null falls back to today.</summary>
+    public static DateTime? DefaultDate { get; set; }
+
+    internal static bool TagMatches(long rowId, QueryOp op, string value)
+    {
+        var tags = TagSnapshot?.Invoke();
+        if (tags != null && tags.TryGetValue(rowId, out var t)) return TagMatchesText(t.Name, t.Text, op, value);
+        return TagMatchesText("", "", op, value);
+    }
+
+    /// <summary>Eq/Ne compare the tag NAME (Important, Question, …); the substring / regex forms search the
+    /// name and the note together, so <c>tag ~ leak</c> finds a note that mentions one.</summary>
+    internal static bool TagMatchesText(string name, string text, QueryOp op, string value)
+        => op == QueryOp.Eq || op == QueryOp.Ne
+            ? PredicateNode.Matches(name ?? "", op, value, FieldKind.Text)
+            : PredicateNode.Matches(((name ?? "") + " " + (text ?? "")).Trim(), op, value, FieldKind.Text);
+
+    private static readonly Dictionary<string, System.Text.RegularExpressions.Regex> RegexCache = new(StringComparer.Ordinal);
+
+    /// <summary>Case-insensitive regex match with a bounded backtracking budget, shared by the in-memory
+    /// path and the SQLite REGEXP function.</summary>
+    public static bool RegexMatches(string pattern, string input)
+    {
+        if (pattern == null) return false;
+        System.Text.RegularExpressions.Regex rx;
+        lock (RegexCache)
+        {
+            if (!RegexCache.TryGetValue(pattern, out rx))
+            {
+                try
+                {
+                    rx = new System.Text.RegularExpressions.Regex(pattern,
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+                        TimeSpan.FromMilliseconds(200));
+                }
+                catch (ArgumentException) { rx = null; }
+                if (RegexCache.Count > 64) RegexCache.Clear();
+                RegexCache[pattern] = rx;
+            }
+        }
+        if (rx == null) return false;
+        try { return rx.IsMatch(input ?? ""); }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { return false; }
+    }
+
+    /// <summary>Validate a regex pattern up front so a typo is a parse error, not a silently-empty result.</summary>
+    public static string RegexError(string pattern)
+    {
+        try { _ = new System.Text.RegularExpressions.Regex(pattern ?? ""); return null; }
+        catch (ArgumentException ex) { return ex.Message; }
+    }
 
     /// <summary>The canonical fields (for the UI help text).</summary>
     public static IEnumerable<string> Fields => Map.Keys;
 
-    public static bool IsField(string name) => name != null && Alias.ContainsKey(name);
-    public static string Canonical(string name) => Alias.TryGetValue(name ?? "", out var c) ? c : null;
-    public static (string col, FieldKind kind) ColumnOf(string canonical) => Map[canonical];
-    public static FieldKind KindOf(string canonical) => Map.TryGetValue(canonical ?? "", out var v) ? v.kind : FieldKind.Text;
+    public static bool IsField(string name) => name != null && (Alias.ContainsKey(name) || IsDataField(name));
+    public static string Canonical(string name)
+        => Alias.TryGetValue(name ?? "", out var c) ? c
+         : IsDataField(name) && IsSafeDataKey(name.Substring(DataPrefix.Length)) ? DataPrefix + name.Substring(DataPrefix.Length)
+         : null;
+    public static (string col, FieldKind kind) ColumnOf(string canonical)
+        => IsDataField(canonical)
+            ? ($"json_extract(StructuredData, '$.{canonical.Substring(DataPrefix.Length)}')", FieldKind.Data)
+            : Map[canonical];
+    public static FieldKind KindOf(string canonical)
+        => IsDataField(canonical) ? FieldKind.Data : Map.TryGetValue(canonical ?? "", out var v) ? v.kind : FieldKind.Text;
+
+    /// <summary>The operators, for completion and help.</summary>
+    public static readonly IReadOnlyList<(string Op, string Meaning)> Operators = new[]
+    {
+        ("==", "equals"), ("!=", "not equal"), ("~", "contains"), ("!~", "does not contain"),
+        ("=~", "matches regex"), (">", "greater"), ("<", "less"), (">=", "at least"), ("<=", "at most"),
+    };
 
     public static int LevelToInt(string name)
     {
@@ -240,9 +390,51 @@ public static class LogQuery
 
     /// <summary>Parse a timestamp flexibly (invariant culture, accepts ISO round-trip and plain forms).</summary>
     public static DateTime? TryParseTime(string s)
-        => DateTime.TryParse(s, CultureInfo.InvariantCulture,
-               DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.NoCurrentDateDefault, out var dt)
-           ? dt : (DateTime?)null;
+    {
+        if (!DateTime.TryParse(s, CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.NoCurrentDateDefault, out var dt))
+            return null;
+        // "12:34:56" alone parses onto year 1: a time of day, not a date. Put it on the data's day.
+        if (dt.Year == 1 && !string.IsNullOrEmpty(s) && s.Trim().IndexOf('-') < 0 && s.Trim().IndexOf('/') < 0)
+        {
+            var day = (DefaultDate ?? DateTime.Today).Date;
+            dt = day + dt.TimeOfDay;
+        }
+        return dt;
+    }
+
+    /// <summary>Parse a window like "2s", "500ms", "1m", "1h", "±2s", "+-2s".</summary>
+    public static bool TryParseWindow(string s, out TimeSpan window)
+    {
+        window = TimeSpan.Zero;
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        var t = s.Trim().TrimStart('±').TrimStart('+').TrimStart('-').TrimStart('/');
+        if (t.StartsWith("-")) t = t.Substring(1); // "+-2s"
+        int i = 0; while (i < t.Length && (char.IsDigit(t[i]) || t[i] == '.')) i++;
+        if (i == 0 || !double.TryParse(t.Substring(0, i), NumberStyles.Float, CultureInfo.InvariantCulture, out var n)) return false;
+        switch (t.Substring(i).ToLowerInvariant())
+        {
+            case "ms": window = TimeSpan.FromMilliseconds(n); return true;
+            case "s": case "sec": case "": window = TimeSpan.FromSeconds(n); return true;
+            case "m": case "min": window = TimeSpan.FromMinutes(n); return true;
+            case "h": window = TimeSpan.FromHours(n); return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>The clause for "around this time": within ±window of center, inclusive.</summary>
+    public static QueryNode AroundTime(DateTime center, TimeSpan window) => new TimeAroundNode(center, window);
+
+    /// <summary>A window as a user would type it: 2s, 500ms, 1m, 1h.</summary>
+    public static string WindowText(TimeSpan window)
+        => window.TotalHours >= 1 && window.TotalHours == Math.Floor(window.TotalHours) ? $"{window.TotalHours:0}h"
+         : window.TotalMinutes >= 1 && window.TotalMinutes == Math.Floor(window.TotalMinutes) ? $"{window.TotalMinutes:0}m"
+         : window.TotalSeconds >= 1 && window.TotalSeconds == Math.Floor(window.TotalSeconds) ? $"{window.TotalSeconds:0}s"
+         : $"{window.TotalMilliseconds:0}ms";
+
+    /// <summary>The query TEXT for "around this time", the way a user would type it.</summary>
+    public static string AroundTimeText(DateTime center, TimeSpan window)
+        => $"time ~ \"{center:yyyy-MM-dd HH:mm:ss.fff}\" ±{WindowText(window)}";
 
     public static string NormalizeTime(string value)
     {
@@ -309,7 +501,13 @@ public static class LogQuery
             if (c == '"' || c == '\'')
             {
                 char q = c; i++; var sb = new StringBuilder();
-                while (i < n && s[i] != q) { if (s[i] == '\\' && i + 1 < n) i++; sb.Append(s[i++]); }
+                // Only the quote itself and a backslash are escapable; any other backslash stays literal
+                // so regex classes (\s, \d) and Windows paths survive without doubling.
+                while (i < n && s[i] != q)
+                {
+                    if (s[i] == '\\' && i + 1 < n && (s[i + 1] == q || s[i + 1] == '\\')) i++;
+                    sb.Append(s[i++]);
+                }
                 if (i >= n) throw new QueryParseException("unterminated string");
                 i++; toks.Add(new Tok(TokType.String, sb.ToString())); continue;
             }
@@ -338,6 +536,7 @@ public static class LogQuery
         switch (two)
         {
             case "==": op = QueryOp.Eq; len = 2; break;
+            case "=~": op = QueryOp.Regex; len = 2; break;
             case "!=": op = QueryOp.Ne; len = 2; break;
             case "!~": op = QueryOp.NotContains; len = 2; break;
             case ">=": op = QueryOp.Ge; len = 2; break;
@@ -417,6 +616,29 @@ public static class LogQuery
                     if (Cur.Type != TokType.Word && Cur.Type != TokType.String)
                         throw new QueryParseException($"expected a value after '{first.Text}'");
                     var val = Cur.Text; _p++;
+                    if (op == QueryOp.Regex)
+                    {
+                        var rxErr = RegexError(val);
+                        if (rxErr != null) throw new QueryParseException($"bad regex: {rxErr}");
+                    }
+                    // time ~ "12:34:56" [±2s]  →  the second (or the ± window) around that instant.
+                    if (KindOf(canonical) == FieldKind.Time && (op == QueryOp.Contains || op == QueryOp.NotContains))
+                    {
+                        var center = TryParseTime(val) ?? throw new QueryParseException($"'{val}' is not a time");
+                        QueryNode range;
+                        if (Cur.Type == TokType.Word && TryParseWindow(Cur.Text, out var window))
+                        {
+                            _p++;
+                            range = new TimeAroundNode(center, window);
+                        }
+                        else if (Cur.Type == TokType.Word && Cur.Text.StartsWith("±"))
+                            throw new QueryParseException($"bad window '{Cur.Text}' (try ±2s, ±500ms, ±1m)");
+                        else if (val.IndexOf('.') >= 0)
+                            range = new TimeAroundNode(center, TimeSpan.FromMilliseconds(0.5)); // named to the millisecond
+                        else
+                            range = new TimeAroundNode(center, null); // the whole second the value names
+                        return op == QueryOp.Contains ? range : new NotNode(range);
+                    }
                     return new PredicateNode(canonical, op, val);
                 }
                 // bare term → substring across all columns

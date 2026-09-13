@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -275,6 +275,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         var text = _searchText ?? "";
         if (FindPluginCore.Searching.Query.LogQuery.LooksStructured(text))
         {
+            // A date-less time in the query ("time ~ 12:34:56") means that time on the data's day.
+            if (text.IndexOf("time", StringComparison.OrdinalIgnoreCase) >= 0)
+                FindPluginCore.Searching.Query.LogQuery.DefaultDate = GetDataMinTime();
             if (FindPluginCore.Searching.Query.LogQuery.TryParse(text, out var node, out var err))
             { _parsedQuery = node; _effectiveSearch = ""; SearchQueryError = ""; }
             else
@@ -323,6 +326,40 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ReloadFromSource();
     }
 
+    // Field filters beyond the four with their own FilterSpec slot (ProcessId, EventId, Channel…).
+    // Kept in the order the user added them and applied as predicates ANDed into FilterSpec.Query, the
+    // same node the search box's structured queries use — so both storage backends already handle them
+    // (SQLite compiles it to SQL, the in-memory source evaluates it per row).
+    private readonly List<KeyValuePair<string, string>> _extraFields = new();
+
+    /// <summary>Active extra-field filters as (canonical field, substring), in the order added.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> ExtraFieldFilters => _extraFields;
+
+    /// <summary>Set (or, with an empty value, drop) one extra field filter and re-apply. Fields must be
+    /// canonical LogQuery names — see FilterableFields.</summary>
+    public void SetExtraFieldFilter(string field, string value)
+    {
+        if (string.IsNullOrEmpty(field)) return;
+        int at = _extraFields.FindIndex(kv => string.Equals(kv.Key, field, StringComparison.OrdinalIgnoreCase));
+        var v = value ?? "";
+        if (v.Length == 0)
+        {
+            if (at < 0) return;
+            _extraFields.RemoveAt(at);
+        }
+        else
+        {
+            if (at >= 0)
+            {
+                if (_extraFields[at].Value == v) return;
+                _extraFields[at] = new KeyValuePair<string, string>(field, v);
+            }
+            else _extraFields.Add(new KeyValuePair<string, string>(field, v));
+        }
+        _currentPage = 1;
+        ApplyFilters();
+    }
+
     private string _levelFilter = "";
     public string LevelFilter { get => _levelFilter; set => Set(ref _levelFilter, value, applyFilters: true); }
 
@@ -359,7 +396,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         }
     }
 
-    public int TotalFilteredCount { get => _totalFilteredCount; private set => Set(ref _totalFilteredCount, value); }
+    public int TotalFilteredCount
+    {
+        get => _totalFilteredCount;
+        private set { if (Set(ref _totalFilteredCount, value)) OnPropertyChanged(nameof(TotalFilteredCountText)); }
+    }
     private int _totalFilteredCount;
 
     public int TotalPages
@@ -370,6 +411,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             return (_totalFilteredCount + _pageSize - 1) / _pageSize;
         }
     }
+
+    /// <summary>The filtered total, grouped. The paging bar reads "&lt;range&gt; of &lt;total&gt;" and the range is
+    /// already grouped, so binding the raw int here produced "1–5,000 of 72923" — two number formats in
+    /// one sentence.</summary>
+    public string TotalFilteredCountText => _totalFilteredCount.ToString("N0");
 
     public string PageRangeText
     {
@@ -388,9 +434,19 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(PageSize));
         OnPropertyChanged(nameof(TotalPages));
         OnPropertyChanged(nameof(PageRangeText));
-        _ = PublishCurrentPageBusyAsync(); // off the UI thread + loader; a deep OFFSET (jump-to-last on
-                                           // millions of rows) used to freeze the UI here for ~10s
+        _lastPagePublish = PublishCurrentPageBusyAsync(); // off the UI thread + loader; a deep OFFSET (jump-to-last on
+                                                          // millions of rows) used to freeze the UI here for ~10s
         UpdateStatus();
+    }
+
+    private Task _lastPagePublish = Task.CompletedTask;
+
+    /// <summary>Go to a page and wait until its rows are in <see cref="Results"/> (paging is otherwise
+    /// fire-and-forget). For callers that then act on the rows, like "go to time".</summary>
+    public async Task GoToPageAndWaitAsync(int page)
+    {
+        CurrentPage = page;
+        try { await _lastPagePublish; } catch { /* superseded or cancelled: the newest page wins */ }
     }
 
     private System.Threading.CancellationTokenSource _pageCts;
@@ -515,7 +571,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     // True while a streaming search is still producing rows into our backing store. Bound to the
     // Stop button's visibility — once the producer signals completion, the button disappears.
     private bool _isStreaming;
-    public bool IsStreaming { get => _isStreaming; set => Set(ref _isStreaming, value); }
+    public bool IsStreaming
+    {
+        get => _isStreaming;
+        set { if (Set(ref _isStreaming, value)) NotifyProgressBannerChanged(); }
+    }
 
     private string _statusText = "0 / 0 results";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
@@ -526,22 +586,136 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private string _lastFilterBreakdown = "Apply a filter or search to see timing.";
     public string LastFilterBreakdown { get => _lastFilterBreakdown; set => Set(ref _lastFilterBreakdown, value); }
 
-    // Prominent "still loading" banner shown while a streaming search produces rows.
+    // The streaming half of the progress banner: refreshed on each live tick while rows stream in.
     private string _streamingBannerText = "Loading logs…";
-    public string StreamingBannerText { get => _streamingBannerText; set => Set(ref _streamingBannerText, value); }
+    public string StreamingBannerText
+    {
+        get => _streamingBannerText;
+        set { if (Set(ref _streamingBannerText, value)) NotifyProgressBannerChanged(); }
+    }
 
     private string ComposeStreamBanner() =>
         $"Loading logs — {_source?.TotalCount ?? TotalCount:N0} rows so far and rising. You can search and scroll now; results keep filling in.";
 
-    // True while the substring-search (FTS) index is being built (lazy/background modes). Bound to a
-    // toolbar indicator + Cancel button. Substring search uses the slower scan until it clears.
+    // True while the substring-search (FTS) index is being built (lazy/background modes). Folded into
+    // the single progress banner (no separate indicator). Substring search uses the slower scan until it clears.
     private bool _isIndexing;
-    public bool IsIndexing { get => _isIndexing; set => Set(ref _isIndexing, value); }
+    public bool IsIndexing
+    {
+        get => _isIndexing;
+        set { if (Set(ref _isIndexing, value)) NotifyProgressBannerChanged(); }
+    }
 
     private string _indexStatusText = "";
-    public string IndexStatusText { get => _indexStatusText; set => Set(ref _indexStatusText, value); }
+    public string IndexStatusText
+    {
+        get => _indexStatusText;
+        set { if (Set(ref _indexStatusText, value)) NotifyProgressBannerChanged(); }
+    }
+
+    // ----- The ONE progress banner (F10): streaming load and/or background index build -----
+
+    /// <summary>The banner shows whenever anything is still working: rows streaming in, or the search
+    /// index building in the background. There is no second indicator on the toolbar.</summary>
+    public bool IsProgressBannerVisible => IsStreaming || IsIndexing;
+
+    /// <summary>What the banner says (see <see cref="ComposeProgressBanner"/>).</summary>
+    public string ProgressBannerText => ComposeProgressBanner(IsStreaming, StreamingBannerText, IsIndexing, IndexStatusText);
+
+    private void NotifyProgressBannerChanged()
+    {
+        OnPropertyChanged(nameof(IsProgressBannerVisible));
+        OnPropertyChanged(nameof(ProgressBannerText));
+    }
+
+    /// <summary>
+    /// Compose the single progress line. Pure so it's unit-testable:
+    /// <list type="bullet">
+    /// <item>streaming only → the streaming text as-is ("Loading logs — N rows so far and rising. …");</item>
+    /// <item>streaming + indexing → the streaming text plus a secondary " · index building in background" phrase
+    ///   (with the build's percentage when known) — NOT a third control;</item>
+    /// <item>indexing only → the index-build status ("Building search index… N / M (P%)") plus why it matters;</item>
+    /// <item>neither → empty (the banner is hidden anyway).</item>
+    /// </list>
+    /// </summary>
+    public static string ComposeProgressBanner(bool streaming, string streamingText, bool indexing, string indexStatusText)
+    {
+        if (streaming)
+        {
+            var main = string.IsNullOrWhiteSpace(streamingText) ? "Loading logs…" : streamingText.Trim();
+            if (!indexing) return main;
+            var pct = ExtractPercent(indexStatusText);
+            return pct == null
+                ? $"{main} · index building in background"
+                : $"{main} · index building in background ({pct})";
+        }
+        if (indexing)
+        {
+            var status = string.IsNullOrWhiteSpace(indexStatusText) ? "Building search index…" : indexStatusText.Trim();
+            return $"{status} — text search uses a slower scan until it finishes.";
+        }
+        return "";
+    }
+
+    /// <summary>Pull a trailing "(NN%)" out of the index status text, if present.</summary>
+    private static string ExtractPercent(string indexStatusText)
+    {
+        if (string.IsNullOrEmpty(indexStatusText)) return null;
+        int close = indexStatusText.LastIndexOf("%)", StringComparison.Ordinal);
+        if (close < 0) return null;
+        int open = indexStatusText.LastIndexOf('(', close);
+        if (open < 0) return null;
+        var inner = indexStatusText.Substring(open + 1, close - open); // "NN%"
+        return inner.Length is > 1 and <= 4 ? inner : null;
+    }
+
+    /// <summary>
+    /// The "Rule filter" toolbar toggle's caption. When the toggle cannot be enabled its text says WHY
+    /// (F4), instead of a silently greyed-out control:
+    /// no rule files → "Rule filter (no rule files loaded)"; files present but rows still streaming in →
+    /// "Rule filter (available after loading)"; otherwise "Rule filter · N file(s)".
+    /// </summary>
+    public static string RuleFilterLabel(int ruleFileCount, bool streaming)
+    {
+        if (ruleFileCount <= 0) return "Rule filter (no rule files loaded)";
+        if (streaming) return "Rule filter (available after loading)";
+        return ruleFileCount == 1 ? "Rule filter · 1 file" : $"Rule filter · {ruleFileCount} files";
+    }
+
+    // ----- Toolbar segmented controls (pure mapping, so the page stays thin and this is testable) -----
+
+    /// <summary>Segment order of the "Filters: Left | Top | Hide" control.</summary>
+    public const int FiltersSegLeft = 0, FiltersSegTop = 1, FiltersSegHide = 2;
+
+    /// <summary>Which Filters segment reflects a pane state: hidden wins (Hide), else the dock.</summary>
+    public static int FiltersSegmentIndexFor(FilterDock dock, bool expanded)
+        => !expanded ? FiltersSegHide : (dock == FilterDock.Left ? FiltersSegLeft : FiltersSegTop);
+
+    /// <summary>Segment order of the "Details: In row | Panel | Popup" control.</summary>
+    public static int DetailsSegmentIndexFor(DetailsMode mode) => mode switch
+    {
+        DetailsMode.BottomPanel => 1,
+        DetailsMode.Popup => 2,
+        _ => 0,
+    };
+
+    public static DetailsMode DetailsModeForSegment(int index) => index switch
+    {
+        1 => DetailsMode.BottomPanel,
+        2 => DetailsMode.Popup,
+        _ => DetailsMode.Inrow,
+    };
 
     // ----- per-level + per-column metadata -----
+
+    /// <summary>
+    /// Severity rank of a level name, taken from the <see cref="FindNeedlePluginLib.Level"/> enum, which is
+    /// declared worst-first (Catastrophic, Error, Warning, Info, Verbose, Unknown). Used to order the level
+    /// chips. Anything unparseable sorts last rather than pretending to be critical.
+    /// </summary>
+    internal static int LevelRank(string level)
+        => Enum.TryParse<FindNeedlePluginLib.Level>(level, ignoreCase: true, out var l) ? (int)l : int.MaxValue;
+
     public ObservableCollection<LevelEntry> Levels { get; } = new();
     public ObservableCollection<string> KnownLevelNames { get; } = new();
     public ObservableCollection<ColumnEntry> Columns { get; } = new();
@@ -730,7 +904,11 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
                     StringComparer.OrdinalIgnoreCase);
 
                 Levels.Clear();
-                foreach (var level in levelSet.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+                // SEVERITY order, not alphabetical. Sorting by name put Info above Warning and left the
+                // chips reading Catastrophic, Error, Info, Warning — which defeats the point of a severity
+                // filter. The Level enum is already declared worst-first, so use it as the rank rather
+                // than keeping a second hand-maintained table that can drift from the enum.
+                foreach (var level in levelSet.OrderBy(LevelRank).ThenBy(s => s, StringComparer.OrdinalIgnoreCase))
                 {
                     var color = DefaultLevelColors.TryGetValue(level, out var c) ? c : "Transparent";
                     Levels.Add(new LevelEntry { Level = level, HexColor = color });
@@ -812,7 +990,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         !string.IsNullOrEmpty(_sourceFilter) || !string.IsNullOrEmpty(_levelFilter) ||
         _fromDate.HasValue || _toDate.HasValue ||
         _providerFilterSet != null || _taskNameFilterSet != null || _sourceFilterSet != null ||
-        _levelFilterSet != null;
+        _levelFilterSet != null || _extraFields.Count > 0;
 
     // Shown while streaming with a filter active: the live re-filter is paused (so the app isn't
     // constantly re-searching the growing table); the user clicks Refresh to fold in new matches.
@@ -1102,6 +1280,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         _fromDate = null;
         _toDate = null;
         _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = _levelFilterSet = null;
+        _extraFields.Clear();
         MiddleLayerService.OutputTimeFrom = MiddleLayerService.OutputTimeTo = null;
         _currentPage = 1;
         HasPendingRows = false;
@@ -1251,6 +1430,21 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         LastFilterBreakdown = sb.ToString();
     }
 
+    /// <summary>AND the extra-field predicates onto whatever the search box parsed (which may be null).
+    /// Contains-semantics, matching the substring behaviour of the built-in field boxes.</summary>
+    private FindPluginCore.Searching.Query.QueryNode ComposeQuery()
+    {
+        var node = _parsedQuery;
+        foreach (var kv in _extraFields)
+        {
+            if (string.IsNullOrEmpty(kv.Value)) continue;
+            var p = new FindPluginCore.Searching.Query.PredicateNode(
+                kv.Key, FindPluginCore.Searching.Query.QueryOp.Contains, kv.Value);
+            node = node == null ? p : new FindPluginCore.Searching.Query.AndNode(node, p);
+        }
+        return node;
+    }
+
     private FilterSpec BuildFilterSpec() => new(
         Search: _effectiveSearch ?? "",   // "" when the box holds a structured query (see _parsedQuery)
         Provider: _providerFilter ?? "",
@@ -1265,7 +1459,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         TaskNameSet = _taskNameFilterSet,
         SourceSet = _sourceFilterSet,
         LevelSet = _levelFilterSet,
-        Query = _parsedQuery,
+        Query = ComposeQuery(),
     };
 
     public void ClearFilters()
@@ -1276,6 +1470,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         ToDate = null;
         // Clear multi-select sets without an extra reload each (the property sets above already reload).
         _providerFilterSet = _taskNameFilterSet = _sourceFilterSet = _levelFilterSet = null;
+        _extraFields.Clear();
     }
 
     // ----- Headless drive hooks (used by the MCP viewer bridge) -----
@@ -1384,6 +1579,26 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         if (_source == null) return null;
         var last = _source.GetPage(FilterSpec.Empty, new SortSpec("Time", true), 0, 1);
         return last.Count > 0 ? last[0].LogTime : (DateTime?)null;
+    }
+
+    /// <summary>The earliest event time across the WHOLE loaded set (ignores the current filter).</summary>
+    public DateTime? GetDataMinTime()
+    {
+        if (_source == null) return null;
+        var first = _source.GetPage(FilterSpec.Empty, new SortSpec("Time", false), 0, 1);
+        return first.Count > 0 ? first[0].LogTime : (DateTime?)null;
+    }
+
+    /// <summary>How many rows of the CURRENT filtered set fall before <paramref name="t"/> in time order -
+    /// i.e. the zero-based position the first row at or after <paramref name="t"/> would have when the
+    /// grid is sorted by Time ascending. What "go to time" pages to.</summary>
+    public int CountBefore(DateTime t)
+    {
+        if (_source == null) return 0;
+        var f = BuildFilterSpec();
+        var before = new FindPluginCore.Searching.Query.PredicateNode("time", FindPluginCore.Searching.Query.QueryOp.Lt, t.ToString("o"));
+        FindPluginCore.Searching.Query.QueryNode q = f.Query == null ? before : new FindPluginCore.Searching.Query.AndNode(f.Query, before);
+        return _source.GetFilteredCount(f with { Query = q });
     }
 
     /// <summary>Top distinct values of a field over the current filtered set (MCP <c>facets</c>).</summary>
@@ -1583,8 +1798,30 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     // ----- INPC plumbing -----
     public event PropertyChangedEventHandler PropertyChanged;
 
+    /// <summary>
+    /// Raise PropertyChanged ON THE UI THREAD. These properties are x:Bind targets, so the binding engine
+    /// writes straight into XAML (InfoBar.Visibility, TextBlock.Text) on whichever thread raised the event —
+    /// and touching a XAML object off the UI thread originates a WinRT error that WinUI turns into a
+    /// RaiseFailFastException (0xC000027B). That failfast bypasses App.UnhandledException, so the process
+    /// dies with no managed stack and nothing in the app log. It is the same hazard already called out for
+    /// Results/the DataGrid where _uiDispatcher is declared.
+    ///
+    /// It bites on the streaming path: the load-completion tick awaits an off-UI-thread refresh and then
+    /// sets IsStreaming = false, notifying the progress banner's bindings from that background continuation
+    /// (open a folder of .evtx, then Run search → viewer opens on a streaming source → crash at run end).
+    /// Marshalling here fixes it for every binding, not just that one property. With no dispatcher
+    /// (unit tests, non-WinUI threads) it raises inline, exactly as before.
+    /// </summary>
     private void OnPropertyChanged(string name)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    {
+        var handler = PropertyChanged;
+        if (handler == null) return;
+        var d = _uiDispatcher;
+        if (d != null && !d.HasThreadAccess
+            && d.TryEnqueue(() => handler(this, new PropertyChangedEventArgs(name))))
+            return; // handed to the UI thread; the binding reads the (already stored) value when it runs
+        handler(this, new PropertyChangedEventArgs(name));
+    }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string name = null, bool applyFilters = false)
     {

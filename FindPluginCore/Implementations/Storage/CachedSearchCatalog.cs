@@ -100,7 +100,15 @@ namespace FindPluginCore.Implementations.Storage
                     && DateTime.TryParse(ca, System.Globalization.CultureInfo.InvariantCulture,
                         System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
                     entry.CompletedAt = dt;
-                try { entry.SourceExists = !string.IsNullOrEmpty(entry.SourcePath) && File.Exists(entry.SourcePath); } catch { }
+                // A source is a file OR a folder (a folder location caches under its folder path). Checking
+                // File.Exists alone flagged every folder source as "source missing" on the Recent page even
+                // while that very folder was the open workspace.
+                try
+                {
+                    entry.SourceExists = !string.IsNullOrEmpty(entry.SourcePath)
+                        && (File.Exists(entry.SourcePath) || System.IO.Directory.Exists(entry.SourcePath));
+                }
+                catch { }
 
                 // Row count — use MAX(Id) (O(1) via the integer PK), NOT COUNT(*), which is a full
                 // table scan and makes enumerating hundreds of multi-million-row caches hang.

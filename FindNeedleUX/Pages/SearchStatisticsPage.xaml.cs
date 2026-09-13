@@ -30,6 +30,7 @@ public sealed partial class SearchStatisticsPage : Page
     public SearchStatisticsPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => Render();
     }
 
@@ -446,7 +447,7 @@ public sealed partial class SearchStatisticsPage : Page
     private string BuildCopyText(SearchRunReport report, SearchStatistics stats)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("Search statistics & timing");
+        sb.AppendLine("Search timing");
         if (!string.IsNullOrEmpty(SubtitleText.Text)) sb.AppendLine(SubtitleText.Text);
         sb.AppendLine();
 

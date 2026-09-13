@@ -35,6 +35,7 @@ public class LogLine
         Time = LogTime.ToString("o");
         Source = NormalizeMissing(searchResult.GetResultSource());
         Level = searchResult.GetLevel().ToString();
+        RawLevel = NormalizeMissing(searchResult.GetRawLevel()); // the source's own number, pre-mapping ("" for text logs)
         MachineName = NormalizeMissing(searchResult.GetMachineName());
         Username = NormalizeMissing(searchResult.GetUsername());
         OpCode = NormalizeMissing(searchResult.GetOpCode());
@@ -168,6 +169,16 @@ public class LogLine
     {
         get; set;
     }
+    /// <summary>The source's severity value before it was mapped onto <see cref="Level"/> — e.g. the
+    /// ETW TraceEventLevel ("2") or the Event Log Level byte. Empty for sources without one.</summary>
+    public string RawLevel
+    {
+        get; set;
+    }
+    /// <summary>For the in-row details template: show the RawLevel row only when the source has one.
+    /// Not part of the row's JSON copy (it's derived).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasRawLevel => !string.IsNullOrEmpty(RawLevel);
     public string MachineName
     {
         get; set;
@@ -223,6 +234,31 @@ public class LogLine
     public string StructuredData
     {
         get; set;
+    }
+
+    private System.Collections.Generic.Dictionary<string, string> _dataFields;
+    /// <summary>One value of the parsed StructuredData payload by key (<c>data.Key</c> in a query), or "".
+    /// Parsed once per row on first use; case-insensitive on the key.</summary>
+    public string DataFieldOrEmpty(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return "";
+        if (_dataFields == null)
+        {
+            var d = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(StructuredData))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(StructuredData);
+                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        foreach (var p in doc.RootElement.EnumerateObject())
+                            d[p.Name] = p.Value.ValueKind == System.Text.Json.JsonValueKind.String ? p.Value.GetString() ?? "" : p.Value.ToString();
+                }
+                catch { /* not JSON: no data fields */ }
+            }
+            _dataFields = d;
+        }
+        return _dataFields.TryGetValue(key, out var v) ? v : "";
     }
     public string SearchableData
     {

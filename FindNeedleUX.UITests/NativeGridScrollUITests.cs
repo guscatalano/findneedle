@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
@@ -31,6 +31,7 @@ namespace FindNeedleUX.UITests
     [TestClass]
     [TestCategory("UITests")]
     [TestCategory("SkipCI")]
+    [TestCategory("UiSmoke")] // self-contained (generated data, small): runs in the CI ui-smoke job
     public class NativeGridScrollUITests
     {
         private static Application _app;
@@ -45,32 +46,7 @@ namespace FindNeedleUX.UITests
 
         public TestContext TestContext { get; set; }
 
-        private static string GetAppExecutablePath()
-        {
-            var testDir = AppContext.BaseDirectory;
-            var solutionDir = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", ".."));
-            string[] possiblePaths =
-            {
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-            };
-
-            string newestPath = null;
-            DateTime newestTime = DateTime.MinValue;
-            foreach (var path in possiblePaths)
-            {
-                if (File.Exists(path) && File.GetLastWriteTime(path) > newestTime)
-                {
-                    newestTime = File.GetLastWriteTime(path);
-                    newestPath = path;
-                }
-            }
-            if (newestPath != null) return newestPath;
-            throw new FileNotFoundException(
-                $"Could not find FindNeedleUX.exe. Searched: {string.Join(", ", possiblePaths)}");
-        }
+        private static string GetAppExecutablePath() => UiTestHelpers.GetAppExecutablePath();
 
         private static string WriteTempLog(int lines)
         {
@@ -220,6 +196,15 @@ namespace FindNeedleUX.UITests
 
             var scroll = GetScrollPattern(grid);
             Assert.IsNotNull(scroll, "Could not obtain a vertical scroll pattern from the DataGrid.");
+            // The first rows realize before the page has finished streaming in, and on a slow desktop
+            // (the CI runner) the grid briefly reports "not scrollable" while it is still filling. Give it
+            // a moment to become scrollable rather than judging the very first realized row.
+            var scrollableBy = DateTime.Now.AddSeconds(20);
+            while (!scroll.VerticallyScrollable.ValueOrDefault && DateTime.Now < scrollableBy)
+            {
+                Thread.Sleep(300);
+                scroll = GetScrollPattern(grid) ?? scroll;
+            }
             Assert.IsTrue(scroll.VerticallyScrollable.ValueOrDefault,
                 "DataGrid is not vertically scrollable — not enough rows to fill the viewport?");
 

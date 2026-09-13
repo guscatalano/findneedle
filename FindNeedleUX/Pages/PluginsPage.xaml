@@ -9,7 +9,7 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Margin="16" RowSpacing="8">
+    <Grid Padding="{StaticResource PagePadding}" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -18,10 +18,10 @@
 
         <!-- Header -->
         <Grid Grid.Row="0">
-            <StackPanel>
-                <TextBlock Text="Plugins &amp; modules" FontSize="22" FontWeight="SemiBold"/>
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="PageHeading" Text="Plugins" Style="{StaticResource PageHeading}"/>
                 <TextBlock Text="Loaded plugin DLLs and the plugins they provide. ✓ loaded · ✗ failed to load · ⚠ invalid"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                           Style="{StaticResource PageSubtitle}"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top">
                 <Button x:Name="ConfigureButton" Content="Configure DLLs…" Click="ConfigureDlls_Click"/>
@@ -39,10 +39,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Master: modules → plugins tree -->
-            <Border Grid.Column="0"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="6" Padding="4">
+            <Border Grid.Column="0" Style="{StaticResource PageCard}" Padding="4">
                 <TreeView x:Name="PluginTree" SelectionMode="Single" ItemInvoked="PluginTree_ItemInvoked">
                     <TreeView.ItemTemplate>
                         <DataTemplate>
@@ -62,11 +59,9 @@
                 <StackPanel Spacing="12">
 
                     <!-- Selected plugin -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="6">
-                            <TextBlock x:Name="DetailTitle" Text="Select a plugin" FontWeight="SemiBold" FontSize="16"/>
+                            <TextBlock x:Name="DetailTitle" Text="Select a plugin" Style="{StaticResource CardTitle}"/>
                             <TextBlock Text="Description" FontWeight="SemiBold" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock x:Name="PluginDescriptionTextBlock" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
                             <TextBlock Text="Class" FontWeight="SemiBold" FontSize="12" Margin="0,4,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -77,11 +72,9 @@
                     </Border>
 
                     <!-- Owning module -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="6">
-                            <TextBlock Text="Module" FontWeight="SemiBold"/>
+                            <TextBlock Text="Module" Style="{StaticResource CardTitle}"/>
                             <TextBlock x:Name="PluginModuleTextBlock" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" IsTextSelectionEnabled="True"/>
                             <TextBlock x:Name="ModuleLoadedStatusTextBlock" TextWrapping="Wrap" FontSize="12"/>
                             <TextBlock x:Name="ModuleLoadExceptionTextBlock" TextWrapping="Wrap" FontSize="12"

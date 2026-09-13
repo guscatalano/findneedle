@@ -37,7 +37,7 @@ public class ResultsViewerDefaultsTests
         Assert.AreEqual("yyyy-MM-dd HH:mm:ss", ResultsViewerSettings.TimeFormat);
         Assert.AreEqual(100, ResultsViewerSettings.PageSize);
         Assert.IsTrue(ResultsViewerSettings.StreamWhileLoading, "progressive loading on by default");
-        Assert.AreEqual(DragDropMode.Prompt, ResultsViewerSettings.DragDropMode);
+        Assert.AreEqual(OpenIntoWorkspaceMode.Add, ResultsViewerSettings.OpenIntoWorkspace, "opening another log adds to the workspace by default");
         Assert.AreEqual(CacheReuseMode.Prompt, ResultsViewerSettings.CacheReuseMode);
         Assert.AreEqual(IndexingMode.Background, ResultsViewerSettings.IndexingMode);
         Assert.AreEqual(SearchSubmitMode.Auto, ResultsViewerSettings.SearchSubmitMode);
@@ -48,6 +48,16 @@ public class ResultsViewerDefaultsTests
         Assert.AreEqual(
             FindPluginCore.GlobalConfiguration.GlobalSettings.NativeResultViewerKey,
             ResultsViewerSettings.DefaultResultViewer);
+    }
+
+    [TestMethod]
+    public void Defaults_FilterPane_DockedLeftAndExpanded()
+    {
+        // The filter pane must simply BE THERE on first open: docked left, shown — not behind a toggle.
+        Assert.AreEqual(FilterDock.Left, ResultsViewerSettings.DefaultFilterDock);
+        Assert.AreEqual(FilterDock.Left, ResultsViewerSettings.FilterDock);
+        Assert.IsTrue(ResultsViewerSettings.DefaultFiltersExpanded);
+        Assert.IsTrue(ResultsViewerSettings.FiltersExpanded, "filter pane must be expanded on a fresh install");
     }
 
     [TestMethod]

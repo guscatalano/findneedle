@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using FindNeedleUX;
@@ -227,13 +227,18 @@ public sealed class InMemoryPagedSource : IPagedLogSource
         "processid" => l.ProcessId,
         "threadid" => l.ThreadId,
         "activityid" => l.ActivityId,
+        "relatedactivityid" => l.RelatedActivityId,
         "eventid" => l.EventId,
         "channel" => l.Channel,
         "machinename" => l.MachineName,
         "username" => l.Username,
         "opcode" => l.OpCode,
         "time" => l.LogTime.ToString("o"),
-        _ => "",
+        "rawlevel" => l.RawLevel,
+        "rowid" => l.RowId.ToString(System.Globalization.CultureInfo.InvariantCulture), // for `tag` predicates
+        _ => name.StartsWith(FindPluginCore.Searching.Query.LogQuery.DataPrefix, StringComparison.OrdinalIgnoreCase)
+                ? l.DataFieldOrEmpty(name.Substring(FindPluginCore.Searching.Query.LogQuery.DataPrefix.Length))
+                : "",
     };
 
     private static void ApplySort(SortSpec s, List<LogLine> list)

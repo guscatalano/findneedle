@@ -11,7 +11,7 @@
 
     <NavigationView x:Name="SettingsNav" PaneDisplayMode="Left"
                     IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
-                    PaneTitle="Viewer settings"
+                    PaneTitle="Settings"
                     SelectionChanged="SettingsNav_SelectionChanged">
         <NavigationView.AutoSuggestBox>
             <AutoSuggestBox x:Name="SettingsSearchBox" QueryIcon="Find"
@@ -29,14 +29,11 @@
             <NavigationViewItem Content="Appearance" Tag="appearance">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE790;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="General" Tag="general">
-                <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;"/></NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="Search" Tag="search">
-                <NavigationViewItem.Icon><FontIcon Glyph="&#xE721;"/></NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="Columns" Tag="columns">
+            <NavigationViewItem Content="Viewer" Tag="viewer">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE71D;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Loading &amp; cache" Tag="loading">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE896;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
             <NavigationViewItem Content="Decoding" Tag="decoding">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE9D9;"/></NavigationViewItem.Icon>
@@ -44,25 +41,307 @@
             <NavigationViewItem Content="Integrations" Tag="integrations">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE968;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem Content="App" Tag="app">
+                <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;"/></NavigationViewItem.Icon>
+            </NavigationViewItem>
             <NavigationViewItem Content="Support" Tag="logs">
                 <NavigationViewItem.Icon><FontIcon Glyph="&#xE7C3;"/></NavigationViewItem.Icon>
             </NavigationViewItem>
         </NavigationView.MenuItems>
 
-        <ScrollViewer Padding="24">
-            <StackPanel MaxWidth="640" Spacing="16">
+        <!-- Left-aligned like every other page (it used to float as a 640px column in the middle of the
+             content area, leaving a dead band on each side). -->
+        <ScrollViewer>
+            <StackPanel Padding="{StaticResource PagePadding}" MaxWidth="1000" HorizontalAlignment="Left" Spacing="16">
 
-                <TextBlock x:Name="CategoryTitle" Text="Appearance" FontSize="22" FontWeight="SemiBold"/>
-                <TextBlock Text="These preferences are saved per-user and apply to the native results viewer."
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                <StackPanel Spacing="4">
+                    <TextBlock x:Name="CategoryTitle" Text="Appearance" Style="{StaticResource PageHeading}"/>
+                    <TextBlock Text="These preferences are saved per-user and apply to the native results viewer."
+                               Style="{StaticResource PageSubtitle}"/>
+                </StackPanel>
 
                 <!-- ============================ APPEARANCE ============================ -->
                 <StackPanel x:Name="PanelAppearance" Spacing="16">
 
+                    <!-- Time format -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Time format" FontWeight="SemiBold"/>
+                            <!-- Items are populated in code (PopulateTimeFormatCombo) so each row shows a
+                                 live example rendered from its own format string — always consistent, no dupes. -->
+                            <ComboBox x:Name="TimeFormatCombo" Width="360"
+                                      SelectionChanged="TimeFormatCombo_SelectionChanged"
+                                      AutomationProperties.Name="Time format"/>
+                            <TextBlock x:Name="TimeFormatPreview"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       FontFamily="Consolas" FontSize="12"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Color theme -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Color theme" FontWeight="SemiBold"/>
+                            <TextBlock Text="A preset that fills in level row backgrounds. Picking a theme overwrites individual color overrides below."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="ThemeCombo" Width="220"
+                                      SelectionChanged="ThemeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Color theme">
+                                <ComboBoxItem Content="Subtle (default)" Tag="Subtle"/>
+                                <ComboBoxItem Content="Vivid"            Tag="Vivid"/>
+                                <ComboBoxItem Content="Classic (red/yellow)" Tag="Classic"/>
+                                <ComboBoxItem Content="Bold"             Tag="Bold"/>
+                                <ComboBoxItem Content="Ocean"            Tag="Ocean"/>
+                                <ComboBoxItem Content="Forest"           Tag="Forest"/>
+                                <ComboBoxItem Content="Sunset"           Tag="Sunset"/>
+                                <ComboBoxItem Content="Grayscale"        Tag="Grayscale"/>
+                                <ComboBoxItem Content="None"             Tag="None"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Per-level colors (kept next to Color theme — a theme is just a preset for these) -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <Grid>
+                                <TextBlock Text="Level colors" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <Button Content="Reset all to theme defaults" Click="ResetAllColors_Click"
+                                        HorizontalAlignment="Right" FontSize="12"/>
+                            </Grid>
+                            <TextBlock Text="The colors used to tint result rows by level. This is the only place to change them — click a swatch to pick a custom color; Reset reverts that level to the current theme."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ItemsControl x:Name="LevelEditor">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="nrv:LevelEntry">
+                                        <Grid Padding="0,6,0,6" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{x:Bind Level}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            <Button Grid.Column="1" Click="PickColor_Click" Tag="{x:Bind Level}"
+                                                    Padding="2" MinHeight="0" MinWidth="0"
+                                                    ToolTipService.ToolTip="Pick custom color">
+                                                <Border Width="32" Height="20" CornerRadius="3" BorderThickness="1"
+                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                        Background="{x:Bind HexColor, Mode=OneWay, Converter={StaticResource HexToBrush}}"/>
+                                            </Button>
+                                            <TextBlock Grid.Column="2" Text="{x:Bind HexColor, Mode=OneWay}"
+                                                       VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Button Grid.Column="4" Content="Reset" Click="ResetColor_Click" Tag="{x:Bind Level}"
+                                                    FontSize="12"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Title bar color -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Title bar" FontWeight="SemiBold"/>
+                            <TextBlock Text="Color of the window's title bar. Takes effect on Windows 11."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="TitleBarModeCombo" Width="220"
+                                      SelectionChanged="TitleBarModeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Title bar color mode">
+                                <ComboBoxItem Content="System default" Tag="System"/>
+                                <ComboBoxItem Content="Accent color"   Tag="Accent"/>
+                                <ComboBoxItem Content="Custom…"         Tag="Custom"/>
+                            </ComboBox>
+                            <StackPanel x:Name="TitleBarCustomPanel" Orientation="Horizontal" Spacing="8"
+                                        VerticalAlignment="Center" Visibility="Collapsed">
+                                <Button Click="TitleBarColor_Click" Padding="2" MinHeight="0" MinWidth="0"
+                                        ToolTipService.ToolTip="Pick a custom title bar color">
+                                    <Border x:Name="TitleBarSwatch" Width="40" Height="22" CornerRadius="3"
+                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                                </Button>
+                                <TextBlock x:Name="TitleBarHexText" VerticalAlignment="Center"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Scrollbar -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Scrollbar" FontWeight="SemiBold"/>
+                            <TextBlock Text="How thick the result grid's scrollbar is. Larger sizes are easier to see and grab."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="ScrollBarSizeCombo" Width="220"
+                                      SelectionChanged="ScrollBarSizeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Scrollbar size">
+                                <ComboBoxItem Content="Default (thin)" Tag="12"/>
+                                <ComboBoxItem Content="Medium"        Tag="18"/>
+                                <ComboBoxItem Content="Large"         Tag="24"/>
+                                <ComboBoxItem Content="Extra large"   Tag="32"/>
+                            </ComboBox>
+                            <ToggleSwitch x:Name="AlwaysShowScrollBarsToggle" Header="Always show scrollbars"
+                                          OnContent="Always visible" OffContent="Auto-hide"
+                                          Toggled="AlwaysShowScrollBarsToggle_Toggled" Margin="0,4,0,0"/>
+                            <TextBlock Text="Keep the grid's scrollbars visible instead of letting them auto-hide until you hover."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Row text size -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row text size" FontWeight="SemiBold"/>
+                            <TextBlock Text="Font size of the result grid's rows. Smaller fits more rows on screen; larger is easier to read."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="RowFontSizeCombo" Width="220"
+                                      SelectionChanged="RowFontSizeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Row text size">
+                                <ComboBoxItem Content="Compact (9)"  Tag="9"/>
+                                <ComboBoxItem Content="Small (11)"   Tag="11"/>
+                                <ComboBoxItem Content="Default (12)" Tag="12"/>
+                                <ComboBoxItem Content="Medium (14)"  Tag="14"/>
+                                <ComboBoxItem Content="Large (16)"   Tag="16"/>
+                                <ComboBoxItem Content="Extra large (20)" Tag="20"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Row height (density) -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row height" FontWeight="SemiBold"/>
+                            <TextBlock Text="How tall each row is relative to its text. Tighter fits more rows on screen; roomier is easier to scan."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="RowHeightRatioCombo" Width="220"
+                                      SelectionChanged="RowHeightRatioCombo_SelectionChanged"
+                                      AutomationProperties.Name="Row height">
+                                <ComboBoxItem Content="Tight"            Tag="1.4"/>
+                                <ComboBoxItem Content="Comfortable (default)" Tag="1.9"/>
+                                <ComboBoxItem Content="Roomy"            Tag="2.4"/>
+                                <ComboBoxItem Content="Spacious"         Tag="3"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+
+                <!-- ============================ VIEWER ============================ -->
+                <StackPanel x:Name="PanelViewer" Spacing="16" Visibility="Collapsed">
+
+                    <!-- Default columns -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <Grid>
+                                <TextBlock Text="Default columns" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <Button Content="Reset to defaults" Click="ResetColumnDefaults_Click"
+                                        HorizontalAlignment="Right" FontSize="12"/>
+                            </Grid>
+                            <TextBlock Text="Which columns are shown when you open the result viewer. The viewer's Columns ▾ popover can still toggle any column for the current session."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <nrv:WrapPanelLite x:Name="ColumnDefaultsPanel" HorizontalSpacing="16" VerticalSpacing="8"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Default sort -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Default sort" FontWeight="SemiBold"/>
+                            <TextBlock Text="How rows are sorted when a log first opens. &quot;Load order&quot; keeps the exact order rows were read from the source (not necessarily by time). You can always click a column header to re-sort."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ComboBox x:Name="DefaultSortCombo" Width="320"
+                                      SelectionChanged="DefaultSortCombo_SelectionChanged"
+                                      AutomationProperties.Name="Default sort">
+                                <ComboBoxItem Content="Load order — as read (default)" Tag="LoadOrder"/>
+                                <ComboBoxItem Content="Time — oldest first"           Tag="TimeAscending"/>
+                                <ComboBoxItem Content="Time — newest first"           Tag="TimeDescending"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Paging -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Paging" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ScrollToTopOnPageChangeCheck" Content="Scroll to the top when changing pages"
+                                      Checked="ScrollToTopOnPageChangeCheck_Changed" Unchecked="ScrollToTopOnPageChangeCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="When you move to another page (Next / Prev / First / Last / change page size), jump to the top of the new page. Turn off to keep your scroll position."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Row tags -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Row tags" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ColorTaggedRowsCheck" Content="Also color the whole row with the tag color"
+                                      Checked="ColorTaggedRowsCheck_Changed" Unchecked="ColorTaggedRowsCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="Tagged rows always show a colored tag glyph on the left. Turn this on to tint the whole row too."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- "Show known" filter dropdown mode (per field) -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Known-value filter dropdowns" FontWeight="SemiBold"/>
+                            <TextBlock Text="When the result viewer's &quot;Known ▾&quot; filter is on, choose whether each column's dropdown lets you pick one value or several (matched as any-of)."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <Grid ColumnSpacing="12" RowSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Provider" VerticalAlignment="Center" FontSize="13"/>
+                                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="KnownModeProviderCombo" Width="180"
+                                          SelectionChanged="KnownModeProviderCombo_SelectionChanged" AutomationProperties.Name="Provider known-filter mode">
+                                    <ComboBoxItem Content="Single select" Tag="Single"/>
+                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
+                                </ComboBox>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="TaskName" VerticalAlignment="Center" FontSize="13"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="KnownModeTaskNameCombo" Width="180"
+                                          SelectionChanged="KnownModeTaskNameCombo_SelectionChanged" AutomationProperties.Name="TaskName known-filter mode">
+                                    <ComboBoxItem Content="Single select" Tag="Single"/>
+                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
+                                </ComboBox>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Source" VerticalAlignment="Center" FontSize="13"/>
+                                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="KnownModeSourceCombo" Width="180"
+                                          SelectionChanged="KnownModeSourceCombo_SelectionChanged" AutomationProperties.Name="Source known-filter mode">
+                                    <ComboBoxItem Content="Single select" Tag="Single"/>
+                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
+                                </ComboBox>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Search box submit -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Search box" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="When the search box runs a search. Searching a huge log on every keystroke can make typing lag, so you can require pressing Enter instead."/>
+                            <ComboBox x:Name="SearchSubmitModeCombo" Width="360"
+                                      SelectionChanged="SearchSubmitModeCombo_SelectionChanged"
+                                      AutomationProperties.Name="Search submit mode">
+                                <ComboBoxItem Content="Auto — live, but Enter-to-search on large/slow logs (default)" Tag="Auto"/>
+                                <ComboBoxItem Content="Live — search as you type"  Tag="Live"/>
+                                <ComboBoxItem Content="On Enter — only search when you press Enter" Tag="OnEnter"/>
+                            </ComboBox>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="Auto keeps live search on small logs and switches to Enter-to-search once a search takes about a second (or the log is large), then back to live once searches are fast again."/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Loading animation -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Loading animation" FontWeight="SemiBold"/>
                             <TextBlock Text="What the full-window loading overlay shows during searches and file opens."
@@ -125,343 +404,13 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Time format -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Time format" FontWeight="SemiBold"/>
-                            <!-- Items are populated in code (PopulateTimeFormatCombo) so each row shows a
-                                 live example rendered from its own format string — always consistent, no dupes. -->
-                            <ComboBox x:Name="TimeFormatCombo" Width="360"
-                                      SelectionChanged="TimeFormatCombo_SelectionChanged"
-                                      AutomationProperties.Name="Time format"/>
-                            <TextBlock x:Name="TimeFormatPreview"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       FontFamily="Consolas" FontSize="12"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Color theme -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Color theme" FontWeight="SemiBold"/>
-                            <TextBlock Text="A preset that fills in level row backgrounds. Picking a theme overwrites individual color overrides below."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="ThemeCombo" Width="220"
-                                      SelectionChanged="ThemeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Color theme">
-                                <ComboBoxItem Content="Subtle (default)" Tag="Subtle"/>
-                                <ComboBoxItem Content="Vivid"            Tag="Vivid"/>
-                                <ComboBoxItem Content="Classic (red/yellow)" Tag="Classic"/>
-                                <ComboBoxItem Content="Bold"             Tag="Bold"/>
-                                <ComboBoxItem Content="Ocean"            Tag="Ocean"/>
-                                <ComboBoxItem Content="Forest"           Tag="Forest"/>
-                                <ComboBoxItem Content="Sunset"           Tag="Sunset"/>
-                                <ComboBoxItem Content="Grayscale"        Tag="Grayscale"/>
-                                <ComboBoxItem Content="None"             Tag="None"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Per-level colors (kept next to Color theme — a theme is just a preset for these) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <Grid>
-                                <TextBlock Text="Level colors" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <Button Content="Reset all to theme defaults" Click="ResetAllColors_Click"
-                                        HorizontalAlignment="Right" FontSize="12"/>
-                            </Grid>
-                            <TextBlock Text="The colors used to tint result rows by level. This is the only place to change them — click a swatch to pick a custom color; Reset reverts that level to the current theme."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ItemsControl x:Name="LevelEditor">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="nrv:LevelEntry">
-                                        <Grid Padding="0,6,0,6" ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="120"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="120"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{x:Bind Level}" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                                            <Button Grid.Column="1" Click="PickColor_Click" Tag="{x:Bind Level}"
-                                                    Padding="2" MinHeight="0" MinWidth="0"
-                                                    ToolTipService.ToolTip="Pick custom color">
-                                                <Border Width="32" Height="20" CornerRadius="3" BorderThickness="1"
-                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                        Background="{x:Bind HexColor, Mode=OneWay, Converter={StaticResource HexToBrush}}"/>
-                                            </Button>
-                                            <TextBlock Grid.Column="2" Text="{x:Bind HexColor, Mode=OneWay}"
-                                                       VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"
-                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                            <Button Grid.Column="4" Content="Reset" Click="ResetColor_Click" Tag="{x:Bind Level}"
-                                                    FontSize="12"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Title bar color -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Title bar" FontWeight="SemiBold"/>
-                            <TextBlock Text="Color of the window's title bar. Takes effect on Windows 11."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="TitleBarModeCombo" Width="220"
-                                      SelectionChanged="TitleBarModeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Title bar color mode">
-                                <ComboBoxItem Content="System default" Tag="System"/>
-                                <ComboBoxItem Content="Accent color"   Tag="Accent"/>
-                                <ComboBoxItem Content="Custom…"         Tag="Custom"/>
-                            </ComboBox>
-                            <StackPanel x:Name="TitleBarCustomPanel" Orientation="Horizontal" Spacing="8"
-                                        VerticalAlignment="Center" Visibility="Collapsed">
-                                <Button Click="TitleBarColor_Click" Padding="2" MinHeight="0" MinWidth="0"
-                                        ToolTipService.ToolTip="Pick a custom title bar color">
-                                    <Border x:Name="TitleBarSwatch" Width="40" Height="22" CornerRadius="3"
-                                            BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"/>
-                                </Button>
-                                <TextBlock x:Name="TitleBarHexText" VerticalAlignment="Center"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Scrollbar -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Scrollbar" FontWeight="SemiBold"/>
-                            <TextBlock Text="How thick the result grid's scrollbar is. Larger sizes are easier to see and grab."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="ScrollBarSizeCombo" Width="220"
-                                      SelectionChanged="ScrollBarSizeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Scrollbar size">
-                                <ComboBoxItem Content="Default (thin)" Tag="12"/>
-                                <ComboBoxItem Content="Medium"        Tag="18"/>
-                                <ComboBoxItem Content="Large"         Tag="24"/>
-                                <ComboBoxItem Content="Extra large"   Tag="32"/>
-                            </ComboBox>
-                            <ToggleSwitch x:Name="AlwaysShowScrollBarsToggle" Header="Always show scrollbars"
-                                          OnContent="Always visible" OffContent="Auto-hide"
-                                          Toggled="AlwaysShowScrollBarsToggle_Toggled" Margin="0,4,0,0"/>
-                            <TextBlock Text="Keep the grid's scrollbars visible instead of letting them auto-hide until you hover."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Row text size -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Row text size" FontWeight="SemiBold"/>
-                            <TextBlock Text="Font size of the result grid's rows. Smaller fits more rows on screen; larger is easier to read."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="RowFontSizeCombo" Width="220"
-                                      SelectionChanged="RowFontSizeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Row text size">
-                                <ComboBoxItem Content="Compact (9)"  Tag="9"/>
-                                <ComboBoxItem Content="Small (11)"   Tag="11"/>
-                                <ComboBoxItem Content="Default (12)" Tag="12"/>
-                                <ComboBoxItem Content="Medium (14)"  Tag="14"/>
-                                <ComboBoxItem Content="Large (16)"   Tag="16"/>
-                                <ComboBoxItem Content="Extra large (20)" Tag="20"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Row height (density) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Row height" FontWeight="SemiBold"/>
-                            <TextBlock Text="How tall each row is relative to its text. Tighter fits more rows on screen; roomier is easier to scan."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="RowHeightRatioCombo" Width="220"
-                                      SelectionChanged="RowHeightRatioCombo_SelectionChanged"
-                                      AutomationProperties.Name="Row height">
-                                <ComboBoxItem Content="Tight"            Tag="1.4"/>
-                                <ComboBoxItem Content="Comfortable (default)" Tag="1.9"/>
-                                <ComboBoxItem Content="Roomy"            Tag="2.4"/>
-                                <ComboBoxItem Content="Spacious"         Tag="3"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Row tags -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Row tags" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ColorTaggedRowsCheck" Content="Also color the whole row with the tag color"
-                                      Checked="ColorTaggedRowsCheck_Changed" Unchecked="ColorTaggedRowsCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="Tagged rows always show a colored tag glyph on the left. Turn this on to tint the whole row too."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Paging -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Paging" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ScrollToTopOnPageChangeCheck" Content="Scroll to the top when changing pages"
-                                      Checked="ScrollToTopOnPageChangeCheck_Changed" Unchecked="ScrollToTopOnPageChangeCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="When you move to another page (Next / Prev / First / Last / change page size), jump to the top of the new page. Turn off to keep your scroll position."/>
-                        </StackPanel>
-                    </Border>
-
                 </StackPanel>
 
-                <!-- ============================ GENERAL ============================ -->
-                <StackPanel x:Name="PanelGeneral" Spacing="16" Visibility="Collapsed">
-
-                    <!-- Default sort -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Default sort" FontWeight="SemiBold"/>
-                            <TextBlock Text="How rows are sorted when a log first opens. &quot;Load order&quot; keeps the exact order rows were read from the source (not necessarily by time). You can always click a column header to re-sort."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <ComboBox x:Name="DefaultSortCombo" Width="320"
-                                      SelectionChanged="DefaultSortCombo_SelectionChanged"
-                                      AutomationProperties.Name="Default sort">
-                                <ComboBoxItem Content="Load order — as read (default)" Tag="LoadOrder"/>
-                                <ComboBoxItem Content="Time — oldest first"           Tag="TimeAscending"/>
-                                <ComboBoxItem Content="Time — newest first"           Tag="TimeDescending"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- "Show known" filter dropdown mode (per field) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Known-value filter dropdowns" FontWeight="SemiBold"/>
-                            <TextBlock Text="When the result viewer's &quot;Known ▾&quot; filter is on, choose whether each column's dropdown lets you pick one value or several (matched as any-of)."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <Grid ColumnSpacing="12" RowSpacing="6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Provider" VerticalAlignment="Center" FontSize="13"/>
-                                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="KnownModeProviderCombo" Width="180"
-                                          SelectionChanged="KnownModeProviderCombo_SelectionChanged" AutomationProperties.Name="Provider known-filter mode">
-                                    <ComboBoxItem Content="Single select" Tag="Single"/>
-                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
-                                </ComboBox>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="TaskName" VerticalAlignment="Center" FontSize="13"/>
-                                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="KnownModeTaskNameCombo" Width="180"
-                                          SelectionChanged="KnownModeTaskNameCombo_SelectionChanged" AutomationProperties.Name="TaskName known-filter mode">
-                                    <ComboBoxItem Content="Single select" Tag="Single"/>
-                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
-                                </ComboBox>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Source" VerticalAlignment="Center" FontSize="13"/>
-                                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="KnownModeSourceCombo" Width="180"
-                                          SelectionChanged="KnownModeSourceCombo_SelectionChanged" AutomationProperties.Name="Source known-filter mode">
-                                    <ComboBoxItem Content="Single select" Tag="Single"/>
-                                    <ComboBoxItem Content="Multi select"  Tag="Multi"/>
-                                </ComboBox>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Welcome page -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Welcome page" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ShowWelcomeIntroCheck" Content="Show the &quot;New here?&quot; getting-started banner"
-                                      Checked="ShowWelcomeIntroCheck_Changed" Unchecked="ShowWelcomeIntroCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="The intro + key-features banner at the top of the welcome page. Dismissing it there also unchecks this."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Status bar -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Status bar" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ShowStatusBarCheck" Content="Show the status bar"
-                                      Checked="ShowStatusBarCheck_Changed" Unchecked="ShowStatusBarCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="The bar at the top with Sources / Rules / Last run / Run &amp; View. Closing it with the × turns this off."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Keyboard shortcuts -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Keyboard shortcuts" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="HotkeysCheck" Content="Enable keyboard shortcuts"
-                                      Checked="HotkeysCheck_Changed" Unchecked="HotkeysCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="On by default. App hotkeys like Ctrl+F (focus the search box) and Ctrl+K (command palette). Turn off to disable them all — typing keys like Enter and Escape are unaffected."/>
-                            <CheckBox x:Name="CommandPaletteCheck" Content="Ctrl+K command palette" Margin="0,8,0,0"
-                                      Checked="CommandPaletteCheck_Changed" Unchecked="CommandPaletteCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="Off by default. A keyboard-first jump list to any page or action. Requires keyboard shortcuts (above) to be on."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Drag and drop behavior -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Drag and drop" FontWeight="SemiBold"/>
-                            <TextBlock TextWrapping="Wrap" FontSize="12"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="When you drag a file or folder onto the viewer and a workspace is already loaded."/>
-                            <ComboBox x:Name="DragDropModeCombo" Width="320"
-                                      SelectionChanged="DragDropModeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Drag and drop behavior">
-                                <ComboBoxItem Content="Ask every time (default)"   Tag="Prompt"/>
-                                <ComboBoxItem Content="Clear workspace and open"   Tag="ClearAndAdd"/>
-                                <ComboBoxItem Content="Add to existing workspace"  Tag="AddToExisting"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                </StackPanel>
-
-                <!-- ============================ SEARCH ============================ -->
-                <StackPanel x:Name="PanelSearch" Spacing="16" Visibility="Collapsed">
+                <!-- ============================ LOADING & CACHE ============================ -->
+                <StackPanel x:Name="PanelLoading" Spacing="16" Visibility="Collapsed">
 
                     <!-- Progressive loading -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Progressive loading" FontWeight="SemiBold"/>
                             <CheckBox x:Name="StreamWhileLoadingCheck"
@@ -473,10 +422,34 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Loading performance -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Loading performance" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ParallelIngestCheck" Margin="0,4,0,0"
+                                      Content="Parallel ingest for large logs (faster first open)"
+                                      Checked="ParallelIngestCheck_Changed" Unchecked="ParallelIngestCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="On by default. Large logs load by inserting across several writer threads while one thread decodes, then merging — about 2× faster first open on a multi-million-event .etl. Turn off to use the slower single-writer load (the fail-safe), which also lets rows appear in the viewer live as they load. Takes effect on the next search."/>
+                            <CheckBox x:Name="FastBulkIngestCheck" Margin="0,8,0,0"
+                                      Content="Fast bulk ingest (defer indexes, faster row loading)"
+                                      Checked="FastBulkIngestCheck_Changed" Unchecked="FastBulkIngestCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="On by default. Builds the cache's secondary indexes in one pass after the rows load instead of maintaining them on every insert, and skips AUTOINCREMENT — about 29% faster raw ingest on a 1M-line log, so rows become viewable sooner (the full-text search index still builds afterward). Turn off to restore the original eager-index behavior. Takes effect on the next fresh search."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Search progress -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Search progress" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ShowStepHistoryCheck" Content="Show completed steps above the current step"
+                                      Checked="ShowStepHistoryCheck_Changed" Unchecked="ShowStepHistoryCheck_Changed"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Cache reuse -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Cache search results" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -493,9 +466,7 @@
                     </Border>
 
                     <!-- Cached searches (size / clear / browse) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Cached searches" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -507,15 +478,13 @@
                                 <Button x:Name="CacheClearButton" Content="Clear…" Click="CacheClear_Click"
                                         ToolTipService.ToolTip="Delete all cached searches"/>
                                 <Button Content="Browse…" Click="CacheBrowse_Click"
-                                        ToolTipService.ToolTip="Open the Cached Searches page"/>
+                                        ToolTipService.ToolTip="Open the Recent searches page"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
                     <!-- Startup cache cleanup -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Startup cache cleanup" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -531,10 +500,28 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Search storage backend -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Search storage" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Where search results are kept while you view them. Auto picks based on result size."/>
+                            <ComboBox x:Name="StorageCombo" Width="280"
+                                      SelectionChanged="StorageCombo_SelectionChanged"
+                                      AutomationProperties.Name="Search storage backend">
+                                <ComboBoxItem Content="Auto (recommended)"     Tag="Auto"/>
+                                <ComboBoxItem Content="In-memory (fastest, &lt; 100k rows)"  Tag="InMemory"/>
+                                <ComboBoxItem Content="Hybrid (RAM + SQLite spillover)"      Tag="Hybrid"/>
+                                <ComboBoxItem Content="SQLite only (smallest memory)"        Tag="SqlLite"/>
+                            </ComboBox>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="Auto picks: in-memory under 10k rows, hybrid up to 1M, SQLite above. Takes effect on the next search."/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Substring-search index -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Substring-search index" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -557,107 +544,13 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Loading performance -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Loading performance" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ParallelIngestCheck" Margin="0,4,0,0"
-                                      Content="Parallel ingest for large logs (faster first open)"
-                                      Checked="ParallelIngestCheck_Changed" Unchecked="ParallelIngestCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="On by default. Large logs load by inserting across several writer threads while one thread decodes, then merging — about 2× faster first open on a multi-million-event .etl. Turn off to use the slower single-writer load (the fail-safe), which also lets rows appear in the viewer live as they load. Takes effect on the next search."/>
-                            <CheckBox x:Name="FastBulkIngestCheck" Margin="0,8,0,0"
-                                      Content="Fast bulk ingest (defer indexes, faster row loading)"
-                                      Checked="FastBulkIngestCheck_Changed" Unchecked="FastBulkIngestCheck_Changed"/>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="On by default. Builds the cache's secondary indexes in one pass after the rows load instead of maintaining them on every insert, and skips AUTOINCREMENT — about 29% faster raw ingest on a 1M-line log, so rows become viewable sooner (the full-text search index still builds afterward). Turn off to restore the original eager-index behavior. Takes effect on the next fresh search."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Search box submit -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Search box" FontWeight="SemiBold"/>
-                            <TextBlock TextWrapping="Wrap" FontSize="12"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="When the search box runs a search. Searching a huge log on every keystroke can make typing lag, so you can require pressing Enter instead."/>
-                            <ComboBox x:Name="SearchSubmitModeCombo" Width="360"
-                                      SelectionChanged="SearchSubmitModeCombo_SelectionChanged"
-                                      AutomationProperties.Name="Search submit mode">
-                                <ComboBoxItem Content="Auto — live, but Enter-to-search on large/slow logs (default)" Tag="Auto"/>
-                                <ComboBoxItem Content="Live — search as you type"  Tag="Live"/>
-                                <ComboBoxItem Content="On Enter — only search when you press Enter" Tag="OnEnter"/>
-                            </ComboBox>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="Auto keeps live search on small logs and switches to Enter-to-search once a search takes about a second (or the log is large), then back to live once searches are fast again."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Search progress -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Search progress" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="ShowStepHistoryCheck" Content="Show completed steps above the current step"
-                                      Checked="ShowStepHistoryCheck_Changed" Unchecked="ShowStepHistoryCheck_Changed"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Search storage backend -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Search storage" FontWeight="SemiBold"/>
-                            <TextBlock TextWrapping="Wrap" FontSize="12"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Where search results are kept while you view them. Auto picks based on result size."/>
-                            <ComboBox x:Name="StorageCombo" Width="280"
-                                      SelectionChanged="StorageCombo_SelectionChanged"
-                                      AutomationProperties.Name="Search storage backend">
-                                <ComboBoxItem Content="Auto (recommended)"     Tag="Auto"/>
-                                <ComboBoxItem Content="In-memory (fastest, &lt; 100k rows)"  Tag="InMemory"/>
-                                <ComboBoxItem Content="Hybrid (RAM + SQLite spillover)"      Tag="Hybrid"/>
-                                <ComboBoxItem Content="SQLite only (smallest memory)"        Tag="SqlLite"/>
-                            </ComboBox>
-                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                                       Text="Auto picks: in-memory under 10k rows, hybrid up to 1M, SQLite above. Takes effect on the next search."/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-
-                <!-- ============================ COLUMNS ============================ -->
-                <StackPanel x:Name="PanelColumns" Spacing="16" Visibility="Collapsed">
-
-                    <!-- Default columns -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
-                        <StackPanel Spacing="8">
-                            <Grid>
-                                <TextBlock Text="Default columns" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <Button Content="Reset to defaults" Click="ResetColumnDefaults_Click"
-                                        HorizontalAlignment="Right" FontSize="12"/>
-                            </Grid>
-                            <TextBlock Text="Which columns are shown when you open the result viewer. The viewer's Columns ▾ popover can still toggle any column for the current session."
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
-                            <nrv:WrapPanelLite x:Name="ColumnDefaultsPanel" HorizontalSpacing="16" VerticalSpacing="8"/>
-                        </StackPanel>
-                    </Border>
                 </StackPanel>
 
                 <!-- ============================ DECODING ============================ -->
                 <StackPanel x:Name="PanelDecoding" Spacing="16" Visibility="Collapsed">
 
                     <!-- Event payload format (ETW TraceLogging etc.) -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Event payload format" FontWeight="SemiBold"/>
                             <TextBlock Text="How a structured event's fields (e.g. ETW TraceLogging) are shown in the Message column. Applies instantly — no re-scan."
@@ -682,15 +575,13 @@
                     </Border>
 
                     <!-- WPP / tracefmt symbols — moved to its own page; this is just a pointer -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="WPP symbols (TMF decoding)" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        Text="WPP-traced .etl files need TMF format files (from each binary's private PDB) to decode — otherwise events show as 'Unknown'. Point at ready-made TMFs, resolve them from PDBs/symbols, and see per-binary status on the dedicated page."/>
-                            <Button Content="Open WPP symbol resolution →" Click="OpenWppSymbols_Click"/>
+                            <Button Content="Open Symbols (WPP) →" Click="OpenWppSymbols_Click"/>
 
                             <TextBlock Text="WPP decoder" FontWeight="SemiBold" Margin="0,8,0,0"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -704,15 +595,14 @@
                             </ComboBox>
                         </StackPanel>
                     </Border>
+
                 </StackPanel>
 
                 <!-- ============================ INTEGRATIONS ============================ -->
                 <StackPanel x:Name="PanelIntegrations" Spacing="16" Visibility="Collapsed">
 
                     <!-- MCP server -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="MCP server (experimental)" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -731,10 +621,56 @@
                         </StackPanel>
                     </Border>
 
+                </StackPanel>
+
+                <!-- ============================ APP ============================ -->
+                <StackPanel x:Name="PanelApp" Spacing="16" Visibility="Collapsed">
+
+                    <!-- Status bar -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Status bar" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="ShowStatusBarCheck" Content="Show the status bar"
+                                      Checked="ShowStatusBarCheck_Changed" Unchecked="ShowStatusBarCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="The bar at the top with Sources / Rules / Last run / Run &amp; View. Closing it with the × turns this off."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Keyboard shortcuts -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Keyboard shortcuts" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="HotkeysCheck" Content="Enable keyboard shortcuts"
+                                      Checked="HotkeysCheck_Changed" Unchecked="HotkeysCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="On by default. App hotkeys like Ctrl+F (focus the search box) and Ctrl+K (command palette). Turn off to disable them all — typing keys like Enter and Escape are unaffected."/>
+                            <CheckBox x:Name="CommandPaletteCheck" Content="Ctrl+K command palette" Margin="0,8,0,0"
+                                      Checked="CommandPaletteCheck_Changed" Unchecked="CommandPaletteCheck_Changed"/>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                                       Text="On by default. A keyboard-first jump list to any page or action. Requires keyboard shortcuts (above) to be on."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Opening another log while a workspace is loaded (pickers, Open with rules, Recent
+                         searches, Known logs, drag-and-drop — one policy for all of them). Mirrored on Home. -->
+                    <Border Style="{StaticResource PageCard}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="When you open another log while a workspace is loaded" FontWeight="SemiBold"/>
+                            <RadioButtons x:Name="OpenIntoWorkspaceRadios" SelectionChanged="OpenIntoWorkspaceRadios_SelectionChanged"
+                                          AutomationProperties.Name="When you open another log while a workspace is loaded">
+                                <RadioButton Content="Add it to this workspace (default)" Tag="Add"/>
+                                <RadioButton Content="Replace the workspace" Tag="Replace"/>
+                                <RadioButton Content="Ask each time" Tag="Ask"/>
+                            </RadioButtons>
+                            <TextBlock TextWrapping="Wrap" FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Your sources and rule files are never discarded without asking. An empty workspace never prompts."/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- File associations -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="File associations" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
@@ -759,20 +695,19 @@
                                     FontSize="12" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
+
                 </StackPanel>
 
-                <!-- ============================ LOGS ============================ -->
+                <!-- ============================ SUPPORT ============================ -->
                 <StackPanel x:Name="PanelLogs" Spacing="16" Visibility="Collapsed">
 
-                    <!-- Diagnostics: bundle logs for the developer -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <!-- Support: bundle logs for the developer -->
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Diagnostics" FontWeight="SemiBold"/>
+                            <TextBlock Text="Support" FontWeight="SemiBold"/>
                             <TextBlock TextWrapping="Wrap" FontSize="12"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Text="Bundle the app logs, settings, plugin config, and system info into a single .zip you can attach to a bug report. No log file contents are uploaded anywhere — you choose where to save it."/>
+                                       Text="Bundle the app log, settings, plugin config, and system info into a single .zip you can attach to a bug report. No log file contents are uploaded anywhere — you choose where to save it."/>
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Button x:Name="SendLogsButton" Content="Send app logs to dev…" Click="SendLogs_Click"/>
                                 <TextBlock x:Name="SendLogsStatus" VerticalAlignment="Center" FontSize="12"
@@ -782,9 +717,7 @@
                     </Border>
 
                     <!-- Settings file path -->
-                    <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="16">
+                    <Border Style="{StaticResource PageCard}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Settings file" FontWeight="SemiBold"/>
                             <TextBlock Text="Where your per-user viewer settings are stored on disk."
@@ -794,6 +727,7 @@
                                        IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
+
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

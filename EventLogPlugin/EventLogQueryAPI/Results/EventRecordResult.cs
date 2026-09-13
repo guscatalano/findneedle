@@ -83,6 +83,11 @@ public class EventRecordResult : ISearchResult
     }
 
 
+    public string GetRawLevel()
+    {
+        try { return entry.Level?.ToString() ?? ""; } catch { return ""; }
+    }
+
     public Level GetLevel()
     {
         try { 

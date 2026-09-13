@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 <PropertyGroup>
   <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
@@ -15,6 +15,13 @@
   <UseWinUI>false</UseWinUI>
   <WindowsAppSDKWinUI>false</WindowsAppSDKWinUI>
   <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+  <!-- The MRT PRI tooling is imported transitively and loads its tasks from
+       MSBuildExtensionsPath/Microsoft/VisualStudio/v(VisualStudioVersion)/AppxPackage, which the plain
+       .NET SDK does not ship (MSB4062 "ExpandPriContent could not be loaded" on the CI image with VS 18 /
+       SDK 10). A unit-test assembly has no resources to index, so turn the PRI steps off outright. -->
+  <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
+  <AppxGeneratePriEnabled>false</AppxGeneratePriEnabled>
+  <AppxGeneratePrisForPortableLibrariesEnabled>false</AppxGeneratePrisForPortableLibrariesEnabled>
 </PropertyGroup>
 
 <ItemGroup>

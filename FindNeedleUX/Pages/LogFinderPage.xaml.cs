@@ -16,10 +16,21 @@ namespace FindNeedleUX.Pages;
 /// Windows locations plus the user's own. "Open" loads the folder/file as a location and runs it.</summary>
 public sealed partial class LogFinderPage : Page
 {
+    private string _highlightId; // entry to spotlight when navigated from Home's "Known logs" card
+
     public LogFinderPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) => RenderList();
+    }
+
+    /// <summary>Navigation parameter: a catalog entry id (e.g. "builtin:winevt") to highlight and scroll to.</summary>
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        _highlightId = e.Parameter as string;
+        if (IsLoaded) RenderList();
     }
 
     private void RenderList()
@@ -37,7 +48,17 @@ public sealed partial class LogFinderPage : Page
             });
             var rows = group.ToList();
             for (int i = 0; i < rows.Count; i++)
-                ListHost.Children.Add(BuildRow(rows[i], i, rows.Count));
+            {
+                var row = BuildRow(rows[i], i, rows.Count);
+                ListHost.Children.Add(row);
+                if (!string.IsNullOrEmpty(_highlightId) && string.Equals(rows[i].Id, _highlightId, StringComparison.OrdinalIgnoreCase)
+                    && row is Border b)
+                {
+                    b.BorderBrush = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                    b.BorderThickness = new Thickness(2);
+                    b.Loaded += (_, _) => { try { b.StartBringIntoView(); } catch { } };
+                }
+            }
         }
     }
 
@@ -49,9 +70,9 @@ public sealed partial class LogFinderPage : Page
         {
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(4),
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            Padding = new Thickness(12),
+            Padding = new Thickness(12, 10, 12, 10),
         };
         var grid = new Grid { ColumnSpacing = 10 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -78,16 +99,17 @@ public sealed partial class LogFinderPage : Page
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
 
         // Reorder within the category. (Segoe MDL2 chevrons via char code — no unicode literal.)
-        var up = new Button { Content = new FontIcon { Glyph = ((char)0xE70E).ToString(), FontSize = 12 }, IsEnabled = indexInGroup > 0, Padding = new Thickness(6) };
+        // Icon buttons match the 32px text buttons beside them (Padding=6 alone made them 28px).
+        var up = new Button { Content = new FontIcon { Glyph = ((char)0xE70E).ToString(), FontSize = 12 }, IsEnabled = indexInGroup > 0, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(up, "Move up");
         up.Click += (_, _) => { LogCatalog.MoveWithinCategory(e.Id, -1); RenderList(); };
-        var down = new Button { Content = new FontIcon { Glyph = ((char)0xE70D).ToString(), FontSize = 12 }, IsEnabled = indexInGroup < groupCount - 1, Padding = new Thickness(6) };
+        var down = new Button { Content = new FontIcon { Glyph = ((char)0xE70D).ToString(), FontSize = 12 }, IsEnabled = indexInGroup < groupCount - 1, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(down, "Move down");
         down.Click += (_, _) => { LogCatalog.MoveWithinCategory(e.Id, +1); RenderList(); };
         actions.Children.Add(up); actions.Children.Add(down);
 
         // Reassign category (built-ins and user entries).
-        var cat = new Button { Content = new SymbolIcon { Symbol = Symbol.Tag }, Padding = new Thickness(6) };
+        var cat = new Button { Content = new SymbolIcon { Symbol = Symbol.Tag }, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(cat, "Move to category");
         var catMenu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
         foreach (var c in LogCatalog.GetCategories())
@@ -107,7 +129,7 @@ public sealed partial class LogFinderPage : Page
         var open = new Button { Content = WithIcon(e.IsFolder ? Symbol.OpenLocal : Symbol.OpenFile, e.IsFolder ? "Open folder" : "Open file"), IsEnabled = e.Exists };
         open.Click += (_, _) => OpenEntry(e);
         actions.Children.Add(open);
-        var reveal = new Button { Content = new SymbolIcon { Symbol = Symbol.View }, IsEnabled = e.Exists };
+        var reveal = new Button { Content = new SymbolIcon { Symbol = Symbol.View }, IsEnabled = e.Exists, Padding = new Thickness(0), Width = 32, Height = 32 };
         ToolTipService.SetToolTip(reveal, "Reveal in Explorer");
         reveal.Click += (_, _) => Reveal(e);
         actions.Children.Add(reveal);
@@ -143,14 +165,14 @@ public sealed partial class LogFinderPage : Page
         return sp;
     }
 
-    /// <summary>Load this catalog entry's folder/file as a fresh search and open the results.</summary>
-    private void OpenEntry(LogCatalogEntry e)
+    /// <summary>Open this catalog entry's folder/file through the one workspace-open path (Add / Replace /
+    /// Ask when a workspace is loaded) and show the results.</summary>
+    private async void OpenEntry(LogCatalogEntry e)
     {
         var path = e.ExpandedPath;
         if (string.IsNullOrWhiteSpace(path)) return;
-        MiddleLayerService.NewWorkspace();
-        MiddleLayerService.AddFolderLocation(path); // handles both a folder and a single file path
-        (WindowUtil.GetMainWindow() as MainWindow)?.RunAndViewResults();
+        if (WindowUtil.GetMainWindow() is MainWindow main)
+            await main.OpenIntoWorkspaceAsync(new[] { path }, label: $"Opening {e.Name}…", displayName: e.Name); // name it, not its folder
     }
 
     private static void Reveal(LogCatalogEntry e)

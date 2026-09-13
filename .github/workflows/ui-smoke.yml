@@ -1,0 +1,136 @@
+# UI smoke: drive the real WinUI app with FlaUI on the hosted runner's interactive desktop.
+#
+# Runs the FindNeedleUX.UITests classes tagged "UiSmoke" - the self-contained ones (generated data,
+# small logs, no LargeSamples). The perf lane, the maintainer screenshot tools and anything that
+# needs a multi-hundred-MB fixture stay local (SkipCI / Performance).
+#
+# Informational for now: the job never fails the workflow (continue-on-error) until it has a green
+# streak; then drop that line and gate on it. Screenshots of the desktop are captured after the run
+# (always) so a red test comes with a picture, not just a stack trace.
+name: UI smoke
+
+on:
+  push:
+    branches: [ "master", "ux-redesign" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+  ui-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      # The tests need the app to run without the single-instance handoff (each test launches its own).
+      FINDNEEDLE_NO_SINGLE_INSTANCE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-uismoke-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # Building the test project builds the app through its project reference (x64, self-contained,
+      # unpackaged - the same exe a developer runs).
+      - name: Build app + UI tests (Debug, x64)
+        shell: pwsh
+        run: |
+          dotnet build FindNeedleUX.UITests/FindNeedleUX.UITests.csproj -c Debug -p:Platform=x64
+
+      - name: Locate the app under test
+        id: app
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path FindNeedleUX/bin -Recurse -Filter FindNeedleUX.exe |
+                 Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw "FindNeedleUX.exe was not produced" }
+          Write-Host "App under test: $($exe.FullName)"
+          "path=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Desktop facts (resolution, session)
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          $s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          Write-Host "Primary screen: $($s.Width)x$($s.Height)"
+          Write-Host "Session: $([System.Diagnostics.Process]::GetCurrentProcess().SessionId), interactive: $([Environment]::UserInteractive)"
+
+      - name: Run UI smoke tests
+        id: tests
+        continue-on-error: true
+        shell: pwsh
+        env:
+          FINDNEEDLE_UITEST_APP: ${{ steps.app.outputs.path }}
+        run: |
+          dotnet test FindNeedleUX.UITests/FindNeedleUX.UITests.csproj -c Debug -p:Platform=x64 --no-build `
+            --filter "TestCategory=UiSmoke" `
+            --logger "trx;LogFileName=ui-smoke.trx" --results-directory TestResults/ui-smoke `
+            -- MSTest.Parallelize.Workers=1
+
+      - name: Capture the desktop (what the runner saw)
+        if: always()
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -AssemblyName System.Windows.Forms
+          New-Item -ItemType Directory -Force TestResults/ui-smoke/screens | Out-Null
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+          $bmp.Save("TestResults/ui-smoke/screens/desktop-after-run.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose(); $bmp.Dispose()
+          # Any app instance a failed test left behind: note it, then close it so the runner exits cleanly.
+          Get-Process FindNeedleUX -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Leftover app instance: pid $($_.Id) '$($_.MainWindowTitle)'"; $_ | Stop-Process -Force }
+
+      - name: Collect the app's own logs
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force TestResults/ui-smoke/app-logs | Out-Null
+          foreach ($f in @("$env:APPDATA\FindNeedlePlugin\findneedle_log.txt", "$env:LOCALAPPDATA\FindNeedle\perf-log.txt", "$env:LOCALAPPDATA\FindNeedle\ux-slow.log")) {
+            if (Test-Path $f) { Copy-Item $f TestResults/ui-smoke/app-logs/ }
+          }
+
+      - name: Upload results (trx, screenshots, app logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-smoke-results
+          path: TestResults/ui-smoke
+          retention-days: 7
+
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem TestResults/ui-smoke -Filter *.trx -Recurse | Select-Object -First 1
+          if (-not $trx) { "No trx produced (build or launch failed)." | Out-File $env:GITHUB_STEP_SUMMARY -Append; exit 0 }
+          [xml]$x = Get-Content $trx.FullName
+          $c = $x.TestRun.ResultSummary.Counters
+          $lines = @("## UI smoke", "", "| total | passed | failed | inconclusive |", "|---|---|---|---|",
+                     "| $($c.total) | $($c.passed) | $($c.failed) | $($c.inconclusive) |", "")
+          foreach ($r in $x.TestRun.Results.UnitTestResult) {
+            $mark = switch ($r.outcome) { "Passed" { "✅" } "Failed" { "❌" } default { "⚠️" } }
+            $msg = ""
+            if ($r.Output -and $r.Output.ErrorInfo -and $r.Output.ErrorInfo.Message) {
+              $m = [string]$r.Output.ErrorInfo.Message; if ($m.Length -gt 200) { $m = $m.Substring(0, 200) + "…" }
+              $msg = " — " + ($m -replace "`r?`n", " ")
+            }
+            $lines += "- $mark $($r.testName) ($($r.outcome))$msg"
+          }
+          $lines += ""
+          $lines += "_Informational job: does not gate the workflow yet._"
+          $lines -join "`n" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          # The step-level outcome is what a future gate will read.
+          if ($c.failed -gt 0) { Write-Host "::warning::$($c.failed) UI smoke test(s) failed" }

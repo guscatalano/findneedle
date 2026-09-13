@@ -51,16 +51,13 @@
     <None Remove="Windows\DemoViewerWindow.xaml" />
     <None Remove="Pages\LogsPage.xaml" />
     <None Remove="Pages\PluginsPage.xaml" />
-    <None Remove="Pages\RunSearchPage.xaml" />
     <None Remove="Pages\SearchLocationsPage.xaml" />
-    <None Remove="Pages\SearchProcessorsPage.xaml" />
     <None Remove="Pages\SearchStatisticsPage.xaml" />
     <None Remove="Pages\SystemInfoPage.xaml" />
     <None Remove="Pages\DiagramToolsPage.xaml" />
   </ItemGroup>
   <ItemGroup>
     <Page Remove="Pages\WelcomePage.xaml" />
-    <Page Remove="Windows\LogsWindow.xaml" />
   </ItemGroup>
 
   
@@ -141,16 +138,10 @@
     <None Update="Pages\DiagramToolsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
-    <None Update="Pages\QuickLogWithRulesPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
     <None Update="Pages\SearchRulesPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
     <None Update="Pages\WelcomePage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
-    <None Update="Windows\LogsWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
   </ItemGroup>
@@ -177,14 +168,6 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
-    <Page Update="Pages\RunSearchPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
-    <Page Update="Pages\SearchProcessorsPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Pages\SearchLocationsPage.xaml">

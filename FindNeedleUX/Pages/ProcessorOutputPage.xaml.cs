@@ -34,6 +34,7 @@ public sealed partial class ProcessorOutputPage : Page
     public ProcessorOutputPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         Loaded += (_, _) =>
         {
             BuildPage();
@@ -106,9 +107,9 @@ public sealed partial class ProcessorOutputPage : Page
             {
                 Title = "Diagram tool not available",
                 Content = $"This output renders a {list} diagram image, but the {list} rendering tool isn't set up on "
-                        + "this machine. Install or configure it on the Diagram Tools page.\n\n"
+                        + "this machine. Install or configure it under Tools ▸ Diagram tools.\n\n"
                         + "“Generate anyway” still writes the diagram text (.mmd / .puml) — just without the rendered image.",
-                PrimaryButtonText = "Open Diagram Tools",
+                PrimaryButtonText = "Open Diagram tools",
                 SecondaryButtonText = "Generate anyway",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary,

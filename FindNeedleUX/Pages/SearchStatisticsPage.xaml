@@ -10,13 +10,13 @@
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <ScrollViewer Padding="24">
-        <StackPanel MaxWidth="900" Spacing="16">
+    <ScrollViewer>
+        <StackPanel Padding="{StaticResource PagePadding}" Spacing="16" MaxWidth="{StaticResource PageMaxWidth}" HorizontalAlignment="Stretch">
 
             <Grid>
-                <StackPanel>
-                    <TextBlock Text="Search statistics &amp; timing" FontSize="24" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
+                <StackPanel Spacing="4">
+                    <TextBlock x:Name="PageHeading" Text="Search timing" Style="{StaticResource PageHeading}"/>
+                    <TextBlock x:Name="SubtitleText" Style="{StaticResource PageSubtitle}"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="8">
                     <Button x:Name="OpenResolveLogButton" Content="Symbol resolution log" Visibility="Collapsed"
@@ -39,9 +39,7 @@
             <nrv:WrapPanelLite x:Name="Cards" HorizontalSpacing="12" VerticalSpacing="12"/>
 
             <!-- Where the time went -->
-            <Border x:Name="PhasesCard" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="16">
+            <Border x:Name="PhasesCard" Style="{StaticResource PageCard}">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Where the time went" FontWeight="SemiBold"/>
                     <StackPanel x:Name="PhaseBars" Spacing="6"/>
@@ -49,9 +47,7 @@
             </Border>
 
             <!-- Notes / why -->
-            <Border x:Name="NotesCard" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="16">
+            <Border x:Name="NotesCard" Style="{StaticResource PageCard}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Notes" FontWeight="SemiBold"/>
                     <StackPanel x:Name="Notes" Spacing="6"/>
@@ -60,9 +56,7 @@
 
             <!-- ETW trace session header (from the first events, when present) -->
             <Border x:Name="TraceInfoCard" Visibility="Collapsed"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="16">
+                    Style="{StaticResource PageCard}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Trace session info" FontWeight="SemiBold"/>
                     <TextBlock Text="From the ETW EventTrace header at the start of the trace."
@@ -71,12 +65,12 @@
                 </StackPanel>
             </Border>
 
-            <!-- Full ETL inspection (same as Settings → Inspect ETL), on demand -->
+            <!-- Full ETL inspection (same as Tools ▸ Inspect ETL), on demand -->
             <Expander x:Name="EtlInspectExpander" Visibility="Collapsed"
                       Header="ETL details (full inspection)"
                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Runs the same inspection as Settings → Inspect ETL on the loaded .etl file(s) — Windows build, capture window, event/lost counts, format breakdown, and providers. Can take a few seconds on large traces."
+                    <TextBlock Text="Runs the same inspection as Tools ▸ Inspect ETL on the loaded .etl file(s) — Windows build, capture window, event/lost counts, format breakdown, and providers. Can take a few seconds on large traces."
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
                     <Button x:Name="EtlInspectButton" Content="Run inspection" Click="EtlInspect_Click"/>
                     <TextBlock x:Name="EtlInspectText" FontFamily="Consolas" FontSize="12"
@@ -86,9 +80,7 @@
 
             <!-- How each source decoded (readable, per-file) -->
             <Border x:Name="DecodeCard" Visibility="Collapsed"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="16">
+                    Style="{StaticResource PageCard}">
                 <StackPanel Spacing="10">
                     <TextBlock Text="How each source decoded" FontWeight="SemiBold"/>
                     <StackPanel x:Name="DecodeList" Spacing="10"/>

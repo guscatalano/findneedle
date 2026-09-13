@@ -20,6 +20,7 @@ public sealed partial class SearchRulesPage : Page
     public SearchRulesPage()
     {
         this.InitializeComponent();
+        PageHeading.Text = FindNeedleUX.Services.PageCatalog.TitleOf(GetType());
         _viewModel.LoadRulesFromQuery();
         // The "test file path" box + Load button back an automation hook (AddRuleFileByPath); they
         // duplicate Browse and only confuse a normal user, so show them in developer mode only.

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -42,13 +42,14 @@ public class CorrelationFieldsStorageTests
             new R("alpha") { Pid = "4120", Tid = "7880", Act = "{11111111-1111-1111-1111-111111111111}",
                 Eid = "1003", Kw = "Audit Success", Rel = "{22222222-2222-2222-2222-222222222222}",
                 Chan = "Application", PGuid = "{33333333-3333-3333-3333-333333333333}", Rec = "106936",
-                PName = "svchost.exe", SD = "{\"Foo\":\"bar\"}" },
+                PName = "svchost.exe", SD = "{\"Foo\":\"bar\"}", Raw = "2" },
             new R("beta")  { Pid = "", Tid = "", Act = "" }, // a source without correlation fields
+            new R("gamma") { Raw = "5" }, // raw level alone still takes the wide (extended) insert
         });
 
         var all = new List<ISearchResult>();
         s.GetFilteredResultsInBatches(b => all.AddRange(b));
-        Assert.AreEqual(2, all.Count);
+        Assert.AreEqual(3, all.Count);
 
         var alpha = all.First(r => r.GetMessage() == "alpha");
         Assert.AreEqual("4120", alpha.GetProcessId());
@@ -62,16 +63,21 @@ public class CorrelationFieldsStorageTests
         Assert.AreEqual("106936", alpha.GetRecordId());
         Assert.AreEqual("svchost.exe", alpha.GetProcessName());
         Assert.AreEqual("{\"Foo\":\"bar\"}", alpha.GetStructuredData());
+        Assert.AreEqual("2", alpha.GetRawLevel(), "the source's unmapped level rides along with the row");
 
         var beta = all.First(r => r.GetMessage() == "beta");
         Assert.AreEqual("", beta.GetProcessId());
         Assert.AreEqual("", beta.GetThreadId());
+        Assert.AreEqual("", beta.GetRawLevel());
+
+        Assert.AreEqual("5", all.First(r => r.GetMessage() == "gamma").GetRawLevel());
 
         // By-id lookup carries the fields too.
         var byId = s.GetById(alpha.GetRowId());
         Assert.IsNotNull(byId);
         Assert.AreEqual("4120", byId.GetProcessId());
         Assert.AreEqual("{11111111-1111-1111-1111-111111111111}", byId.GetActivityId());
+        Assert.AreEqual("2", byId.GetRawLevel());
     }
 
     private sealed class R : ISearchResult
@@ -79,7 +85,7 @@ public class CorrelationFieldsStorageTests
         private readonly string _m;
         public R(string m) { _m = m; }
         public string Pid = "", Tid = "", Act = "";
-        public string Eid = "", Kw = "", Rel = "", Chan = "", PGuid = "", Rec = "", PName = "", SD = "";
+        public string Eid = "", Kw = "", Rel = "", Chan = "", PGuid = "", Rec = "", PName = "", SD = "", Raw = "";
         public DateTime GetLogTime() => new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         public string GetMachineName() => "M";
         public void WriteToConsole() { }
@@ -102,5 +108,6 @@ public class CorrelationFieldsStorageTests
         public string GetRecordId() => Rec;
         public string GetProcessName() => PName;
         public string GetStructuredData() => SD;
+        public string GetRawLevel() => Raw;
     }
 }

@@ -20,6 +20,16 @@ public sealed class ViewerQuickRule
     public bool Strip { get; init; }
     public string ColumnLabel { get; init; } = "";
 
+    /// <summary>Off = keep the rule in the session list but stop applying it. Lets the user see what a
+    /// rule was doing (and put it back) without retyping the regex.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Short caption for the filter pane's "Quick rules" list and its Active-filters pill —
+    /// "TaskName &#8592; PID=(?&lt;v&gt;\d+)" when extracting, "strip msg ~ heartbeat" when only stripping.</summary>
+    public string Label => TargetField != null
+        ? $"{(string.IsNullOrEmpty(ColumnLabel) ? TargetField : ColumnLabel)} \u2190 {Pattern}"
+        : $"strip msg ~ {Pattern}";
+
     /// <summary>Evaluate against a message: did it match, the captured value (if extracting), and the
     /// message after stripping. Used by both the live preview and the apply path so they agree.</summary>
     public (bool matched, string captured, string after) Evaluate(string message)
@@ -71,10 +81,14 @@ public static class ViewerQuickRulesStore
     public static void Add(ViewerQuickRule rule) { if (rule != null) _rules.Add(rule); }
     public static void Clear() => _rules.Clear();
 
-    /// <summary>Apply every active rule to a freshly-built row (in display order).</summary>
+    /// <summary>Drop one rule from the session (the pane's per-rule remove).</summary>
+    public static void Remove(ViewerQuickRule rule) { if (rule != null) _rules.Remove(rule); }
+
+    /// <summary>Apply every ENABLED rule to a freshly-built row (in display order). A disabled rule
+    /// stays in the list but reshapes nothing.</summary>
     public static void Apply(FindNeedleUX.LogLine line)
     {
         if (_rules.Count == 0) return;
-        foreach (var r in _rules) r.Apply(line);
+        foreach (var r in _rules) if (r.Enabled) r.Apply(line);
     }
 }

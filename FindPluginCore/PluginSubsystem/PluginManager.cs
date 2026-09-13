@@ -147,6 +147,13 @@ public class PluginManager
                 configFileToLoad = LOADER_CONFIG;
             }
 
+            // Same rule as the loader below: a relative config name means the one shipped beside this app,
+            // not whatever the current working directory happens to contain.
+            if (!Path.IsPathRooted(configFileToLoad))
+            {
+                var besideApp = Path.Combine(AppContext.BaseDirectory, configFileToLoad);
+                if (File.Exists(besideApp)) configFileToLoad = besideApp;
+            }
             configFileToLoad = FileIO.FindFullPathToFile(configFileToLoad, false); //Error handling happens later.
 
             if (File.Exists(configFileToLoad))
@@ -356,6 +363,16 @@ public class PluginManager
             if (String.IsNullOrEmpty(config.PathToFakeLoadPlugin))
             {
                 config.PathToFakeLoadPlugin = FAKE_LOADER;
+            }
+            // A relative loader path means "the one shipped next to this app". Resolve it against the
+            // app's own directory FIRST: FindFullPathToFile prefers the current working directory, and
+            // that is wherever the launcher happened to be (a shortcut's "Start in", a test runner's
+            // output folder) - which can hold a same-named FakeLoadPlugin.exe apphost with no dll behind
+            // it, so every plugin silently failed to load and every search returned nothing.
+            if (!Path.IsPathRooted(config.PathToFakeLoadPlugin))
+            {
+                var besideApp = Path.Combine(AppContext.BaseDirectory, config.PathToFakeLoadPlugin);
+                if (File.Exists(besideApp)) config.PathToFakeLoadPlugin = besideApp;
             }
             config.PathToFakeLoadPlugin = FileIO.FindFullPathToFile(config.PathToFakeLoadPlugin);
             if (!File.Exists(config.PathToFakeLoadPlugin))
