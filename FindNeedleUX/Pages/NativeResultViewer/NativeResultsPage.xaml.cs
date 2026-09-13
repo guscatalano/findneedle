@@ -3973,20 +3973,59 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return all.Where(t => t.Item1 != null && !string.IsNullOrWhiteSpace(t.Item3));
     }
 
-    private void ShowFilterFieldMenu(object sender, bool negate)
+    // The row actions (Filter in / Filter out / Follow / Tag / Copy) are built once here and offered in
+    // two places with the same items: the buttons under the in-row detail, and the row's right-click
+    // menu (as submenus). One builder per action so the two never drift.
+
+    /// <summary>One "Field op "value"" item per filterable field the row has a value for.</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildFilterItems(LogLine row, bool negate)
     {
-        var row = RowOf(sender);
-        if (row == null || sender is not FrameworkElement anchor) return;
-        var menu = new MenuFlyout();
+        var items = new List<MenuFlyoutItemBase>();
         foreach (var (field, caption, value, contains) in FilterableFields(row))
         {
             var preview = value.Length > 40 ? value.Substring(0, 40) + "…" : value;
             string op = contains ? (negate ? "!~" : "~") : (negate ? "!=" : "==");
             var item = new MenuFlyoutItem { Text = $"{caption} {op} \"{preview}\"" };
             item.Click += (_, __) => AddSearchPredicate(field, value, negate: negate, contains: contains);
-            menu.Items.Add(item);
+            items.Add(item);
         }
-        if (menu.Items.Count == 0) menu.Items.Add(new MenuFlyoutItem { Text = "No filterable values on this row", IsEnabled = false });
+        if (items.Count == 0) items.Add(new MenuFlyoutItem { Text = "No filterable values on this row", IsEnabled = false });
+        return items;
+    }
+
+    /// <summary>One item per axis the row can be followed along (activity / thread / process / provider).</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildFollowItems(LogLine row)
+    {
+        var items = new List<MenuFlyoutItemBase>();
+        foreach (var axis in NativeResultViewer.FollowCatalog.AxesFor(row.ActivityId, row.ProcessId, row.ThreadId, row.Provider))
+        {
+            var item = new MenuFlyoutItem { Text = axis.Caption, Icon = new SymbolIcon(Symbol.Link) };
+            var q = axis.Query;
+            item.Click += async (_, __) => await FollowQueryAsync(q);
+            items.Add(item);
+        }
+        if (items.Count == 0) items.Add(new MenuFlyoutItem { Text = "Nothing on this row to follow", IsEnabled = false });
+        return items;
+    }
+
+    /// <summary>Copy the row as JSON / CSV / XML.</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildCopyItems(LogLine row)
+    {
+        MenuFlyoutItem Make(string text, Func<LogLine, string> fmt)
+        {
+            var item = new MenuFlyoutItem { Text = text };
+            item.Click += (_, __) => CopyToClipboard(fmt(row));
+            return item;
+        }
+        return new MenuFlyoutItemBase[] { Make("Copy as JSON", RowAsJson), Make("Copy as CSV", RowAsCsv), Make("Copy as XML", RowAsXml) };
+    }
+
+    private void ShowFilterFieldMenu(object sender, bool negate)
+    {
+        var row = RowOf(sender);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        foreach (var item in BuildFilterItems(row, negate)) menu.Items.Add(item);
         menu.ShowAt(anchor);
     }
 
@@ -4014,15 +4053,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         var row = RowOf(sender);
         if (row == null || sender is not FrameworkElement anchor) return;
         var menu = new MenuFlyout();
-        foreach (var axis in NativeResultViewer.FollowCatalog.AxesFor(row.ActivityId, row.ProcessId, row.ThreadId, row.Provider))
-        {
-            var item = new MenuFlyoutItem { Text = axis.Caption, Icon = new SymbolIcon(Symbol.Link) };
-            var q = axis.Query;
-            item.Click += async (_, __) => await FollowQueryAsync(q);
-            menu.Items.Add(item);
-        }
-        if (menu.Items.Count == 0)
-            menu.Items.Add(new MenuFlyoutItem { Text = "Nothing on this row to follow", IsEnabled = false });
+        foreach (var item in BuildFollowItems(row)) menu.Items.Add(item);
         menu.ShowAt(anchor);
     }
 
@@ -4045,23 +4076,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         var row = RowOf(sender);
         if (row == null || sender is not FrameworkElement anchor) return;
         var menu = new MenuFlyout();
-        void Add(string text, Func<LogLine, string> fmt)
-        {
-            var item = new MenuFlyoutItem { Text = text };
-            item.Click += (_, __) => CopyToClipboard(fmt(row));
-            menu.Items.Add(item);
-        }
-        Add("Copy as JSON", RowAsJson);
-        Add("Copy as CSV", RowAsCsv);
-        Add("Copy as XML", RowAsXml);
+        foreach (var item in BuildCopyItems(row)) menu.Items.Add(item);
         menu.ShowAt(anchor);
     }
-
-    /// <summary>Filter the grid to one activity's causal sequence: every event in the activity PLUS the start
-    /// events of the child activities it spawned (which carry it as RelatedActivityId), in time order. Uses
-    /// the structured query DSL — no capped in-memory gather, so it works across the full paged set.</summary>
-    private System.Threading.Tasks.Task FollowActivityAsync(string activityId)
-        => FollowQueryAsync($"activityid == \"{activityId}\" OR relatedactivityid == \"{activityId}\"");
 
     /// <summary>Follow along any axis: replace the search with <paramref name="q"/> and read the result in
     /// time order, in one reload.</summary>
@@ -4300,40 +4317,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
-        // ----- Follow the ActivityId → reconstruct that one activity as a sequence -----
-        if (HasActivity(row.ActivityId))
-        {
-            var aid = row.ActivityId;
-
-            // Filter the grid to this activity's causal sequence: every event in the activity, PLUS the
-            // start events of the child activities it spawned (which carry it as RelatedActivityId), in
-            // time order. Uses the structured query DSL — no capped in-memory gather, so it works across
-            // the full paged result set.
-            var followAct = new MenuFlyoutItem { Text = "Follow this activity (filter to sequence)", Icon = new SymbolIcon(Symbol.Link) };
-            followAct.Click += async (_, __) => await FollowActivityAsync(aid);
-            flyout.Items.Add(followAct);
-
-            var diagAct = new MenuFlyoutItem { Text = "Diagram this activity (ActivityId)", Icon = new SymbolIcon(Symbol.View) };
-            diagAct.Click += (_, __) =>
-            {
-                var activityRows = ViewModel.GatherByActivityId(aid);
-                if (activityRows.Count == 0)
-                {
-                    _ = ShowDiagramInfoAsync("No events", "No loaded rows share this ActivityId.");
-                    return;
-                }
-                DiagramSelectedRows(activityRows, r => FirstNonBlank(r.Provider, r.ProcessName, "unknown"), DefaultDiagramLabel);
-            };
-            flyout.Items.Add(diagAct);
-            flyout.Items.Add(new MenuFlyoutSeparator());
-        }
-
-        // ----- Tag (mark this row) -----
-        var tagSub = new MenuFlyoutSubItem { Text = "Tag" };
-        foreach (var item in BuildTagMenuItems(row.RowId, RefreshRow)) tagSub.Items.Add(item);
-        flyout.Items.Add(tagSub);
-        flyout.Items.Add(new MenuFlyoutSeparator());
-
+        // ----- The clicked cell first: its value is the most specific thing under the cursor. -----
         if (!string.IsNullOrEmpty(cellColumnHeader))
         {
             var cellValue = GetRowField(row, cellColumnHeader);
@@ -4370,17 +4354,46 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
 
-        var copyJson = new MenuFlyoutItem { Text = "Copy row as JSON" };
-        copyJson.Click += (_, __) => CopyToClipboard(RowAsJson(row));
-        flyout.Items.Add(copyJson);
+        // ----- The same row actions as the buttons under the in-row detail: Filter in / Filter out /
+        // Follow / Tag / Copy — as submenus, so the right-click menu is complete on its own. -----
+        var filterInSub = new MenuFlyoutSubItem { Text = "Filter in", Icon = new SymbolIcon(Symbol.Filter) };
+        foreach (var item in BuildFilterItems(row, negate: false)) filterInSub.Items.Add(item);
+        flyout.Items.Add(filterInSub);
 
-        var copyCsv = new MenuFlyoutItem { Text = "Copy row as CSV" };
-        copyCsv.Click += (_, __) => CopyToClipboard(RowAsCsv(row));
-        flyout.Items.Add(copyCsv);
+        var filterOutSub = new MenuFlyoutSubItem { Text = "Filter out" };
+        foreach (var item in BuildFilterItems(row, negate: true)) filterOutSub.Items.Add(item);
+        flyout.Items.Add(filterOutSub);
 
-        var copyXml = new MenuFlyoutItem { Text = "Copy row as XML" };
-        copyXml.Click += (_, __) => CopyToClipboard(RowAsXml(row));
-        flyout.Items.Add(copyXml);
+        var followSub = new MenuFlyoutSubItem { Text = "Follow", Icon = new SymbolIcon(Symbol.Link) };
+        foreach (var item in BuildFollowItems(row)) followSub.Items.Add(item);
+        flyout.Items.Add(followSub);
+
+        var tagSub = new MenuFlyoutSubItem { Text = "Tag", Icon = new SymbolIcon(Symbol.Tag) };
+        foreach (var item in BuildTagMenuItems(row.RowId, RefreshRow)) tagSub.Items.Add(item);
+        flyout.Items.Add(tagSub);
+
+        var copySub = new MenuFlyoutSubItem { Text = "Copy row", Icon = new SymbolIcon(Symbol.Copy) };
+        foreach (var item in BuildCopyItems(row)) copySub.Items.Add(item);
+        flyout.Items.Add(copySub);
+
+        // ----- Diagram the ActivityId → reconstruct that one activity as a sequence -----
+        if (HasActivity(row.ActivityId))
+        {
+            var aid = row.ActivityId;
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            var diagAct = new MenuFlyoutItem { Text = "Diagram this activity (ActivityId)", Icon = new SymbolIcon(Symbol.View) };
+            diagAct.Click += (_, __) =>
+            {
+                var activityRows = ViewModel.GatherByActivityId(aid);
+                if (activityRows.Count == 0)
+                {
+                    _ = ShowDiagramInfoAsync("No events", "No loaded rows share this ActivityId.");
+                    return;
+                }
+                DiagramSelectedRows(activityRows, r => FirstNonBlank(r.Provider, r.ProcessName, "unknown"), DefaultDiagramLabel);
+            };
+            flyout.Items.Add(diagAct);
+        }
 
         // Anchor on ResultsGrid and position at the click point so the menu lands under the
         // cursor regardless of which visual-tree descendant raised the event.
