@@ -196,6 +196,15 @@ namespace FindNeedleUX.UITests
 
             var scroll = GetScrollPattern(grid);
             Assert.IsNotNull(scroll, "Could not obtain a vertical scroll pattern from the DataGrid.");
+            // The first rows realize before the page has finished streaming in, and on a slow desktop
+            // (the CI runner) the grid briefly reports "not scrollable" while it is still filling. Give it
+            // a moment to become scrollable rather than judging the very first realized row.
+            var scrollableBy = DateTime.Now.AddSeconds(20);
+            while (!scroll.VerticallyScrollable.ValueOrDefault && DateTime.Now < scrollableBy)
+            {
+                Thread.Sleep(300);
+                scroll = GetScrollPattern(grid) ?? scroll;
+            }
             Assert.IsTrue(scroll.VerticallyScrollable.ValueOrDefault,
                 "DataGrid is not vertically scrollable — not enough rows to fill the viewport?");
 
