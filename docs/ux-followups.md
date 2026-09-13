@@ -132,6 +132,62 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
       cache"); the Sources button lists both loaded files.
 - Not doing a Deskhand capture / OCR layer (owner decision 2026-09-13): FlaUI tests are the lane.
 
+## 9. Power-user review (2026-09-13)
+
+A second review pass against the trace-expert persona (symptom → pivot → neighbourhood → pivot back,
+keyboard-first, 5M-row logs). Owner triage: **2 and 3 approved**; 1 (a query history stack with
+Alt+Left/Right and pivot pills) not adopted for now; the rest recorded as candidates.
+
+### Approved
+
+- [ ] **Time neighbourhood.** "Show me ±5 s around this row" does not exist in the viewer (MCP has
+      `get_context`, the UI has nothing), and the relative chips (15m…7d) anchor to the data's max time,
+      so they are useless mid-trace. Do: an "Around ▾" action in the row bar and right-click (±1 s /
+      ±10 s / ±1 min / custom) that writes a `time >= … AND time <= …` predicate; a Ctrl+G "go to time"
+      box taking an absolute timestamp or `+30s` relative to the selected row; query sugar
+      `time ~ 12:34:56 ±2s` compiled to the same range. Effort M.
+- [ ] **Query language reach and discoverability.** No completion while typing, parse errors only after
+      Enter (`SearchQueryError`), help behind "?". Missing operators the persona uses daily: regex
+      (`=~`; only `~` contains exists), `tag == Important` (tags are not a field), structured payload
+      fields (`data.<key>`, json_extract in SQLite / dictionary lookup in memory). Do (a) field and
+      operator completion in the search box, (b) inline parse error as you type, (c) the three new
+      fields. (a)+(b) are S; (c) is the L part.
+
+### Candidates (not scheduled)
+
+- [ ] **Multiple sources are indistinguishable.** Source column hidden by default
+      (`DefaultColumnVisibility` "Source": false); the Sources dialog has no per-file counts. Auto-show
+      Source when more than one location is loaded; per-source counts in the dialog and the chip menu;
+      a Source facet row like Level. S.
+- [ ] **Keyboard reach for row actions.** Filter in/out, Follow, Tag, Copy are buttons and a context
+      menu only. With the grid focused: I/O filter in/out on the focused column, F follow, T tag,
+      Ctrl+C copy row, Enter toggle detail; list in "?" help; row actions in Ctrl+K when a row is
+      selected. S/M.
+- [ ] **Tags die with the session.** `_rowTags` is in-memory; exports write visible columns only; Copy as
+      JSON/CSV omits tags. Persist tags per source signature (size+mtime) under LocalAppData; Tag
+      column in exports when any tag exists; "Export tagged rows…" as a Markdown timeline. M.
+- [ ] **Paging hides the timeline shape.** Page size 100 over 5M rows = 50k pages; "# go to" takes a
+      page number; the histogram strip is decoration. Histogram click/drag → time predicate; go-to
+      accepts `@12:34:56` and lands on the page containing that time. M.
+- [ ] **Dense preset.** Index column off, Level as a 3-letter badge in the Time gutter, shorter time
+      format (`HH:mm:ss.fff`), row font 11; selectable from Columns ▾, default above 100k rows. S.
+- [ ] **Repeatable triage.** Workspaces save locations + rules, not the viewer state (query, sort,
+      columns, tags, dock). Save view state in the workspace JSON; `save_view` / `apply_view` MCP tools;
+      "Copy as MCP script" in Copy ▾. M.
+- [ ] **Rule filter semantics are invisible.** Rules load with the toggle off and every row shows;
+      nothing says so. An Active-filters pill "Rules: off (1 file) · apply" and a line in the loading
+      summary. S.
+- [ ] **Level chips and the query are two vocabularies** that silently AND together. Make the chips
+      emit query predicates and render from the query. M.
+- [ ] **UTC vs local is never stated.** Time renders without a zone marker; ETW is UTC, EVTX local. A
+      zone toggle in Columns ▾ (Local / UTC / source), a suffix in the Time header, `time` predicates
+      parsed in the same zone. S.
+
+### Keep as is
+Query AST compiling to both SQL and in-memory; Follow with only the axes a row has; the Run/Stop
+strip and the stay-put cancel; the MCP `run_search → wait_for_load → get_page/get_context/summary`
+story (keep names stable); streaming open with the stop-loading banner.
+
 ## Parked (not UX, tracked so they are not lost)
 
 - Multi-process: activation batching → `DecodeScope` as `AsyncLocal` → cache / perf-log / MCP-port
