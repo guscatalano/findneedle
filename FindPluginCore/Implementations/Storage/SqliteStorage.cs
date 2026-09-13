@@ -149,6 +149,10 @@ namespace FindPluginCore.Implementations.Storage
         {
             _connection = new SqliteConnection($"Data Source={_dbPath}");
             _connection.Open();
+            // `field =~ pattern` in the viewer's query language compiles to `col REGEXP @p`; SQLite has the
+            // operator but no implementation, so supply the same matcher the in-memory path uses.
+            _connection.CreateFunction("regexp", (string pattern, string input) =>
+                FindPluginCore.Searching.Query.LogQuery.RegexMatches(pattern, input), isDeterministic: true);
             try
             {
                 ApplyBulkInsertPragmas();

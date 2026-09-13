@@ -235,6 +235,31 @@ public class LogLine
     {
         get; set;
     }
+
+    private System.Collections.Generic.Dictionary<string, string> _dataFields;
+    /// <summary>One value of the parsed StructuredData payload by key (<c>data.Key</c> in a query), or "".
+    /// Parsed once per row on first use; case-insensitive on the key.</summary>
+    public string DataFieldOrEmpty(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return "";
+        if (_dataFields == null)
+        {
+            var d = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(StructuredData))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(StructuredData);
+                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        foreach (var p in doc.RootElement.EnumerateObject())
+                            d[p.Name] = p.Value.ValueKind == System.Text.Json.JsonValueKind.String ? p.Value.GetString() ?? "" : p.Value.ToString();
+                }
+                catch { /* not JSON: no data fields */ }
+            }
+            _dataFields = d;
+        }
+        return _dataFields.TryGetValue(key, out var v) ? v : "";
+    }
     public string SearchableData
     {
         get; set;

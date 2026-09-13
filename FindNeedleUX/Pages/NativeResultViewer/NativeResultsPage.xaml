@@ -101,6 +101,10 @@
                                 ToolTipService.ToolTip="Show only this row's activity, process, thread or provider, in time order"/>
                         <Button Content="Tag ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailTag_Click"
                                 ToolTipService.ToolTip="Mark this row (Important / Question / Resolved / Note) and add a note"/>
+                        <!-- Around ▾: the neighbourhood of this row in time, across the whole log (the pivot a
+                             trace expert makes hundreds of times: what else happened right then). -->
+                        <Button Content="Around ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailAround_Click"
+                                ToolTipService.ToolTip="Show everything within ±1 s / ±10 s / ±1 min / … of this row's time, in time order"/>
                         <Button Content="Copy ▾" Height="28" FontSize="12" Padding="10,0" Click="RowDetailCopy_Click"
                                 ToolTipService.ToolTip="Copy this row as JSON, CSV or XML"/>
                     </StackPanel>
@@ -213,11 +217,17 @@
                 <ColumnDefinition Width="Auto"/>  <!-- ? help + search indicators -->
                 <ColumnDefinition Width="Auto"/>  <!-- action buttons, pinned right -->
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="SearchBox" Grid.Column="0" Height="32" HorizontalAlignment="Stretch" Margin="0,0,8,0" MinWidth="160"
+            <!-- An AutoSuggestBox so the query language completes as you type (fields, operators, level /
+                 tag values, AND / OR / NOT - see QuerySuggestions) and a malformed query is flagged while
+                 typing, not only after Enter. Plain text still searches every column. -->
+            <AutoSuggestBox x:Name="SearchBox" Grid.Column="0" Height="32" HorizontalAlignment="Stretch" Margin="0,0,8,0" MinWidth="160"
                          PlaceholderText="Search all columns…  (advanced query: press ?)"
                          TextChanged="SearchBox_TextChanged"
+                         SuggestionChosen="SearchBox_SuggestionChosen"
+                         QuerySubmitted="SearchBox_QuerySubmitted"
                          KeyDown="SearchBox_KeyDown"
                          GotFocus="SearchBox_GotFocus"
+                         TextMemberPath="FullText" DisplayMemberPath="Display"
                          AutomationProperties.Name="Search results">
                     <ToolTipService.ToolTip>
                         <TextBlock>
@@ -225,10 +235,11 @@
                             <Run FontFamily="Consolas" Text="  msg != &quot;this&quot; AND taskname == &quot;that&quot;"/><LineBreak/>
                             <Run FontFamily="Consolas" Text="  level == Error OR provider ~ Kernel"/><LineBreak/>
                             <Run FontFamily="Consolas" Text="  (pid == 1234 OR pid == 5678) AND NOT msg ~ debug"/><LineBreak/>
-                            <Run Text="Operators: == != ~ (contains) !~ &gt; &lt; &gt;= &lt;=  ·  fields: msg, taskname, provider, source, level, pid, tid, eventid, channel, time, …"/>
+                            <Run FontFamily="Consolas" Text="  time ~ 12:34:56 ±2s   ·   msg =~ &quot;^Err.*\d+$&quot;   ·   tag == Important   ·   data.ProcessId == 4"/><LineBreak/>
+                            <Run Text="Operators: == != ~ (contains) !~ =~ (regex) &gt; &lt; &gt;= &lt;=  ·  fields complete as you type  ·  Ctrl+G: go to a time"/>
                         </TextBlock>
                     </ToolTipService.ToolTip>
-                </TextBox>
+                </AutoSuggestBox>
                 <!-- Col1: ? help + search-state indicators, riding just right of the (filled) box. -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <!-- "?" opens the ONE viewer help surface (query syntax + filters + shortcuts) — the same

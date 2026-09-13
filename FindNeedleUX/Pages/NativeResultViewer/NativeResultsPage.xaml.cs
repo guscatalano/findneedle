@@ -116,12 +116,61 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // collapses into one (off-UI-thread) search instead of one per character.
         _searchDebounceTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _searchDebounceTimer.Tick += (_, _) => { _searchDebounceTimer.Stop(); _ = RunSearchAsync(); };
+        // Parse the box while the user types (a beat after the last key) so a malformed query is flagged
+        // before Enter - in Enter-to-search mode nothing else would say so until the search ran.
+        _queryPreviewTimer = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+        _queryPreviewTimer.Tick += (_, _) => { _queryPreviewTimer.Stop(); PreviewQueryError(); };
+        // `tag == Important` needs the viewer's tags in both query backends.
+        FindPluginCore.Searching.Query.LogQuery.TagSnapshot = () =>
+            _rowTags.ToDictionary(kv => kv.Key, kv => (kv.Value.Name, kv.Value.Text));
     }
 
     private readonly Microsoft.UI.Xaml.DispatcherTimer _lazyIndexTimer;
     private bool _lazyPromptShown; // don't re-prompt for the >30s warning every keystroke
 
     private readonly Microsoft.UI.Xaml.DispatcherTimer _searchDebounceTimer;
+    private readonly Microsoft.UI.Xaml.DispatcherTimer _queryPreviewTimer;
+
+    /// <summary>The AutoSuggestBox's inner TextBox (for caret placement and select-all); null until templated.</summary>
+    private TextBox SearchTextBox
+    {
+        get
+        {
+            try
+            {
+                var q = new Queue<DependencyObject>(); q.Enqueue(SearchBox);
+                while (q.Count > 0)
+                {
+                    var n = q.Dequeue();
+                    if (n is TextBox tb) return tb;
+                    int c = VisualTreeHelper.GetChildrenCount(n);
+                    for (int i = 0; i < c; i++) q.Enqueue(VisualTreeHelper.GetChild(n, i));
+                }
+            }
+            catch { }
+            return null;
+        }
+    }
+
+    private void PlaceSearchCaretAtEnd()
+    {
+        try { var tb = SearchTextBox; if (tb != null) tb.SelectionStart = (SearchBox.Text ?? "").Length; } catch { /* best-effort */ }
+    }
+
+    /// <summary>Flag a malformed structured query under the box as it is typed (cleared when it parses
+    /// or is plain text). The applied query's own error (from the view model) still wins once a search runs.</summary>
+    private void PreviewQueryError()
+    {
+        if (SearchQueryErrorText == null) return;
+        var text = SearchBox.Text ?? "";
+        if (FindPluginCore.Searching.Query.LogQuery.LooksStructured(text)
+            && !FindPluginCore.Searching.Query.LogQuery.TryParse(text, out _, out var err))
+        {
+            SearchQueryErrorText.Text = "⚠ " + err;
+            SearchQueryErrorText.Visibility = Visibility.Visible;
+        }
+        else UpdateSearchQueryError(); // back to the applied state (usually hidden)
+    }
     private System.Threading.CancellationTokenSource _searchCts; // cancels the in-flight search
 
     // ----- Adaptive search submit (live keystrokes vs Enter-to-search) -----
@@ -2922,15 +2971,104 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (ctrl && e.Key == global::Windows.System.VirtualKey.F)
         {
             SearchBox.Focus(FocusState.Programmatic);
-            SearchBox.SelectAll();
+            try { SearchTextBox?.SelectAll(); } catch { }
+            e.Handled = true;
+            return;
+        }
+        if (ctrl && e.Key == global::Windows.System.VirtualKey.G)
+        {
+            ShowGoToTime();
             e.Handled = true;
             return;
         }
     }
 
-    // ----- Search + filter inputs -----
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    // ----- Go to time (Ctrl+G) -----
+    // Jump the grid to a moment: an absolute timestamp, or an offset from the selected row ("+30s",
+    // "-2m"). No filter is applied; the grid is put in time order and paged to the first row at or
+    // after that time, which is then selected.
+
+    private void ShowGoToTime()
     {
+        var selected = ResultsGrid.SelectedItem as LogLine;
+        var box = new TextBox
+        {
+            PlaceholderText = selected != null ? "12:34:56.789, 2026-01-15 12:34:56, or +30s / -2m from the selected row" : "12:34:56.789 or 2026-01-15 12:34:56",
+            MinWidth = 420,
+        };
+        var hint = new TextBlock
+        {
+            Text = selected != null ? $"Selected row: {selected.Time}" : "Tip: select a row first to jump relative to it (+30s, -500ms, +1h).",
+            FontSize = 12, Opacity = 0.75, Margin = new Thickness(0, 6, 0, 0),
+        };
+        var panel = new StackPanel { Spacing = 2 };
+        panel.Children.Add(new TextBlock { Text = "Go to time", FontWeight = global::Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(box);
+        panel.Children.Add(hint);
+        var flyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
+        box.KeyDown += async (_, ke) =>
+        {
+            if (ke.Key == global::Windows.System.VirtualKey.Enter)
+            {
+                ke.Handled = true;
+                var target = ParseGoToTime(box.Text, selected?.LogTime);
+                if (target == null) { hint.Text = "Not a time. Try 12:34:56, 2026-01-15 12:34:56, or +30s from the selected row."; return; }
+                flyout.Hide();
+                await GoToTimeAsync(target.Value);
+            }
+        };
+        flyout.ShowAt(SearchBox);
+        box.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>"+30s" / "-2m" relative to <paramref name="anchor"/>, else an absolute (date-less times land on the data's day).</summary>
+    internal static DateTime? ParseGoToTime(string text, DateTime? anchor)
+    {
+        text = (text ?? "").Trim();
+        if (text.Length == 0) return null;
+        if ((text[0] == '+' || text[0] == '-') && anchor != null
+            && FindPluginCore.Searching.Query.LogQuery.TryParseWindow(text.Substring(1), out var delta))
+            return text[0] == '+' ? anchor.Value + delta : anchor.Value - delta;
+        return FindPluginCore.Searching.Query.LogQuery.TryParseTime(text);
+    }
+
+    private async System.Threading.Tasks.Task GoToTimeAsync(DateTime target)
+    {
+        // Position only makes sense in time order.
+        if (!string.Equals(ViewModel.SortColumn, "Time", StringComparison.OrdinalIgnoreCase) || ViewModel.SortDescending)
+        {
+            ViewModel.SetSortState("Time", false);
+            await ViewModel.ApplyFiltersAsync(System.Threading.CancellationToken.None);
+            SyncSortArrowsFromViewModel();
+        }
+        int before = await System.Threading.Tasks.Task.Run(() => ViewModel.CountBefore(target));
+        int pageSize = Math.Max(1, ViewModel.PageSize);
+        int page = before / pageSize + 1;
+        await ViewModel.GoToPageAndWaitAsync(page);
+        // Select the first row at or after the target on that page.
+        LogLine hit = null;
+        foreach (var l in ViewModel.Results)
+            if (l.LogTime >= target) { hit = l; break; }
+        if (hit != null)
+        {
+            ResultsGrid.SelectedItem = hit;
+            try { ResultsGrid.ScrollIntoView(hit, null); } catch { }
+        }
+    }
+
+    // ----- Search + filter inputs -----
+    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            // Completion for the query language; nothing for a plain substring so the popup never nags.
+            var suggestions = NativeResultViewer.QuerySuggestions.For(sender.Text);
+            sender.ItemsSource = suggestions.Count > 0 ? suggestions : null;
+            _queryPreviewTimer.Stop();
+            _queryPreviewTimer.Start();
+        }
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.SuggestionChosen)
+            return; // the completed text is not a search yet; the user keeps typing
         if (RequireEnterToSearch())
         {
             // Enter-to-search mode: don't run a search mid-typing. Just surface the hint so the
@@ -2961,12 +3099,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void SearchBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == global::Windows.System.VirtualKey.Enter)
+        // Enter is handled by QuerySubmitted (which also knows whether a suggestion was picked).
+    }
+
+    private void SearchBox_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+    {
+        // TextMemberPath writes the completed text; put the caret after it so typing continues.
+        DispatcherQueue.TryEnqueue(PlaceSearchCaretAtEnd);
+    }
+
+    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        if (args.ChosenSuggestion != null)
         {
-            e.Handled = true;
-            _searchDebounceTimer.Stop();
-            _ = RunSearchAsync(); // commit now, regardless of mode
+            // Enter on a highlighted completion: accept it, offer the next step, don't search yet.
+            sender.ItemsSource = null;
+            var next = NativeResultViewer.QuerySuggestions.For(sender.Text);
+            if (next.Count > 0) { sender.ItemsSource = next; sender.IsSuggestionListOpen = true; }
+            PlaceSearchCaretAtEnd();
+            return;
         }
+        sender.ItemsSource = null;
+        _searchDebounceTimer.Stop();
+        _queryPreviewTimer.Stop();
+        _ = RunSearchAsync(); // commit now, regardless of mode
     }
 
     /// <summary>
@@ -3832,9 +3988,15 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         Mono("level == Error OR provider ~ Kernel");
         Mono("(pid == 1234 OR pid == 5678) AND NOT msg ~ debug");
         Mono("time >= \"2024-01-15 09:00\"");
-        Note("Operators:  ==  equals   !=  not-equals   ~  contains   !~  not-contains   > < >= <=  compare (time / number). " +
-             "Combine with AND, OR, NOT and parentheses; quote values that contain spaces.");
-        Note("Fields: msg, taskname, provider, source, level, pid, tid, eventid, channel, machine, user, opcode, time.");
+        Mono("time ~ 12:34:56 ±2s              (everything within 2 s of that moment; no ± = that whole second)");
+        Mono("msg =~ \"^Err(or)?\\s+\\d+\"        (regex, case-insensitive)");
+        Mono("tag == Important   ·   tag ~ leak   (your tags; == matches the tag, ~ searches the note too)");
+        Mono("data.ProcessId == 4                (a field of the structured payload, by key)");
+        Note("Operators:  ==  equals   !=  not-equals   ~  contains   !~  not-contains   =~  regex   > < >= <=  compare (time / number). " +
+             "Combine with AND, OR, NOT and parentheses; quote values that contain spaces. Fields and operators complete as you type; " +
+             "a date-less time means that time on the log's day.");
+        Note("Fields: msg, taskname, provider, source, level, rawlevel, pid, tid, aid, raid, eventid, channel, machine, user, opcode, time, tag, data.<key>.");
+        Bullet("Ctrl+G — go to a time: an absolute timestamp, or +30s / -2m from the selected row. Puts the grid in time order and lands on the first row at or after it (no filter).");
         Note("On a large log the box switches to Enter-to-search (a hint appears next to it) so typing doesn't re-query on every key.");
 
         Section("Filter pane (Filters: Left | Top | Hide)");
@@ -3844,7 +4006,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         Bullet("The count badge on the Filters label is how many filters are active — it stays visible when the pane is hidden. \"Clear all (incl. search & time)\" resets everything at once.");
 
         Section("Rows");
-        Bullet("Click a row to open its details (Details: In row). Under the detail: Filter in ▾ / Filter out ▾ add a predicate for one of the row's fields to the search box; Follow ▾ keeps only this row's activity, thread, process or provider, in time order (only the axes the row has); Tag ▾ marks the row (Important / Question / Resolved / Note, plus a note); Copy ▾ copies the row as JSON, CSV or XML.");
+        Bullet("Click a row to open its details (Details: In row). Under the detail: Filter in ▾ / Filter out ▾ add a predicate for one of the row's fields to the search box; Follow ▾ keeps only this row's activity, thread, process or provider, in time order (only the axes the row has); Around ▾ shows everything in the log within ±1 s / ±10 s / ±1 min / … of the row's time; Tag ▾ marks the row (Important / Question / Resolved / Note, plus a note); Copy ▾ copies the row as JSON, CSV or XML.");
         Bullet("Right-click a row for the same actions, plus, with several rows selected, copy / tag / diagram the selection as a sequence.");
         Bullet("Right-click a column header for a Quick rule (this session): pull a value out of the Message into that column, or strip matching text — applied instantly, cleared on restart.");
         Bullet("Click a header to sort; drag headers to reorder; drag a header's right edge to resize.");
@@ -4008,6 +4170,70 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         return items;
     }
 
+    /// <summary>"Around" windows offered for a row: everything in the log within ±w of its time.</summary>
+    private static readonly (string Caption, TimeSpan Window)[] AroundWindows =
+    {
+        ("±1 second", TimeSpan.FromSeconds(1)), ("±10 seconds", TimeSpan.FromSeconds(10)),
+        ("±1 minute", TimeSpan.FromMinutes(1)), ("±10 minutes", TimeSpan.FromMinutes(10)),
+    };
+
+    /// <summary>One item per window, plus Custom…; each replaces the search with a time range around the
+    /// row (the whole log, not the current filter: the point is to see what ELSE happened then), puts the
+    /// grid in time order and re-selects the row.</summary>
+    private IEnumerable<MenuFlyoutItemBase> BuildAroundItems(LogLine row)
+    {
+        var items = new List<MenuFlyoutItemBase>();
+        foreach (var (caption, window) in AroundWindows)
+        {
+            var item = new MenuFlyoutItem { Text = caption, Icon = new SymbolIcon(Symbol.Clock) };
+            var w = window;
+            item.Click += async (_, __) => await AroundRowAsync(row, w);
+            items.Add(item);
+        }
+        var custom = new MenuFlyoutItem { Text = "Custom…" };
+        custom.Click += async (_, __) => await AroundRowCustomAsync(row);
+        items.Add(custom);
+        return items;
+    }
+
+    private async System.Threading.Tasks.Task AroundRowAsync(LogLine row, TimeSpan window)
+    {
+        await FollowQueryAsync(FindPluginCore.Searching.Query.LogQuery.AroundTimeText(row.LogTime, window));
+        // Land on the row itself (it sits inside the window by construction; page to it if the window is wide).
+        int before = await System.Threading.Tasks.Task.Run(() => ViewModel.CountBefore(row.LogTime));
+        int page = before / Math.Max(1, ViewModel.PageSize) + 1;
+        if (page != ViewModel.CurrentPage) await ViewModel.GoToPageAndWaitAsync(page);
+        foreach (var l in ViewModel.Results)
+            if (l.RowId == row.RowId) { ResultsGrid.SelectedItem = l; try { ResultsGrid.ScrollIntoView(l, null); } catch { } break; }
+    }
+
+    private async System.Threading.Tasks.Task AroundRowCustomAsync(LogLine row)
+    {
+        var box = new TextBox { Text = "5s", PlaceholderText = "e.g. 500ms, 5s, 2m, 1h", MinWidth = 200 };
+        var dialog = new ContentDialog
+        {
+            Title = "Around this row",
+            Content = new StackPanel { Spacing = 8, Children = { new TextBlock { Text = $"Show everything within ± this much of {row.Time}:" }, box } },
+            PrimaryButtonText = "Show", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+        };
+        try
+        {
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        }
+        catch { return; } // a dialog is already open
+        if (FindPluginCore.Searching.Query.LogQuery.TryParseWindow(box.Text, out var w)) await AroundRowAsync(row, w);
+    }
+
+    private void RowDetailAround_Click(object sender, RoutedEventArgs e)
+    {
+        var row = RowOf(sender);
+        if (row == null || sender is not FrameworkElement anchor) return;
+        var menu = new MenuFlyout();
+        foreach (var item in BuildAroundItems(row)) menu.Items.Add(item);
+        menu.ShowAt(anchor);
+    }
+
     /// <summary>Copy the row as JSON / CSV / XML.</summary>
     private IEnumerable<MenuFlyoutItemBase> BuildCopyItems(LogLine row)
     {
@@ -4087,7 +4313,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         ViewModel.SetSortState("Time", false); // chronological, without a separate reload
         SearchBox.Text = q;
         SearchBox.Focus(FocusState.Programmatic);
-        try { SearchBox.SelectionStart = q.Length; } catch { /* cursor position is best-effort */ }
+        PlaceSearchCaretAtEnd();
         _searchDebounceTimer.Stop();
         await RunSearchAsync();                 // one reload: this filter + the Time sort
         SyncSortArrowsFromViewModel();
@@ -4368,6 +4594,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         foreach (var item in BuildFollowItems(row)) followSub.Items.Add(item);
         flyout.Items.Add(followSub);
 
+        var aroundSub = new MenuFlyoutSubItem { Text = "Around", Icon = new SymbolIcon(Symbol.Clock) };
+        foreach (var item in BuildAroundItems(row)) aroundSub.Items.Add(item);
+        flyout.Items.Add(aroundSub);
+
         var tagSub = new MenuFlyoutSubItem { Text = "Tag", Icon = new SymbolIcon(Symbol.Tag) };
         foreach (var item in BuildTagMenuItems(row.RowId, RefreshRow)) tagSub.Items.Add(item);
         flyout.Items.Add(tagSub);
@@ -4435,7 +4665,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         SearchBox.Text = newText;
         SearchBox.Focus(FocusState.Programmatic);
-        try { SearchBox.SelectionStart = newText.Length; } catch { /* cursor position is best-effort */ }
+        PlaceSearchCaretAtEnd();
         _searchDebounceTimer.Stop();
         _ = RunSearchAsync(); // commit + apply now, regardless of submit mode
     }

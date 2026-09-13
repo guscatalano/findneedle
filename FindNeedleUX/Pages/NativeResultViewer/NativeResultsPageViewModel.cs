@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -275,6 +275,9 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         var text = _searchText ?? "";
         if (FindPluginCore.Searching.Query.LogQuery.LooksStructured(text))
         {
+            // A date-less time in the query ("time ~ 12:34:56") means that time on the data's day.
+            if (text.IndexOf("time", StringComparison.OrdinalIgnoreCase) >= 0)
+                FindPluginCore.Searching.Query.LogQuery.DefaultDate = GetDataMinTime();
             if (FindPluginCore.Searching.Query.LogQuery.TryParse(text, out var node, out var err))
             { _parsedQuery = node; _effectiveSearch = ""; SearchQueryError = ""; }
             else
@@ -431,9 +434,19 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(PageSize));
         OnPropertyChanged(nameof(TotalPages));
         OnPropertyChanged(nameof(PageRangeText));
-        _ = PublishCurrentPageBusyAsync(); // off the UI thread + loader; a deep OFFSET (jump-to-last on
-                                           // millions of rows) used to freeze the UI here for ~10s
+        _lastPagePublish = PublishCurrentPageBusyAsync(); // off the UI thread + loader; a deep OFFSET (jump-to-last on
+                                                          // millions of rows) used to freeze the UI here for ~10s
         UpdateStatus();
+    }
+
+    private Task _lastPagePublish = Task.CompletedTask;
+
+    /// <summary>Go to a page and wait until its rows are in <see cref="Results"/> (paging is otherwise
+    /// fire-and-forget). For callers that then act on the rows, like "go to time".</summary>
+    public async Task GoToPageAndWaitAsync(int page)
+    {
+        CurrentPage = page;
+        try { await _lastPagePublish; } catch { /* superseded or cancelled: the newest page wins */ }
     }
 
     private System.Threading.CancellationTokenSource _pageCts;
@@ -1566,6 +1579,26 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         if (_source == null) return null;
         var last = _source.GetPage(FilterSpec.Empty, new SortSpec("Time", true), 0, 1);
         return last.Count > 0 ? last[0].LogTime : (DateTime?)null;
+    }
+
+    /// <summary>The earliest event time across the WHOLE loaded set (ignores the current filter).</summary>
+    public DateTime? GetDataMinTime()
+    {
+        if (_source == null) return null;
+        var first = _source.GetPage(FilterSpec.Empty, new SortSpec("Time", false), 0, 1);
+        return first.Count > 0 ? first[0].LogTime : (DateTime?)null;
+    }
+
+    /// <summary>How many rows of the CURRENT filtered set fall before <paramref name="t"/> in time order -
+    /// i.e. the zero-based position the first row at or after <paramref name="t"/> would have when the
+    /// grid is sorted by Time ascending. What "go to time" pages to.</summary>
+    public int CountBefore(DateTime t)
+    {
+        if (_source == null) return 0;
+        var f = BuildFilterSpec();
+        var before = new FindPluginCore.Searching.Query.PredicateNode("time", FindPluginCore.Searching.Query.QueryOp.Lt, t.ToString("o"));
+        FindPluginCore.Searching.Query.QueryNode q = f.Query == null ? before : new FindPluginCore.Searching.Query.AndNode(f.Query, before);
+        return _source.GetFilteredCount(f with { Query = q });
     }
 
     /// <summary>Top distinct values of a field over the current filtered set (MCP <c>facets</c>).</summary>

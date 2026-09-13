@@ -140,18 +140,19 @@ Alt+Left/Right and pivot pills) not adopted for now; the rest recorded as candid
 
 ### Approved
 
-- [ ] **Time neighbourhood.** "Show me ±5 s around this row" does not exist in the viewer (MCP has
-      `get_context`, the UI has nothing), and the relative chips (15m…7d) anchor to the data's max time,
-      so they are useless mid-trace. Do: an "Around ▾" action in the row bar and right-click (±1 s /
-      ±10 s / ±1 min / custom) that writes a `time >= … AND time <= …` predicate; a Ctrl+G "go to time"
-      box taking an absolute timestamp or `+30s` relative to the selected row; query sugar
-      `time ~ 12:34:56 ±2s` compiled to the same range. Effort M.
-- [ ] **Query language reach and discoverability.** No completion while typing, parse errors only after
-      Enter (`SearchQueryError`), help behind "?". Missing operators the persona uses daily: regex
-      (`=~`; only `~` contains exists), `tag == Important` (tags are not a field), structured payload
-      fields (`data.<key>`, json_extract in SQLite / dictionary lookup in memory). Do (a) field and
-      operator completion in the search box, (b) inline parse error as you type, (c) the three new
-      fields. (a)+(b) are S; (c) is the L part.
+- [x] **Time neighbourhood.** "Around ▾" in the row bar and the right-click menu (±1 s / ±10 s / ±1 min /
+      ±10 min / Custom…) replaces the search with `time ~ "<row time>" ±w` over the whole log, in time
+      order, and re-selects the row. Ctrl+G "Go to time" takes an absolute timestamp or `+30s` / `-2m`
+      from the selected row and pages to the first row at or after it (no filter). Query sugar
+      `time ~ 12:34:56 ±2s` (no ± = that whole second; a date-less time lands on the log's day).
+- [x] **Query language reach and discoverability.** The search box is an AutoSuggestBox: fields
+      complete as you type, then operators, then level / tag values, then AND / OR / NOT; a malformed
+      query is flagged inline a beat after the last key, before Enter. New in the language: `=~` regex
+      (case-insensitive, validated at parse time, REGEXP registered on the SQLite connection), `tag`
+      (== matches the tag name, ~ searches the note; untagged rows compare as ""), `data.<key>`
+      (json_extract on StructuredData / a per-row parsed dictionary in memory), `rawlevel`. Backslashes
+      inside quotes are now literal except `\"` and `\`, so `\s` and `\d` survive.
+      Remaining from the review: nothing.
 
 ### Candidates (not scheduled)
 
