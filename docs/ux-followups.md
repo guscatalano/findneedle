@@ -106,6 +106,16 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
       Narrator and any accessibility tool, not just test harnesses. Needs a virtualized automation
       peer for the grid rows (or peers that don't realize every row). Scope as its own piece of work.
 
+## 8. UI tests in CI (step 1 done; Deskhand is step 2)
+
+- [x] **FlaUI smoke job.** `.github/workflows/ui-smoke.yml` runs the `UiSmoke`-tagged classes (8 classes,
+      generated data, no LargeSamples) on windows-latest, non-blocking, with a desktop screenshot, the
+      app's logs and a step summary as artifacts. Gate on it once it has been green for a while.
+- [ ] **Deskhand as the capture / OCR layer.** Download `deskhand.zip` from a pinned release, start
+      `Deskhand.Http` on loopback, and add screen-truth assertions (overlap, band height, readable
+      text) that UIA cannot see. Upload audit + episodes on failure. Prerequisite for anything beyond
+      the small samples: section 7 (the automation hang on a loaded grid).
+
 ## Parked (not UX, tracked so they are not lost)
 
 - Multi-process: activation batching → `DecodeScope` as `AsyncLocal` → cache / perf-log / MCP-port

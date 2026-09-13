@@ -50,7 +50,10 @@ source project by name (`FindNeedleRuleDSL` → `FindNeedleRuleDSLTests`, etc.).
 - If a WinUI-dependent test build fails under `dotnet test` with **MSB4062** (PriGen task), build
   with Visual Studio's MSBuild and run `vstest.console` on the output instead.
   (`FindNeedleUXTests` deliberately disables WinUI in its csproj so plain `dotnet test` works.)
-- `FindNeedleUX.UITests` drives the real app with FlaUI (x64); it's excluded from CI.
+- `FindNeedleUX.UITests` drives the real app with FlaUI (x64). The self-contained classes are tagged
+  `UiSmoke` and run in CI on the hosted runner's desktop (`.github/workflows/ui-smoke.yml`, informational
+  until it has a green streak); everything needing LargeSamples or the perf lane stays local. Build it
+  with `-p:Platform=x64`; `FINDNEEDLE_UITEST_APP` names the exe under test explicitly.
 - Sample `*.log` test data is gitignored — a test that reads it passes locally but fails in CI
   unless the data file is tracked and copied to the test output.
 

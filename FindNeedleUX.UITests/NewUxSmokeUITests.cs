@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
@@ -27,6 +27,7 @@ namespace FindNeedleUX.UITests
     [TestClass]
     [TestCategory("UITests")]
     [TestCategory("SkipCI")]
+    [TestCategory("UiSmoke")] // self-contained (generated data, small): runs in the CI ui-smoke job
     public class NewUxSmokeUITests
     {
         public TestContext TestContext { get; set; }

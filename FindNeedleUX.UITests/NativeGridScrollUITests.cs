@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
@@ -31,6 +31,7 @@ namespace FindNeedleUX.UITests
     [TestClass]
     [TestCategory("UITests")]
     [TestCategory("SkipCI")]
+    [TestCategory("UiSmoke")] // self-contained (generated data, small): runs in the CI ui-smoke job
     public class NativeGridScrollUITests
     {
         private static Application _app;
@@ -45,32 +46,7 @@ namespace FindNeedleUX.UITests
 
         public TestContext TestContext { get; set; }
 
-        private static string GetAppExecutablePath()
-        {
-            var testDir = AppContext.BaseDirectory;
-            var solutionDir = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", ".."));
-            string[] possiblePaths =
-            {
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-            };
-
-            string newestPath = null;
-            DateTime newestTime = DateTime.MinValue;
-            foreach (var path in possiblePaths)
-            {
-                if (File.Exists(path) && File.GetLastWriteTime(path) > newestTime)
-                {
-                    newestTime = File.GetLastWriteTime(path);
-                    newestPath = path;
-                }
-            }
-            if (newestPath != null) return newestPath;
-            throw new FileNotFoundException(
-                $"Could not find FindNeedleUX.exe. Searched: {string.Join(", ", possiblePaths)}");
-        }
+        private static string GetAppExecutablePath() => UiTestHelpers.GetAppExecutablePath();
 
         private static string WriteTempLog(int lines)
         {

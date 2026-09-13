@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
@@ -22,6 +22,7 @@ namespace FindNeedleUX.UITests
     [TestClass]
     [TestCategory("UITests")]
     [TestCategory("SkipCI")]
+    [TestCategory("UiSmoke")] // self-contained (generated data, small): runs in the CI ui-smoke job
     public class SearchRulesPageUITests
     {
         private static Application _app;
@@ -30,46 +31,7 @@ namespace FindNeedleUX.UITests
         private const string AppName = "FindNeedleUX";
 
 
-        private static string GetAppExecutablePath()
-        {
-            // Get the solution directory by going up from the test output folder
-            var testDir = AppContext.BaseDirectory;
-            var solutionDir = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", ".."));
-            
-            // Try common build output locations (FindNeedleUX uses win-x64 RuntimeIdentifier)
-            string[] possiblePaths = new[]
-            {
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "win-x64", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Debug", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-                Path.Combine(solutionDir, "FindNeedleUX", "bin", "Release", "net8.0-windows10.0.19041.0", "FindNeedleUX.exe"),
-            };
-
-            // Find the most recently modified executable to ensure we use the latest build
-            string newestPath = null;
-            DateTime newestTime = DateTime.MinValue;
-            
-            foreach (var path in possiblePaths)
-            {
-                if (File.Exists(path))
-                {
-                    var modTime = File.GetLastWriteTime(path);
-                    if (modTime > newestTime)
-                    {
-                        newestTime = modTime;
-                        newestPath = path;
-                    }
-                }
-            }
-            
-            if (newestPath != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"Selected executable: {newestPath} (modified: {newestTime})");
-                return newestPath;
-            }
-
-            throw new FileNotFoundException($"Could not find FindNeedleUX.exe in expected locations. Searched: {string.Join(", ", possiblePaths)}");
-        }
+        private static string GetAppExecutablePath() => UiTestHelpers.GetAppExecutablePath();
 
 
         [ClassInitialize]
