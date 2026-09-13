@@ -130,6 +130,14 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
       200 rows, off = 200, remove rules = chip 0); save / clear / reopen a workspace (name on the chip,
       sources and rows back); reopen a Recent search from Home after a clear (rows, chip, "from
       cache"); the Sources button lists both loaded files.
+- [x] **Opening a second log while one is open** (`SecondOpenUITests` + `OpenIntoWorkspaceTests`). The
+      second launch (Explorer / "Open with" / command line) hands its file to the running window and
+      exits: there is never a second window. Then the Open-into-workspace setting decides: Add (the
+      default) puts both in one workspace (chip "2 sources", both files' rows; the same file again is
+      not a third source); Replace starts over with just the new file, no question asked; Ask shows
+      "Open into the current workspace?" with Add / Replace / Cancel, and Replace or Cancel do what
+      they say. An empty workspace never asks whatever the setting. Rule files follow the same rule
+      (Add keeps them, Replace drops them, never duplicated).
 - Not doing a Deskhand capture / OCR layer (owner decision 2026-09-13): FlaUI tests are the lane.
 
 ## 9. Power-user review (2026-09-13)
