@@ -1,4 +1,4 @@
-<Page
+﻿<Page
     x:Class="FindNeedleUX.Pages.WelcomePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -10,7 +10,7 @@
 
     <!-- Home: one open model. Left = get a log in front of you (open / recent / known); right = the
          workspace it lands in (sources, rule files, run) plus the Add / Replace / Ask policy. The
-         customizable Shortcuts tiles sit below because the primary actions now live in the cards. -->
+         customizable Tools tiles sit below: "jump to a tool" only, never a repeat of the cards. -->
     <Page.Resources>
         <Style x:Key="HomeCard" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
@@ -248,17 +248,17 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Shortcuts: the customizable tiles (QuickActionCatalog). Compact, below the cards. -->
+            <!-- Tools: the customizable tiles (QuickActionCatalog). Compact, below the cards. -->
             <StackPanel Spacing="10">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Shortcuts" Style="{StaticResource CardTitle}"/>
+                    <TextBlock Grid.Column="0" Text="Tools" Style="{StaticResource CardTitle}"/>
                     <Button Grid.Column="1" x:Name="CustomizeButton" Click="Customize_Click"
                             Background="Transparent" BorderThickness="0" Padding="8,4"
-                            AutomationProperties.Name="Customize shortcuts">
+                            AutomationProperties.Name="Customize tools">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon x:Name="CustomizeIcon" Symbol="Edit"/>
                             <TextBlock x:Name="CustomizeLabel" Text="Customize…"/>

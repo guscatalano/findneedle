@@ -19,12 +19,12 @@ namespace FindNeedleUX.Pages;
 /// <summary>
 /// Home. One open model: everything on the left (Open log file / folder / with rules, Recent searches,
 /// Known logs) lands in the workspace on the right through <see cref="MainWindow.OpenIntoWorkspaceAsync"/>,
-/// governed by the Add / Replace / Ask card. The customizable Shortcuts tiles (QuickActionCatalog) live
+/// governed by the Add / Replace / Ask card. The customizable Tools tiles (QuickActionCatalog) live
 /// below the cards; navigating here with <see cref="CustomizeParameter"/> opens them in edit mode.
 /// </summary>
 public sealed partial class WelcomePage : Page
 {
-    /// <summary>Navigation parameter that opens the Shortcuts tiles in edit mode ("Customize…").</summary>
+    /// <summary>Navigation parameter that opens the Tools tiles in edit mode ("Customize…").</summary>
     public const string CustomizeParameter = "customize";
 
     private const int RecentCount = 3;
@@ -369,7 +369,7 @@ public sealed partial class WelcomePage : Page
     private async void OpenWorkspace_Click(object sender, RoutedEventArgs e) { if (Main is { } m) await m.ExecuteMenuActionAsync("openworkspace"); }
     private async void SaveWorkspace_Click(object sender, RoutedEventArgs e) { if (Main is { } m) await m.ExecuteMenuActionAsync("saveworkspace"); }
 
-    // ===================== Shortcuts (customizable tiles) =====================
+    // ===================== Tools (customizable tiles) =====================
 
     private void Customize_Click(object sender, RoutedEventArgs e)
     {
@@ -448,7 +448,7 @@ public sealed partial class WelcomePage : Page
         content.Children.Add(new TextBlock { Text = "Add", VerticalAlignment = VerticalAlignment.Center });
 
         var btn = new Button { Content = content, Height = 36, MinWidth = 90 };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, "Add shortcut");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, "Add tool");
 
         var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom };
         var available = QuickActionCatalog.Available();

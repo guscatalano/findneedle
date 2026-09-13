@@ -1,47 +1,42 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace FindNeedleUX.Services;
 
-/// <summary>One customizable Home "Shortcuts" tile: a stable id, a display label, and an emoji.
+/// <summary>One customizable Home "Tools" tile: a stable id, a display label, and an emoji.
 /// The id maps to <see cref="MainWindow.RunQuickAction"/>.</summary>
 public sealed record QuickAction(string Id, string Label, string Emoji);
 
 /// <summary>
-/// The catalog of available Home "Shortcuts" tiles plus the user's chosen subset/order. (The primary
-/// open/run actions live in the Home cards; the tiles are the customizable extras below them.)
+/// The catalog of available Home "Tools" tiles plus the user's chosen subset/order. The tiles are
+/// purely "jump to a tool": anything that already has a button in the Home cards (open a file / folder /
+/// with rules, Known logs, Recent searches, Run search, Open results) is deliberately NOT in this catalog,
+/// so the row never repeats the cards above it. Ids that used to be here are still accepted by
+/// <see cref="MainWindow.RunQuickAction"/> (the palette and MCP use them); they are just not pinnable.
 /// Persisted to a JSON file under <c>%LocalAppData%\FindNeedle\</c> (not WinRT LocalSettings, which
 /// throws when the app runs unpackaged) so customization actually sticks. A storage seam lets tests
 /// redirect persistence to a temp file.
 /// </summary>
 public static class QuickActionCatalog
 {
-    /// <summary>Every action a user can pin to the Home Shortcuts row. Ids are stable (persisted).</summary>
+    /// <summary>Every tool a user can pin to the Home Tools row. Ids are stable (persisted).</summary>
     public static readonly IReadOnlyList<QuickAction> All = new[]
     {
-        new QuickAction("open_file",        "Open log file",       "📁"),
-        new QuickAction("open_folder",      "Open folder",         "📂"),
-        new QuickAction("open_rules",       "Open with rules",     "📝"),
-        new QuickAction("log_finder",       "Known logs",          "🧭"),
-        new QuickAction("open_ado",         "Open ADO work item",  "🔷"),
-        new QuickAction("open_github",      "Open GitHub issue",   "🐙"),
-        new QuickAction("open_kusto",       "Open Kusto query",    "🔎"),
-        new QuickAction("cached",           "Recent searches",     "🕑"),
         new QuickAction("locations",        "Sources",             "📍"),
         new QuickAction("rules_config",     "Rule files",          "⚙️"),
         new QuickAction("auto_rules",       "Auto rules",          "✨"),
-        new QuickAction("run_search",       "Run search",          "▶️"),
-        new QuickAction("results",          "Open results",        "📊"),
-        new QuickAction("processor_output", "Outputs",             "🖼️"),
-        new QuickAction("diagram",          "Diagram tools",       "📈"),
         new QuickAction("inspect_etl",      "Inspect ETL",         "🔬"),
+        new QuickAction("diagram",          "Diagram tools",       "📈"),
+        new QuickAction("processor_output", "Outputs",             "🖼️"),
+        new QuickAction("open_ado",         "Open ADO work item",  "🔷"),
+        new QuickAction("open_github",      "Open GitHub issue",   "🐙"),
+        new QuickAction("open_kusto",       "Open Kusto query",    "🔎"),
     };
 
-    /// <summary>The default set shown until the user customizes. Open log file / folder / with rules and
-    /// Recent searches already have first-class buttons in the Home cards, so the default tiles are the
-    /// next-most-useful things that don't: Sources, Rule files, Inspect ETL, Diagram tools, Outputs.</summary>
+    /// <summary>The default set shown until the user customizes: the tools you reach for once a log is
+    /// loaded. (A stored selection that only names retired ids falls back to this.)</summary>
     public static readonly IReadOnlyList<string> Defaults = new[] { "locations", "rules_config", "inspect_etl", "diagram", "processor_output" };
 
     private static readonly string DefaultPath = Path.Combine(

@@ -51,6 +51,13 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
       schema v11, old caches rebuild) and shown as a RawLevel row under Level in the in-row template,
       the panel and the popup, plus the XML copy and the MCP record. Only sources with a raw value get
       the row. tracefmt-decoded WPP rows have no level in the text, so they stay blank.
+- [x] **Home tiles never repeat the cards.** The "Shortcuts" row is now "Tools": the catalog dropped every
+      entry that already has a card button (open file / folder / with rules, Known logs, Recent searches,
+      Run search, Open results) and keeps only jump-to-a-tool entries (Sources, Rule files, Auto rules,
+      Inspect ETL, Diagram tools, Outputs, the three online sources). It stays at the bottom: Home's
+      first screen is "get a log in front of you"; tools matter once something is loaded. A stored
+      selection made only of retired ids falls back to the defaults; the retired ids still work from the
+      palette and MCP.
 - [x] **A way to cancel a search.** The streaming open (the default) showed "Running search…" with no
       Cancel while a big .etl decoded, and Run ▸ Stop / Esc stayed disabled because nothing refreshed
       the running state. Now: the spinner's Cancel covers both paths, the status-bar Run turns into a

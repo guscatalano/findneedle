@@ -122,7 +122,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Home with the Shortcuts tiles already in edit mode (the "Customize…" affordance).</summary>
+    /// <summary>Home with the Tools tiles already in edit mode (the "Customize…" affordance).</summary>
     public void NavigateToHomeCustomize()
         => contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage), FindNeedleUX.Pages.WelcomePage.CustomizeParameter);
 
@@ -1347,7 +1347,7 @@ public sealed partial class MainWindow : Window
                 "preferences options theme viewer colors", menu("settings_resultviewer")),
             Cmd(T(typeof(FindNeedleUX.Pages.WelcomePage)), FindNeedleUX.Services.PageCatalog.Home, "welcome start intro",
                 () => { contentFrame.Navigate(typeof(FindNeedleUX.Pages.WelcomePage)); return System.Threading.Tasks.Task.CompletedTask; }),
-            Cmd("Customize shortcuts…", FindNeedleUX.Services.PageCatalog.Home, "quick actions tiles edit home",
+            Cmd("Customize Home tools…", FindNeedleUX.Services.PageCatalog.Home, "quick actions tiles edit home shortcuts",
                 () => { NavigateToHomeCustomize(); return System.Threading.Tasks.Task.CompletedTask; }),
         };
     }
