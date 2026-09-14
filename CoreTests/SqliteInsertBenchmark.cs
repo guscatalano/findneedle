@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -27,11 +27,16 @@ public class SqliteInsertBenchmark
 
     private readonly List<string> _dbPaths = new();
 
+    private int _priorShardThreshold;
+
     [TestInitialize]
     public void Init()
     {
         // This benchmark isolates the SINGLE-DB insert + FTS-rebuild cost; keep sharding off regardless
         // of the production default so the numbers stay comparable (sharding is measured by FtsShardSpike).
+        // Restored in Cleanup: left at int.MaxValue it leaked into every later test that expects the
+        // sharded path ("sharded build should have created shard DB files").
+        _priorShardThreshold = SqliteStorage.FtsShardThreshold;
         SqliteStorage.FtsShardThreshold = int.MaxValue;
     }
 
@@ -42,6 +47,7 @@ public class SqliteInsertBenchmark
             try { if (File.Exists(p)) File.Delete(p); } catch { }
         SqliteStorage.DisableFtsForMeasurement =
             !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FINDNEEDLE_DISABLE_FTS"));
+        SqliteStorage.FtsShardThreshold = _priorShardThreshold;
         SqliteStorage.FtsShardThreshold = SqliteStorage.DefaultFtsShardThreshold;
     }
 

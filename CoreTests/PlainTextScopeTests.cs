@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using BasicTextPlugin;
@@ -141,6 +141,7 @@ public class PlainTextScopeTests
         File.WriteAllText(rules,
             "{ \"sections\": [ { \"name\": \"scope\", \"purpose\": \"scope\", \"rules\": [ { \"name\": \"scope\", " +
             "\"action\": { \"type\": \"scope\", \"timeTo\": \"2026-01-15T00:00:00Z\" } } ] } ] }");
+        var priorParallelIngest = FindPluginCore.Implementations.Storage.SqliteStorage.ParallelIngestEnabled;
         try
         {
             FindPluginCore.Implementations.Storage.SqliteStorage.ParallelIngestEnabled = false;
@@ -164,6 +165,11 @@ public class PlainTextScopeTests
             // Only the two January lines are <= the 2026-01-15 window (the tz shift is hours, not weeks).
             Assert.AreEqual(2, rows, "the time-window scope rule must filter the text load through the full pipeline");
         }
-        finally { DecodeScope.Current = null; try { Directory.Delete(dir, true); } catch { } }
+        finally
+        {
+            DecodeScope.Current = null;
+            FindPluginCore.Implementations.Storage.SqliteStorage.ParallelIngestEnabled = priorParallelIngest; // process-wide static
+            try { Directory.Delete(dir, true); } catch { }
+        }
     }
 }

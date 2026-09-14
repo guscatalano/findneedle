@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -29,8 +29,26 @@ public sealed class PlainTextScopePerfTests
 {
     public TestContext TestContext { get; set; } = null!;
 
+    // Load() turns FTS and parallel ingest off to measure the scan alone; these are process-wide statics,
+    // so put them back or every later FTS / sharding test in the run fails ("deferred run wrote
+    // fts_built=0", "sharded build created shard files"). Only bites where LargeSamples exists.
+    private bool _priorDisableFts, _priorParallelIngest;
+
+    [TestInitialize]
+    public void Init()
+    {
+        _priorDisableFts = SqliteStorage.DisableFtsForMeasurement;
+        _priorParallelIngest = SqliteStorage.ParallelIngestEnabled;
+    }
+
     [TestCleanup]
-    public void Cleanup() { DecodeScope.Current = null; SqliteConnection.ClearAllPools(); }
+    public void Cleanup()
+    {
+        DecodeScope.Current = null;
+        SqliteConnection.ClearAllPools();
+        SqliteStorage.DisableFtsForMeasurement = _priorDisableFts;
+        SqliteStorage.ParallelIngestEnabled = _priorParallelIngest;
+    }
 
     private static string? FindLog()
     {
