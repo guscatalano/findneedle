@@ -26,14 +26,14 @@ public sealed class PluginManagerTests
         PluginManager x = new PluginManager();
         x.config = new PluginConfig();
         x.config.PathToFakeLoadPlugin = "somepath";
-        x.config.entries.Add(new PluginConfigEntry() { name = "test", path = "testval" });
+        x.config.AddEntry(PluginConfigEntry.Create("test", "testval"));
         x.SaveToFile();
 
         x = new PluginManager();
         Assert.IsNotNull(x.config);
-        Assert.AreEqual(1, actual: x.config.entries.Count);
-        Assert.AreEqual("test", actual: x.config.entries[0].name);
-        Assert.AreEqual("testval", actual: x.config.entries[0].path);
+        Assert.AreEqual(1, actual: x.config.Entries.Count);
+        Assert.AreEqual("test", actual: x.config.Entries[0].Name);
+        Assert.AreEqual("testval", actual: x.config.Entries[0].Path);
         Assert.AreEqual("somepath", actual: x.config.PathToFakeLoadPlugin);
         if (File.Exists(PluginManager.LOADER_CONFIG))
         {
@@ -50,7 +50,7 @@ public sealed class PluginManagerTests
         PluginManager pluginManager = new();
         pluginManager.config = new();
         pluginManager.config.PathToFakeLoadPlugin = TestGlobals.FAKE_LOAD_PLUGIN_REL_PATH;
-        pluginManager.config.entries.Add(new PluginConfigEntry() { name = "TestPlugin", path = TEST_PLUGIN_NAME });
+        pluginManager.config.AddEntry(PluginConfigEntry.Create("TestPlugin", TEST_PLUGIN_NAME));
         pluginManager.LoadAllPlugins();
         foreach(var module in pluginManager.loadedPluginsModules)
         {
@@ -69,7 +69,7 @@ public sealed class PluginManagerTests
         PluginManager pluginManager = new();
         pluginManager.config = new();
         pluginManager.config.PathToFakeLoadPlugin = TestGlobals.FAKE_LOAD_PLUGIN_REL_PATH;
-        pluginManager.config.entries.Add(new PluginConfigEntry() { name = "TestPlugin", path = TEST_PLUGIN_NAME });
+        pluginManager.config.AddEntry(PluginConfigEntry.Create("TestPlugin", TEST_PLUGIN_NAME));
         pluginManager.LoadAllPlugins();
         var ret = pluginManager.GetAllPluginsInstancesOfAType<ISearchOutput>();
         Assert.AreEqual(1, ret.Count());

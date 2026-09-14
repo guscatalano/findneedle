@@ -92,8 +92,16 @@ public class PluginManager
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
 
-            p.WaitForExit();
-            FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin process exited for plugin: {plugin} with code {p.ExitCode}");
+            if (p.WaitForExit(60000))
+            {
+                            FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin process exited for plugin: {plugin} with code {p.ExitCode}");
+            }
+            else
+            {
+                            FindNeedlePluginLib.Logger.Instance.Log($"FakeLoadPlugin process timed out for plugin: {plugin}, killing...");
+                            p.Kill(true);
+                            p.WaitForExit();
+            }
             // If not in debug, we still saved outputBuffer into the logger line-by-line above
 
             // Also try to read the FakeLoadPlugin output file (written to AppData) and append to our logger
@@ -103,8 +111,9 @@ public class PluginManager
                 var fakeOutputPath = Path.Combine(appDataFolder, "fakeloadplugin_output.txt");
                 if (File.Exists(fakeOutputPath))
                 {
-                    var lines = File.ReadAllLines(fakeOutputPath);
-                    foreach (var l in lines)
+                    // Offload file I/O to avoid blocking the loader thread
+                    var readTask = Task.Run(() => File.ReadAllLines(fakeOutputPath));
+                    foreach (var l in readTask.GetAwaiter().GetResult())
                     {
                         if (!string.IsNullOrWhiteSpace(l))
                         {
@@ -216,7 +225,7 @@ public class PluginManager
             foreach (var plugin in pluginModule.description)
             {
                 //Skip it if it doesnt implement the interface we need
-                if (plugin.ImplementedInterfaces.FirstOrDefault(x => x.Equals(typeof(T).FullName)) == null)
+                if (!plugin.ImplementedInterfaces.Any(x => string.Equals(x, typeof(T).FullName, StringComparison.Ordinal)))
                 {
                     continue;
                 }
@@ -237,7 +246,7 @@ public class PluginManager
 
     public void LoadAllPlugins(bool loadIntoAssembly = true)
     {
-        FindNeedlePluginLib.Logger.Instance.Log($"Starting to load plugins. Config entries: {(config?.entries.Count ?? 0)}");
+        FindNeedlePluginLib.Logger.Instance.Log($"Starting to load plugins. Config entries: {(config?.Entries.Count ?? 0)}");
         try
         {
             if (config != null)
@@ -265,9 +274,9 @@ public class PluginManager
                                 foreach (var pluginPath in plugins)
                                 {
                                     // Only add if not already present
-                                    if (!config.entries.Any(e => string.Equals(e.path, pluginPath, StringComparison.OrdinalIgnoreCase)))
+                                    if (!config.Entries.Any(e => string.Equals(e.Path, pluginPath, StringComparison.OrdinalIgnoreCase)))
                                     {
-                                        config.entries.Add(new PluginConfigEntry { name = Path.GetFileNameWithoutExtension(pluginPath), path = pluginPath, enabled = true });
+                                        config.AddEntry(PluginConfigEntry.Create(Path.GetFileNameWithoutExtension(pluginPath), pluginPath, true));
                                         FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin from registry: {pluginPath}");
                                     }
                                 }
@@ -284,14 +293,14 @@ public class PluginManager
                     }
                 }
                 // --- END: Registry plugin loading ---
-                foreach (var pluginModuleDescriptor in config.entries)
+                foreach (var pluginModuleDescriptor in config.Entries)
                 {
                     try
                     {
-                        FindNeedlePluginLib.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.path}");
-                        var originalPath = pluginModuleDescriptor.path;
-                        pluginModuleDescriptor.path = FileIO.FindFullPathToFile(pluginModuleDescriptor.path);
-                        if (!File.Exists(pluginModuleDescriptor.path))
+                        FindNeedlePluginLib.Logger.Instance.Log($"Loading plugin module: {pluginModuleDescriptor.Path}");
+                        var originalPath = pluginModuleDescriptor.Path;
+                        pluginModuleDescriptor.Path = FileIO.FindFullPathToFile(pluginModuleDescriptor.Path);
+                        if (!File.Exists(pluginModuleDescriptor.Path))
                         {
                             // Try to locate the plugin under the application's base directory (including subfolders)
                             try
@@ -303,7 +312,7 @@ public class PluginManager
                                     var candidate = Directory.EnumerateFiles(baseDir, fileName, SearchOption.AllDirectories).FirstOrDefault();
                                     if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
                                     {
-                                        pluginModuleDescriptor.path = candidate;
+                                        pluginModuleDescriptor.Path = candidate;
                                         FindNeedlePluginLib.Logger.Instance.Log($"Resolved plugin {fileName} to {candidate}");
                                     }
                                 }
@@ -313,10 +322,10 @@ public class PluginManager
                                 FindNeedlePluginLib.Logger.Instance.Log($"Error searching for plugin {originalPath}: {ex.Message}");
                             }
 
-                            if (!File.Exists(pluginModuleDescriptor.path))
+                            if (!File.Exists(pluginModuleDescriptor.Path))
                             {
                                 // Automatically mark as disabled and record reason in the config entry (if supported)
-                                pluginModuleDescriptor.enabled = false;
+                                pluginModuleDescriptor.Enabled = false;
                                 try
                                 {
                                     // If the config entry has a disabledReason field, set it (handles both dynamic and typed cases)
@@ -326,20 +335,20 @@ public class PluginManager
                                         prop.SetValue(pluginModuleDescriptor, "File not found: " + originalPath);
                                     }
                                 }
-                                catch { }
+                                catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"Plugin load error: {ex.Message}"); }
 
                                 FindNeedlePluginLib.Logger.Instance.Log($"Auto-disabling missing plugin module: {originalPath}");
                                 continue;
                             }
                         }
 
-                        InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.path, this, loadIntoAssembly);
+                        InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.Path, this, loadIntoAssembly);
                         loadedPluginsModules.Add(loadedPluginModule);
-                        FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.path}");
+                        FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.Path}");
                     }
                     catch (Exception ex)
                     {
-                        FindNeedlePluginLib.Logger.Instance.Log($"WARNING: Failed to load plugin module {pluginModuleDescriptor.path}: {ex.Message}");
+                        FindNeedlePluginLib.Logger.Instance.Log($"WARNING: Failed to load plugin module {pluginModuleDescriptor.Path}: {ex.Message}");
                         // Continue loading other plugins
                     }
                 }

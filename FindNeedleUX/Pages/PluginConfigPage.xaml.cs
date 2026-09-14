@@ -44,8 +44,8 @@ public sealed partial class PluginConfigPage : Page
                 ?.GetValue(manager)?.ToString() ?? "PluginConfig.json";
             PluginConfigEntries.Clear();
             if (loadedConfig != null)
-                foreach (var entry in loadedConfig.entries)
-                    PluginConfigEntries.Add(new PluginConfigEntryViewModel { Name = entry.name, Path = entry.path, Enabled = entry.enabled });
+                foreach (var entry in loadedConfig.Entries)
+                    PluginConfigEntries.Add(new PluginConfigEntryViewModel { Name = entry.Name, Path = entry.Path, Enabled = entry.Enabled });
         }
         catch (Exception ex)
         {
@@ -70,9 +70,9 @@ public sealed partial class PluginConfigPage : Page
         try
         {
             if (loadedConfig == null) return;
-            loadedConfig.entries.Clear();
+            loadedConfig.ClearEntries();
             foreach (var vm in PluginConfigEntries)
-                loadedConfig.entries.Add(new PluginConfigEntry { name = vm.Name, path = vm.Path, enabled = vm.Enabled });
+                loadedConfig.AddEntry(PluginConfigEntry.Create(vm.Name, vm.Path, vm.Enabled));
             findneedle.PluginSubsystem.PluginManager.GetSingleton().SaveToFile(loadedConfigPath);
             SaveStatus.Text = "Saved. Use “Reload all plugins” to apply.";
         }

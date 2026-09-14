@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -37,11 +37,39 @@ public class FreshInstallDefaultsTests
         };
         foreach (var name in expected)
         {
-            var entry = cfg.entries.FirstOrDefault(e => string.Equals(e.name, name, StringComparison.OrdinalIgnoreCase));
+            var entry = cfg.Entries.FirstOrDefault(e => string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
             Assert.IsNotNull(entry, $"{name} should ship in PluginConfig.json");
-            Assert.IsTrue(entry!.enabled, $"{name} should be enabled out of the box");
-            Assert.IsFalse(string.IsNullOrWhiteSpace(entry.path), $"{name} should have a dll path");
+            Assert.IsTrue(entry!.Enabled, $"{name} should be enabled out of the box");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(entry.Path), $"{name} should have a dll path");
         }
+    }
+
+    [TestMethod]
+    public void ShippedConfigShape_RoundTrips_ThroughTheSerializer()
+    {
+        // The on-disk keys are fixed ("entries" with lowercase "name"/"path"/"enabled"; PascalCase settings)
+        // and System.Text.Json is case-sensitive. A refactor that renamed the members or made the list
+        // read-only loaded every config as EMPTY with no error, so pin the exact shape both ways.
+        const string shipped = @"{ ""entries"": [ { ""name"": ""A"", ""path"": ""A.dll"", ""enabled"": false } ],
+                                   ""PathToFakeLoadPlugin"": ""FakeLoadPlugin.exe"", ""SearchQueryClass"": ""NuSearchQuery"",
+                                   ""UserRegistryPluginKeyEnabled"": true }";
+        var opts = new JsonSerializerOptions { IncludeFields = true };
+        var cfg = JsonSerializer.Deserialize<PluginConfig>(shipped, opts);
+        Assert.IsNotNull(cfg);
+        Assert.AreEqual(1, cfg!.Entries.Count, "the lowercase 'entries' array must populate Entries");
+        Assert.AreEqual("A", cfg.Entries[0].Name);
+        Assert.AreEqual("A.dll", cfg.Entries[0].Path);
+        Assert.IsFalse(cfg.Entries[0].Enabled, "lowercase 'enabled' must populate Enabled");
+        Assert.AreEqual("FakeLoadPlugin.exe", cfg.PathToFakeLoadPlugin);
+        Assert.AreEqual("NuSearchQuery", cfg.SearchQueryClass);
+        Assert.IsTrue(cfg.UserRegistryPluginKeyEnabled);
+
+        cfg.AddEntry(PluginConfigEntry.Create("B", "B.dll"));
+        var written = JsonSerializer.Serialize(cfg, opts);
+        StringAssert.Contains(written, "\"entries\"", "written back with the on-disk key, not a PascalCase rename");
+        StringAssert.Contains(written, "\"name\":\"B\"");
+        var again = JsonSerializer.Deserialize<PluginConfig>(written, opts)!;
+        Assert.AreEqual(2, again.Entries.Count, "save then load keeps every entry");
     }
 
     [TestMethod]

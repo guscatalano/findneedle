@@ -23,8 +23,27 @@ using Microsoft.UI.Xaml.Controls;
 namespace FindNeedleUX.Services;
 public class MiddleLayerService
 {
-    public static List<ISearchLocation> Locations = new();
-    public static List<ISearchFilter> Filters = new();
+    private static readonly object _locationsLock = new();
+    private static readonly object _filtersLock = new();
+    public static List<ISearchLocation> Locations
+    {
+        get
+        {
+            lock (_locationsLock) return _locationsInternal;
+        }
+        internal set { lock (_locationsLock) { _locationsInternal.Clear(); _locationsInternal.AddRange(value); } }
+    }
+    private static List<ISearchLocation> _locationsInternal = new();
+
+    public static List<ISearchFilter> Filters
+    {
+        get
+        {
+            lock (_filtersLock) return _filtersInternal;
+        }
+        internal set { lock (_filtersLock) { _filtersInternal.Clear(); _filtersInternal.AddRange(value); } }
+    }
+    private static List<ISearchFilter> _filtersInternal = new();
 
     // Cheap to construct now — LoadAllPlugins (~2s, the old dominant launch cost) is deferred to
     // SearchQueryUX.EnsureLoaded — so touching this anywhere (e.g. the status strip on launch) is free.
@@ -132,7 +151,7 @@ public class MiddleLayerService
     public static void AddLocation(ISearchLocation location)
     {
         if (location == null) return;
-        Locations.Add(location);
+        lock (_locationsLock) _locationsInternal.Add(location);
         NotifyStateChanged();
     }
 
@@ -214,9 +233,9 @@ public class MiddleLayerService
     {
         try { CurrentStreamingSearch?.Stop(); } catch { /* ignore */ }
         CurrentStreamingSearch = null;
-        Locations.Clear();
-        Filters.Clear();
-        SearchResults.Clear();
+        _locationsInternal.Clear();
+        _filtersInternal.Clear();
+        lock (_searchResultsLock) { SearchResults.Clear(); }
         ViewerQuickRulesStore.Clear(); // session right-click rules don't outlive the workspace
         OutputTimeFrom = OutputTimeTo = null;
         LastRunSummary = null;
@@ -225,7 +244,7 @@ public class MiddleLayerService
         LastStats = null; // drop the previous run's decode-warning stats so its banner clears
         // Drop the previous run's rule-output state so the Processor Output page clears too.
         LastRuleOutputFiles.Clear();
-        AdHocDiagramFiles = new List<string>(); // selection diagrams don't outlive the workspace
+        AdHocDiagramFiles.Clear(); // selection diagrams don't outlive the workspace
         LastRuleProcessors.Clear();
         LastAutoAddedRules.Clear();
         WorkspaceRulePaths.Clear(); // a loaded workspace's rules don't outlive a clear/new
@@ -238,6 +257,9 @@ public class MiddleLayerService
         {
             nuq.RulesConfigPaths = new List<string>();
             nuq.LoadedRules = null;
+            // Dispose the previous storage (SQLite connections, file handles, temp files) before
+            // clearing. This prevents stale disk locks and memory leaks between workspaces.
+            try { nuq.ResultStorage?.Dispose(); } catch { /* best-effort storage dispose */ }
         }
         _workspaceCleared = true; // GetSearchStorage / GetStats / Processor Output now report "nothing to show"
         // Tell an open viewer to drop its source BEFORE we dispose any storage (avoids reading a
@@ -250,10 +272,14 @@ public class MiddleLayerService
 
     public static List<ISearchResult> GetSearchResults()
     {
-        return SearchResults;
+        lock (_searchResultsLock)
+        {
+            return new List<ISearchResult>(SearchResults);
+        }
     }
 
     private static List<ISearchResult> SearchResults = new();
+    private static readonly object _searchResultsLock = new();
 
     /// <summary>Opt out of auto-adding rules for just the next search (reset after one run). The
     /// global on/off lives in <see cref="FindPluginCore.Searching.AutoRules.AutoRulesStore.Enabled"/>.</summary>
@@ -261,24 +287,25 @@ public class MiddleLayerService
 
     /// <summary>Rule paths that were auto-added to the most recent search (for the Rules page to show
     /// "these were added automatically").</summary>
-    public static List<string> LastAutoAddedRules { get; private set; } = new();
+    public static List<string> LastAutoAddedRules { get; internal set; } = new();
 
     /// <summary>Files written by RuleDSL output rules in the most recent search (UML .mmd diagrams,
     /// rendered images, CSV/JSON exports). The Processor Output page surfaces these so generated
     /// diagrams/exports are discoverable — they're written straight to the output folder otherwise.</summary>
-    public static List<string> LastRuleOutputFiles { get; private set; } = new();
+    public static List<string> LastRuleOutputFiles { get; internal set; } = new();
 
     /// <summary>Ad-hoc diagrams generated on demand from the viewer (e.g. "Diagram selected rows") rather
     /// than by an output rule. The Processor Output page surfaces these alongside rule outputs so they show
     /// in-app instead of an external browser. Latest-only by default (see <see cref="RegisterAdHocDiagram"/>).</summary>
-    public static List<string> AdHocDiagramFiles { get; private set; } = new();
+    public static List<string> AdHocDiagramFiles { get; internal set; } = new();
 
     /// <summary>Register a just-generated ad-hoc diagram file and make it the one the Processor Output page
     /// shows. Latest-only (replaces any prior ad-hoc diagram) so the page shows "the diagram from your last
     /// selection" without piling up.</summary>
     public static void RegisterAdHocDiagram(string path)
     {
-        AdHocDiagramFiles = new List<string> { path };
+        AdHocDiagramFiles.Clear();
+        AdHocDiagramFiles.Add(path);
         NotifyStateChanged();
     }
 
@@ -314,9 +341,33 @@ public class MiddleLayerService
     public static string? PendingScopeRulePath;
     private static int? _pendingAutoRuleBuild;
 
-    // Cache of per-file ETL metadata keyed by "path|size|mtimeticks" so repeated searches of the same
-    // file don't re-scan it.
+    // Bounded cache of per-file ETL metadata keyed by "path|size|mtimeticks" so repeated searches of
+    // the same file don't re-scan it. Uses an insertion-order list for simple LRU eviction at a fixed
+    // size ceiling, so the cache never grows unbounded over a long session.
     private static readonly Dictionary<string, (HashSet<string> providers, int? build)> _etlMetaCache = new();
+    private static readonly List<string> _etlMetaCacheOrder = new();
+    private const int MaxEtlMetaCacheSize = 1000;
+
+
+    private static void EvictEtlMetaCache()
+    {
+        while (_etlMetaCache.Count > MaxEtlMetaCacheSize && _etlMetaCacheOrder.Count > 0)
+        {
+            var oldest = _etlMetaCacheOrder[0];
+            _etlMetaCache.Remove(oldest);
+            _etlMetaCacheOrder.RemoveAt(0);
+        }
+    }
+
+    private static void EvictEvtxMetaCache()
+    {
+        while (_evtxMetaCache.Count > MaxEvtxMetaCacheSize && _evtxMetaCacheOrder.Count > 0)
+        {
+            var oldest = _evtxMetaCacheOrder[0];
+            _evtxMetaCache.Remove(oldest);
+            _evtxMetaCacheOrder.RemoveAt(0);
+        }
+    }
 
     /// <summary>
     /// If any enabled auto-rule needs scanned metadata (providers / build), cheaply peek the ETL
@@ -337,7 +388,7 @@ public class MiddleLayerService
             foreach (var loc in Locations ?? Enumerable.Empty<ISearchLocation>())
             {
                 string path = "";
-                try { path = loc?.GetName() ?? ""; } catch { }
+                try { path = loc?.GetName() ?? ""; } catch { /* best-effort name retrieval */ }
                 if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
                 var ext = System.IO.Path.GetExtension(path);
 
@@ -370,7 +421,7 @@ public class MiddleLayerService
             foreach (var loc in Locations ?? Enumerable.Empty<ISearchLocation>())
             {
                 string path = "";
-                try { path = loc?.GetName() ?? ""; } catch { }
+                try { path = loc?.GetName() ?? ""; } catch { /* best-effort name retrieval */ }
                 if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
                 var ext = System.IO.Path.GetExtension(path);
                 if (ext.Equals(".etl", StringComparison.OrdinalIgnoreCase)) GetEtlMetaCached(path);
@@ -398,13 +449,26 @@ public class MiddleLayerService
             // whole file (was 5s on a WPP .etl, freezing the open). 1.5s is plenty for manifest/kernel.
             var (counts, _, build) = findneedle.ETWPlugin.EtlInfoExtractor.QuickScanCounts(path, maxEvents: 120000, maxMs: 1500);
             var meta = (new HashSet<string>(counts.Keys, StringComparer.OrdinalIgnoreCase), build);
+            if (_etlMetaCache.ContainsKey(key))
+            {
+                _etlMetaCache.Remove(key);
+                if (_etlMetaCacheOrder.Contains(key)) _etlMetaCacheOrder.Remove(key);
+            }
+            else
+            {
+                EvictEtlMetaCache();
+            }
             _etlMetaCache[key] = meta;
+            _etlMetaCacheOrder.Add(key);
             return meta;
         }
         catch { return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), null); }
     }
 
+    // Same bounded LRU cache pattern as _etlMetaCache above.
     private static readonly Dictionary<string, HashSet<string>> _evtxMetaCache = new();
+    private static readonly List<string> _evtxMetaCacheOrder = new();
+    private const int MaxEvtxMetaCacheSize = 1000;
 
     private static HashSet<string> GetEvtxProvidersCached(string path)
     {
@@ -415,7 +479,16 @@ public class MiddleLayerService
             if (_evtxMetaCache.TryGetValue(key, out var cached)) return cached;
             var providers = findneedle.Implementations.Locations.EventLogQueryLocation
                 .EvtxMetaExtractor.QuickScanProviders(path);
+            if (_evtxMetaCacheOrder.Contains(key))
+            {
+                _evtxMetaCacheOrder.Remove(key);
+            }
+            else
+            {
+                EvictEvtxMetaCache();
+            }
             _evtxMetaCache[key] = providers;
+            _evtxMetaCacheOrder.Add(key);
             return providers;
         }
         catch { return new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
@@ -435,7 +508,7 @@ public class MiddleLayerService
         {
             if (loc == null) continue;
             string name = "";
-            try { name = loc.GetName() ?? ""; } catch { }
+            try { name = loc.GetName() ?? ""; } catch { /* best-effort name retrieval */ }
             if (!string.IsNullOrEmpty(name)) ctx.Paths.Add(name);
 
             var typeName = loc.GetType().Name;
@@ -465,15 +538,15 @@ public class MiddleLayerService
         var enabledProcessors = new List<IResultProcessor>();
         if (config != null)
         {
-            foreach (var entry in config.entries)
+            foreach (var entry in config.Entries)
             {
-                if (entry.enabled)
+                if (entry.Enabled)
                 {
                     // Find the processor instance by name (FriendlyName or ClassName)
                     var processor = pluginManager.GetAllPluginsInstancesOfAType<IResultProcessor>()
                         .FirstOrDefault(p =>
-                            p.GetType().Name == entry.name ||
-                            (p.GetType().FullName != null && p.GetType().FullName.EndsWith(entry.name))
+                            p.GetType().Name == entry.Name ||
+                            (p.GetType().FullName != null && p.GetType().FullName.EndsWith(entry.Name))
                         );
                     if (processor != null && !enabledProcessors.Contains(processor))
                         enabledProcessors.Add(processor);
@@ -611,7 +684,8 @@ public class MiddleLayerService
         if (SearchQueryUX.CurrentQuery is NuSearchQuery nu)
         {
             var files = nu.GenerateOutputsNow(ct, OutputTimeFrom, OutputTimeTo);
-            LastRuleOutputFiles = files;
+            LastRuleOutputFiles.Clear();
+        LastRuleOutputFiles.AddRange(files);
             NotifyStateChanged();
             return files;
         }
@@ -630,7 +704,8 @@ public class MiddleLayerService
     {
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            var fileContent = System.IO.File.ReadAllText(path);
+            using var doc = System.Text.Json.JsonDocument.Parse(fileContent);
             var root = doc.RootElement;
             if (!root.TryGetProperty("sections", out var secs) && !root.TryGetProperty("Sections", out secs))
                 return true; // unknown shape → assume it needs processing
@@ -654,7 +729,7 @@ public class MiddleLayerService
             }
             return false; // only filter/output/extract-enrichment sections → no Step3 processor needed
         }
-        catch { return true; }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"Error reading rule file: {ex.Message}"); return true; }
     }
 
     /// <summary>True if the rule file has at least one enrichment section containing an "extract" action —
@@ -663,7 +738,8 @@ public class MiddleLayerService
     {
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            var fileContent = System.IO.File.ReadAllText(path);
+            using var doc = System.Text.Json.JsonDocument.Parse(fileContent);
             if (!doc.RootElement.TryGetProperty("sections", out var secs) && !doc.RootElement.TryGetProperty("Sections", out secs))
                 return false;
             if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
@@ -683,7 +759,7 @@ public class MiddleLayerService
                 }
             }
         }
-        catch { /* unreadable → not an extract rule */ }
+        catch (Exception) { /* unreadable → not an extract rule */ }
         return false;
     }
 
@@ -725,7 +801,8 @@ public class MiddleLayerService
         try
         {
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return false;
-            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            var fileContent = System.IO.File.ReadAllText(path);
+            using var doc = System.Text.Json.JsonDocument.Parse(fileContent);
             if (!doc.RootElement.TryGetProperty("sections", out var secs) && !doc.RootElement.TryGetProperty("Sections", out secs))
                 return false;
             if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
@@ -797,7 +874,8 @@ public class MiddleLayerService
         try
         {
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return result;
-            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            var fileContent = System.IO.File.ReadAllText(path);
+            using var doc = System.Text.Json.JsonDocument.Parse(fileContent);
             if (!doc.RootElement.TryGetProperty("sections", out var secs) && !doc.RootElement.TryGetProperty("Sections", out secs)) return result;
             if (secs.ValueKind != System.Text.Json.JsonValueKind.Array) return result;
             foreach (var s in secs.EnumerateArray())
@@ -927,7 +1005,11 @@ public class MiddleLayerService
     {
         // Fast path: the search consolidated rows into SearchResults (legacy + small-search
         // behaviour). Walk that list.
-        var sr = SearchResults;
+        List<ISearchResult> sr = null;
+        lock (_searchResultsLock)
+        {
+            sr = SearchResults;
+        }
         if (sr != null && sr.Count > 0)
         {
             var lines = new List<LogLine>(sr.Count);
@@ -966,7 +1048,11 @@ public class MiddleLayerService
     /// </summary>
     public static int GetFilteredRowCount()
     {
-        var sr = SearchResults;
+        List<ISearchResult> sr = null;
+        lock (_searchResultsLock)
+        {
+            sr = SearchResults;
+        }
         if (sr != null && sr.Count > 0) return sr.Count;
         return TrySafeFilteredCount(GetSearchStorage());
     }
@@ -1014,11 +1100,11 @@ public class MiddleLayerService
         LastRunWasCancelled = false;
         if (cancellationToken != default)
         {
-            SearchResults = SearchQueryUX.GetSearchResults(cancellationToken);
+            lock (_searchResultsLock) { SearchResults = SearchQueryUX.GetSearchResults(cancellationToken); }
         }
         else
         {
-            SearchResults = SearchQueryUX.GetSearchResults();
+            lock (_searchResultsLock) { SearchResults = SearchQueryUX.GetSearchResults(); }
         }
         // Capture stats (component/decode breakdown + storage-backed counts) before the next
         // UpdateSearchQuery() swaps in a fresh query.
@@ -1322,11 +1408,14 @@ public class MiddleLayerService
     /// <summary>Rule-config paths restored from a loaded workspace. Re-applied in <see cref="UpdateSearchQuery"/>
     /// every time the query is rebuilt (each search recreates the query), so a loaded workspace's rules
     /// survive re-runs. Cleared by New/Clear.</summary>
-    public static List<string> WorkspaceRulePaths = new();
+    public static List<string> WorkspaceRulePaths { get; internal set; } = new();
+    internal static void AddWorkspaceRulePath(string path) { WorkspaceRulePaths.Add(path); }
+    internal static void ClearWorkspaceRulePaths() { WorkspaceRulePaths.Clear(); }
 
     public static void OpenWorkspace(string filename)
     {
-        var o = SearchQueryJsonReader.LoadSearchQuery(File.ReadAllText(filename));
+        var fileContent = Task.Run(() => System.IO.File.ReadAllText(filename)).GetAwaiter().GetResult();
+            var o = SearchQueryJsonReader.LoadSearchQuery(fileContent);
         SearchQuery r = SearchQueryJsonReader.GetSearchQueryObject(o);
         Filters = r.Filters;
         Locations = r.Locations;
@@ -1376,6 +1465,36 @@ public class MiddleLayerService
             UpdateSearchQuery();
             NotifyStateChanged();
         }
+    }
+
+    /// <summary>Thread-safe remove from static Locations list.</summary>
+    public static void RemoveLocation(ISearchLocation location)
+    {
+        lock (_locationsLock) _locationsInternal.Remove(location);
+    }
+
+    /// <summary>Thread-safe clear static Locations list.</summary>
+    public static void ClearLocations()
+    {
+        lock (_locationsLock) _locationsInternal.Clear();
+    }
+
+    /// <summary>Thread-safe add to static Filters list.</summary>
+    public static void AddFilter(ISearchFilter filter)
+    {
+        lock (_filtersLock) _filtersInternal.Add(filter);
+    }
+
+    /// <summary>Thread-safe remove from static Filters list.</summary>
+    public static void RemoveFilter(ISearchFilter filter)
+    {
+        lock (_filtersLock) _filtersInternal.Remove(filter);
+    }
+
+    /// <summary>Thread-safe clear static Filters list.</summary>
+    public static void ClearFilters()
+    {
+        lock (_filtersLock) _filtersInternal.Clear();
     }
 
     public static ObservableCollection<LocationListItem> GetLocationListItems()
@@ -1570,7 +1689,7 @@ public class MiddleLayerService
         {
             try
             {
-                SearchResults = SearchQueryUX.GetSearchResults(cts.Token);
+                lock (_searchResultsLock) { SearchResults = SearchQueryUX.GetSearchResults(cts.Token); }
                 LastRunWasCancelled = cts.IsCancellationRequested; // stopped early: the rows so far are kept
                 CaptureStats(nu, storage); // decode done now → per-file decode info + counts are complete
                 NotifyStateChanged();
