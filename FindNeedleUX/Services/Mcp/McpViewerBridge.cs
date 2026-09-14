@@ -451,7 +451,7 @@ public sealed class McpViewerBridge
             if (!Directory.Exists(dir)) return;
             foreach (var f in Directory.EnumerateFiles(dir, "*.rules.json").OrderBy(x => x))
             {
-                long bytes = 0; try { bytes = new FileInfo(f).Length; } catch { }
+                long bytes = 0; try { bytes = new FileInfo(f).Length; } catch { /* best-effort file size */ }
                 list.Add(new { name = Path.GetFileName(f), source, editable, bytes, path = f });
             }
         }

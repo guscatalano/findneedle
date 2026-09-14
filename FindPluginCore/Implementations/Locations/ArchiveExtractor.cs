@@ -101,7 +101,7 @@ public static class ArchiveExtractor
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                try { proc.Kill(entireProcessTree: true); } catch { }
+                try { proc.Kill(entireProcessTree: true); } catch (Exception) { /* best-effort process kill */ }
                 return;
             }
         }

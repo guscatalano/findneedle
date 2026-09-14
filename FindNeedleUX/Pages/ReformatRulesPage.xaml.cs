@@ -225,7 +225,7 @@ public sealed partial class ReformatRulesPage : Page
         if (string.IsNullOrWhiteSpace(input)) return;
 
         MessageReformatResult r = null;
-        try { r = MessageReformatCatalog.Apply(input); } catch { }
+        try { r = MessageReformatCatalog.Apply(input); } catch { /* best-effort reformat — no rule matched or error */ }
         if (r == null)
         {
             TestOutput.Children.Add(new TextBlock { Text = "No enabled rule matched this message.", FontSize = 12, Foreground = Dim(), FontStyle = global::Windows.UI.Text.FontStyle.Italic });

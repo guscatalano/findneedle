@@ -28,7 +28,7 @@ public partial class App : Application
     internal static void Mark(string phase)
     {
         try { FindPluginCore.Diagnostics.PerfLog.Log("startup." + phase, ("t_ms", StartupClock.ElapsedMilliseconds)); }
-        catch { }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"App error: {ex.Message}"); }
     }
 
     public App()
@@ -39,7 +39,7 @@ public partial class App : Application
             var sinceProc = (DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalMilliseconds;
             FindPluginCore.Diagnostics.PerfLog.Log("startup.app_ctor", ("since_proc_start_ms", (long)sinceProc));
         }
-        catch { }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"App error: {ex.Message}"); }
         this.InitializeComponent();
         Mark("app_initcomponent");
 
@@ -48,7 +48,7 @@ public partial class App : Application
         // shouldn't tear down a log-viewing session. The logged stack is how we diagnose such crashes.
         this.UnhandledException += (s, e) =>
         {
-            try { Logger.Instance.Log($"UNHANDLED EXCEPTION: {e.Message}\n{e.Exception}"); } catch { }
+            try { Logger.Instance.Log($"UNHANDLED EXCEPTION: {e.Message}\n{e.Exception}"); } catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"App error: {ex.Message}"); }
             e.Handled = true;
         };
 
@@ -108,7 +108,7 @@ public partial class App : Application
         // during MainWindow construction and was ~85% of launch time. Every search entry awaits PluginsReady
         // (with a spinner) so a search that beats the warm shows a spinner rather than freezing. See
         // MiddleLayerService.PluginsReady.
-        try { FindNeedleUX.Services.MiddleLayerService.WarmPluginsInBackground(); } catch { }
+        try { FindNeedleUX.Services.MiddleLayerService.WarmPluginsInBackground(); } catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"App error: {ex.Message}"); }
         Mark("plugins_warm_kicked");
 
         // Apply the persisted "index timestamps in search" preference to the storage layer before any

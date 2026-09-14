@@ -32,7 +32,7 @@ public static class TraceFormatEnv
         // TRACE_FORMAT_SEARCH_PATH: configured TMF folder, then the managed TMF cache, then ambient.
         var tmfParts = new List<string>();
         if (!string.IsNullOrWhiteSpace(tmfFolder)) tmfParts.Add(tmfFolder.Trim());
-        try { if (Directory.Exists(WppSymbolResolver.TmfCacheDir)) tmfParts.Add(WppSymbolResolver.TmfCacheDir); } catch { }
+        try { if (Directory.Exists(WppSymbolResolver.TmfCacheDir)) tmfParts.Add(WppSymbolResolver.TmfCacheDir); } catch (Exception) { /* best-effort path resolution */ }
         if (!string.IsNullOrEmpty(ambientTmf)) tmfParts.Add(ambientTmf);
         Environment.SetEnvironmentVariable(TmfVar,
             string.Join(";", tmfParts.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase)));

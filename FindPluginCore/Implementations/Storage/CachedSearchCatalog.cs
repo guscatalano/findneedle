@@ -72,7 +72,7 @@ namespace FindPluginCore.Implementations.Storage
             {
                 SQLitePCL.Batteries.Init();
                 var entry = new CachedSearchEntry { DbPath = dbPath };
-                try { entry.SizeOnDiskBytes = new FileInfo(dbPath).Length; } catch { }
+                try { entry.SizeOnDiskBytes = new FileInfo(dbPath).Length; } catch (Exception) { /* best-effort size calc */ }
 
                 var csb = new SqliteConnectionStringBuilder
                 {
@@ -134,10 +134,10 @@ namespace FindPluginCore.Implementations.Storage
         public static void Delete(string dbPath)
         {
             // Drop pooled handles so the file isn't locked on Windows.
-            try { SqliteConnection.ClearAllPools(); } catch { }
+            try { SqliteConnection.ClearAllPools(); } catch (Exception) { /* best-effort pool clear */ }
             foreach (var p in new[] { dbPath, dbPath + "-wal", dbPath + "-shm", dbPath + "-journal" })
             {
-                try { if (File.Exists(p)) File.Delete(p); } catch { /* ignore */ }
+                try { if (File.Exists(p)) File.Delete(p); } catch (Exception) { /* ignore */ }
             }
         }
 
@@ -149,7 +149,7 @@ namespace FindPluginCore.Implementations.Storage
         {
             string dir = CachedStorage.CacheDirectory;
             if (!System.IO.Directory.Exists(dir)) return 0;
-            try { SqliteConnection.ClearAllPools(); } catch { }
+            try { SqliteConnection.ClearAllPools(); } catch (Exception) { /* best-effort pool clear */ }
             int removed = 0;
             string[] files;
             try { files = System.IO.Directory.GetFiles(dir, "*.db"); }

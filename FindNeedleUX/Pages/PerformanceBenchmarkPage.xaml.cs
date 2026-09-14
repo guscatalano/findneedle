@@ -172,7 +172,7 @@ public sealed partial class PerformanceBenchmarkPage : Page
                 Machine = PerfBenchRunner.DescribeMachine(),
                 Scenarios = { scenario },
             };
-            try { res.SystemLoad.AvailableRamGB = Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1e9, 1); } catch { }
+            try { res.SystemLoad.AvailableRamGB = Math.Round(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1e9, 1); } catch { /* best-effort benchmark operation */ }
 
             _last = res;
             StatusText.Text = "Viewer measured. Open the report for the on-screen render times.";
@@ -186,7 +186,7 @@ public sealed partial class PerformanceBenchmarkPage : Page
             if (grid != null) grid.ItemsSource = null;
             ViewerBenchHost.Child = null;
             ViewerBenchHost.Visibility = Visibility.Collapsed;
-            try { storage?.Dispose(); } catch { }
+            try { storage?.Dispose(); } catch { /* best-effort benchmark operation */ }
             TryDeleteDb(dbBase);
             SetBusy(false, null);
         }
@@ -222,15 +222,15 @@ public sealed partial class PerformanceBenchmarkPage : Page
         {
             if (done) return;
             done = true;
-            try { vm.Results.CollectionChanged -= onCol; } catch { }
-            try { grid.LayoutUpdated -= onLayout; } catch { }
+            try { vm.Results.CollectionChanged -= onCol; } catch { /* best-effort benchmark operation */ }
+            try { grid.LayoutUpdated -= onLayout; } catch { /* best-effort benchmark operation */ }
             tcs.TrySetResult(ms);
         }
         onLayout = (_, __) => { sw.Stop(); Finish(sw.Elapsed.TotalMilliseconds); };
         onCol = (_, a) =>
         {
             if (a.Action != NotifyCollectionChangedAction.Reset) return;
-            try { vm.Results.CollectionChanged -= onCol; } catch { }
+            try { vm.Results.CollectionChanged -= onCol; } catch { /* best-effort benchmark operation */ }
             grid.LayoutUpdated += onLayout; // stop on the arrange that follows the swap
         };
 
@@ -318,9 +318,9 @@ public sealed partial class PerformanceBenchmarkPage : Page
         {
             var db = FindNeedleCoreUtils.CachedStorage.GetCacheFilePath(dbBase, ".db");
             foreach (var f in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
-                try { if (File.Exists(f)) File.Delete(f); } catch { }
+                try { if (File.Exists(f)) File.Delete(f); } catch { /* best-effort benchmark operation */ }
         }
-        catch { }
+        catch { /* best-effort benchmark operation */ }
     }
 
     private void RenderResults(PerfBenchResult r)
@@ -382,12 +382,12 @@ public sealed partial class PerformanceBenchmarkPage : Page
     private void OpenHtml_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_htmlPath) || !File.Exists(_htmlPath)) return;
-        try { Process.Start(new ProcessStartInfo { FileName = _htmlPath, UseShellExecute = true }); } catch { }
+        try { Process.Start(new ProcessStartInfo { FileName = _htmlPath, UseShellExecute = true }); } catch { /* best-effort benchmark operation */ }
     }
 
     private void ShowJson_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_jsonPath) || !File.Exists(_jsonPath)) return;
-        try { Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{_jsonPath}\"", UseShellExecute = true }); } catch { }
+        try { Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{_jsonPath}\"", UseShellExecute = true }); } catch { /* best-effort benchmark operation */ }
     }
 }

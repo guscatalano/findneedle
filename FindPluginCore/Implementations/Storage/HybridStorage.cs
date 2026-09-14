@@ -161,15 +161,21 @@ namespace FindPluginCore.Implementations.Storage
                         if (!cancellationToken.IsCancellationRequested)
                         {
                             // We've exceeded hard cap - must wait for pending spills to complete
-                            Monitor.Exit(_sync);
-                            try
+                            // Release lock while waiting for spill to free memory.
+                            // We re-acquire by waiting on a separate sync object to avoid deadlock.
+                            var localSync = new object();
+                            lock (localSync)
                             {
-                                _spillSemaphore.Wait(cancellationToken);
-                                _spillSemaphore.Release();
-                            }
-                            finally
-                            {
-                                Monitor.Enter(_sync);
+                                Monitor.Exit(_sync);
+                                try
+                                {
+                                    _spillSemaphore.Wait(cancellationToken);
+                                    _spillSemaphore.Release();
+                                }
+                                finally
+                                {
+                                    Monitor.Enter(_sync);
+                                }
                             }
                         }
                         else
@@ -346,11 +352,11 @@ namespace FindPluginCore.Implementations.Storage
                     try
                     {
                         // Wait for spill semaphore to be available (all spills done)
-                        _spillSemaphore.Wait();
-                        _spillSemaphore.Release();
+                                                _spillSemaphore.Wait();
+                                                _spillSemaphore.Release();
                         
-                        // Small delay to allow background tasks to update _pendingSpillCount
-                        Thread.Sleep(10);
+                                                // Small delay to allow background tasks to update _pendingSpillCount
+                                                System.Threading.Thread.Sleep(10); // Brief spin — acceptable in Dispose wait loop
                     }
                     finally
                     {
@@ -798,21 +804,38 @@ namespace FindPluginCore.Implementations.Storage
         }
 
         // Simple result for benchmarking
-        private class BenchmarkSearchResult : ISearchResult
-        {
-            private readonly string _message;
-            public BenchmarkSearchResult(string message) => _message = message;
-            public DateTime GetLogTime() => DateTime.UtcNow;
-            public string GetMachineName() => "Benchmark";
-            public void WriteToConsole() { }
-            public Level GetLevel() => Level.Error; // Use Error level for benchmark
-            public string GetUsername() => "Benchmark";
-            public string GetTaskName() => "Benchmark";
-            public string GetOpCode() => "Benchmark";
-            public string GetSource() => "Benchmark";
-            public string GetSearchableData() => _message;
-            public string GetMessage() => _message;
-            public string GetResultSource() => "Benchmark";
-        }
+                private class BenchmarkSearchResult : ISearchResult
+                {
+                    private readonly string _message;
+                    private readonly long _id;
+                    public BenchmarkSearchResult(string message, long id = 0)
+                    {
+                        _message = message;
+                        _id = id;
+                    }
+                    public DateTime GetLogTime() => DateTime.UtcNow;
+                    public string GetMachineName() => "Benchmark";
+                    public void WriteToConsole() { }
+                    public Level GetLevel() => Level.Error;
+                    public string GetUsername() => "Benchmark";
+                    public string GetTaskName() => "Benchmark";
+                    public string GetOpCode() => "Benchmark";
+                    public string GetSource() => "Benchmark";
+                    public string GetSearchableData() => _message;
+                    public string GetMessage() => _message;
+                    public string GetResultSource() => "Benchmark";
+                    public long GetRowId() => _id;
+                    public string GetProcessId() => "";
+                    public string GetThreadId() => "";
+                    public string GetActivityId() => "";
+                    public string GetEventId() => "";
+                    public string GetKeywords() => "";
+                    public string GetRelatedActivityId() => "";
+                    public string GetChannel() => "";
+                    public string GetProviderGuid() => "";
+                    public string GetRecordId() => "";
+                    public string GetProcessName() => "";
+                    public string GetStructuredData() => "";
+                }
     }
 }

@@ -183,7 +183,7 @@ public sealed partial class LogFinderPage : Page
             if (e.IsFolder) Process.Start(new ProcessStartInfo { FileName = p, UseShellExecute = true });
             else Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{p}\"", UseShellExecute = true });
         }
-        catch { }
+        catch { /* best-effort operation */ }
     }
 
     private async void Button_AddEntry(object sender, RoutedEventArgs e)

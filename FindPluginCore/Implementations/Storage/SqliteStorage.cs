@@ -134,7 +134,7 @@ namespace FindPluginCore.Implementations.Storage
                 var meta = ReadMeta();
                 _ftsIndexBuilt = RestoreFtsFromMeta(meta); // re-attaches shard files if the cache was sharded
             }
-            catch { /* best effort */ }
+            catch (Exception) { FindNeedlePluginLib.Logger.Instance.Log("SQLite best-effort operation failed"); }
         }
 
         /// <summary>
@@ -170,8 +170,8 @@ namespace FindPluginCore.Implementations.Storage
                     $"[SqliteStorage] cache DB '{_dbPath}' is corrupt; rebuilding from scratch: {ex.Message}");
 
                 // Close + drop the connection so the OS releases the file handle before we delete.
-                try { _connection.Close(); } catch { }
-                try { _connection.Dispose(); } catch { }
+                try { _connection.Close(); } catch (Exception) { /* best-effort connection close */ }
+                try { _connection.Dispose(); } catch (Exception) { /* best-effort connection dispose */ }
                 _connection = null;
                 // Flush Microsoft.Data.Sqlite's connection pool so the file lock is fully released
                 // (otherwise File.Delete fails on Windows with "file is being used by another
@@ -758,7 +758,7 @@ namespace FindPluginCore.Implementations.Storage
                     long lo = minId + (long)k * per;
                     long hi = Math.Min(lo + per, maxId + 1); // [lo, hi)
                     var path = ShardDbPath(k);
-                    try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch { }
+                    try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch (Exception) { /* best-effort file cleanup */ }
 
                     using var sc = new SqliteConnection($"Data Source={path}");
                     sc.Open();
@@ -856,7 +856,7 @@ namespace FindPluginCore.Implementations.Storage
                 for (int k = 0; k < MaxShards; k++)
                 {
                     try { using var d = _connection.CreateCommand(); d.CommandText = $"DETACH DATABASE shard{k};"; d.ExecuteNonQuery(); }
-                    catch { /* not attached — fine */ }
+                    catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"SQLite detach failed: {ex.Message}"); }
                 }
             }
         }
@@ -869,9 +869,9 @@ namespace FindPluginCore.Implementations.Storage
             for (int k = 0; k < MaxShards; k++)
             {
                 var p = ShardDbPath(k);
-                try { if (System.IO.File.Exists(p)) System.IO.File.Delete(p); } catch { }
+                try { if (System.IO.File.Exists(p)) System.IO.File.Delete(p); } catch (Exception) { /* best-effort shard cleanup */ }
                 foreach (var s in new[] { "-wal", "-shm", "-journal" })
-                    try { if (System.IO.File.Exists(p + s)) System.IO.File.Delete(p + s); } catch { }
+                    try { if (System.IO.File.Exists(p + s)) System.IO.File.Delete(p + s); } catch (Exception) { /* best-effort shard cleanup */ }
             }
             _ftsSharded = false;
             _shardCount = 0;
@@ -897,7 +897,7 @@ namespace FindPluginCore.Implementations.Storage
                 lock (_sync)
                     for (int k = 0; k < shards; k++)
                     {
-                        try { using var d = _connection.CreateCommand(); d.CommandText = $"DETACH DATABASE shard{k};"; d.ExecuteNonQuery(); } catch { }
+                        try { using var d = _connection.CreateCommand(); d.CommandText = $"DETACH DATABASE shard{k};"; d.ExecuteNonQuery(); } catch (Exception) { /* best-effort detach */ }
                         using var a = _connection.CreateCommand();
                         a.CommandText = $"ATTACH DATABASE '{ShardDbPath(k).Replace("'", "''")}' AS shard{k};";
                         a.ExecuteNonQuery();
@@ -944,6 +944,39 @@ namespace FindPluginCore.Implementations.Storage
         /// catches every practical case where the log has actually changed. A full content hash
         /// would be ironclad but cost ~0.2–1 s per open even for warm hits.
         /// </summary>
+        /// <summary>A cheap content fingerprint: first 4KB of the file, SHA256-hashed. Used alongside
+        /// size+mtime in cache reuse validation to catch the rare case where a file is replaced with
+        /// same-size same-mtime content. Reads only the first 4KB (or less if the file is smaller),
+        /// so the overhead is typically under 1ms even on spinning disks.</summary>
+        private static string? ComputeContentFingerprint(string path, int maxBytes = 4096)
+        {
+            try
+            {
+                using var fs = System.IO.File.OpenRead(path);
+                var buf = new byte[Math.Min(maxBytes, (int)fs.Length)];
+                var read = fs.Read(buf, 0, buf.Length);
+                if (read == 0) return null;
+                // Trim to actual read length
+                if (read < buf.Length)
+                {
+                    var trimmed = new byte[read];
+                    System.Array.Copy(buf, trimmed, read);
+                    buf = trimmed;
+                }
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                var hash = sha.ComputeHash(buf);
+                var sb = new System.Text.StringBuilder();
+                foreach (var b in hash)
+                    sb.Append(b.ToString("x2"));
+                return sb.ToString();
+            }
+            catch
+            {
+                return null; // caller should treat as "no fingerprint" (cache miss)
+            }
+        }
+
+
         public bool EvaluateCacheReuse(string sourcePath, int schemaVersion)
         {
             ReusedExistingCache = false;
@@ -1037,6 +1070,19 @@ namespace FindPluginCore.Implementations.Storage
                     return false;
                 }
 
+                // Content fingerprint catches same-size same-mtime replacement. The fingerprint is
+                // computed from the first 4KB (cheap, <1ms) and stored alongside size+mtime.
+                var fingerprint = ComputeContentFingerprint(sourcePath);
+                if (fingerprint != null)
+                {
+                    if (!meta.TryGetValue("content_fingerprint", out var stored) || stored != fingerprint)
+                    {
+                        FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "fingerprint_differs"));
+                        ClearTables();
+                        return false;
+                    }
+                }
+
                 // Quick sanity check: make sure FilteredResults actually has rows. A meta-only
                 // row with no data would be useless.
                 int rows;
@@ -1069,7 +1115,7 @@ namespace FindPluginCore.Implementations.Storage
                 // partially-valid cache.
                 FindPluginCore.Diagnostics.PerfLog.Log("cache.eval", ("reuse", false), ("reason", "exception"), ("msg", ex.GetType().Name));
                 System.Diagnostics.Debug.WriteLine($"[SqliteStorage] EvaluateCacheReuse failed: {ex.Message}");
-                try { ClearTables(); } catch { /* ignore */ }
+                try { ClearTables(); } catch (Exception) { /* SQLite operation best-effort — non-critical */ }
                 return false;
             }
         }
@@ -1118,6 +1164,8 @@ namespace FindPluginCore.Implementations.Storage
                     // Part of cache validity: a cache built with a different LogTime-in-FTS setting has a
                     // differently-tokenized index, so reuse must reject it (EvaluateCacheReuse).
                     WriteMetaKey(tx, "fts_logtime",    IndexLogTimeInFts ? "1" : "0");
+                    // Store a content fingerprint so the cache can detect same-size same-mtime replacement.
+                    WriteMetaKey(tx, "content_fingerprint", ComputeContentFingerprint(sourcePath));
                     WriteMetaKey(tx, "completed_at",   DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
                     tx.Commit();
                     FindPluginCore.Diagnostics.PerfLog.Log("cache.write", ("ok", true), ("size", size), ("path_len", sourcePath.Length));
@@ -1171,7 +1219,7 @@ namespace FindPluginCore.Implementations.Storage
                     return dt;
                 }
             }
-            catch { /* ignore */ }
+            catch (Exception) { /* SQLite operation best-effort — non-critical */ }
             return null;
         }
 
@@ -2207,7 +2255,7 @@ namespace FindPluginCore.Implementations.Storage
                 if (File.Exists(_dbPath))
                     sizeOnDisk = new FileInfo(_dbPath).Length;
             }
-            catch { /* file briefly inaccessible — report 0, never throw from a stats read */ }
+            catch (Exception) { /* file briefly inaccessible — report 0, never throw from a stats read */ }
             long sizeInMemory = 0; // Not applicable for SQLite
             return (rawCount, filteredCount, sizeOnDisk, sizeInMemory);
         }
@@ -2227,9 +2275,9 @@ namespace FindPluginCore.Implementations.Storage
                 {
                     // Detach (don't delete) shard files so the next session can warm-reuse them; just
                     // release the attach handles before closing. Eviction is handled by the cache pruner.
-                    if (_shardCount > 0) { try { DetachShards(); } catch { } }
-                    // Ensure connection is closed before disposing to release any file locks
-                    try { _connection?.Close(); } catch { }
+                    if (_shardCount > 0) { try { DetachShards(); } catch { /* best-effort — non-critical */ } }
+                                        // Ensure connection is closed before disposing to release any file locks
+                                        try { _connection?.Close(); } catch { /* best-effort — non-critical */ }
                     _connection?.Dispose();
                 }
                 catch

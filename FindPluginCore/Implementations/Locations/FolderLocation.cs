@@ -42,7 +42,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             component = this.GetType().Name,
             step = SearchStep.AtLoad,
             summary = "statsByFile",
-            metric = new Dictionary<string, dynamic>()
+            metric = new Dictionary<string, object>()
         };
         Logger.Instance.Log($"FolderLocation constructed with path: {path}");
     }
@@ -128,7 +128,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 if (processor == null)
                 {
                     Logger.Instance.Log("Null processor found in SetExtensionProcessorList");
-                    throw new Exception("null?");
+                    throw new ArgumentException("Processor list contains null entries");
                 }
                 var exts = processor.RegisterForExtensions();
                 foreach (var ext in exts)
@@ -161,7 +161,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             component = this.GetType().Name,
             step = SearchStep.AtLoad,
             summary = "statsByFile",
-            metric = new Dictionary<string, dynamic>()
+            metric = new Dictionary<string, object>()
         };
 
         TempStorage.GetMainTempPath();
@@ -200,21 +200,10 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
         }
         if (sink != null)
         {
-            sink.NotifyProgress("waiting for etl files to be processed");
+            sink.NotifyProgress("waiting for files to be processed");
         }
         Logger.Instance.Log($"Waiting for {tasks.Count} file processing tasks to complete in FolderLocation: {path}");
-        var completed = 0;
-        var initialCount = tasks.Count;
-        while (completed < tasks.Count)
-        {
-            completed = tasks.Where(x => x.IsCompleted).Count();
-            if (sink != null)
-            {
-                sink.NotifyProgress("waiting for etl files to be processed " + completed + " / " + tasks.Count);
-            }
-            Thread.Yield();
-        }
-        Task.WhenAll(tasks).Wait();
+        Task.WhenAll(tasks).GetAwaiter().GetResult();
         Logger.Instance.Log($"All file processing tasks completed in FolderLocation: {path}");
         tasks.Clear();
         if (sink != null)
@@ -225,6 +214,10 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 
     // How deep we'll follow archives-within-archives before giving up (zip-bomb / runaway guard).
     private const int MaxArchiveDepth = 8;
+    // Maximum number of files to extract from an archive (zip-bomb protection).
+    private const int MaxExtractedFiles = 100000;
+    // Maximum total size of extracted archive files (1 GB).
+    private const long MaxExtractedSizeBytes = 1024L * 1024 * 1024;
 
     private void ProcessFile(string file, System.Threading.CancellationToken cancellationToken)
     {
@@ -289,9 +282,32 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             return;
         }
 
+        long totalExtractedSize = 0;
+        int extractedFileCount = 0;
+        bool overflow = false;
         foreach (var inner in FileIO.GetAllFiles(temp, GetAllFilesErrorHandler))
         {
+            if (overflow)
+            {
+                Logger.Instance.Log($"Archive {archive} exceeded extraction limits — skipped remaining files");
+                break;
+            }
             if (cancellationToken.IsCancellationRequested) return;
+            try
+            {
+                var fi = new FileInfo(inner);
+                totalExtractedSize += fi.Length;
+            }
+            catch (Exception) { /* non-critical fallback — continue */ }
+
+            if (totalExtractedSize > MaxExtractedSizeBytes || extractedFileCount >= MaxExtractedFiles)
+            {
+                overflow = true;
+                Logger.Instance.Log($"Archive {archive} too large or too many files — stopping extraction");
+                break;
+            }
+            extractedFileCount++;
+
             var innerExt = ResolveExtension(inner);
             if (ArchiveExtractor.IsArchive(innerExt))
                 ExtractAndProcessArchive(inner, cancellationToken, depth + 1);
@@ -337,7 +353,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 if (template == null)
                 {
                     Logger.Instance.Log($"Null processor found for extension {ext} in ProcessFile");
-                    throw new Exception("null?");
+                    throw new ArgumentException("Processor list contains null entries");
                 }
 
                 // A fresh instance per file — processors hold per-file state (file path, parsed rows),
@@ -416,12 +432,17 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                 if(item == null)
                 {
                     Logger.Instance.Log("Null processor found in Search");
-                    continue; //bug!
+                    continue; // null processor skipped
                 }
                 Logger.Instance.Log($"Getting results from processor: {item.GetType().Name}");
+                // No de-duplication here: each file is parsed by exactly one processor (chosen by
+                // extension), so rows cannot repeat, and GetRowId() is not an identity yet at this
+                // stage - it is assigned by storage (SQLite Id) or by load order in the viewer, and every
+                // freshly parsed row answers -1. A row-id set collapsed the whole load to one row.
                 results.AddRange(item.GetResults());
             }
         }
+        Logger.Instance.Log($"Search returned {results.Count} results for FolderLocation: {path}");
 
         var filteredResults = new List<ISearchResult>();
         foreach (var result in results)
@@ -473,7 +494,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             component = this.GetType().Name,
             step = SearchStep.AtLoad,
             summary = "ExtensionProviders",
-            metric = new Dictionary<string, dynamic>()
+            metric = new Dictionary<string, object>()
         };
         reports.Add(extensionProviderReport);
 
@@ -482,7 +503,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
            component = this.GetType().Name,
            step = SearchStep.AtLoad,
            summary = "ProviderByFile",
-           metric = new Dictionary<string, dynamic>()
+           metric = new Dictionary<string, object>()
         };
         reports.Add(ProviderByFileReport);
 
@@ -492,7 +513,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
            component = this.GetType().Name,
            step = SearchStep.AtLoad,
            summary = "DecodeByFile",
-           metric = new Dictionary<string, dynamic>()
+           metric = new Dictionary<string, object>()
         };
         reports.Add(DecodeByFileReport);
 
@@ -502,7 +523,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
             if (p == null)
             {
                Logger.Instance.Log("Null processor found in ReportStatistics");
-               continue; //bug!
+               continue; // null processor skipped
             }
             var name = p.GetType().ToString();
             if (!extensionProviderReport.metric.ContainsKey(name))
@@ -636,7 +657,7 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
                     anyRecords = true;
                 }
             }
-            catch { /* estimate is best-effort */ }
+            catch (Exception) { /* estimate is best-effort */ }
         }
 
         return (anyTime ? totalTime : null, anyRecords ? totalRecords : null);

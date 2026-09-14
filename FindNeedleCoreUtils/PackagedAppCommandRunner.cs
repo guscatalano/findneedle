@@ -110,18 +110,18 @@ public static class PackagedAppCommandRunner
             var pollInterval = 500; // ms
             
             while (!File.Exists(sentinelFile))
-            {
-                var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
-                if (elapsed > timeoutMs)
-                {
-                    throw new TimeoutException($"Command timed out after {timeoutMs}ms");
-                }
+                        {
+                            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+                            if (elapsed > timeoutMs)
+                            {
+                                throw new TimeoutException($"Command timed out after {timeoutMs}ms");
+                            }
                 
-                Thread.Sleep(pollInterval);
-            }
+                            System.Threading.Thread.Sleep(pollInterval); // Polling — acceptable for sync wrapper
+                        }
 
-            // Give a small delay for files to be fully written
-            Thread.Sleep(100);
+                        // Give a small delay for files to be fully written
+                        System.Threading.Thread.Sleep(100);
             
             // Read the exit code from sentinel file
             var exitCodeText = File.ReadAllText(sentinelFile).Trim();
@@ -182,7 +182,7 @@ public static class PackagedAppCommandRunner
 
             if (!completed)
             {
-                try { process.Kill(); } catch { }
+                try { process.Kill(); } catch { /* best-effort process kill */ }
                 throw new TimeoutException($"Command timed out after {timeoutMs}ms");
             }
 
@@ -271,16 +271,16 @@ public static class PackagedAppCommandRunner
             var pollInterval = 500;
             
             while (!File.Exists(sentinelFile))
-            {
-                var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
-                if (elapsed > timeoutMs)
-                {
-                    return (-1, "Command timed out");
-                }
-                Thread.Sleep(pollInterval);
-            }
+                        {
+                            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+                            if (elapsed > timeoutMs)
+                            {
+                                return (-1, "Command timed out");
+                            }
+                            System.Threading.Thread.Sleep(pollInterval); // Polling — acceptable for sync wrapper
+                        }
 
-            Thread.Sleep(100);
+                        System.Threading.Thread.Sleep(100); // Brief delay for file flush
             
             var output = File.Exists(outputFile) ? File.ReadAllText(outputFile).Trim() : "";
             var exitCodeText = File.ReadAllText(sentinelFile).Trim();
@@ -295,7 +295,7 @@ public static class PackagedAppCommandRunner
                 if (File.Exists(sentinelFile)) File.Delete(sentinelFile);
                 if (File.Exists(outputFile)) File.Delete(outputFile);
             }
-            catch { }
+            catch { /* best-effort operation */ }
         }
     }
 
@@ -335,7 +335,7 @@ public static class PackagedAppCommandRunner
 
         if (!process.WaitForExit(timeoutMs))
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            try { process.Kill(entireProcessTree: true); } catch { /* best-effort operation */ }
             return (-1, "Command timed out");
         }
         process.WaitForExit(); // flush the async readers to EOF

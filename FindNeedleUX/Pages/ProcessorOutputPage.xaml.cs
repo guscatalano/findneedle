@@ -423,7 +423,7 @@ public sealed partial class ProcessorOutputPage : Page
     /// overlay host (the inline one stays as-is) so leaving fullscreen needs no teardown of the detail.</summary>
     private void EnterFullscreen(string path)
     {
-        try { path = Path.GetFullPath(path); } catch { }
+        try { path = Path.GetFullPath(path); } catch { /* best-effort operation */ }
         FullscreenHost.Children.Clear();
         FullscreenTitle.Text = Path.GetFileName(path);
         try
@@ -568,7 +568,7 @@ public sealed partial class ProcessorOutputPage : Page
         if (!string.IsNullOrWhiteSpace(ruleDsl.RulesFilePath))
         {
             var link = new HyperlinkButton { Content = ruleDsl.RulesFilePath, Padding = new Thickness(0), FontSize = 11 };
-            link.Click += (_, _) => { try { Process.Start(new ProcessStartInfo { FileName = ruleDsl.RulesFilePath, UseShellExecute = true }); } catch { } };
+            link.Click += (_, _) => { try { Process.Start(new ProcessStartInfo { FileName = ruleDsl.RulesFilePath, UseShellExecute = true }); } catch { /* best-effort operation */ } };
             panel.Children.Add(link);
         }
 
@@ -663,7 +663,7 @@ public sealed partial class ProcessorOutputPage : Page
                     var html = IsMermaid(path) ? GenerateMermaidHtml(path) : GenerateImageHtml(path);
                     TryStart(new ProcessStartInfo { FileName = html, UseShellExecute = true });
                 }
-                catch { }
+                catch { /* best-effort operation */ }
             };
             actions.Children.Add(renderBtn);
         }
@@ -971,7 +971,7 @@ public sealed partial class ProcessorOutputPage : Page
 
     private static void TryStart(ProcessStartInfo psi)
     {
-        try { Process.Start(psi); } catch { }
+        try { Process.Start(psi); } catch { /* best-effort operation */ }
     }
 
     /// <summary>Wrap a Mermaid .mmd file in an HTML page rendered via mermaid.js (CDN). The raw source

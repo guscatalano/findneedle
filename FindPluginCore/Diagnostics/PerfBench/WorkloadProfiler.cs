@@ -67,7 +67,7 @@ public static class WorkloadProfiler
             return (new List<PerfBenchHotFrame>(),
                     "Profiling was not available on this machine: " + ex.Message);
         }
-        finally { try { if (File.Exists(nettrace)) File.Delete(nettrace); } catch { } }
+        finally { try { if (File.Exists(nettrace)) File.Delete(nettrace); } catch (Exception) { /* best-effort cleanup */ } }
     }
 
     // ---- capture: EventPipe self-session around the workload ----
@@ -187,7 +187,7 @@ public static class WorkloadProfiler
                 .ToList();
             return (frames, active.Count, samples.Count);
         }
-        finally { try { if (File.Exists(etlx)) File.Delete(etlx); } catch { } }
+        finally { try { if (File.Exists(etlx)) File.Delete(etlx); } catch (Exception) { /* best-effort cleanup */ } }
     }
 
     /// <summary>
@@ -232,13 +232,13 @@ public static class WorkloadProfiler
     }
 
     private static void TryDeleteDb(string dbBase)
-    {
-        try
         {
-            var db = CachedStorage.GetCacheFilePath(dbBase, ".db");
-            foreach (var f in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
-                try { if (File.Exists(f)) File.Delete(f); } catch { }
+            try
+            {
+                var db = CachedStorage.GetCacheFilePath(dbBase, ".db");
+                foreach (var f in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
+                    try { if (File.Exists(f)) File.Delete(f); } catch (Exception) { /* best-effort cleanup */ }
+            }
+            catch (Exception ex) { /* best-effort cleanup — non-critical for benchmark profiler */ }
         }
-        catch { }
-    }
 }

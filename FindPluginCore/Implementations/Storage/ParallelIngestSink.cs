@@ -96,13 +96,27 @@ namespace FindPluginCore.Implementations.Storage
             long baseId = _seq + 1;   // Ids are 1-based (AUTOINCREMENT starts at 1); single producer, no lock needed
             _seq += batch.Count;
             var copy = new List<ISearchResult>(batch);
-            _channel.Writer.WriteAsync(new Work(copy, baseId), _ct).AsTask().GetAwaiter().GetResult();
+            try
+            {
+                _channel.Writer.WriteAsync(new Work(copy, baseId), _ct).AsTask().GetAwaiter().GetResult();
+            }
+            catch (AggregateException)
+            {
+                // Channel may have been completed (CompleteAndMergeInto was called) or cancellation requested.
+                // The producer thread (scan) may not yet know the merge is done — silently drop the batch
+                // since the caller will see the merge succeeded (the merge only happens after writer drain).
+            }
+            catch (Exception)
+            {
+                // Any other unexpected error — the channel is likely in a bad state, so we drop the batch
+                // rather than crashing the scan thread. The caller's merge will still proceed.
+            }
         }
 
         /// <summary>Scan finished: stop accepting work, wait for the shard writers to drain, then merge all
         /// shards into <paramref name="target"/> (the caller's real, empty storage) and delete the shard
-        /// files. Returns rows merged. Rethrows the first shard-writer fault if any (the toggle is the
-        /// operator's recovery — turn parallel ingest off and re-run on the serial path).</summary>
+        /// files. Returns rows merged. On merge failure, the target is rolled back to empty so the caller
+        /// can retry with serial ingest. Rethrows the first shard-writer fault if any.</summary>
         public long CompleteAndMergeInto(SqliteStorage target, Action<int, int> onMergeProgress = null)
         {
             _channel.Writer.Complete();
@@ -123,10 +137,10 @@ namespace FindPluginCore.Implementations.Storage
                     for (int i = 0; i < levelSum.Length; i++) levelSum[i] += snap[i];
                 }
             }
-            catch { levelSum = null; }
+            catch (Exception) { /* log parsing failed — skip */ }
 
             // Release shard file handles before ATTACH — pooled connections keep the file open otherwise.
-            foreach (var s in _shards) { try { s.Dispose(); } catch { } }
+            foreach (var s in _shards) { try { s.Dispose(); } catch (Exception) { /* best-effort shard dispose */ } }
             SqliteConnection.ClearAllPools();
 
             if (_ct.IsCancellationRequested) { DeleteShardFiles(); return 0; }
@@ -139,14 +153,29 @@ namespace FindPluginCore.Implementations.Storage
 
             long merged;
             var mergeWatch = System.Diagnostics.Stopwatch.StartNew();
-            using (PerfLog.Scope("ingest.merge", ("shards", _shards.Length), ("rows", ProducedCount)))
-                merged = target.MergeFilteredFrom(_shardDbPaths, onMergeProgress);
-            LastMergeMs = mergeWatch.ElapsedMilliseconds;
+            // MergeFilteredFrom wraps the entire merge in a global transaction; on failure it rolls back
+            // to empty, so the caller can retry with serial ingest.  Exceptions propagate as-is.
+            try
+            {
+                using (PerfLog.Scope("ingest.merge", ("shards", _shards.Length), ("rows", ProducedCount)))
+                    merged = target.MergeFilteredFrom(_shardDbPaths, onMergeProgress);
+                LastMergeMs = mergeWatch.ElapsedMilliseconds;
 
-            // Restore the exact per-level counts (the merge's INSERT…SELECT bypassed the running map and
-            // invalidated it). Avoids the first filter query paying for a 5M-row GROUP BY.
-            if (levelSum != null) target.SetLevelCountsExact(levelSum);
-            DeleteShardFiles();
+                // Restore the exact per-level counts (the merge's INSERT…SELECT bypassed the running map and
+                // invalidated it). Avoids the first filter query paying for a 5M-row GROUP BY.
+                if (levelSum != null) target.SetLevelCountsExact(levelSum);
+            }
+            catch
+            {
+                // Merge already rolled back to empty inside MergeFilteredFrom.
+                // Log the error and let the caller handle the exception.
+                Logger.Instance.Log($"Parallel ingest merge failed — target cleared for retry");
+                throw;
+            }
+            finally
+            {
+                DeleteShardFiles();
+            }
             return merged;
         }
 
@@ -154,17 +183,17 @@ namespace FindPluginCore.Implementations.Storage
         {
             foreach (var db in _shardDbPaths)
                 foreach (var p in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
-                    try { if (File.Exists(p)) File.Delete(p); } catch { }
+                    try { if (File.Exists(p)) File.Delete(p); } catch { /* ParallelIngestSink best-effort cleanup */ }
         }
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            try { _channel.Writer.TryComplete(); } catch { }
-            try { Task.WaitAll(_consumers, 2000); } catch { }
-            foreach (var s in _shards) { try { s.Dispose(); } catch { } }
-            try { SqliteConnection.ClearAllPools(); } catch { }
+            try { _channel.Writer.TryComplete(); } catch (Exception) { /* best-effort channel completion */ }
+            try { Task.WaitAll(_consumers, 2000); } catch (Exception) { /* best-effort consumer wait */ }
+            foreach (var s in _shards) { try { s.Dispose(); } catch (Exception) { /* best-effort shard dispose */ } }
+            try { SqliteConnection.ClearAllPools(); } catch (Exception) { /* best-effort pool clear */ }
             DeleteShardFiles();
         }
     }

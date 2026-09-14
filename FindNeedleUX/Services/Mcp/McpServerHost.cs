@@ -73,7 +73,7 @@ public static class McpServerHost
 
     private static void StopLocked()
     {
-        try { _server?.Stop(); } catch { }
+        try { _server?.Stop(); } catch { /* best-effort server stop */ }
         _server = null;
         _runningPort = 0;
         McpViewerBridge.Instance.ServerPort = 0;
@@ -83,6 +83,6 @@ public static class McpServerHost
     private static void SetStatus(string s)
     {
         Status = s;
-        try { StatusChanged?.Invoke(); } catch { }
+        try { StatusChanged?.Invoke(); } catch { /* best-effort status event */ }
     }
 }

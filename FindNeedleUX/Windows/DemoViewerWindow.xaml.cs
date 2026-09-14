@@ -15,7 +15,7 @@ namespace FindNeedleUX.Windows
                     var uri = new System.Uri("file:///" + htmlFilePath.Replace('\\', '/'));
                     DemoWebView.Source = uri;
                 }
-                catch { }
+                catch { /* best-effort demo viewer load */ }
             }
         }
     }

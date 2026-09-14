@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -83,7 +83,8 @@ public class FolderLocationResilienceTests
 
         var loc = MakeLocation();
         try { loc.LoadInMemory(CancellationToken.None); }
-        catch (AggregateException) { /* cancellation propagates out of the file tasks — that is fine */ }
+        catch (Exception ex) when (ex is OperationCanceledException || ex is AggregateException)
+        { /* cancellation propagates out of the file tasks (wrapped or not, depending on how they are awaited) — that is fine */ }
 
         Assert.AreEqual(0, loc.SkippedFiles.Count,
             "a cancellation is a user action, not a file fault");

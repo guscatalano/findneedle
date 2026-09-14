@@ -60,7 +60,7 @@ public static class AttachmentFolderProcessor
                 catch (Exception ex)
                 {
                     Logger.Instance.Log($"AttachmentFolderProcessor: failed to expand {zip}: {ex.Message}");
-                    try { File.Delete(zip); } catch { } // avoid re-trying a bad zip forever
+                    try { File.Delete(zip); } catch (Exception) { /* best-effort cleanup — avoid re-trying a bad zip forever */ }
                 }
             }
         }

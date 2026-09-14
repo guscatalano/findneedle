@@ -42,7 +42,7 @@ public sealed partial class DiagramToolsPage : Page
             {
                 InstallProgressText.Text = "Could not find timeline-demo.html in expected locations.";
                 var notFoundDlg = new ContentDialog() { Title = "Demo file not found", Content = "Could not locate timeline-demo.html. Check that WebContent/timeline-demo.html is present.", CloseButtonText = "OK" };
-                DispatcherQueue.TryEnqueue(() => { try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { } _ = notFoundDlg.ShowAsync(); });
+                DispatcherQueue.TryEnqueue(() => { try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { /* best-effort XAML root assignment */ } _ = notFoundDlg.ShowAsync(); });
                 return;
             }
 
@@ -70,7 +70,7 @@ public sealed partial class DiagramToolsPage : Page
             {
                 InstallProgressText.Text = "Could not find timeline-demo.html in expected locations.";
                 var notFoundDlg = new ContentDialog() { Title = "Demo file not found", Content = "Could not locate timeline-demo.html. Check that WebContent/timeline-demo.html is present.", CloseButtonText = "OK" };
-                DispatcherQueue.TryEnqueue(() => { try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { } _ = notFoundDlg.ShowAsync(); });
+                DispatcherQueue.TryEnqueue(() => { try { notFoundDlg.XamlRoot = this.XamlRoot; } catch { /* best-effort XAML root assignment */ } _ = notFoundDlg.ShowAsync(); });
                 return;
             }
             var demoWindow = new FindNeedleUX.Windows.DemoViewerWindow(fullPath);
@@ -113,7 +113,7 @@ public sealed partial class DiagramToolsPage : Page
                 var full = Path.GetFullPath(c);
                 if (File.Exists(full)) return full;
             }
-            catch { }
+            catch { /* best-effort operation */ }
         }
 
         // If packaged, try package installed location (UWP/WinUI)
@@ -127,7 +127,7 @@ public sealed partial class DiagramToolsPage : Page
                 if (File.Exists(p)) return p;
             }
         }
-        catch { }
+        catch { /* best-effort operation */ }
 
         return null;
     }

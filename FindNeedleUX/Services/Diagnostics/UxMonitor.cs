@@ -141,7 +141,7 @@ public static class UxMonitor
             {
                 _recent.Enqueue(rec);
                 while (_recent.Count > RecentCap) _recent.Dequeue();
-                try { File.AppendAllText(_path, JsonSerializer.Serialize(rec) + "\n"); } catch { }
+                try { File.AppendAllText(_path, JsonSerializer.Serialize(rec) + "\n"); } catch { /* best-effort logging */ }
             }
 
             // Brief line in the unified perf timeline too (no stack — that's in ux-slow.log).
@@ -158,7 +158,7 @@ public static class UxMonitor
             var dir = Path.GetDirectoryName(FindPluginCore.Diagnostics.PerfLog.FilePath);
             if (!string.IsNullOrEmpty(dir)) { Directory.CreateDirectory(dir); return Path.Combine(dir, "ux-slow.log"); }
         }
-        catch { }
+        catch { /* best-effort operation */ }
         return Path.Combine(Path.GetTempPath(), "findneedle-ux-slow.log");
     }
 

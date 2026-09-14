@@ -9,6 +9,7 @@ namespace findneedle;
 
 
 
+[Obsolete("This is the deprecated search implementation replaced by NuSearchQuery. Marked obsolete to prevent accidental use; update callers to use NuSearchQuery instead.")]
 public class SearchQuery : ISearchQuery
 {
 

@@ -78,7 +78,7 @@ public class RuleEvaluationEngine
     }
 
     // Helper: get string property from dynamic or JsonElement
-    private string? GetStringProp(dynamic obj, string name)
+    private string? GetStringProp(object obj, string name)
     {
         try
         {
@@ -162,13 +162,12 @@ public class RuleEvaluationEngine
                 if (val is bool bb) return bb;
                 if (val is string ss && bool.TryParse(ss, out var pb2)) return pb2;
             }
-            catch { }
-            return null;
+            catch (Exception) { /* silently ignore */ }return null;
         }
         catch { return null; }
     }
 
-    private bool HasProp(dynamic obj, string name)
+    private bool HasProp(object obj, string name)
     {
         try
         {
@@ -193,7 +192,7 @@ public class RuleEvaluationEngine
         catch { return false; }
     }
 
-    private dynamic? GetObjectProp(dynamic obj, string name)
+    private object? GetObjectProp(object obj, string name)
     {
         try
         {
@@ -213,9 +212,7 @@ public class RuleEvaluationEngine
             }
             else
             {
-                try { return ((object)obj).GetType().GetProperty(name)?.GetValue((object)obj); } catch { }
-                try { return ((object)obj).GetType().GetProperty(char.ToUpperInvariant(name[0]) + name.Substring(1))?.GetValue((object)obj); } catch { }
-                return null;
+                try { return ((object)obj).GetType().GetProperty(name)?.GetValue((object)obj); } catch (Exception) { /* silently ignore */ }try { return ((object)obj).GetType().GetProperty(char.ToUpperInvariant(name[0]) + name.Substring(1))?.GetValue((object)obj); } catch (Exception) { /* silently ignore */ }return null;
             }
         }
         catch { return null; }
@@ -303,8 +300,7 @@ public class RuleEvaluationEngine
         }
         catch (Exception ex)
         {
-            try { FindNeedlePluginLib.Logger.Instance.Log($"Error evaluating rules: {ex}"); } catch { }
-        }
+            try { FindNeedlePluginLib.Logger.Instance.Log($"Error evaluating rules: {ex}"); } catch (Exception) { /* silently ignore */ }}
 
         // Tags are stored only in the EvaluationResult; outputs may query evalResult.Tags when processing per-result
         // (No global TagStore is available in this build.)
@@ -393,7 +389,7 @@ public class RuleEvaluationEngine
     /// <summary>
     /// Evaluates datetime range constraints.
     /// </summary>
-    private bool EvaluateDateRange(ISearchResult result, dynamic dateRange)
+    private bool EvaluateDateRange(ISearchResult result, object dateRange)
     {
         try
         {
@@ -535,8 +531,7 @@ public class RuleEvaluationEngine
         }
         catch (Exception ex)
         {
-            try { FindNeedlePluginLib.Logger.Instance.Log($"Error executing actions: {ex}"); } catch { }
-        }
+            try { FindNeedlePluginLib.Logger.Instance.Log($"Error executing actions: {ex}"); } catch (Exception) { /* silently ignore */ }}
     }
 
     /// <summary>

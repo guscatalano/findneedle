@@ -40,10 +40,10 @@ namespace FindNeedleCoreUtils
             {
                 foreach (var f in Directory.EnumerateFiles(directory))
                 {
-                    try { bytes += new FileInfo(f).Length; n++; } catch { }
+                    try { bytes += new FileInfo(f).Length; n++; } catch { /* best-effort size calc */ }
                 }
             }
-            catch { }
+            catch { /* best-effort operation */ }
             return (n, bytes);
         }
 
@@ -100,7 +100,7 @@ namespace FindNeedleCoreUtils
                 var all = new List<FileInfo>();
                 foreach (var f in Directory.EnumerateFiles(directory))
                 {
-                    try { all.Add(new FileInfo(f)); } catch { }
+                    try { all.Add(new FileInfo(f)); } catch { /* best-effort operation */ }
                 }
 
                 // Orphan sweep: delete any sidecar/shard whose base .db no longer exists.
@@ -110,7 +110,7 @@ namespace FindNeedleCoreUtils
                     var b = BaseDbOf(f.FullName);
                     if (b != null && !present.Contains(b))
                     {
-                        try { long l = f.Length; f.Delete(); freed += l; all.Remove(f); } catch { }
+                        try { long l = f.Length; f.Delete(); freed += l; all.Remove(f); } catch { /* best-effort operation */ }
                     }
                 }
 
@@ -136,7 +136,7 @@ namespace FindNeedleCoreUtils
                     catch { continue; /* open / locked — skip, eligible next time */ }
                     // The .db is gone; delete its sidecars/shards too.
                     if (sidecars.TryGetValue(db.FullName, out var sc))
-                        foreach (var x in sc) { try { x.Delete(); } catch { } }
+                        foreach (var x in sc) { try { x.Delete(); } catch { /* best-effort operation */ } }
                     freed += entry; total -= entry; count--;
                 }
             }

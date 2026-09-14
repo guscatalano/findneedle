@@ -328,8 +328,10 @@ public sealed partial class MainWindow : Window
     /// same navigation/commands the menus use, so the welcome page can be customized freely.</summary>
     public async void RunQuickAction(string id)
     {
-        switch (id)
+        try
         {
+            switch (id)
+            {
             case "open_file":         QuickFileOpen(); break;
             case "open_folder":       QuickFolderOpen(); break;
             case "open_rules":        OpenWithRules(); break;
@@ -347,6 +349,11 @@ public sealed partial class MainWindow : Window
             case "diagram":           contentFrame.Navigate(typeof(FindNeedleUX.Pages.DiagramToolsPage)); break;
             case "inspect_etl":       await InspectionService.InspectEtlAsync(this, (show, text) => ShowSpinner(show, text)); break;
             default: Logger.Instance.Log($"RunQuickAction: unknown id {id}"); break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"RunQuickAction error: {ex.Message}");
         }
     }
 
@@ -588,10 +595,10 @@ public sealed partial class MainWindow : Window
         // [plugin-load gate] The CLI auto-run fires at launch, before the background warm finishes, and its
         // search prep loads plugins synchronously on the UI thread. Await the load here (spinner shows during
         // the load below) so the auto-search doesn't freeze the window.
-        await MiddleLayerService.PluginsReady;
-
         try
         {
+            await MiddleLayerService.PluginsReady;
+            
             Logger.Instance.Log($"CLI load: {path}" + (rules != null ? $" (rules: {rules})" : "")
                 + (storage != null ? $" (storage: {storage})" : "") + (estimate != null ? $" (estimate: {estimate})" : ""));
 
@@ -782,7 +789,7 @@ public sealed partial class MainWindow : Window
         if (MiddleLayerService.GetLoadedCsv() != null)
         {
             Color? accent = null;
-            try { accent = (Color)Application.Current.Resources["SystemAccentColor"]; } catch { }
+            try { accent = (Color)Application.Current.Resources["SystemAccentColor"]; } catch { /* best-effort accent color */ }
             var remapBtn = MakeStatusSegment(Symbol.Edit, "CSV", "Remap columns…",
                 "Edit how this CSV's columns map to Time / Level / Message / …", accent,
                 () => _ = ShowCsvMappingDialogAsync());
@@ -839,7 +846,7 @@ public sealed partial class MainWindow : Window
             case "lastrun":
             {
                 string lastRun; bool hasResults = false; int liveCount = -1;
-                try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { }
+                try { if (MiddleLayerService.GetSearchStorage() != null) liveCount = MiddleLayerService.GetFilteredRowCount(); } catch { /* best-effort live count */ }
                 if (liveCount >= 0)
                 {
                     // Viewing a Recent search (OpenCachedResult) is "from cache" too - no run happened at all.
@@ -935,8 +942,8 @@ public sealed partial class MainWindow : Window
     /// <summary>Cancel the running search (streaming or progress) — status-bar "Stop".</summary>
     public void StopSearch()
     {
-        try { MiddleLayerService.CurrentStreamingSearch?.Stop(); } catch { }
-        try { _quickActionCts?.Cancel(); } catch { }
+        try { MiddleLayerService.CurrentStreamingSearch?.Stop(); } catch { /* best-effort search stop */ }
+        try { _quickActionCts?.Cancel(); } catch { /* best-effort cancellation */ }
     }
 
     /// <summary>A flat nav chip (icon + label, no count) for the status bar.</summary>
@@ -947,7 +954,7 @@ public sealed partial class MainWindow : Window
         row.Children.Add(new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
         var btn = new Button { Content = row, Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 0 };
         ToolTipService.SetToolTip(btn, tooltip);
-        btn.Click += (_, _) => { try { onClick(); } catch { } };
+        btn.Click += (_, _) => { try { onClick(); } catch { /* best-effort button click handling */ } };
         return btn;
     }
 
@@ -1022,7 +1029,7 @@ public sealed partial class MainWindow : Window
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, label); // the content is a panel, so the button has no name of its own
         ToolTipService.SetToolTip(btn, tooltip);
-        btn.Click += (_, _) => { try { onClick(); } catch { } };
+        btn.Click += (_, _) => { try { onClick(); } catch { /* best-effort button click handling */ } };
         return btn;
     }
 
@@ -1030,12 +1037,19 @@ public sealed partial class MainWindow : Window
     /// "Run" action.</summary>
     public async void RunAndViewResults()
     {
-        if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
+        try
         {
-            contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
-            return;
+            if ((MiddleLayerService.Locations?.Count ?? 0) == 0)
+            {
+                contentFrame.Navigate(typeof(FindNeedleUX.Pages.SearchLocationsPage));
+                return;
+            }
+            await OpenWithOptionalStreamingAsync("Running search…");
         }
-        await OpenWithOptionalStreamingAsync("Running search…");
+        catch (Exception ex)
+        {
+            Logger.Instance.Log($"RunAndViewResults error: {ex.Message}");
+        }
     }
 
     /// <summary>A flat, clickable status-bar segment: icon + "Label: value", with a tooltip and an
@@ -1058,7 +1072,7 @@ public sealed partial class MainWindow : Window
             MinHeight = 0,
         };
         ToolTipService.SetToolTip(btn, tooltip);
-        btn.Click += (_, _) => { try { onClick(); } catch { } };
+        btn.Click += (_, _) => { try { onClick(); } catch { /* best-effort button click handling */ } };
         return btn;
     }
 

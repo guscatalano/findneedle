@@ -132,7 +132,14 @@ public class NuSearchQuery : ISearchQuery
     }
     private SearchStepNotificationSink _stepnotifysink;
 
-    public List<ISearchResult> CurrentResultList => _currentResultList;
+    public List<ISearchResult> CurrentResultList
+    {
+        get
+        {
+            var list = Volatile.Read(ref _currentResultList);
+            return list == null ? null : new List<ISearchResult>(list);
+        }
+    }
 
     public string Name
     {
@@ -143,7 +150,7 @@ public class NuSearchQuery : ISearchQuery
         }
     }
 
-    private List<ISearchResult> _currentResultList;
+    private volatile List<ISearchResult> _currentResultList;
 
     private ISearchStorage? _resultStorage; // Use ISearchStorage instead of InMemoryStorage
 
@@ -180,7 +187,7 @@ public class NuSearchQuery : ISearchQuery
 
     // The enrichment sections to apply in-scan (resolved once per Step 2 from LoadedRules when
     // EnrichmentEnabled). Null/empty ⇒ EnrichRow is a no-op.
-    private List<dynamic>? _enrichmentSections;
+    private List<object>? _enrichmentSections;
     // Accumulated enrichment cost for the current location (logged at location.end for visibility).
     private readonly System.Diagnostics.Stopwatch _enrichWatch = new();
     private int _enrichedRowCount;
@@ -720,94 +727,11 @@ public class NuSearchQuery : ISearchQuery
             return _filteredResults;
         }
 
-        // If a caller (e.g. the streaming entry point) already prepared storage on the UI thread
-        // we reuse that instance — otherwise create it lazily here, preserving the legacy flow.
-        _resultStorage ??= CreateStorage(cancellationToken);
+        // ========== SETUP ==========
+        var (ingestSink, streamFilteredDuringScan, scanBatchSize, storageLabel, total, useSync) = SetupScanState(cancellationToken);
+        int count = 1;
 
-        // We're doing a fresh scan (a cache hit would have returned above via _skipScan). The
-        // storage constructor no longer wipes on open — it preserves any on-disk cache so the
-        // cache-reuse fast path can validate it — so guarantee a clean slate here before we
-        // start writing. Without this, a stale cache file (CacheReuseMode.Never, a multi-location
-        // search, or a cache miss) could surface duplicated rows. Harmless no-op when already
-        // empty (fresh InMemory, or a SQLite miss that EvaluateCacheReuse already cleared).
-        _resultStorage.ClearTables();
-
-        var storageLabel = ShortStorageLabel(_resultStorage);
-        var count = 1;
-        var total = _locations.Count;
-        var pluginManager = PluginManager.GetSingleton();
-        var useSync = pluginManager.config?.UseSynchronousSearch ?? false;
-
-        // ----- Streaming-to-disk fast path (constant memory) -----
-        // For the "just view a huge log" case — no filters, no rules/processors/outputs (so no
-        // in-RAM list is needed), SQLite storage, async scan — we can write each batch to the
-        // filtered store as it arrives and never retain it. Without this we'd accumulate the entire
-        // result set in `rawResults` just to hand it to one post-scan AddFilteredBatch, holding every
-        // row alive (a 5M-row .etl peaked ~2.9 GB purely on that). synchronous=OFF + journal=MEMORY
-        // make per-batch transactions cheap, so streaming costs the same total insert work but keeps
-        // peak RAM to ~one batch. Any filters/rules/processors/outputs, sync scan, or non-SQLite
-        // storage fall back to the accumulate-then-store path below.
-        bool noFilters = _filters == null || _filters.Count == 0;
-        bool willMaterializeList = NeedsResultList();
-        bool streamFilteredDuringScan =
-            !useSync && noFilters && !willMaterializeList && _resultStorage is SqliteStorage;
-        if (streamFilteredDuringScan)
-            Logger.Instance.Log("Step2: streaming filtered rows straight to SQLite (constant memory, no rawResults retention)");
-
-        // Resolve enrichment "extract" sections once. Applied per-row in EnrichBatch before the storage
-        // insert (both the streaming and accumulate paths), so the extracted fields land in real columns.
-        // Off/empty ⇒ EnrichBatch is a no-op and the scan path is unchanged. Doesn't force the list and
-        // doesn't break the streaming fast path (it runs inside the scan).
-        _enrichmentSections = (EnrichmentEnabled && LoadedRules != null)
-            ? _ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment")
-            : null;
-        bool enrichActive = _enrichmentSections != null && _enrichmentSections.Count > 0;
-        // Collect per-rule match/time stats during the scan so the UI can show which enrichment rule
-        // costs what (and so the Active rules page stops showing "0 matched" for in-scan enrichment).
-        _ruleEngine.RuleStats.Clear();
-        _ruleEngine.CollectRuleStats = enrichActive;
-        if (enrichActive)
-            Logger.Instance.Log($"Step2: enrichment ON ({_enrichmentSections.Count} section(s)) — extracting fields per-row");
-
-        // ----- Pre-decode scope (triage) -----
-        // A loaded `scope` rule filters the load at decode time (before the wrap). Resolve it once and set
-        // the ambient DecodeScope the format decoders read; cleared after the scan loop below. Set fresh each
-        // Step2 so a leaked scope from a prior/failed search can't bleed in. See docs/scope-rule-design.md.
-        FindNeedlePluginLib.DecodeScope.Current = ResolveDecodeScope();
-
-        // ----- Parallel fan-out ingest (large streaming loads) -----
-        // One thread can't keep the disk busy while it also decodes/wraps events, so when the streaming
-        // path is active for a large log we fan the per-shard SQLite inserts out across N writer threads,
-        // then merge the shards into _resultStorage. Each shard row carries its global scan-order Id, so
-        // the merged DB's default ORDER BY Id ASC still shows events in scan order. Gated by the toggle
-        // (default on) and a row-estimate floor; off ⇒ the untouched serial insert below (and the viewer
-        // can fill in live, which the fan-out can't — rows are queryable only after the merge).
-        ParallelIngestSink ingestSink = null;
-        if (streamFilteredDuringScan && SqliteStorage.ParallelIngestEnabled)
-        {
-            long estTotal = 0;
-            foreach (var loc in _locations)
-            {
-                if (cancellationToken.IsCancellationRequested) break;
-                try
-                {
-                    var pe = loc.GetSearchPerformanceEstimate(cancellationToken);
-                    if (pe.recordCount.HasValue && pe.recordCount.Value > 0) estTotal += pe.recordCount.Value;
-                }
-                catch { /* unknown estimate — leave at 0 (stays serial below the floor) */ }
-            }
-            if (estTotal >= SqliteStorage.ParallelIngestMinRows)
-            {
-                ingestSink = new ParallelIngestSink(SqliteStorage.ParallelIngestShardCount(), cancellationToken);
-                Logger.Instance.Log($"Step2: parallel fan-out ingest ON — {ingestSink.ShardCount} shards, ~{estTotal:N0} est rows");
-                PerfLog.Log("ingest.parallel.begin", ("shards", ingestSink.ShardCount), ("est_rows", estTotal));
-            }
-        }
-        // Bigger scan batches on the fan-out path: each shard insert is one transaction, so 1k batches mean
-        // ~5k tiny transactions on a 5M log; 8k batches cut that ~8× (the single-writer serial path keeps
-        // its tuned 1k default). This is the main lever closing the gap to the prototype's overlap.
-        int scanBatchSize = ingestSink != null ? 8192 : 1000;
-
+        // ========== SCAN LOOP ==========
         FlowProgress.Begin(FlowPhase.ReadParse);
         foreach (var loc in _locations)
         {
@@ -939,7 +863,7 @@ public class NuSearchQuery : ISearchQuery
                                 estCapture.HasValue && estCapture.Value > 0
                                     ? Math.Clamp((int)(n * 100L / estCapture.Value), 0, 100) : (int?)null);
                         }
-                    }, cancellationToken, scanBatchSize).Wait();
+                    }, cancellationToken, scanBatchSize);
                 }
                 catch (NotImplementedException)
                 {
@@ -1059,118 +983,164 @@ public class NuSearchQuery : ISearchQuery
             count++;
         }
 
-        // Decode is done — drop the ambient scope so it can't affect anything downstream or a later search.
+        // ========== POST-SCAN CLEANUP ==========
+        PostScanCleanup(ingestSink);
+
+        // ========== MATERIALIZE ==========
+        List<ISearchResult> allResults = MaterializeResults(cancellationToken);
+
+        // ========== POST-PROCESSING ==========
+        _filteredResults = allResults;
+        _currentResultList = allResults;
+
+        PostProcessing(cancellationToken);
+
+        TryStampCacheCompletion(cancellationToken);
+
+        Logger.Instance.Log($"Step2_GetFilteredResults (with cancellation) complete: {_filteredResults.Count} total filtered results");
+        return _filteredResults;
+    }
+
+
+    /// <summary>
+    /// Sets up storage, scan configuration, streaming mode, enrichment, decode scope, and parallel ingest.
+    /// Returns the computed state needed by the scan loop and post-processing phases.
+    /// </summary>
+    private (ParallelIngestSink? ingestSink, bool streamFilteredDuringScan, int scanBatchSize, string storageLabel, int total, bool useSync) SetupScanState(CancellationToken cancellationToken)
+    {
+        _resultStorage ??= CreateStorage(cancellationToken);
+        _resultStorage.ClearTables();
+
+        var storageLabel = ShortStorageLabel(_resultStorage);
+        var total = _locations.Count;
+        var pluginManager = PluginManager.GetSingleton();
+        var useSync = pluginManager.config?.UseSynchronousSearch ?? false;
+
+        bool noFilters = _filters == null || _filters.Count == 0;
+        bool willMaterializeList = NeedsResultList();
+        bool streamFilteredDuringScan =
+            !useSync && noFilters && !willMaterializeList && _resultStorage is SqliteStorage;
+        if (streamFilteredDuringScan)
+            Logger.Instance.Log("Step2: streaming filtered rows straight to SQLite (constant memory, no rawResults retention)");
+
+        _enrichmentSections = (EnrichmentEnabled && LoadedRules != null)
+            ? _ruleLoader.GetSectionsByPurpose(LoadedRules, "enrichment")
+            : null;
+        bool enrichActive = _enrichmentSections != null && _enrichmentSections.Count > 0;
+        _ruleEngine.RuleStats.Clear();
+        _ruleEngine.CollectRuleStats = enrichActive;
+        if (enrichActive)
+            Logger.Instance.Log($"Step2: enrichment ON ({_enrichmentSections.Count} section(s)) — extracting fields per-row");
+
+        FindNeedlePluginLib.DecodeScope.Current = ResolveDecodeScope();
+
+        ParallelIngestSink ingestSink = null;
+        if (streamFilteredDuringScan && SqliteStorage.ParallelIngestEnabled)
+        {
+            long estTotal = 0;
+            foreach (var loc in _locations)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                try
+                {
+                    var pe = loc.GetSearchPerformanceEstimate(cancellationToken);
+                    if (pe.recordCount.HasValue && pe.recordCount.Value > 0) estTotal += pe.recordCount.Value;
+                }
+                catch { /* unknown estimate */ }
+            }
+            if (estTotal >= SqliteStorage.ParallelIngestMinRows)
+            {
+                ingestSink = new ParallelIngestSink(SqliteStorage.ParallelIngestShardCount(), cancellationToken);
+                Logger.Instance.Log($"Step2: parallel fan-out ingest ON — {ingestSink.ShardCount} shards, ~{estTotal:N0} est rows");
+                PerfLog.Log("ingest.parallel.begin", ("shards", ingestSink.ShardCount), ("est_rows", estTotal));
+            }
+        }
+
+        int scanBatchSize = ingestSink != null ? 8192 : 1000;
+        return (ingestSink, streamFilteredDuringScan, scanBatchSize, storageLabel, total, useSync);
+    }
+
+    private void PostScanCleanup(ParallelIngestSink? ingestSink)
+    {
         FindNeedlePluginLib.DecodeScope.Current = null;
 
-        // ----- Merge the fan-out shards into _resultStorage -----
-        // The scan wrote rows into N shard DBs; fold them into the real store (INSERT…SELECT, preserving
-        // the global scan-order Id) so everything downstream — consolidate, FTS, the viewer — runs on one
-        // DB exactly as the serial path produces. A shard-writer fault rethrows here; the toggle is the
-        // operator's recovery (disable parallel ingest and re-run on the serial path).
         if (ingestSink != null)
         {
             using (ingestSink)
             {
                 long produced = ingestSink.ProducedCount;
                 int shards = ingestSink.ShardCount;
-                // Report climbing progress as each shard merges (the copy runs tens of seconds on a large
-                // log). Without this the status froze at 100% "merging…" for the whole merge, which read as
-                // a hang. Map shard k/N to 90–99% so the bar keeps moving through the merge phase.
                 FlowProgress.Begin(FlowPhase.Consolidate);
                 long merged = ingestSink.CompleteAndMergeInto((SqliteStorage)_resultStorage, (done, n) =>
                 {
                     int pct = n > 0 ? 90 + (int)(9.0 * done / n) : 90;
-                    _stepnotifysink.progressSink.NotifyProgress(pct, $"merging logs · {done}/{n} · {produced:N0} rows · {storageLabel}");
+                    _stepnotifysink.progressSink.NotifyProgress(pct, $"merging logs · {done}/{n} · {produced:N0} rows");
                     FlowProgress.Detail($"merging {produced:N0} rows ({done}/{n})", pct, estimate: false);
                 });
-                Logger.Instance.Log($"Step2: parallel ingest merged {merged:N0} rows from {shards} shards into {storageLabel}");
+                Logger.Instance.Log($"Step2: parallel ingest merged {merged:N0} rows from {shards} shards");
             }
-            ingestSink = null;
         }
 
-        // Per-rule enrichment cost (this scan) → perf log, so it's queryable via get_diagnostics.
         if (_ruleEngine.CollectRuleStats)
         {
             foreach (var s in EnrichmentRuleStats)
                 PerfLog.Log("enrich.rule", ("name", s.Name), ("matches", s.Matches), ("ms", (long)s.Ms));
         }
+    }
 
-        // ----- Decide whether to materialize the full result list in RAM -----
-        // The list is only meaningful if something downstream walks it. Step3 walks it iff
-        // processors are configured or rule-enrichment is loaded; Step4 walks it iff outputs
-        // are configured or rule-output is loaded; the post-search legacy in-memory client-side
-        // web viewer reads it via MiddleLayerService.GetLogLines (now lazy from storage). For
-        // Quick Open on a huge log — no rules, no processors, no outputs — this is 36 seconds
-        // of pure allocation. Skip it; downstream consumers fall back to the storage-backed path.
+    private List<ISearchResult> MaterializeResults(CancellationToken cancellationToken)
+    {
         int known = SafeFilteredCount();
         bool needsList = NeedsResultList();
-
-        List<ISearchResult> allResults;
 
         if (!needsList)
         {
             Logger.Instance.Log($"Step2: skipping consolidate ({known:N0} rows stay in storage, no downstream consumer)");
             PerfLog.Log("consolidate.skipped", ("known_rows", known), ("reason", "no_consumers"));
-            // Return an empty list — _currentResultList becomes empty, Step3/Step4 iterate over
-            // nothing (they're no-ops anyway), and consumers read from storage instead.
-            allResults = new List<ISearchResult>();
+            return new List<ISearchResult>();
         }
-        else
+
+        var allResults = new List<ISearchResult>(Math.Max(known, 1024));
+        int gathered = 0;
+        int lastReport = 0;
+        string storageLabel = ShortStorageLabel(_resultStorage);
+        _stepnotifysink.progressSink.NotifyProgress(100, $"consolidating {known:N0} rows from {storageLabel}...");
+        FlowProgress.Begin(FlowPhase.Consolidate);
+        using (PerfLog.Scope("consolidate", ("known_rows", known), ("storage", storageLabel)))
         {
-            // Pre-size the list to the known row count so internal array doubling doesn't fire
-            // ~20 times on a 500k consolidation.
-            allResults = new List<ISearchResult>(Math.Max(known, 1024));
-            int gathered = 0;
-            int lastReport = 0;
-            _stepnotifysink.progressSink.NotifyProgress(
-                100, $"consolidating {known:N0} rows from {storageLabel}…");
-
-            FlowProgress.Begin(FlowPhase.Consolidate);
-            using (PerfLog.Scope("consolidate", ("known_rows", known), ("storage", storageLabel)))
+            _resultStorage.GetFilteredResultsInBatches(batch =>
             {
-                _resultStorage.GetFilteredResultsInBatches(batch =>
+                allResults.AddRange(batch);
+                gathered += batch.Count;
+                if (gathered - lastReport >= 10_000)
                 {
-                    allResults.AddRange(batch);
-                    gathered += batch.Count;
-                    // Throttle status to every 10k rows; spamming the dispatcher with 500
-                    // updates does more harm than good.
-                    if (gathered - lastReport >= 10_000)
-                    {
-                        lastReport = gathered;
-                        _stepnotifysink.progressSink.NotifyProgress(
-                            100, $"consolidating · {gathered:N0} / {known:N0} rows · {storageLabel}");
-                        FlowProgress.Detail($"{gathered:N0} / {known:N0} rows · {storageLabel}",
-                            known > 0 ? Math.Clamp((int)(gathered * 100L / known), 0, 100) : (int?)null);
-                    }
-                }, 1000, cancellationToken);
-            }
-
-            // Apply rule-based filtering if rules are loaded
-            if (LoadedRules != null)
-            {
-                _stepnotifysink.progressSink.NotifyProgress(100, $"applying rule filters to {allResults.Count:N0} rows…");
-                Logger.Instance.Log("Applying rule-based filtering...");
-                using (PerfLog.Scope("rule_filter", ("in_rows", allResults.Count)))
-                    allResults = ApplyRuleFiltering(allResults);
-                Logger.Instance.Log($"After rule filtering: {allResults.Count} results");
-            }
+                    lastReport = gathered;
+                    _stepnotifysink.progressSink.NotifyProgress(
+                        100, $"consolidating · {gathered:N0} / {known:N0} rows · {storageLabel}");
+                    FlowProgress.Detail($"{gathered:N0} / {known:N0} rows · {storageLabel}",
+                        known > 0 ? Math.Clamp((int)(gathered * 100L / known), 0, 100) : (int?)null);
+                }
+            }, 1000, cancellationToken);
         }
 
-        _filteredResults = allResults;
-        // The UI path calls Step2 directly and doesn't assign the return to _currentResultList (only
-        // RunThrough does), so set it here — Step3 enrichment / Step4 rule outputs (UML) read it.
-        _currentResultList = allResults;
+        if (LoadedRules != null)
+        {
+            _stepnotifysink.progressSink.NotifyProgress(100, $"applying rule filters to {allResults.Count:N0} rows...");
+            Logger.Instance.Log("Applying rule-based filtering...");
+            using (PerfLog.Scope("rule_filter", ("in_rows", allResults.Count)))
+                allResults = ApplyRuleFiltering(allResults);
+            Logger.Instance.Log($"After rule filtering: {allResults.Count} results");
+        }
 
-        // ----- Settle HybridStorage to disk on the search thread, not the UI thread -----
-        // The viewer (any viewer) opens immediately after Step2; if Hybrid still has rows in RAM
-        // when the viewer asks PagedLogSourceFactory for a source, the resulting SettleToDisk
-        // call blocks the UI for tens of seconds. Doing it here means the search task pays the
-        // cost (where progress is visible) instead of the UI thread paying it.
+        return allResults;
+    }
+
+    private void PostProcessing(CancellationToken cancellationToken)
+    {
         if (_resultStorage is HybridStorage hybrid)
         {
             var rowsToMove = SafeFilteredCount();
-            _stepnotifysink.progressSink.NotifyProgress(
-                100, $"moving {rowsToMove:N0} results into the cache…");
+            _stepnotifysink.progressSink.NotifyProgress(100, $"moving {rowsToMove:N0} results into the cache...");
             try
             {
                 using (PerfLog.Scope("search.settle", ("storage", "hybrid"), ("rows", rowsToMove)))
@@ -1184,12 +1154,6 @@ public class NuSearchQuery : ISearchQuery
             }
         }
 
-        // ----- Build the full-text search index in one bulk pass -----
-        // All filtered rows are now in storage (and, for Hybrid, settled to disk above). Build the
-        // FTS5 trigram index once here instead of maintaining it per-row during ingest. Skipped when
-        // DeferIndexBuild is set (UI lazy/background modes build it later via BuildSearchIndexNow so
-        // the viewer can open before the index finishes); until it's built, substring search falls
-        // back to LIKE (handled in storage).
         if (!cancellationToken.IsCancellationRequested && !DeferIndexBuild)
         {
             try
@@ -1211,12 +1175,8 @@ public class NuSearchQuery : ISearchQuery
         {
             PerfLog.Log("search.build_index.deferred");
         }
-
-        TryStampCacheCompletion(cancellationToken);
-
-        Logger.Instance.Log($"Step2_GetFilteredResults (with cancellation) complete: {_filteredResults.Count} total filtered results");
-        return _filteredResults;
     }
+
 
     /// <summary>
     /// When set, Step2 does NOT build the FTS search index inline. The UI's lazy/background indexing
@@ -1422,9 +1382,7 @@ public class NuSearchQuery : ISearchQuery
         List<(int Start, int Length)>? strips = null;
         foreach (var section in _enrichmentSections!)
         {
-            RuleEvaluationEngine.EvaluationResult eval;
-            try { eval = _ruleEngine.EvaluateRules(r, section); }
-            catch { continue; }
+            RuleEvaluationEngine.EvaluationResult eval = _ruleEngine.EvaluateRules(r, section);
             if (eval.Fields.Count > 0)
             {
                 fields ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

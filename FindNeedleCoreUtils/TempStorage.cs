@@ -16,7 +16,7 @@ public class TempStorage : IDisposable
         // CLI return). Without this, every clean run still leaked its session dir until the next
         // startup's CleanupStaleSessions sweep. Killed/crashed runs don't fire ProcessExit — the
         // startup sweep is the backstop for those.
-        try { AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { gTemp.Dispose(); } catch { } }; }
+        try { AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { gTemp.Dispose(); } catch { /* best-effort dispose on exit */ } }; }
         catch { /* never block construction on the hook */ }
     }
 
@@ -41,13 +41,13 @@ public class TempStorage : IDisposable
     }
 
     public static void DeleteSomeTempPath(string randomDir)
-    {
-        while (Directory.Exists(randomDir))
         {
-            Directory.Delete(randomDir, true);
-            Thread.Sleep(1000);
+            while (Directory.Exists(randomDir))
+            {
+                Directory.Delete(randomDir, true);
+                System.Threading.Thread.Sleep(1000); // Brief spin — acceptable for temp directory cleanup loop
+            }
         }
-    }
 
     /// <summary>
     /// Delete leaked extraction temp dirs from earlier sessions. Each run creates a
@@ -74,14 +74,14 @@ public class TempStorage : IDisposable
                     if (Directory.GetLastWriteTimeUtc(dir) > cutoff) continue; // possibly a live concurrent run
                     long size = 0;
                     foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
-                        try { size += new FileInfo(f).Length; } catch { }
+                        try { size += new FileInfo(f).Length; } catch { /* best-effort size calc */ }
                     Directory.Delete(dir, true);
                     freed += size;
                 }
                 catch { /* in use / racing another instance — skip */ }
             }
         }
-        catch { }
+        catch { /* best-effort operation */ }
         return freed;
     }
 

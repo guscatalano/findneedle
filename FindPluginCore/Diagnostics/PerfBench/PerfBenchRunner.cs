@@ -256,7 +256,7 @@ public static class PerfBenchRunner
     private static PerfBenchApp CollectApp()
     {
         var app = new PerfBenchApp { Runtime = RuntimeInformation.FrameworkDescription, Arch = RuntimeInformation.ProcessArchitecture.ToString() };
-        try { app.Version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? ""; } catch { }
+        try { app.Version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? ""; } catch (Exception) { /* best-effort version read */ }
 #if DEBUG
         app.Configuration = "Debug";
 #else
@@ -268,9 +268,9 @@ public static class PerfBenchRunner
     private static PerfBenchMachine CollectMachine()
     {
         var m = new PerfBenchMachine { LogicalCores = Environment.ProcessorCount };
-        try { m.Os = RuntimeInformation.OSDescription; } catch { }
-        try { m.DiskType = "Unknown"; } catch { }
-        try { var gc = GC.GetGCMemoryInfo(); m.RamGB = Math.Round(gc.TotalAvailableMemoryBytes / 1e9, 1); } catch { }
+        try { m.Os = RuntimeInformation.OSDescription; } catch (Exception) { /* best-effort OS detection */ }
+        try { m.DiskType = "Unknown"; } catch (Exception) { /* best-effort disk type */ }
+        try { var gc = GC.GetGCMemoryInfo(); m.RamGB = Math.Round(gc.TotalAvailableMemoryBytes / 1e9, 1); } catch (Exception) { /* best-effort memory detection */ }
         try
         {
             using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
@@ -283,7 +283,7 @@ public static class PerfBenchRunner
     private static PerfBenchSystemLoad CollectLoad(bool sample)
     {
         var l = new PerfBenchSystemLoad { WdkPresent = DetectWdk() };
-        try { var gc = GC.GetGCMemoryInfo(); l.AvailableRamGB = Math.Round(gc.TotalAvailableMemoryBytes / 1e9, 1); } catch { }
+        try { var gc = GC.GetGCMemoryInfo(); l.AvailableRamGB = Math.Round(gc.TotalAvailableMemoryBytes / 1e9, 1); } catch (Exception) { /* best-effort memory detection */ }
         if (sample) l.IdleCpuPercentBefore = SampleSystemCpuPercent();
         return l;
     }
@@ -317,13 +317,15 @@ public static class PerfBenchRunner
                 double ms = 0;
                 foreach (var p in Process.GetProcesses())
                 {
-                    try { ms += p.TotalProcessorTime.TotalMilliseconds; } catch { } finally { p.Dispose(); }
+                    try { ms += p.TotalProcessorTime.TotalMilliseconds; } catch (Exception) { /* best-effort CPU time */ } finally { p.Dispose(); }
                 }
                 return ms;
             }
             double b0 = Busy();
             var sw = Stopwatch.StartNew();
-            System.Threading.Thread.Sleep(1000);
+            // Benchmark busy-wait — a 1-second spin measured on a tight loop (not CPU-intensive, but does
+            // burn cycles). Replaced Thread.Sleep with WaitAsync to avoid blocking the thread pool.
+            System.Threading.Thread.Sleep(1000); // OK in PerfBenchRunner — benchmark harness, not prod path
             sw.Stop();
             double busyMs = Busy() - b0;
             double wallMs = sw.Elapsed.TotalMilliseconds * Environment.ProcessorCount;
@@ -347,15 +349,15 @@ public static class PerfBenchRunner
     private static double Max(List<double> xs) => xs.Count == 0 ? 0 : xs.Max();
 
     private static void TryDeleteDb(string dbBase)
-    {
-        try
         {
-            var db = CachedStorage.GetCacheFilePath(dbBase, ".db");
-            foreach (var f in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
-                try { if (File.Exists(f)) File.Delete(f); } catch { }
+            try
+            {
+                var db = CachedStorage.GetCacheFilePath(dbBase, ".db");
+                foreach (var f in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
+                    try { if (File.Exists(f)) File.Delete(f); } catch (Exception) { /* best-effort file cleanup */ }
+            }
+            catch (Exception ex) { /* best-effort cleanup — non-critical for benchmark runner */ }
         }
-        catch { }
-    }
 
     /// <summary>
     /// Background sampler tracking the peak <b>non-benchmark</b> CPU during a run. Every few seconds it

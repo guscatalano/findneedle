@@ -61,7 +61,7 @@ public sealed partial class WppSymbolResolutionPage : Page
     private void RenderNeeds()
     {
         string missing = null;
-        try { missing = MiddleLayerService.GetDecodeWarning()?.missingTmfs; } catch { }
+        try { missing = MiddleLayerService.GetDecodeWarning()?.missingTmfs; } catch { /* best-effort decode warning read */ }
         if (!string.IsNullOrEmpty(missing))
         {
             var guids = missing.Split(new[] { ',', ';', ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries);

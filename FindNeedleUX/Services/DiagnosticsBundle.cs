@@ -100,14 +100,14 @@ public static class DiagnosticsBundle
         sb.AppendLine($"OS:            {Environment.OSVersion}");
         sb.AppendLine($"64-bit OS:     {Environment.Is64BitOperatingSystem}");
         sb.AppendLine($"Processors:    {Environment.ProcessorCount}");
-        try { sb.AppendLine($"App dir:       {AppContext.BaseDirectory}"); } catch { }
-        try { sb.AppendLine($"Exe:           {Environment.ProcessPath}"); } catch { }
+        try { sb.AppendLine($"App dir:       {AppContext.BaseDirectory}"); } catch { /* best-effort diagnostics collection */ }
+        try { sb.AppendLine($"Exe:           {Environment.ProcessPath}"); } catch { /* best-effort diagnostics collection */ }
         try
         {
             var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             sb.AppendLine($"Assembly:      {ver}");
         }
-        catch { }
+        catch { /* best-effort diagnostics collection */ }
         try
         {
             var p = global::Windows.ApplicationModel.Package.Current?.Id?.Version;

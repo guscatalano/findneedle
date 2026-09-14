@@ -235,7 +235,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private void ViewOutputFiles_Click(object sender, RoutedEventArgs e)
     {
-        try { this.Frame?.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)); } catch { }
+        try { this.Frame?.Navigate(typeof(FindNeedleUX.Pages.ProcessorOutputPage)); } catch { /* best-effort navigation */ }
     }
 
     private void DismissOutputFilesBanner_Click(object sender, RoutedEventArgs e)
@@ -1544,7 +1544,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void DetailsPanelResizer_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         if (_detailsResizing) return; // keep the resize cursor while dragging
-        try { ProtectedCursor = null; } catch { }
+        try { ProtectedCursor = null; } catch { /* best-effort cursor cleanup */ }
     }
 
     private void DetailsPanelResizer_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -1580,7 +1580,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (!_detailsResizing) return;
         _detailsResizing = false;
         if (sender is UIElement el) el.ReleasePointerCapture(e.Pointer);
-        try { ProtectedCursor = null; } catch { }
+        try { ProtectedCursor = null; } catch { /* best-effort cursor cleanup */ }
         // Persist whatever height the user settled on.
         ResultsViewerSettings.DetailsPanelHeight = DetailsPanel.Height;
         e.Handled = true;
@@ -1591,7 +1591,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (_detailsResizing)
         {
             _detailsResizing = false;
-            try { ProtectedCursor = null; } catch { }
+            try { ProtectedCursor = null; } catch { /* best-effort cursor cleanup */ }
             ResultsViewerSettings.DetailsPanelHeight = DetailsPanel.Height;
         }
     }
@@ -1610,7 +1610,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private void FilterPaneSplitter_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         if (_filterPaneResizing) return; // keep the resize cursor while dragging
-        try { ProtectedCursor = null; } catch { }
+        try { ProtectedCursor = null; } catch { /* best-effort cursor cleanup */ }
     }
 
     private void FilterPaneSplitter_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -1639,7 +1639,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (!_filterPaneResizing) return;
         _filterPaneResizing = false;
         if (sender is UIElement el) el.ReleasePointerCapture(e.Pointer);
-        try { ProtectedCursor = null; } catch { }
+        try { ProtectedCursor = null; } catch { /* best-effort cursor cleanup */ }
         ResultsViewerSettings.FilterPaneWidth = LeftFilterColumn.ActualWidth; // persist
         e.Handled = true;
     }
@@ -1648,7 +1648,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         if (!_filterPaneResizing) return;
         _filterPaneResizing = false;
-        try { ProtectedCursor = null; } catch { }
+        try { ProtectedCursor = null; } catch { /* best-effort cursor cleanup */ }
         ResultsViewerSettings.FilterPaneWidth = LeftFilterColumn.ActualWidth;
     }
 
@@ -1932,7 +1932,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // ScrollBarVisibility is the top-level lever (Visible = always shown, Auto = auto-hide).
         bool alwaysShow = ResultsViewerSettings.AlwaysShowScrollBars;
         var vis = alwaysShow ? ScrollBarVisibility.Visible : ScrollBarVisibility.Auto;
-        try { ResultsGrid.VerticalScrollBarVisibility = vis; ResultsGrid.HorizontalScrollBarVisibility = vis; } catch { }
+        try { ResultsGrid.VerticalScrollBarVisibility = vis; ResultsGrid.HorizontalScrollBarVisibility = vis; } catch { /* best-effort scrollbar toggle */ }
 
         try
         {
@@ -2362,7 +2362,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // the row count), computed off the UI thread so a big result set never freezes the dialog.
         // (Previously an O(rows) facet scan of up to ~1M rows on the UI thread — the slow Sources button.)
         System.Collections.Generic.Dictionary<string, int> counts = null;
-        try { counts = await System.Threading.Tasks.Task.Run(() => ViewModel.GetSourceCounts()); } catch { }
+        try { counts = await System.Threading.Tasks.Task.Run(() => ViewModel.GetSourceCounts()); } catch { /* best-effort source counts */ }
         if (counts == null || counts.Count == 0) return null;
 
         var byType = new System.Collections.Generic.Dictionary<string, (int count, System.Collections.Generic.List<string> values)>(StringComparer.Ordinal);
@@ -4433,7 +4433,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
         catch (Exception ex)
         {
-            try { FindNeedlePluginLib.Logger.Instance.Log($"Diagram-from-selection failed: {ex}"); } catch { }
+            try { FindNeedlePluginLib.Logger.Instance.Log($"Diagram-from-selection failed: {ex}"); } catch { /* best-effort logging */ }
             await ShowDiagramInfoAsync("Diagram failed", ex.Message);
         }
     }

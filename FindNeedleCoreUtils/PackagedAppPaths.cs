@@ -87,7 +87,7 @@ public static class PackagedAppPaths
         {
             var dest = Path.Combine(newDir, Path.GetFileName(src));
             if (File.Exists(dest)) continue;   // store already has (newer) state — don't overwrite
-            try { Directory.CreateDirectory(newDir); File.Copy(src, dest); } catch { }
+            try { Directory.CreateDirectory(newDir); File.Copy(src, dest); } catch { /* best-effort file copy */ }
         }
     }
 

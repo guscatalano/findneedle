@@ -173,7 +173,7 @@ public static class DumpEtwExtractor
             p.ErrorDataReceived += (_, e) => { if (e.Data != null) lock (outSb) outSb.AppendLine(e.Data); };
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
-            if (!p.WaitForExit(timeoutMs)) { try { p.Kill(true); } catch { } throw new TimeoutException("cdb timed out"); }
+            if (!p.WaitForExit(timeoutMs)) { try { p.Kill(true); } catch { /* best-effort process kill on timeout */ } throw new TimeoutException("cdb timed out"); }
             p.WaitForExit();
         }
         result.CdbOutput = outSb.ToString();

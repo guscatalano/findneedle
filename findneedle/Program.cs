@@ -21,11 +21,11 @@ internal class Program
     static void Main(string[] args)
     {
 
-        var cancel = false;
-        Console.CancelKeyPress += delegate {
-            cancel = true;
-            Console.WriteLine("Cancel received, exiting");
-            Environment.Exit(0);
+        var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) => {
+            Console.WriteLine("Cancel received, shutting down...");
+            e.Cancel = true;  // Don't force terminate - let us clean up
+            cts.Cancel();
         };
 
         // Configure logger for console app: write detailed logs to file (already done by Logger),
@@ -161,7 +161,7 @@ internal class Program
                         var val = a.Substring(idx + 1).Trim();
                         if (val.StartsWith("\"") && val.EndsWith("\""))
                             val = val.Substring(1, val.Length - 2);
-                        try { val = FileIO.FindFullPathToFile(val); } catch { }
+                        try { val = FileIO.FindFullPathToFile(val); } catch { /* Program best-effort cleanup */ }
                         try
                         {
                             dynamic dx = x;
@@ -172,12 +172,12 @@ internal class Program
                                 ((List<string>)dx.RulesConfigPaths).Add(val);
                             }
                         }
-                        catch { }
+                        catch { /* Program best-effort cleanup */ }
                     }
                 }
             }
         }
-        catch { }
+        catch { /* Program best-effort cleanup */ }
         SearchQueryCmdLine.PrintToConsole(x);
         // Print what rule files (if any) were provided so user can confirm
         try
@@ -204,7 +204,7 @@ internal class Program
                 }
             }
         }
-        catch { }
+        catch { /* Program best-effort cleanup */ }
         PluginManager.GetSingleton().PrintToConsole();
 
         // Verify bundled DLLs are present so installer prompt and UML generation can run
@@ -213,8 +213,8 @@ internal class Program
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string? installersPath = null;
             string? umlDslPath = null;
-            try { installersPath = Directory.EnumerateFiles(baseDir, "FindNeedleToolInstallers.dll", SearchOption.AllDirectories).FirstOrDefault(); } catch { }
-            try { umlDslPath = Directory.EnumerateFiles(baseDir, "FindNeedleUmlDsl.dll", SearchOption.AllDirectories).FirstOrDefault(); } catch { }
+            try { installersPath = Directory.EnumerateFiles(baseDir, "FindNeedleToolInstallers.dll", SearchOption.AllDirectories).FirstOrDefault(); } catch { /* Program best-effort cleanup */ }
+            try { umlDslPath = Directory.EnumerateFiles(baseDir, "FindNeedleUmlDsl.dll", SearchOption.AllDirectories).FirstOrDefault(); } catch { /* Program best-effort cleanup */ }
 
             if (string.IsNullOrEmpty(installersPath))
             {
@@ -236,8 +236,7 @@ internal class Program
                 Logger.Instance.Log($"Found FindNeedleUmlDsl: {umlDslPath}");
             }
         }
-        catch { }
-
+        catch { /* Program best-effort cleanup */ }
         // If any rules request UML image generation, offer to install missing UML tool dependencies
         try
         {
@@ -282,13 +281,12 @@ internal class Program
                                 if (requiresUmlImage) break;
                             }
                         }
-                        catch { }
+                        catch { /* Program best-effort cleanup */ }
                         if (requiresUmlImage) break;
                     }
                 }
             }
-            catch { }
-
+            catch { /* Program best-effort cleanup */ }
             if (requiresUmlImage)
             {
                 try
@@ -309,7 +307,7 @@ internal class Program
                                 }
                             }
                         }
-                        catch { }
+                        catch { /* Program best-effort cleanup */ }
                         return false;
                     }
 
@@ -346,10 +344,10 @@ internal class Program
                                             manager = c.Invoke(ctorArgs);
                                             if (manager != null) break;
                                         }
-                                        catch { }
+                                        catch { /* Program best-effort cleanup */ }
                                     }
                                 }
-                                catch { }
+                                catch { /* Program best-effort cleanup */ }
                             }
                             var areInstalledMethod = managerType.GetMethod("AreAllImageDependenciesInstalled");
                             var installed = areInstalledMethod != null && manager != null && (bool)areInstalledMethod.Invoke(manager, null)!;
@@ -393,8 +391,7 @@ internal class Program
                 }
             }
         }
-        catch { }
-
+        catch { /* Program best-effort cleanup */ }
         // Show the concrete files that will be searched (short summary, not verbose).
         try
         {
@@ -439,12 +436,11 @@ internal class Program
                             Console.WriteLine("    (location does not exist or is not accessible)");
                         }
                     }
-                    catch { }
+                    catch { /* Program best-effort cleanup */ }
                 }
             }
         }
-        catch { }
-
+        catch { /* Program best-effort cleanup */ }
         // Prepare output folder path so we can offer to open it later. Under the CURRENT WORKING DIRECTORY,
         // not next to the exe: a Store-installed CLI runs from a read-only folder (C:\Program Files\
         // WindowsApps\...), so RuleDSL/UML output written beside the exe would fail. Matches --out's default.
@@ -474,7 +470,7 @@ internal class Program
         {
             Console.WriteLine("If correct, please enter to search, otherwise ctrl-c to exit");
             var input = Console.ReadLine();
-            if (cancel || input == null) // input will be null when it's control+c
+            if (cts.IsCancellationRequested || input == null) // input will be null when it's control+c
             {
                 // user cancelled, exit early
                 Environment.Exit(0);
@@ -487,7 +483,7 @@ internal class Program
 
         // Proceed with search (either forced or after user confirmation)
         // Note: keep original cancel handling in case of Ctrl-C during run
-        if (cancel) Environment.Exit(0);
+        if (cts.IsCancellationRequested) Environment.Exit(0);
         // If requested, clear existing output files before we enumerate/create output folder
         if (clearExisting)
         {
@@ -511,7 +507,7 @@ internal class Program
                 }
                 else
                 {
-                    try { Directory.CreateDirectory(outputFolder); } catch { }
+                    try { Directory.CreateDirectory(outputFolder); } catch { /* Program best-effort cleanup */ }
                 }
             }
             catch (Exception ex)
@@ -662,16 +658,14 @@ internal class Program
                 if (rowsDecoded <= 0)
                     rowsDecoded = x.GetSearchStatistics().GetRecordsAtStep(SearchStep.AtSearch);
             }
-            catch { }
-
+            catch { /* Program best-effort cleanup */ }
             var resolvers = new List<string>();
             try
             {
                 foreach (var r in PluginManager.GetSingleton().GetAllPluginsInstancesOfAType<ISymbolResolver>())
                     resolvers.Add(r.GetType().FullName ?? r.GetType().Name);
             }
-            catch { }
-
+            catch { /* Program best-effort cleanup */ }
             // Fold in what the decoder ACTUALLY saw (partial decodes never hit the provisioning seam above).
             long unresolvedEvents = 0;
             try
@@ -680,8 +674,7 @@ internal class Program
                 foreach (var g in sinkGuids) wppMissingGuids.Add(g);
                 unresolvedEvents = sinkUnresolved;
             }
-            catch { }
-
+            catch { /* Program best-effort cleanup */ }
             Console.WriteLine();
             Console.WriteLine("=== WPP decode summary ===");
             Console.WriteLine($"  Records decoded (matched):           {rowsDecoded}");
@@ -705,8 +698,7 @@ internal class Program
             Console.WriteLine("==========================");
             Environment.ExitCode = exit;
         }
-        catch { }
-
+        catch { /* Program best-effort cleanup */ }
         Console.WriteLine("Done");
 
         try
@@ -743,8 +735,6 @@ internal class Program
                 }
             }
         }
-        catch { }
-
-
+        catch { /* Program best-effort cleanup */ }
     }
 }

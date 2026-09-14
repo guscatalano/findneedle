@@ -37,7 +37,7 @@ public static class McpActivityLog
             else
                 Clients[client] = (now, now, 1);
         }
-        try { Updated?.Invoke(); } catch { }
+        try { Updated?.Invoke(); } catch { /* best-effort event invocation */ }
     }
 
     /// <summary>The most recent commands, newest first (default 10).</summary>

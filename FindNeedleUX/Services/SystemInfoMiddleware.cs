@@ -237,7 +237,7 @@ public class SystemInfoMiddleware
                         return regVal;
                 }
             }
-            catch { }
+            catch { /* best-effort operation */ }
             return string.Empty;
         }
         return val;

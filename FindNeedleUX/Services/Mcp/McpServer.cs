@@ -71,9 +71,9 @@ public sealed class McpServer : IDisposable
         {
             if (!IsRunning) return;
             IsRunning = false;
-            try { _cts?.Cancel(); } catch { }
-            try { _listener?.Stop(); } catch { }
-            try { _listener?.Close(); } catch { }
+            try { _cts?.Cancel(); } catch { /* best-effort cancellation */ }
+            try { _listener?.Stop(); } catch { /* best-effort listener stop */ }
+            try { _listener?.Close(); } catch { /* best-effort listener close */ }
             _listener = null;
             Log?.Invoke("MCP server stopped.");
         }
@@ -120,7 +120,7 @@ public sealed class McpServer : IDisposable
 
             // A POST is a live client request — stamp it so the UI can show "a client is connected".
             LastActivityUtc = DateTime.UtcNow;
-            try { Activity?.Invoke(); } catch { }
+            try { Activity?.Invoke(); } catch { /* best-effort event invocation */ }
 
             // Identify the client for the activity log: prefer the User-Agent (MCP clients send one,
             // e.g. a tool name), else fall back to the loopback remote address.
@@ -161,7 +161,7 @@ public sealed class McpServer : IDisposable
                 ctx.Response.StatusCode = 200;
                 await WriteJsonAsync(ctx, Error(null, -32700, "Parse/handler error: " + ex.Message)).ConfigureAwait(false);
             }
-            catch { try { ctx.Response.Abort(); } catch { } }
+            catch { try { ctx.Response.Abort(); } catch { /* nested best-effort */ } /* MCP request handler error */ }
         }
     }
 
@@ -190,7 +190,7 @@ public sealed class McpServer : IDisposable
                     detail = raw.Length > 200 ? raw.Substring(0, 200) + "…" : raw;
                 }
             }
-            try { McpActivityLog.Record(client, method, tool, detail); } catch { }
+            try { McpActivityLog.Record(client, method, tool, detail); } catch { /* best-effort activity logging */ }
         }
 
         // Notifications (no id) get no response.

@@ -52,7 +52,7 @@ public static class OnlineSourceSettings
     private static Data Load()
     {
         try { if (File.Exists(Path_)) return JsonSerializer.Deserialize<Data>(File.ReadAllText(Path_)) ?? new Data(); }
-        catch { }
+        catch { /* best-effort operation */ }
         return new Data();
     }
 

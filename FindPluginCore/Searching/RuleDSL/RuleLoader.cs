@@ -28,7 +28,7 @@ public class RuleLoader
     /// <summary>
     /// Loads rules from file paths. Returns merged rule set.
     /// </summary>
-    public dynamic? LoadRulesFromPaths(IEnumerable<string> rulePaths)
+    public object? LoadRulesFromPaths(IEnumerable<string> rulePaths)
     {
         if (rulePaths == null || !rulePaths.Any())
             return null;
@@ -74,7 +74,7 @@ public class RuleLoader
                             continue;
                         }
                     }
-                    catch { }
+                    catch (Exception) { /* best-effort JSON parsing */ }
                 }
             }
             catch (Exception ex)
@@ -180,38 +180,39 @@ public class RuleLoader
     /// <summary>
     /// Gets sections by purpose (filter, enrichment, uml).
     /// </summary>
-    public List<dynamic> GetSectionsByPurpose(dynamic? ruleSet, string purpose)
+    public List<object> GetSectionsByPurpose(object? ruleSet, string purpose)
     {
         if (ruleSet == null)
-            return new List<dynamic>();
+            return new List<object>();
 
         try
         {
-            var matched = new List<dynamic>();
+            var matched = new List<object>();
             IEnumerable<object>? sections = null;
             try
             {
-                sections = ruleSet.Sections as IEnumerable<object>;
+                var rsProp = ruleSet.GetType().GetProperty("Sections");
+            if (rsProp != null) sections = rsProp.GetValue(ruleSet) as IEnumerable<object>;
             }
-            catch { }
+            catch (Exception ex) { /* reflection fallback — sections not accessible in this format */ }
+
+                        if (sections == null)
+                        {
+                            // try reflection-based access
+                            try
+                            {
+                                var rsObj = (object)ruleSet;
+                                var prop = rsObj.GetType().GetProperty("Sections") ?? rsObj.GetType().GetProperty("sections");
+                                if (prop != null)
+                                {
+                                    sections = prop.GetValue(rsObj) as IEnumerable<object>;
+                                }
+                            }
+                            catch (Exception ex) { /* second reflection fallback — sections not accessible */ }
+                        }
 
             if (sections == null)
-            {
-                // try reflection-based access
-                try
-                {
-                    var rsObj = (object)ruleSet;
-                    var prop = rsObj.GetType().GetProperty("Sections") ?? rsObj.GetType().GetProperty("sections");
-                    if (prop != null)
-                    {
-                        sections = prop.GetValue(rsObj) as IEnumerable<object>;
-                    }
-                }
-                catch { }
-            }
-
-            if (sections == null)
-                return new List<dynamic>();
+                return new List<object>();
 
             foreach (var s in sections)
             {
@@ -232,7 +233,7 @@ public class RuleLoader
                     }
                     else
                     {
-                        // try dynamic / reflection
+                        // try reflection
                         try
                         {
                             var prop = s.GetType().GetProperty("purpose") ?? s.GetType().GetProperty("Purpose");
@@ -242,7 +243,7 @@ public class RuleLoader
                                 if (v != null) pval = v.ToString();
                             }
                         }
-                        catch { }
+                        catch (Exception ex) { /* best-effort reflection fallback */ }
                     }
 
                     if (!string.IsNullOrEmpty(pval) && pval.Equals(purpose, StringComparison.OrdinalIgnoreCase))
@@ -250,14 +251,14 @@ public class RuleLoader
                         matched.Add(s);
                     }
                 }
-                catch { }
+                catch (Exception ex) { /* best-effort reflection fallback */ }
             }
 
             return matched;
         }
-        catch
+        catch (Exception)
         {
-            return new List<dynamic>();
+            return new List<object>();
         }
     }
 
