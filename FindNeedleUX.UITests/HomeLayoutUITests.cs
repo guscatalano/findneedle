@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Conditions;
 using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
 using System;
@@ -91,17 +92,39 @@ namespace FindNeedleUX.UITests
                     Assert.IsTrue(WaitUntil(() => s.Window.FindFirstDescendant(cf => cf.ByName("See all").And(cf.ByControlType(ControlType.Hyperlink))) == null
                                                || s.Window.FindFirstDescendant(cf => cf.ByName("Collapse Recent searches")) == null, 5000));
 
-                    // Hide Known logs from the pencil: Customize Home ▸ Known logs ▸ Show (untick).
-                    Invoke(ByName(s.Window, "Customize Home"));
-                    var desktop = s.Automation.GetDesktop();
-                    var known = ByName(desktop, "Known logs", 8000);
-                    Assert.IsNotNull(known, "the Customize Home menu should list Known logs.");
-                    known.Patterns.ExpandCollapse.PatternOrDefault?.Expand();
-                    var show = ByName(desktop, "Show", 8000);
-                    Assert.IsNotNull(show, "the Known logs submenu should have a Show toggle.");
-                    Invoke(show);
+                    // Hide Known logs from its own header (the ✕), no menu needed.
+                    Invoke(ByName(s.Window, "Hide Known logs"));
                     Assert.IsTrue(WaitUntil(() => s.Window.FindFirstDescendant(cf => cf.ByName("Known logs").And(cf.ByControlType(ControlType.Text))) == null, 8000),
                         "Known logs should disappear from Home once hidden.");
+
+                    // The way back is the pencil: Customize Home ▸ Known logs ▸ Show. Check it is offered (unticked)
+                    // without using it, so the relaunch below can prove the hide persisted.
+                    Invoke(ByName(s.Window, "Customize Home"));
+                    // The flyout is its own top-level window of the app's process; search only those, not the
+                    // whole desktop (other apps' menus are full of "Show" and "Known logs" lookalikes).
+                    int pid = s.App.ProcessId;
+                    AutomationElement InAppPopups(Func<ConditionFactory, ConditionBase> cond)
+                    {
+                        foreach (var top in s.Automation.GetDesktop().FindAllChildren(cf => cf.ByProcessId(pid)))
+                        {
+                            var hit = top.FindFirstDescendant(cond);
+                            if (hit != null) return hit;
+                        }
+                        return null;
+                    }
+                    AutomationElement known = null;
+                    Assert.IsTrue(WaitUntil(() => (known = InAppPopups(cf => cf.ByControlType(ControlType.MenuItem).And(cf.ByName("Known logs")))) != null, 8000),
+                        "the Customize Home menu should still list the hidden Known logs.");
+                    // Expanding a submenu right as the flyout opens can be a no-op; retry until Show appears.
+                    AutomationElement show = null;
+                    WaitUntil(() =>
+                    {
+                        try { known.Patterns.ExpandCollapse.PatternOrDefault?.Expand(); } catch { }
+                        Thread.Sleep(400);
+                        return (show = InAppPopups(cf => cf.ByControlType(ControlType.MenuItem).And(cf.ByName("Show")))) != null;
+                    }, 10000);
+                    Assert.IsNotNull(show, "the Known logs submenu should have a Show toggle.");
+                    Assert.AreEqual(ToggleState.Off, show.Patterns.Toggle.PatternOrDefault?.ToggleState.ValueOrDefault, "Show is unticked for a hidden section");
                 }
 
                 // Same profile again: still collapsed, still hidden.

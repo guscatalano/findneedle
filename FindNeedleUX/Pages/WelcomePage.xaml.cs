@@ -102,20 +102,29 @@ public sealed partial class WelcomePage : Page
             // Wrap the header (first child) in a grid with the chevron at its right edge.
             var header = panel.Children[0];
             panel.Children.RemoveAt(0);
-            var wrap = new Grid { ColumnSpacing = 8 };
+            var wrap = new Grid { ColumnSpacing = 4 };
             wrap.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            wrap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             wrap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Grid.SetColumn((FrameworkElement)header, 0);
             wrap.Children.Add(header);
-            ui.ChevronGlyph = new TextBlock { Text = "▾", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-            ui.Chevron = new Button
+            Button Quiet(UIElement content) => new Button
             {
-                Content = ui.ChevronGlyph, Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0),
+                Content = content, Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0),
                 Padding = new Thickness(6, 0, 6, 0), MinHeight = 0, Height = 24, VerticalAlignment = VerticalAlignment.Top,
             };
+            ui.ChevronGlyph = new TextBlock { Text = "▾", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            ui.Chevron = Quiet(ui.ChevronGlyph);
             ui.Chevron.Click += (_, _) => HomeSectionCatalog.SetCollapsed(id, !HomeSectionCatalog.IsCollapsed(id));
             Grid.SetColumn(ui.Chevron, 1);
             wrap.Children.Add(ui.Chevron);
+            // Hide outright, from the section itself; "Customize Home…" is the way back (its Show toggle).
+            var hide = Quiet(new TextBlock { Text = "✕", FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 });
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(hide, "Hide " + section.Title);
+            ToolTipService.SetToolTip(hide, "Hide this section (Customize Home… brings it back)");
+            hide.Click += (_, _) => HomeSectionCatalog.SetHidden(id, true);
+            Grid.SetColumn(hide, 2);
+            wrap.Children.Add(hide);
             panel.Children.Insert(0, wrap);
             _sections[id] = ui;
         }
