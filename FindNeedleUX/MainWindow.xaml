@@ -9,7 +9,10 @@
     mc:Ignorable="d"
     Title="FindNeedle">
 
-    <Grid x:Name="RootGrid">
+    <!-- KeyboardAcceleratorPlacementMode=Hidden: the Ctrl+K and Esc accelerators are attached to this grid in
+         code, and WinUI shows an element's accelerator as a tooltip when the pointer rests on it - which for
+         the root grid means a stray "Ctrl+K" tooltip over any empty patch of the window. -->
+    <Grid x:Name="RootGrid" KeyboardAcceleratorPlacementMode="Hidden">
         <!-- The Ctrl+K (command palette) accelerator is added in CODE, and ONLY while the palette is enabled
              (see ApplyCommandPaletteAccelerator). Declaring it here unconditionally left WinUI rendering a
              "Ctrl+K" shortcut hint even when the palette was off — a shortcut that did nothing. -->
