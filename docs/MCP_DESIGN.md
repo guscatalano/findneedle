@@ -140,11 +140,24 @@ Code lives in `FindNeedleUX/Services/Mcp/` plus a few touch points:
   MCP `export` tool (writes to a path / temp file, returns `{path, rowCount}`).
 
 ### Enabling / using it
-- Settings → Result viewer settings → **MCP server (experimental)**: tick "Enable", optionally change
-  the port (default **8765**). Off by default. App restart not required — the host starts/stops live.
-- Endpoint: `http://127.0.0.1:8765/` (POST JSON-RPC). Point an MCP client that supports Streamable
-  HTTP at it. Viewer tools need a result viewer open (run a search first), else they return a clear
-  "no active view" error.
+- **Recommended: the stdio launcher.** Point the MCP client at the app itself with the `--mcp-stdio`
+  flag; the client spawns it like any other stdio server, and it starts FindNeedle on demand:
+  ```json
+  { "mcpServers": { "findneedle": { "command": "C:\path\to\FindNeedleUX.exe", "args": ["--mcp-stdio"] } } }
+  ```
+  (Claude Code: `claude mcp add findneedle -- "C:\path	o\FindNeedleUX.exe" --mcp-stdio`.) The
+  launcher process shows no window and registers no single instance: it reads newline-delimited
+  JSON-RPC on stdin, makes sure the app is up (enabling the MCP server setting and launching the app if
+  it is not; a launch while the app runs just hands off and exits), forwards each message to the loopback
+  endpoint and writes the reply. If the app cannot be reached, requests get a JSON-RPC error rather
+  than the client reporting a dead server every session. `McpStdioBridge`; unit-tested with fake HTTP.
+- **Direct HTTP** (older): Settings → Result viewer settings → **MCP server (experimental)**: tick
+  "Enable", optionally change the port (default **8765**). App restart not required — the host
+  starts/stops live. Endpoint: `http://127.0.0.1:8765/` (POST JSON-RPC) for a client that supports
+  Streamable HTTP. The downside is the reason the launcher exists: the client connects at session
+  start and errors whenever the app is not running.
+- Viewer tools need a result viewer open (run a search first), else they return a clear "no active
+  view" error.
 
 ### Known limitations / follow-ups for v1
 - **Packaging:** works when the app runs **unpackaged** (running the exe directly). An MSIX /

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
@@ -18,6 +18,13 @@ public static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        // `FindNeedleUX.exe --mcp-stdio`: the process an MCP client spawns. No window, no single-instance
+        // registration - it bridges stdin/stdout to the running app's MCP endpoint, launching the app
+        // first if it is not up. Decided before any XAML / AppLifecycle work so nothing UI-side runs.
+        foreach (var a in args)
+            if (string.Equals(a, Services.Mcp.McpStdioBridge.Flag, StringComparison.OrdinalIgnoreCase))
+                return Services.Mcp.McpStdioBridge.Run(args);
+
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
         if (!DecideRedirection())
