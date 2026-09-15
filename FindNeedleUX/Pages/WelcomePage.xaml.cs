@@ -57,6 +57,9 @@ public sealed partial class WelcomePage : Page
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         MiddleLayerService.StateChanged += OnWorkspaceStateChanged;
+        HomeSectionCatalog.Changed += OnHomeLayoutChanged;
+        InitSections();
+        ApplyHomeLayout();
         RenderWorkspace();
         RenderKnownLogs();
         RenderQuickActions();
@@ -66,6 +69,132 @@ public sealed partial class WelcomePage : Page
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         MiddleLayerService.StateChanged -= OnWorkspaceStateChanged;
+        HomeSectionCatalog.Changed -= OnHomeLayoutChanged;
+    }
+
+    // ===================== Sections: collapse, hide, reorder (HomeSectionCatalog) =====================
+    // Every section except the Open card gets a chevron in its header (collapse to the header, state
+    // remembered) and appears in the Customize Home pencil (show / hide / move up / move down). The
+    // columns are structural; sections only move within their own column.
+
+    private sealed class SectionUi
+    {
+        public HomeSection Section;
+        public FrameworkElement Root;      // the Border (or the Tools StackPanel)
+        public StackPanel Panel;           // the section's inner StackPanel: [header, body...]
+        public Button Chevron;
+        public TextBlock ChevronGlyph;
+    }
+
+    private readonly Dictionary<string, SectionUi> _sections = new(StringComparer.OrdinalIgnoreCase);
+    private bool _sectionsInitialized;
+
+    private void InitSections()
+    {
+        if (_sectionsInitialized) return;
+        _sectionsInitialized = true;
+        void Add(string id, FrameworkElement root)
+        {
+            var section = HomeSectionCatalog.Find(id);
+            var panel = root is Border b ? b.Child as StackPanel : root as StackPanel;
+            if (section == null || panel == null || panel.Children.Count == 0) return;
+            var ui = new SectionUi { Section = section, Root = root, Panel = panel };
+            // Wrap the header (first child) in a grid with the chevron at its right edge.
+            var header = panel.Children[0];
+            panel.Children.RemoveAt(0);
+            var wrap = new Grid { ColumnSpacing = 8 };
+            wrap.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            wrap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn((FrameworkElement)header, 0);
+            wrap.Children.Add(header);
+            ui.ChevronGlyph = new TextBlock { Text = "▾", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            ui.Chevron = new Button
+            {
+                Content = ui.ChevronGlyph, Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0),
+                Padding = new Thickness(6, 0, 6, 0), MinHeight = 0, Height = 24, VerticalAlignment = VerticalAlignment.Top,
+            };
+            ui.Chevron.Click += (_, _) => HomeSectionCatalog.SetCollapsed(id, !HomeSectionCatalog.IsCollapsed(id));
+            Grid.SetColumn(ui.Chevron, 1);
+            wrap.Children.Add(ui.Chevron);
+            panel.Children.Insert(0, wrap);
+            _sections[id] = ui;
+        }
+        Add("recent", RecentSection);
+        Add("known", KnownSection);
+        Add("workspace", WorkspaceSection);
+        Add("workspaces", WorkspacesSection);
+        Add("tools", ToolsSection);
+        CustomizeHomeButton.Click += (_, _) => ShowCustomizeHomeMenu();
+    }
+
+    private void OnHomeLayoutChanged() => DispatcherQueue.TryEnqueue(ApplyHomeLayout);
+
+    /// <summary>Put the sections in their stored order, hide the hidden ones, fold the collapsed ones.</summary>
+    private void ApplyHomeLayout()
+    {
+        if (!_sectionsInitialized) return;
+        foreach (var ui in _sections.Values)
+        {
+            bool hidden = HomeSectionCatalog.IsHidden(ui.Section.Id);
+            bool collapsed = HomeSectionCatalog.IsCollapsed(ui.Section.Id);
+            ui.Root.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
+            for (int i = 1; i < ui.Panel.Children.Count; i++)
+                ui.Panel.Children[i].Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+            ui.ChevronGlyph.Text = collapsed ? "▸" : "▾";
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ui.Chevron, (collapsed ? "Expand " : "Collapse ") + ui.Section.Title);
+            ToolTipService.SetToolTip(ui.Chevron, collapsed ? "Expand" : "Collapse to the header");
+        }
+        Reorder(LeftColumn, HomeColumn.Left, new FrameworkElement[] { OpenHeading, OpenCard });
+        Reorder(RightColumn, HomeColumn.Right, Array.Empty<FrameworkElement>());
+    }
+
+    private void Reorder(StackPanel column, HomeColumn which, FrameworkElement[] fixedFirst)
+    {
+        var wanted = new List<UIElement>(fixedFirst);
+        foreach (var s in HomeSectionCatalog.Order(which))
+            if (_sections.TryGetValue(s.Id, out var ui)) wanted.Add(ui.Root);
+        // Only touch the panel when the order actually differs (re-parenting resets focus and layout).
+        bool same = column.Children.Count == wanted.Count;
+        for (int i = 0; same && i < wanted.Count; i++) same = ReferenceEquals(column.Children[i], wanted[i]);
+        if (same) return;
+        column.Children.Clear();
+        foreach (var el in wanted) column.Children.Add(el);
+    }
+
+    private void ShowCustomizeHomeMenu()
+    {
+        var menu = new MenuFlyout();
+        foreach (var column in new[] { HomeColumn.Left, HomeColumn.Right, HomeColumn.Bottom })
+        {
+            var inColumn = HomeSectionCatalog.Order(column).Where(s => !s.Fixed).ToList();
+            for (int i = 0; i < inColumn.Count; i++)
+            {
+                var s = inColumn[i];
+                var sub = new MenuFlyoutSubItem { Text = s.Title };
+                var show = new ToggleMenuFlyoutItem { Text = "Show", IsChecked = !HomeSectionCatalog.IsHidden(s.Id) };
+                show.Click += (_, _) => HomeSectionCatalog.SetHidden(s.Id, !show.IsChecked);
+                sub.Items.Add(show);
+                var fold = new ToggleMenuFlyoutItem { Text = "Collapsed", IsChecked = HomeSectionCatalog.IsCollapsed(s.Id) };
+                fold.Click += (_, _) => HomeSectionCatalog.SetCollapsed(s.Id, fold.IsChecked);
+                sub.Items.Add(fold);
+                if (inColumn.Count > 1)
+                {
+                    sub.Items.Add(new MenuFlyoutSeparator());
+                    var up = new MenuFlyoutItem { Text = "Move up", IsEnabled = i > 0 };
+                    up.Click += (_, _) => HomeSectionCatalog.Move(s.Id, -1);
+                    sub.Items.Add(up);
+                    var down = new MenuFlyoutItem { Text = "Move down", IsEnabled = i < inColumn.Count - 1 };
+                    down.Click += (_, _) => HomeSectionCatalog.Move(s.Id, +1);
+                    sub.Items.Add(down);
+                }
+                menu.Items.Add(sub);
+            }
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var reset = new MenuFlyoutItem { Text = "Reset layout" };
+        reset.Click += (_, _) => HomeSectionCatalog.Reset();
+        menu.Items.Add(reset);
+        menu.ShowAt(CustomizeHomeButton);
     }
 
     private void OnWorkspaceStateChanged() => DispatcherQueue?.TryEnqueue(() => { if (IsLoaded) RenderWorkspace(); });

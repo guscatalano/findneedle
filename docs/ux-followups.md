@@ -197,6 +197,17 @@ Query AST compiling to both SQL and in-memory; Follow with only the axes a row h
 strip and the stay-put cancel; the MCP `run_search → wait_for_load → get_page/get_context/summary`
 story (keep names stable); streaming open with the stop-loading banner.
 
+## 10. Home: arrange the sections (2026-09-14)
+
+- [x] **Collapse / hide / reorder, not widgets.** Home had six fixed sections. Each one except the Open
+      card now has a chevron (collapse to the header, remembered) and appears in "Customize Home…"
+      (Show, Collapsed, Move up / down within its column, Reset layout). The Open card is fixed: first,
+      never hidden or collapsed - Home's job is opening a log. Columns are structural; sections only
+      move within their own. `HomeSectionCatalog` (persisted beside the viewer settings when
+      FINDNEEDLE_VIEWER_SETTINGS redirects them, so tests are isolated), unit-tested; a FlaUI test
+      collapses, hides, relaunches and checks both stuck. A widget grid was considered and rejected: a
+      layout editor to maintain, persisted layouts to migrate, and a Home that differs per machine.
+
 ## Parked (not UX, tracked so they are not lost)
 
 - Multi-process: activation batching → `DecodeScope` as `AsyncLocal` → cache / perf-log / MCP-port

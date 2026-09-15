@@ -77,13 +77,30 @@
 
                 <!-- ===================== Left: open a log ===================== -->
                 <StackPanel x:Name="LeftColumn" Grid.Column="0" Grid.Row="0" Spacing="20" MinWidth="0">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Open a log" FontSize="24" FontWeight="SemiBold"/>
-                        <TextBlock Style="{StaticResource Secondary}" FontSize="13"
-                                   Text="Opening a log adds it to your workspace and runs the search. Sources, rule files and results stay together."/>
-                    </StackPanel>
+                    <Grid x:Name="OpenHeading" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Open a log" FontSize="24" FontWeight="SemiBold"/>
+                            <TextBlock Style="{StaticResource Secondary}" FontSize="13"
+                                       Text="Opening a log adds it to your workspace and runs the search. Sources, rule files and results stay together."/>
+                        </StackPanel>
+                        <!-- Arrange Home: show / hide / reorder the sections below (the Open card stays put). The
+                             same pencil pattern as the status bar and the Tools row - a list, not a layout editor. -->
+                        <Button Grid.Column="1" x:Name="CustomizeHomeButton" VerticalAlignment="Top"
+                                Background="Transparent" BorderThickness="0" Padding="8,4"
+                                AutomationProperties.Name="Customize Home"
+                                ToolTipService.ToolTip="Show, hide or reorder the sections on this page">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <SymbolIcon Symbol="Edit"/>
+                                <TextBlock Text="Customize Home…"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
 
-                    <Border Style="{StaticResource HomeCard}">
+                    <Border x:Name="OpenCard" Style="{StaticResource HomeCard}">
                         <StackPanel Spacing="14">
                             <Grid ColumnSpacing="10">
                                 <Grid.ColumnDefinitions>
@@ -118,7 +135,7 @@
                     </Border>
 
                     <!-- Recent searches (the 3 newest cached results) -->
-                    <Border Style="{StaticResource HomeCard}">
+                    <Border x:Name="RecentSection" Style="{StaticResource HomeCard}">
                         <StackPanel Spacing="12">
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
@@ -138,7 +155,7 @@
                     </Border>
 
                     <!-- Known logs (3 from the Known logs catalog) -->
-                    <Border Style="{StaticResource HomeCard}">
+                    <Border x:Name="KnownSection" Style="{StaticResource HomeCard}">
                         <StackPanel Spacing="12">
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
@@ -158,7 +175,7 @@
 
                 <!-- ===================== Right: the current workspace ===================== -->
                 <StackPanel x:Name="RightColumn" Grid.Column="1" Grid.Row="0" Spacing="16" MinWidth="0">
-                    <Border Style="{StaticResource HomeCard}">
+                    <Border x:Name="WorkspaceSection" Style="{StaticResource HomeCard}">
                         <StackPanel Spacing="14">
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
@@ -235,7 +252,7 @@
                          directly under "Nothing loaded yet". Home is for opening a log. -->
 
                     <!-- Workspaces: the same actions as the Open menu -->
-                    <Border Style="{StaticResource HomeCard}">
+                    <Border x:Name="WorkspacesSection" Style="{StaticResource HomeCard}">
                         <StackPanel Spacing="12">
                             <TextBlock Text="Workspaces" Style="{StaticResource CardTitle}"/>
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -249,7 +266,7 @@
             </Grid>
 
             <!-- Tools: the customizable tiles (QuickActionCatalog). Compact, below the cards. -->
-            <StackPanel Spacing="10">
+            <StackPanel x:Name="ToolsSection" Spacing="10">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
