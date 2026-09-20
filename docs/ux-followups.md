@@ -189,6 +189,12 @@ Alt+Left/Right and pivot pills) not adopted for now; the rest recorded as candid
       time order, each with its offset from the first, note, facts and message.
       Fixed on the way: the session map was never cleared between loads, so opening a different log
       left the old tags on whichever rows inherited those ids.
+      - [ ] **Known limitation: the key is the whole set of loaded locations.** Tag a row with log A
+            open, then ADD log B to the workspace, and the key changes from {A} to {A,B} - the tags
+            are still on disk but do not come back until A is opened alone again. Proposed fix: file
+            each tag under the FILE its row came from (the row already carries it) plus a small index
+            mapping a location set to the file keys it has produced, so a zip's inner files can be
+            found without a GROUP BY over the rows.
 - [ ] **Paging hides the timeline shape.** Page size 100 over 5M rows = 50k pages; "# go to" takes a
       page number; the histogram strip is decoration. Histogram click/drag → time predicate; go-to
       accepts `@12:34:56` and lands on the page containing that time. M.
