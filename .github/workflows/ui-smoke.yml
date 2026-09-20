@@ -4,9 +4,10 @@
 # small logs, no LargeSamples). The perf lane, the maintainer screenshot tools and anything that
 # needs a multi-hundred-MB fixture stay local (SkipCI / Performance).
 #
-# Informational for now: the job never fails the workflow (continue-on-error) until it has a green
-# streak; then drop that line and gate on it. Screenshots of the desktop are captured after the run
-# (always) so a red test comes with a picture, not just a stack trace.
+# This job gates: a failing UI smoke test fails the workflow (it ran informationally until it had a
+# green streak - 2026-09-15, eight consecutive green runs - and now blocks). Every diagnostic step
+# after the run is `if: always()`, so a red test still ships the desktop screenshot, the app's own
+# logs and a step summary - a picture, not just a stack trace.
 name: UI smoke
 
 on:
@@ -66,7 +67,6 @@ jobs:
 
       - name: Run UI smoke tests
         id: tests
-        continue-on-error: true
         shell: pwsh
         env:
           FINDNEEDLE_UITEST_APP: ${{ steps.app.outputs.path }}
@@ -130,7 +130,6 @@ jobs:
             $lines += "- $mark $($r.testName) ($($r.outcome))$msg"
           }
           $lines += ""
-          $lines += "_Informational job: does not gate the workflow yet._"
           $lines -join "`n" | Out-File $env:GITHUB_STEP_SUMMARY -Append
-          # The step-level outcome is what a future gate will read.
-          if ($c.failed -gt 0) { Write-Host "::warning::$($c.failed) UI smoke test(s) failed" }
+          # The run step already failed the job; this only labels the failure in the log.
+          if ($c.failed -gt 0) { Write-Host "::error::$($c.failed) UI smoke test(s) failed" }
