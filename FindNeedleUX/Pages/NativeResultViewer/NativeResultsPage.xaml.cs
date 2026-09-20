@@ -70,9 +70,28 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private List<string> _tagSources;
 
-    /// <summary>The source files the current results came from - the key the tag store files under.</summary>
+    /// <summary>
+    /// The key the tag store files under: the WORKSPACE'S LOCATIONS (each location's name is its path
+    /// for the file-backed kinds), not the distinct Source values of the rows. The row values would
+    /// need a GROUP BY over the whole result set - 20 seconds on a 7-million-row load, and this runs
+    /// right after a load finishes - while the location list is already in memory.
+    /// </summary>
     private List<string> TagSources()
-        => _tagSources ??= ViewModel.GetSourceCounts().Keys.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
+    {
+        if (_tagSources != null) return _tagSources;
+        var names = new List<string>();
+        try
+        {
+            foreach (var loc in MiddleLayerService.Locations)
+            {
+                string name;
+                try { name = loc.GetName(); } catch { continue; }
+                if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
+            }
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not list sources: {ex.Message}"); }
+        return _tagSources = names;
+    }
 
     /// <summary>Tag a row (session + disk).</summary>
     private void ApplyRowTag(long rowId, string name, string note)
@@ -106,10 +125,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (DispatcherQueue == null) return;
         DispatcherQueue.TryEnqueue(() =>
         {
-            RestorePersistedTags();
-            SeedUmlRowTags();
-            AutoShowSourceColumn();
-            if (_rowTags.Count > 0) RerenderRowsPreservingView();
+            _ = RestorePersistedTagsAsync();
+            _ = AutoShowSourceColumnAsync();
         });
     }
 
@@ -119,17 +136,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// saved) and never applied over the user's own choice: once they have set Source themselves,
     /// that wins forever.
     /// </summary>
-    private void AutoShowSourceColumn()
+    private async System.Threading.Tasks.Task AutoShowSourceColumnAsync()
     {
         try
         {
-            if (!ResultsViewerSettings.ShouldAutoShowSourceColumn(
-                    TagSources().Count, ResultsViewerSettings.HasExplicitColumnVisibility("Source"))) return;
+            if (ResultsViewerSettings.HasExplicitColumnVisibility("Source")) return; // their call, not ours
             var col = ViewModel.Columns.FirstOrDefault(c => c.Name == "Source");
             if (col == null || col.IsVisible) return;
+            // How many distinct FILES the rows came from - a zip is one location but eighteen logs, so
+            // this has to come from the data. It is a GROUP BY: never on the UI thread.
+            int distinct = await System.Threading.Tasks.Task.Run(() =>
+            {
+                try { return ViewModel.GetSourceCounts().Count; } catch { return 0; }
+            });
+            if (!ResultsViewerSettings.ShouldAutoShowSourceColumn(distinct, userChose: false)) return;
             col.IsVisible = true;
             ApplyAllColumnVisibility();
-            FindPluginCore.Diagnostics.PerfLog.Log("viewer.source_column.auto_shown", ("sources", TagSources().Count));
+            FindPluginCore.Diagnostics.PerfLog.Log("viewer.source_column.auto_shown", ("sources", distinct));
         }
         catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"auto-show Source: {ex.Message}"); }
     }
@@ -147,43 +170,56 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private const int MaxTagsRestoredPerLoad = 500;
 
     /// <summary>
-    /// Put the stored tags back on their rows after a load. Each tag remembers its row's timestamp,
-    /// so this asks for the rows at that exact instant (indexed, a handful at most) and matches by
-    /// fingerprint. A tag whose row is not in this result set - a different search, a trimmed log -
-    /// simply stays in the store for next time.
+    /// Put the stored tags back on their rows after a load, and clear anything left from the previous
+    /// one. The session map is keyed by RowId, which a load hands out afresh, so stale entries would
+    /// paint tags onto whichever rows inherited those ids - visibly wrong as soon as you open a
+    /// different log. The matching itself runs off the UI thread: this fires the moment a load
+    /// settles, and a load that just finished is exactly when the user least wants a frozen window.
     /// </summary>
-    private void RestorePersistedTags()
+    private async System.Threading.Tasks.Task RestorePersistedTagsAsync()
     {
         _tagSources = null; // a fresh load may be a different set of files
-        // Start from nothing: the session map is keyed by RowId, and a load hands every row a new one.
-        // Keeping the old entries would paint tags onto whichever rows inherited those ids - visibly
-        // wrong as soon as you open a different log. What the user tagged comes back from the store
-        // below; the UML seeds are re-applied by SeedUmlRowTags right after.
         _rowTags.Clear();
+        SeedUmlRowTags();   // derived from the last search's rules; re-applied, never persisted
         try
         {
             var sources = TagSources();
             if (sources.Count == 0) return;
             var stored = RowTagStore.Load(sources);
             if (stored.Count == 0) return;
-            int restored = 0, looked = 0;
-            using var scope = FindPluginCore.Diagnostics.PerfLog.Scope("viewer.tags.restore");
-            foreach (var tag in stored)
-            {
-                if (looked++ >= MaxTagsRestoredPerLoad) break;
-                var time = tag.TimeOrDefault;
-                if (time == default) continue;
-                foreach (var row in ViewModel.RowsAtExactTime(time))
-                {
-                    if (!string.Equals(RowTagStore.Fingerprint(row), tag.Fingerprint, StringComparison.Ordinal)) continue;
-                    _rowTags[row.RowId] = new RowTag(tag.Name, tag.Note);
-                    restored++;
-                    break;
-                }
-            }
-            FindPluginCore.Diagnostics.PerfLog.Log("viewer.tags.restored", ("stored", stored.Count), ("restored", restored));
+
+            var found = await System.Threading.Tasks.Task.Run(() => MatchStoredTags(stored));
+            foreach (var (rowId, tag) in found) _rowTags[rowId] = tag;
+            if (found.Count > 0) RerenderRowsPreservingView();
+            FindPluginCore.Diagnostics.PerfLog.Log("viewer.tags.restored", ("stored", stored.Count), ("restored", found.Count));
         }
         catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not restore: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Match stored tags to rows of the current result set. Each tag remembers its row's timestamp,
+    /// so this asks for the rows at that instant (LogTime is indexed - a handful at most) and compares
+    /// fingerprints. A tag whose row is not in this result set - a different search, a trimmed log -
+    /// simply stays in the store for next time. Runs on a worker thread.
+    /// </summary>
+    private List<(long RowId, RowTag Tag)> MatchStoredTags(List<FindNeedleUX.Services.StoredRowTag> stored)
+    {
+        var found = new List<(long, RowTag)>();
+        using var scope = FindPluginCore.Diagnostics.PerfLog.Scope("viewer.tags.restore");
+        int looked = 0;
+        foreach (var tag in stored)
+        {
+            if (looked++ >= MaxTagsRestoredPerLoad) break;
+            var time = tag.TimeOrDefault;
+            if (time == default) continue;
+            foreach (var row in ViewModel.RowsAtExactTime(time))
+            {
+                if (!string.Equals(RowTagStore.Fingerprint(row), tag.Fingerprint, StringComparison.Ordinal)) continue;
+                found.Add((row.RowId, new RowTag(tag.Name, tag.Note)));
+                break;
+            }
+        }
+        return found;
     }
 
 
@@ -418,7 +454,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // After load, re-apply persisted level color overrides — LoadResultsAsync() repopulates
         // ViewModel.Levels from the theme defaults, which would clobber overrides otherwise.
         ApplyPersistedLevelOverrides();
-        RestorePersistedTags();
+        // Tags + the Source column are settled-load work (OnLoadSettled): a streaming search is still
+        // filling the grid here, so matching tags now would find rows that have not arrived.
         SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
         UpdateEmptyState();
@@ -530,7 +567,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (EmptyOverlay != null) EmptyOverlay.Visibility = Visibility.Collapsed; // don't let a stale "No results" cover the spinner
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
         ApplyPersistedLevelOverrides();
-        RestorePersistedTags();
+        // Tags + the Source column are settled-load work (OnLoadSettled): a streaming search is still
+        // filling the grid here, so matching tags now would find rows that have not arrived.
         SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
         UpdateEmptyState();
