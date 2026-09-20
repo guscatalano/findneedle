@@ -164,14 +164,18 @@ Alt+Left/Right and pivot pills) not adopted for now; the rest recorded as candid
 
 ### Candidates (not scheduled)
 
-- [ ] **Multiple sources are indistinguishable.** Source column hidden by default
-      (`DefaultColumnVisibility` "Source": false); the Sources dialog has no per-file counts. Auto-show
-      Source when more than one location is loaded; per-source counts in the dialog and the chip menu;
-      a Source facet row like Level. S.
-- [ ] **Keyboard reach for row actions.** Filter in/out, Follow, Tag, Copy are buttons and a context
-      menu only. With the grid focused: I/O filter in/out on the focused column, F follow, T tag,
-      Ctrl+C copy row, Enter toggle detail; list in "?" help; row actions in Ctrl+K when a row is
-      selected. S/M.
+- [x] **Multiple sources are indistinguishable.** Done 2026-09-20. The Source column shows itself once
+      more than one distinct FILE is in the result set (a zip is one location but eighteen logs, so the
+      count comes from the data, off the UI thread), session-only and never over an explicit choice.
+      The Sources dialog grew a "Rows by file" breakdown - each file's row count and share - off the
+      same GROUP BY the source-type toggles already run. A Source facet row like Level was not done.
+- [x] **Keyboard reach for row actions.** Done 2026-09-20. With the grid focused and a row selected:
+      I filter in, O filter out, F follow, A around this time, T tag, Ctrl+C copy the row (or the
+      selection) as JSON. Each opens the same menu builder the right-click uses, so they cannot drift;
+      letters are inert outside the grid (so the search box still takes text) and the existing
+      "shortcuts off" setting disables the lot. Listed in the help dialog under Shortcuts. Not done:
+      acting directly on the FOCUSED COLUMN rather than opening the field menu, and Enter to toggle the
+      detail (in-row details already open on selection).
 - [x] **Tags die with the session.** Done 2026-09-20. `RowTagStore` keys each tag by a fingerprint of
       the row's CONTENT (time + file name + provider/task + ids + text), not by RowId - ids are handed
       out by the storage layer and change on every rescan - and files them per set of loaded sources
@@ -198,14 +202,42 @@ Alt+Left/Right and pivot pills) not adopted for now; the rest recorded as candid
       summary. S.
 - [ ] **Level chips and the query are two vocabularies** that silently AND together. Make the chips
       emit query predicates and render from the query. M.
-- [ ] **UTC vs local is never stated.** Time renders without a zone marker; ETW is UTC, EVTX local. A
-      zone toggle in Columns ▾ (Local / UTC / source), a suffix in the Time header, `time` predicates
-      parsed in the same zone. S.
+- [x] **UTC vs local is never stated.** Done 2026-09-20, as a LABEL not a conversion: the Time header
+      reads "Time (UTC)" / "Time (local)" / "Time (mixed zones)" from the rows' DateTime.Kind (which
+      round-trips through the cache), and stays plain "Time" when the data records no zone; the row
+      detail spells one timestamp out with its zone. Still open, and worth doing properly:
+      - [ ] **Convert the rows that know their zone** (a Local / UTC / as-recorded toggle in Columns ▾,
+            with `time` predicates parsed in the displayed zone). Rows with no recorded zone must stay
+            as-is and say so - converting them would turn an unstated assumption into a stated wrong
+            answer.
 
 ### Keep as is
 Query AST compiling to both SQL and in-memory; Follow with only the axes a row has; the Run/Stop
 strip and the stay-put cancel; the MCP `run_search → wait_for_load → get_page/get_context/summary`
 story (keep names stable); streaming open with the stop-loading banner.
+
+## 11. Big-archive load, from a real report (2026-09-20)
+
+Opening `mixed-filter-fixture.zip` (60 MB, 18 logs, 7,363,719 rows) was reported as "the status
+rendered really weird" and "stuck loading the results". Three separate things, two fixed:
+
+- [x] **A 20-second UI freeze after the rows landed.** The settled-load work (restoring tags, deciding
+      whether to show the Source column) keyed off a GROUP BY over the whole result set, on the UI
+      thread. The tag store now keys off the workspace's locations (already in memory) and every
+      query in that path runs on a worker thread.
+- [x] **"Building search index... starting..." for 89 seconds.** The sharded FTS build reported progress
+      once per shard at commit time, so the first number arrived about a minute in; it now reports
+      every 20k rows from inside each shard, and names the row count until then.
+- [ ] **A cache hit still rebuilds the whole FTS index.** `cache.eval reuse=true fts_built=false` then
+      `search.build_index.ondemand elapsed_ms=89047`, and only then is the cache re-stamped. Every
+      reopen of a big log pays the full trigram build before text search is fast. The shards persist
+      beside the .db and re-attach when the cache was stamped after a build - so the gap is the FIRST
+      open writing its cache before the (deferred) index exists. Worth its own work: stamp the cache
+      only once the index is built, or write the index state when the deferred build finishes.
+      Measured: 89s on 7.4M rows, every single reopen.
+
+Load times for the record (first open, cold): unzip + scan 11.5s, decode/ingest 115.6s, shard merge
+17.1s, viewer levels query 22.8s, first page 7.4s.
 
 ## 10. Home: arrange the sections (2026-09-14)
 
