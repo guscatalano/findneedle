@@ -33,7 +33,18 @@ dotnet test CoreTests\CoreTests.csproj --filter "FullyQualifiedName~MyTestMethod
 
 # By category (categories include: Storage, Performance, Installation, UML)
 dotnet test --filter "TestCategory=Storage"
+
+# The WinUI app on its own (APPX1101 at the end is expected locally - the build output is still good)
+dotnet build FindNeedleUX\FindNeedleUX.csproj -c Debug -p:Platform=x64
+
+# The FlaUI suite that CI also runs (build x64 first; FINDNEEDLE_UITEST_APP names the exe under test)
+dotnet build FindNeedleUX.UITests\FindNeedleUX.UITests.csproj -c Debug -p:Platform=x64
+dotnet test FindNeedleUX.UITests\FindNeedleUX.UITests.csproj --no-build --filter "TestCategory=UiSmoke"
 ```
+
+**`FindNeedleUXTests` binds `FindNeedleUX.dll` by `HintPath` into `bin\Debug\...\win-x64`,** not
+`bin\x64`. After building the app with `-p:Platform=x64`, run a plain `dotnet build -c Debug` on it too,
+or the unit tests compile against a stale dll and fail with `CS0117` on APIs you just added.
 
 Tests use **MSTest** (`[TestClass]` / `[TestMethod]`), not xUnit/NUnit. Test projects pair with their
 source project by name (`FindNeedleRuleDSL` → `FindNeedleRuleDSLTests`, etc.).
@@ -51,9 +62,17 @@ source project by name (`FindNeedleRuleDSL` → `FindNeedleRuleDSLTests`, etc.).
   with Visual Studio's MSBuild and run `vstest.console` on the output instead.
   (`FindNeedleUXTests` deliberately disables WinUI in its csproj so plain `dotnet test` works.)
 - `FindNeedleUX.UITests` drives the real app with FlaUI (x64). The self-contained classes are tagged
-  `UiSmoke` and run in CI on the hosted runner's desktop (`.github/workflows/ui-smoke.yml`, informational
-  until it has a green streak); everything needing LargeSamples or the perf lane stays local. Build it
+  `UiSmoke` and run in CI on the hosted runner's desktop (`.github/workflows/ui-smoke.yml`, which gates:
+  a red UI test fails the workflow); everything needing LargeSamples or the perf lane stays local. Build it
   with `-p:Platform=x64`; `FINDNEEDLE_UITEST_APP` names the exe under test explicitly.
+- **UI tests must never synthesize real mouse or keyboard input on a dev machine** - a stray click or
+  keystroke lands in whatever window has focus. Drive the app through UIA patterns (`Invoke`, `Toggle`,
+  `Select`, `ExpandCollapse`) and scope popup searches to the app's own process windows; the few tests
+  that really need typing are CI-only.
+- UI tests isolate per-user state with `FINDNEEDLE_VIEWER_SETTINGS=<temp file>` (viewer settings, and
+  `<that path>.home-sections.json` for the Home layout) and skip single-instancing with
+  `FINDNEEDLE_NO_SINGLE_INSTANCE=1`. A test that wants the *real* single-instance behaviour (opening a
+  second log) must leave that unset - and be inconclusive when a foreign FindNeedle is already running.
 - Sample `*.log` test data is gitignored — a test that reads it passes locally but fails in CI
   unless the data file is tracked and copied to the test output.
 
@@ -110,6 +129,46 @@ behind them) — consult it first.
 - `*Plugin/` (ETWPlugin, EventLogPlugin, ZipFilePlugin, BasicTextPlugin, CsvPlugin, JsonPlugin,
   PcapPlugin, Plugins/Kusto) — concrete plugins.
 
+## The viewer (FindNeedleUX) — subsystems that span several files
+
+**The search box is a small query language**, not a substring match. `FindPluginCore/Searching/Query/`
+holds it: `LogQuery.TryParse` builds an AST that is compiled **twice** — to SQL (`AppendSql`, run by
+`SqliteStorage`) and to an in-memory predicate (`Evaluate`, used by the other backends). Both paths must
+agree, so a new field or operator means touching `ColumnOf`/`AppendSql` *and* `Evaluate`, plus a test in
+`CoreTests/LogQueryPowerTests.cs`. Plain text with no operator still means "any column contains this".
+`QueryEditor` is the programmatic side: the viewer's Filter/Follow/Around pivots call `AddClause`, which
+is **additive and replaces same-axis clauses** (following a second process swaps the process clause, it
+doesn't stack). `QuerySuggestions` feeds the AutoSuggestBox completion list.
+
+**User-arrangeable UI lists follow one "catalog" pattern** (`FindNeedleUX/Services/*Catalog.cs`:
+`StatusBarCatalog`, `QuickActionCatalog`, `HomeSectionCatalog`, `MessageReformatCatalog`).
+Each is a static class with a shipped default list, a JSON file under `%LocalAppData%\FindNeedle`, a
+`Changed` event the page re-applies on, and a `SetStorageLocationForTests` seam — so the arrangement logic
+is unit-tested without the UI. When a catalog's defaults change, migrate old stored values
+(`StatusBarCatalog.LegacyDefaults` is the worked example) rather than resetting the user's layout.
+
+**Process model.** `Program.cs` runs before WinRT init and handles three modes: the `--mcp-stdio` bridge
+(see below), single-instancing via `AppInstance.FindOrRegisterForKey("findneedle-main")` — a second
+launch forwards its file to the running app — and the normal path. `FINDNEEDLE_NO_SINGLE_INSTANCE=1` or
+`--no-single-instance` skips registration.
+
+**MCP.** `Services/Mcp/McpServer` is an HTTP JSON-RPC server inside the app (off by default, port in
+settings). Because a client that spawns a dead server errors on every call, clients instead run
+`FindNeedleUX.exe --mcp-stdio` (`McpStdioBridge`), which speaks stdio, forwards to the HTTP endpoint and
+launches/waits for the app when it isn't up. `docs/MCP_DESIGN.md` has the details.
+
+**Cache schema.** Any change to the SQLite row layout must bump `SqliteStorage.CacheSchemaVersion` *and*
+extend `EnsureColumns`, or cached searches from an older build deserialize into the wrong columns.
+
+## Release mechanics
+
+Pushing to `master` runs `.github/workflows/dotnet-desktop.yml`, which auto-tags the next patch version
+(`1.0.N`) and commits the `Package.appxmanifest` version bump with `[skip ci]`. A **Store release** is a
+`v1.0.N` tag: only `v*.*.*` tags run the `publish-store` job. Two traps: a tag pointing at a `[skip ci]`
+commit triggers nothing (tag the real commit), and the `msstore` publish step fails transiently often
+enough that re-running the job is the normal fix, not a signal something is wrong. `ui-smoke.yml` is a
+separate job, and it gates too.
+
 ## Conventions worth knowing
 
 - New filtering/enrichment/output behavior goes in **RuleDSL**, not new deprecated-interface plugins.
@@ -123,3 +182,5 @@ behind them) — consult it first.
 - `PcapPlugin` parses .pcap/.pcapng with a hand-written managed reader + PacketDotNet — deliberately
   not SharpPcap, to avoid native libpcap dependencies. Keep it managed-only.
 - `.editorconfig` at the repo root governs formatting/style — follow it.
+- Commit gate: the suite a change touches must print `Passed!` before committing, and each commit
+  must build on its own — the pipeline tags and versions every push to `master`.
