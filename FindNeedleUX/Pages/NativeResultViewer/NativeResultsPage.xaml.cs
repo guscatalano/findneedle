@@ -108,8 +108,30 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             RestorePersistedTags();
             SeedUmlRowTags();
+            AutoShowSourceColumn();
             if (_rowTags.Count > 0) RerenderRowsPreservingView();
         });
+    }
+
+    /// <summary>
+    /// With more than one file loaded, show the Source column even though it is hidden by default -
+    /// otherwise two interleaved logs are indistinguishable in the grid. Session-only (nothing is
+    /// saved) and never applied over the user's own choice: once they have set Source themselves,
+    /// that wins forever.
+    /// </summary>
+    private void AutoShowSourceColumn()
+    {
+        try
+        {
+            if (!ResultsViewerSettings.ShouldAutoShowSourceColumn(
+                    TagSources().Count, ResultsViewerSettings.HasExplicitColumnVisibility("Source"))) return;
+            var col = ViewModel.Columns.FirstOrDefault(c => c.Name == "Source");
+            if (col == null || col.IsVisible) return;
+            col.IsVisible = true;
+            ApplyAllColumnVisibility();
+            FindPluginCore.Diagnostics.PerfLog.Log("viewer.source_column.auto_shown", ("sources", TagSources().Count));
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"auto-show Source: {ex.Message}"); }
     }
 
     /// <summary>Forget every tag on these sources (session + disk).</summary>
@@ -2453,8 +2475,17 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     {
         try
         {
-            var section = await BuildSourceTypeTogglesAsync();
+            // One GROUP BY serves both sections: which kinds of source are loaded, and how many rows
+            // each individual file contributed. "Which of these two logs is most of this?" is the first
+            // question with more than one file open, and until now the dialog could not answer it.
+            System.Collections.Generic.Dictionary<string, int> counts = null;
+            try { counts = await System.Threading.Tasks.Task.Run(() => ViewModel.GetSourceCounts()); }
+            catch { /* best-effort source counts */ }
+
+            var section = BuildSourceTypeToggles(counts);
             if (section != null) host.Children.Add(section);
+            var perFile = BuildRowsByFileSection(counts);
+            if (perFile != null) host.Children.Add(perFile);
         }
         catch (Exception ex)
         {
@@ -2469,13 +2500,11 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// it composes with cross-filter narrowing and needs no new storage-side filter dimension.
     /// Returns null when there's nothing worth grouping (0 or 1 distinct type).
     /// </summary>
-    private async System.Threading.Tasks.Task<FrameworkElement?> BuildSourceTypeTogglesAsync()
+    private FrameworkElement? BuildSourceTypeToggles(System.Collections.Generic.Dictionary<string, int> counts)
     {
-        // Exact distinct Source values + counts via a cheap GROUP BY (bounded by the loaded files, not
-        // the row count), computed off the UI thread so a big result set never freezes the dialog.
-        // (Previously an O(rows) facet scan of up to ~1M rows on the UI thread — the slow Sources button.)
-        System.Collections.Generic.Dictionary<string, int> counts = null;
-        try { counts = await System.Threading.Tasks.Task.Run(() => ViewModel.GetSourceCounts()); } catch { /* best-effort source counts */ }
+        // Counts come from a cheap GROUP BY (bounded by the loaded files, not the row count), computed
+        // off the UI thread by the caller so a big result set never freezes the dialog. (Previously an
+        // O(rows) facet scan of up to ~1M rows on the UI thread — the slow Sources button.)
         if (counts == null || counts.Count == 0) return null;
 
         var byType = new System.Collections.Generic.Dictionary<string, (int count, System.Collections.Generic.List<string> values)>(StringComparer.Ordinal);
@@ -2512,6 +2541,29 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             cb.Unchecked += (_, __) => ApplySourceTypeSelection(checks);
             checks.Add((cb, kv.Value.values));
             section.Children.Add(cb);
+        }
+        return section;
+    }
+
+    /// <summary>
+    /// "Rows by file": each loaded file with the number of rows it contributed, biggest first. Only
+    /// worth showing when more than one file is loaded - with one, the answer is "all of them".
+    /// </summary>
+    private FrameworkElement? BuildRowsByFileSection(System.Collections.Generic.Dictionary<string, int> counts)
+    {
+        if (counts == null) return null;
+        var files = counts.Where(kv => !string.IsNullOrEmpty(kv.Key)).OrderByDescending(kv => kv.Value).ToList();
+        if (files.Count <= 1) return null;
+
+        int total = files.Sum(kv => kv.Value);
+        var section = new StackPanel { Spacing = 2 };
+        section.Children.Add(SourcesHeader($"Rows by file ({files.Count})"));
+        section.Children.Add(SourcesNote($"{total:N0} rows in this search."));
+        foreach (var kv in files)
+        {
+            double share = total > 0 ? 100.0 * kv.Value / total : 0;
+            section.Children.Add(SourcesItem(
+                $"{System.IO.Path.GetFileName(kv.Key)}  —  {kv.Value:N0} rows ({share:0.#}%)", kv.Key));
         }
         return section;
     }

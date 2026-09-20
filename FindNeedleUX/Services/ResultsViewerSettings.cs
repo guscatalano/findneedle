@@ -608,6 +608,20 @@ public static class ResultsViewerSettings
         }
     }
 
+    /// <summary>Has the user made an explicit choice for this column (as opposed to inheriting the
+    /// default)? Lets the viewer auto-show a column without ever overriding a deliberate decision.</summary>
+    public static bool HasExplicitColumnVisibility(string column)
+        => !string.IsNullOrEmpty(column) && Data.ColumnVisibility?.ContainsKey(column) == true;
+
+    /// <summary>
+    /// Should the Source column be shown even though it is hidden by default? Yes exactly when more
+    /// than one file is loaded and the user has not decided for themselves: with two logs interleaved,
+    /// a grid that never says which row came from which is unreadable. One source - the common case -
+    /// keeps the column hidden, because then every row has the same answer.
+    /// </summary>
+    public static bool ShouldAutoShowSourceColumn(int distinctSources, bool userChose)
+        => !userChose && distinctSources > 1;
+
     public static void SetColumnVisibility(string column, bool visible)
     {
         if (string.IsNullOrEmpty(column)) return;

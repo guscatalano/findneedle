@@ -17,6 +17,24 @@ namespace FindNeedleUXTests.ViewModels;
 [DoNotParallelize]
 public class ResultsViewerSettingsTests
 {
+    // ----- the Source column shows itself when there is more than one file -----
+
+    [TestMethod]
+    public void SourceColumn_AutoShows_OnlyWithMoreThanOneFile()
+    {
+        Assert.IsFalse(ResultsViewerSettings.ShouldAutoShowSourceColumn(0, userChose: false), "nothing loaded");
+        Assert.IsFalse(ResultsViewerSettings.ShouldAutoShowSourceColumn(1, userChose: false), "one file: every row has the same answer");
+        Assert.IsTrue(ResultsViewerSettings.ShouldAutoShowSourceColumn(2, userChose: false), "two interleaved logs need the column");
+        Assert.IsTrue(ResultsViewerSettings.ShouldAutoShowSourceColumn(9, userChose: false));
+    }
+
+    [TestMethod]
+    public void SourceColumn_NeverOverridesTheUsersOwnChoice()
+    {
+        Assert.IsFalse(ResultsViewerSettings.ShouldAutoShowSourceColumn(5, userChose: true),
+            "once the user has set Source themselves, that decision stands");
+    }
+
     [TestMethod]
     public void ClampDetailsPanelHeight_BelowMin_ClampsToMin()
     {

@@ -346,8 +346,66 @@ namespace FindNeedleUX.UITests
                 Invoke(UiTestHelpers.FindByIdSkippingGrid(s.Window, "SourcesButton", 10000));
                 Assert.IsNotNull(FindByName(s.Window, Path.GetFileName(a), 10000), $"the Sources dialog does not list '{Path.GetFileName(a)}'.");
                 Assert.IsNotNull(FindByName(s.Window, Path.GetFileName(b), 5000), $"the Sources dialog does not list '{Path.GetFileName(b)}'.");
+
+                // With two files loaded the dialog also breaks the rows down per file, so "which of
+                // these is most of this search" is answerable without filtering.
+                Assert.IsNotNull(FindByName(s.Window, "Rows by file", 10000), "the Sources dialog should break rows down per file.");
             }
             finally { TryDelete(a, b); }
+        }
+
+        /// <summary>
+        /// Source is hidden by default (long paths, and with one log every row has the same answer),
+        /// but the moment a second file is loaded the grid has to say which log a row came from - so
+        /// the column shows itself. Asserted through the Columns popover's own checkbox.
+        /// </summary>
+        [TestMethod]
+        [Timeout(240000)]
+        public void ASecondSource_ShowsTheSourceColumn()
+        {
+            var a = WriteLog("fn_srccol_a", 40);
+            var b = WriteLog("fn_srccol_b", 40);
+            try
+            {
+                using var s = Launch($"\"{a}\" --viewer=native");
+                Assert.IsNotNull(UiTestHelpers.WaitForPopulatedGrid(s.Window, 45000), "the file did not load.");
+                Assert.AreEqual(ToggleState.Off, ColumnCheckState(s, "Source"), "one file: Source stays hidden");
+
+                s.Mcp("add_folder", new { path = b });
+                s.Mcp("run_search");
+                s.Mcp("wait_for_load", new { timeoutMs = 60000 });
+                Assert.IsTrue(WaitForTotal(s.Window, 80, 60000), $"both files should be loaded (pager: {PagerTotal(s.Window)}).");
+                Assert.IsTrue(WaitUntil(() => ColumnCheckState(s, "Source") == ToggleState.On, 15000),
+                    "two files: the Source column should show itself");
+            }
+            finally { TryDelete(a, b); }
+        }
+
+        /// <summary>Open Columns ▾ and read one column's checkbox (then close the popover again).</summary>
+        private static ToggleState ColumnCheckState(Session s, string column)
+        {
+            Invoke(UiTestHelpers.FindByIdSkippingGrid(s.Window, "ColumnsButton", 10000));
+            try
+            {
+                var pid = s.App.ProcessId;
+                AutomationElement box = null;
+                WaitUntil(() =>
+                {
+                    foreach (var top in s.Automation.GetDesktop().FindAllChildren(cf => cf.ByProcessId(pid)))
+                    {
+                        box = top.FindFirstDescendant(cf => cf.ByControlType(ControlType.CheckBox).And(cf.ByName(column)));
+                        if (box != null) return true;
+                    }
+                    return false;
+                }, 8000);
+                Assert.IsNotNull(box, $"the Columns popover has no '{column}' checkbox.");
+                return box.Patterns.Toggle.PatternOrDefault?.ToggleState.ValueOrDefault ?? ToggleState.Indeterminate;
+            }
+            finally
+            {
+                try { s.Window.Focus(); } catch { }
+                try { Invoke(UiTestHelpers.FindByIdSkippingGrid(s.Window, "ColumnsButton", 3000)); } catch { }
+            }
         }
     }
 }
