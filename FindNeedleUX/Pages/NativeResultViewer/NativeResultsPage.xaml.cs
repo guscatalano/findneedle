@@ -59,6 +59,113 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     private readonly Dictionary<long, RowTag> _rowTags = new();
     private bool _colorTaggedRows; // optional: also tint the whole row with the tag color
 
+    // ----- Tags that outlive the session -----
+    //
+    // _rowTags above is keyed by RowId, which the storage layer assigns at load time: it changes on
+    // every rescan. RowTagStore keys the same tags by a fingerprint of the row's content, filed under
+    // the set of sources loaded, so they come back tomorrow. Every place that sets or clears a tag goes
+    // through ApplyRowTag / RemoveRowTag so the disk copy can never drift from the session copy. UML
+    // seeding (SeedUmlRowTags) is the deliberate exception - those tags are derived from a rule, not
+    // from the user, so they stay in the session only.
+
+    private List<string> _tagSources;
+
+    /// <summary>The source files the current results came from - the key the tag store files under.</summary>
+    private List<string> TagSources()
+        => _tagSources ??= ViewModel.GetSourceCounts().Keys.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
+
+    /// <summary>Tag a row (session + disk).</summary>
+    private void ApplyRowTag(long rowId, string name, string note)
+    {
+        _rowTags[rowId] = new RowTag(name, note);
+        try
+        {
+            var line = ViewModel.GetRecordByRowId(rowId);
+            if (line != null) RowTagStore.Set(TagSources(), RowTagStore.TagFor(line, name, note));
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not save: {ex.Message}"); }
+    }
+
+    /// <summary>Untag a row (session + disk). True when it had a tag.</summary>
+    private bool RemoveRowTag(long rowId)
+    {
+        bool removed = _rowTags.Remove(rowId);
+        try
+        {
+            var line = ViewModel.GetRecordByRowId(rowId);
+            if (line != null) RowTagStore.Remove(TagSources(), RowTagStore.Fingerprint(line));
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not save: {ex.Message}"); }
+        return removed;
+    }
+
+    /// <summary>The load has settled (streaming producer done, final count bound): put the stored tags
+    /// back on their rows, re-seed the UML ones, and repaint so the glyphs show.</summary>
+    private void OnLoadSettled()
+    {
+        if (DispatcherQueue == null) return;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            RestorePersistedTags();
+            SeedUmlRowTags();
+            if (_rowTags.Count > 0) RerenderRowsPreservingView();
+        });
+    }
+
+    /// <summary>Forget every tag on these sources (session + disk).</summary>
+    private void ClearAllRowTags()
+    {
+        _rowTags.Clear();
+        try { RowTagStore.Clear(TagSources()); }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not clear: {ex.Message}"); }
+    }
+
+    /// <summary>How many stored tags a single load will try to place. A triage pass leaves tens of
+    /// tags; a pathological file is capped rather than firing thousands of point queries.</summary>
+    private const int MaxTagsRestoredPerLoad = 500;
+
+    /// <summary>
+    /// Put the stored tags back on their rows after a load. Each tag remembers its row's timestamp,
+    /// so this asks for the rows at that exact instant (indexed, a handful at most) and matches by
+    /// fingerprint. A tag whose row is not in this result set - a different search, a trimmed log -
+    /// simply stays in the store for next time.
+    /// </summary>
+    private void RestorePersistedTags()
+    {
+        _tagSources = null; // a fresh load may be a different set of files
+        // Start from nothing: the session map is keyed by RowId, and a load hands every row a new one.
+        // Keeping the old entries would paint tags onto whichever rows inherited those ids - visibly
+        // wrong as soon as you open a different log. What the user tagged comes back from the store
+        // below; the UML seeds are re-applied by SeedUmlRowTags right after.
+        _rowTags.Clear();
+        try
+        {
+            var sources = TagSources();
+            if (sources.Count == 0) return;
+            var stored = RowTagStore.Load(sources);
+            if (stored.Count == 0) return;
+            int restored = 0, looked = 0;
+            using var scope = FindPluginCore.Diagnostics.PerfLog.Scope("viewer.tags.restore");
+            foreach (var tag in stored)
+            {
+                if (looked++ >= MaxTagsRestoredPerLoad) break;
+                var time = tag.TimeOrDefault;
+                if (time == default) continue;
+                foreach (var row in ViewModel.RowsAtExactTime(time))
+                {
+                    if (!string.Equals(RowTagStore.Fingerprint(row), tag.Fingerprint, StringComparison.Ordinal)) continue;
+                    _rowTags[row.RowId] = new RowTag(tag.Name, tag.Note);
+                    restored++;
+                    break;
+                }
+            }
+            FindPluginCore.Diagnostics.PerfLog.Log("viewer.tags.restored", ("stored", stored.Count), ("restored", restored));
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not restore: {ex.Message}"); }
+    }
+
+
+
     public NativeResultsPage()
     {
         this.InitializeComponent();
@@ -273,6 +380,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // Level chips are rebuilt on each load; re-sync their selected state to the current level filter.
         ViewModel.Levels.CollectionChanged -= OnLevelsCollectionChanged;
         ViewModel.Levels.CollectionChanged += OnLevelsCollectionChanged;
+        // A streaming load finishes long after LoadResultsAsync returns; tags can only be matched to
+        // rows once the rows are all there.
+        ViewModel.LoadSettled -= OnLoadSettled;
+        ViewModel.LoadSettled += OnLoadSettled;
 
         // Apply persisted prefs BEFORE rendering so the first paint already has the user's choices.
         ApplyPersistedSettings();
@@ -285,6 +396,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         // After load, re-apply persisted level color overrides — LoadResultsAsync() repopulates
         // ViewModel.Levels from the theme defaults, which would clobber overrides otherwise.
         ApplyPersistedLevelOverrides();
+        RestorePersistedTags();
         SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
         UpdateEmptyState();
@@ -396,6 +508,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (EmptyOverlay != null) EmptyOverlay.Visibility = Visibility.Collapsed; // don't let a stale "No results" cover the spinner
         await ViewModel.LoadResultsCommand.ExecuteAsync(null);
         ApplyPersistedLevelOverrides();
+        RestorePersistedTags();
         SeedUmlRowTags();
         LoadingOverlay.Visibility = Visibility.Collapsed;
         UpdateEmptyState();
@@ -3929,6 +4042,55 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
     }
 
+    /// <summary>
+    /// "Export tagged rows…": the rows you marked during this pass, in time order, as a Markdown
+    /// timeline - each entry with how long after the first tagged row it happened, its note, where it
+    /// came from and its message. The writeup a triage pass ends in, without retyping it from the grid.
+    /// </summary>
+    private async void ExportTagged_Click(object sender, RoutedEventArgs e)
+    {
+        var rows = new List<FindNeedleUX.Services.ResultExporter.TaggedRow>();
+        foreach (var kv in _rowTags)
+        {
+            var line = ViewModel.GetRecordByRowId(kv.Key);
+            if (line == null) continue;
+            rows.Add(new FindNeedleUX.Services.ResultExporter.TaggedRow(
+                line.LogTime, kv.Value.Name, kv.Value.Text, line.Level,
+                line.Provider, line.TaskName, line.Source, line.Message));
+        }
+        if (rows.Count == 0)
+        {
+            await ShowMessageAsync("No tagged rows",
+                "Tag a row first: right-click it (or use the Tag ▾ button in the row details) and pick a category. "
+                + "Tags are remembered for these logs, so they are still here next time you open them.");
+            return;
+        }
+
+        try
+        {
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(WindowUtil.GetMainWindow());
+            var suggested = $"findneedle-timeline-{DateTime.Now:yyyyMMdd-HHmmss}.md";
+            var path = FindNeedleUX.Services.Win32FileDialog.SaveFile(
+                hWnd, suggested, new (string, string)[] { ("Markdown", "*.md") }, ".md");
+            if (path == null) return;
+
+            var title = $"Tagged rows - {MiddleLayerService.WorkspaceDisplayName}";
+            var lines = FindNeedleUX.Services.ResultExporter.BuildTagTimeline(rows, title);
+            await System.IO.File.WriteAllLinesAsync(path, lines);
+            await ShowMessageAsync("Export complete", $"Saved {rows.Count:N0} tagged row(s) to:" + Environment.NewLine + path);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Export failed", ex.Message);
+        }
+    }
+
+    private async System.Threading.Tasks.Task ShowMessageAsync(string title, string message)
+    {
+        var dlg = new ContentDialog { Title = title, Content = message, CloseButtonText = "OK", XamlRoot = this.XamlRoot };
+        try { await dlg.ShowAsync(); } catch { /* another dialog is already up */ }
+    }
+
     // ----- Help dialog -----
     private void HelpButton_Click(object sender, RoutedEventArgs e) => _ = ShowHelpDialogAsync();
 
@@ -4364,7 +4526,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             item.Click += (_, __) =>
             {
                 var note = _rowTags.TryGetValue(key, out var ex) ? ex.Text : null;
-                _rowTags[key] = new RowTag(capturedName, note);
+                ApplyRowTag(key, capturedName, note);
                 refreshRow();
             };
             yield return item;
@@ -4379,7 +4541,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         yield return noteItem;
         yield return new MenuFlyoutSeparator();
         var clearTag = new MenuFlyoutItem { Text = "Clear tag" };
-        clearTag.Click += (_, __) => { _rowTags.Remove(key); refreshRow(); };
+        clearTag.Click += (_, __) => { RemoveRowTag(key); refreshRow(); };
         yield return clearTag;
     }
 
@@ -4558,7 +4720,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
                     foreach (var l in selected)
                     {
                         var note = _rowTags.TryGetValue(l.RowId, out var ex) ? ex.Text : null;
-                        _rowTags[l.RowId] = new RowTag(capturedSel, note);
+                        ApplyRowTag(l.RowId, capturedSel, note);
                     }
                     RerenderRowsPreservingView();
                 };
@@ -4566,7 +4728,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             }
             tagSelSub.Items.Add(new MenuFlyoutSeparator());
             var clearSel = new MenuFlyoutItem { Text = "Clear tags" };
-            clearSel.Click += (_, __) => { foreach (var l in selected) _rowTags.Remove(l.RowId); RerenderRowsPreservingView(); };
+            clearSel.Click += (_, __) => { foreach (var l in selected) RemoveRowTag(l.RowId); RerenderRowsPreservingView(); };
             tagSelSub.Items.Add(clearSel);
             flyout.Items.Add(tagSelSub);
 
@@ -4732,7 +4894,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
             var name = string.IsNullOrEmpty(existing.Name) ? TagOptions[3].Name : existing.Name; // default "Note"
-            _rowTags[rowId] = new RowTag(name, tb.Text);
+            ApplyRowTag(rowId, name, tb.Text);
             refreshRow();
         }
     }
@@ -5410,14 +5572,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (!_tagColors.ContainsKey(name)) return false;         // unknown category
         // Note: null = keep existing; "" or a value = set it.
         var note = text ?? existing.Text;
-        _rowTags[rowId] = new RowTag(name, note);
+        ApplyRowTag(rowId, name, note);
         RerenderRowsPreservingView(); // re-render so the tag glyph/tooltip updates immediately
         return true;
     });
 
     public Task<bool> ClearTagAsync(long rowId) => McpOnUiAsync(() =>
     {
-        bool removed = _rowTags.Remove(rowId);
+        bool removed = RemoveRowTag(rowId);
         if (removed) RerenderRowsPreservingView();
         return removed;
     });

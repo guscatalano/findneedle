@@ -172,9 +172,19 @@ Alt+Left/Right and pivot pills) not adopted for now; the rest recorded as candid
       menu only. With the grid focused: I/O filter in/out on the focused column, F follow, T tag,
       Ctrl+C copy row, Enter toggle detail; list in "?" help; row actions in Ctrl+K when a row is
       selected. S/M.
-- [ ] **Tags die with the session.** `_rowTags` is in-memory; exports write visible columns only; Copy as
-      JSON/CSV omits tags. Persist tags per source signature (size+mtime) under LocalAppData; Tag
-      column in exports when any tag exists; "Export tagged rows…" as a Markdown timeline. M.
+- [x] **Tags die with the session.** Done 2026-09-20. `RowTagStore` keys each tag by a fingerprint of
+      the row's CONTENT (time + file name + provider/task + ids + text), not by RowId - ids are handed
+      out by the storage layer and change on every rescan - and files them per set of loaded sources
+      under LocalAppData (beside the viewer settings when FINDNEEDLE_VIEWER_SETTINGS redirects them).
+      Deliberately NOT keyed on size+mtime as this entry first suggested: the logs people tag are
+      usually still being written to, and that signature would bin the tags every time the file grew.
+      A load puts them back by asking for the rows at each tag's timestamp and matching fingerprints,
+      once the load has SETTLED (new `LoadSettled` event - a streaming load finishes long after
+      LoadResultsAsync returns). Exports (CSV/JSON/XML, viewer and MCP) grow Tag + Tag note columns
+      when any row is tagged, and Export ▸ "Export tagged rows…" writes the Markdown timeline: rows in
+      time order, each with its offset from the first, note, facts and message.
+      Fixed on the way: the session map was never cleared between loads, so opening a different log
+      left the old tags on whichever rows inherited those ids.
 - [ ] **Paging hides the timeline shape.** Page size 100 over 5M rows = 50k pages; "# go to" takes a
       page number; the histogram strip is decoration. Histogram click/drag → time predicate; go-to
       accepts `@12:34:56` and lands on the page containing that time. M.

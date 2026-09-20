@@ -322,6 +322,10 @@
                             <MenuFlyoutItem Text="Export as CSV"  Click="ExportCsv_Click"/>
                             <MenuFlyoutItem Text="Export as JSON" Click="ExportJson_Click"/>
                             <MenuFlyoutItem Text="Export as XML"  Click="ExportXml_Click"/>
+                            <MenuFlyoutSeparator/>
+                            <!-- The rows the user marked, in time order, as a writeup - not another dump of the grid. -->
+                            <MenuFlyoutItem Text="Export tagged rows…" Click="ExportTagged_Click"
+                                            AutomationProperties.Name="Export tagged rows"/>
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>

@@ -568,6 +568,19 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
     private bool _isLoading;
     public bool IsLoading { get => _isLoading; set => Set(ref _isLoading, value); }
 
+    /// <summary>
+    /// Raised once a load has genuinely settled - for a streaming search that is when the producer
+    /// finished and the final count is bound, NOT when LoadResultsAsync returns (it returns early and
+    /// the rows keep arriving). Anything that has to read the finished row set - restoring row tags,
+    /// for one - hangs off this rather than off the end of the load call.
+    /// </summary>
+    public event Action LoadSettled;
+
+    private void RaiseLoadSettled()
+    {
+        try { LoadSettled?.Invoke(); } catch (Exception ex) { PerfLog.Log("viewer.loadsettled.error", ("error", ex.Message)); }
+    }
+
     // True while a streaming search is still producing rows into our backing store. Bound to the
     // Stop button's visibility — once the producer signals completion, the button disappears.
     private bool _isStreaming;
@@ -942,7 +955,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         {
             // For streaming, IsLoading stays true until the producer signals completion via
             // RowsAvailable + IsLoading=false. For one-shot loads, flip it off now.
-            if (!streaming) IsLoading = false;
+            if (!streaming) { IsLoading = false; RaiseLoadSettled(); }
         }
     }
 
@@ -1067,6 +1080,7 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
             IsLoading = false;
             IsStreaming = false;
             UpdateStatus();
+            RaiseLoadSettled();
         }
     }
 
@@ -1499,6 +1513,20 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
 
     /// <summary>Look up one row by its stable <see cref="LogLine.RowId"/>, ignoring filter/sort/page.</summary>
     public LogLine GetRecordByRowId(long rowId) => _source?.GetByRowId(rowId);
+
+    /// <summary>
+    /// Rows whose timestamp is exactly <paramref name="time"/>, ignoring the current filter and sort.
+    /// Used to put a persisted tag back on its row after a rescan handed every row a new id: the tag
+    /// remembers the row's time, and this narrows the search to the handful of rows at that instant,
+    /// which the caller then matches by content fingerprint.
+    /// </summary>
+    public List<LogLine> RowsAtExactTime(DateTime time, int limit = 64)
+    {
+        var src = _source;
+        if (src == null) return new List<LogLine>();
+        try { return src.GetPage(FilterSpec.Empty with { FromTime = time, ToTime = time }, SortSpec.None, 0, limit); }
+        catch { return new List<LogLine>(); }
+    }
 
     /// <summary>A read-only snapshot of the rows currently shown on the active page.</summary>
     public IReadOnlyList<LogLine> CurrentPageRows() => Results;

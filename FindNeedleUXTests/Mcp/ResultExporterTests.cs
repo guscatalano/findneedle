@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using FindNeedlePluginLib;
@@ -34,6 +35,49 @@ public class ResultExporterTests
         Assert.AreEqual("Index,Message,Level", lines[0], "header is the visible columns");
         Assert.AreEqual(3, lines.Count, "header + 2 rows");
         Assert.IsTrue(lines[2].Contains("\"a,b\"\"c\""), "comma/quote value is quoted + doubled: " + lines[2]);
+    }
+
+    // ----- tags ride along with an export -----
+
+    private static Dictionary<long, (string Name, string Note)> Tags(params (long id, string name, string note)[] t)
+        => t.ToDictionary(x => x.id, x => (x.name, x.note));
+
+    [TestMethod]
+    public void Csv_CarriesTheTagColumns_WhenRowsAreTagged()
+    {
+        using var src = Source(new FakeResult("first"), new FakeResult("second"));
+        var lines = ResultExporter.BuildLines(src, FilterSpec.Empty, SortSpec.None, Cols,
+            ResultExporter.Format.Csv, out _, Tags((1, "Cause", "the reset lands here")));
+
+        Assert.AreEqual("Index,Message,Level,Tag,Tag note", lines[0], "tag columns are appended, not substituted");
+        StringAssert.EndsWith(lines[1], ",,", "an untagged row leaves them empty");
+        StringAssert.EndsWith(lines[2], ",Cause,the reset lands here");
+    }
+
+    [TestMethod]
+    public void Export_IsUnchanged_WhenNothingIsTagged()
+    {
+        using var src = Source(new FakeResult("first"));
+        var withEmpty = ResultExporter.BuildLines(src, FilterSpec.Empty, SortSpec.None, Cols,
+            ResultExporter.Format.Csv, out _, new Dictionary<long, (string, string)>());
+        Assert.AreEqual("Index,Message,Level", withEmpty[0], "no tags, no extra columns");
+    }
+
+    [TestMethod]
+    public void Json_And_Xml_CarryTags_WithAnElementNameThatIsValidXml()
+    {
+        using var src = Source(new FakeResult("only"));
+        var tags = Tags((0, "Note", "look here"));
+
+        var json = string.Join(Environment.NewLine, ResultExporter.BuildLines(src, FilterSpec.Empty, SortSpec.None, Cols,
+            ResultExporter.Format.Json, out _, tags));
+        StringAssert.Contains(json, "\"Tag\":\"Note\"");
+        StringAssert.Contains(json, "\"Tag note\":\"look here\"");
+
+        var xml = string.Join(Environment.NewLine, ResultExporter.BuildLines(src, FilterSpec.Empty, SortSpec.None, Cols,
+            ResultExporter.Format.Xml, out _, tags));
+        StringAssert.Contains(xml, "<Tag>Note</Tag>");
+        StringAssert.Contains(xml, "<TagNote>look here</TagNote>", "a space is not legal in an element name");
     }
 
     [TestMethod]
