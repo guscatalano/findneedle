@@ -3191,6 +3191,80 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             return;
         }
 
+        // ----- Row actions from the keyboard -----
+        // Filter in / Filter out / Follow / Tag / Copy existed only as buttons and a right-click menu,
+        // which means a keyboard-first pass had to reach for the mouse on every pivot. With the grid
+        // focused and a row selected, each action is one key; the menus they open are the SAME builders
+        // the right-click menu uses, so the two can never drift. Letters only fire in the grid - never
+        // while typing in the search box - and the list is in the help dialog under "Row actions".
+        if (!RowActionKeysApply()) return;
+        var current = ResultsGrid.SelectedItem as LogLine;
+        if (current == null) return;
+
+        if (ctrl && e.Key == global::Windows.System.VirtualKey.C)
+        {
+            var rows = ResultsGrid.SelectedItems.OfType<LogLine>().ToList();
+            CopyToClipboard(rows.Count > 1 ? RowsAsJson(rows) : RowAsJson(current));
+            e.Handled = true;
+            return;
+        }
+        if (ctrl) return; // every other Ctrl chord belongs to someone else
+
+        switch (e.Key)
+        {
+            case global::Windows.System.VirtualKey.I:
+                ShowRowActionMenu(BuildFilterItems(current, negate: false));
+                e.Handled = true;
+                break;
+            case global::Windows.System.VirtualKey.O:
+                ShowRowActionMenu(BuildFilterItems(current, negate: true));
+                e.Handled = true;
+                break;
+            case global::Windows.System.VirtualKey.F:
+                ShowRowActionMenu(BuildFollowItems(current));
+                e.Handled = true;
+                break;
+            case global::Windows.System.VirtualKey.A:
+                ShowRowActionMenu(BuildAroundItems(current));
+                e.Handled = true;
+                break;
+            case global::Windows.System.VirtualKey.T:
+                ShowRowActionMenu(BuildTagMenuItems(current.RowId, () =>
+                {
+                    RerenderRowsPreservingView();
+                    try { ResultsGrid.ScrollIntoView(current, null); } catch { /* row may be off-page */ }
+                }));
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Do bare letter keys mean "act on the selected row" right now? Only with the focus inside the
+    /// results grid: anywhere else (the search box above all) a letter is text the user is typing.
+    /// </summary>
+    private bool RowActionKeysApply()
+    {
+        try
+        {
+            var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(this.XamlRoot) as DependencyObject;
+            while (focused != null)
+            {
+                if (ReferenceEquals(focused, ResultsGrid)) return true;
+                focused = VisualTreeHelper.GetParent(focused);
+            }
+        }
+        catch { /* no focus / no XamlRoot yet */ }
+        return false;
+    }
+
+    /// <summary>Show one of the shared row-action menus anchored on the grid (keyboard entry point).</summary>
+    private void ShowRowActionMenu(IEnumerable<MenuFlyoutItemBase> items)
+    {
+        var menu = new MenuFlyout();
+        foreach (var item in items) menu.Items.Add(item);
+        if (menu.Items.Count == 0) return;
+        menu.ShowAt(ResultsGrid);
     }
 
     // ----- Go to time (Ctrl+G) -----
@@ -4282,6 +4356,8 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         Section("Shortcuts");
         Bullet("Ctrl+K — command palette (every menu action by name).  F1 — this help.  Ctrl+F — search box.  Esc — close a popup.");
+        Bullet("With the grid focused, the row actions are one key each: I — filter in, O — filter out, F — follow, A — around this time, T — tag, Ctrl+C — copy the row (or the selection) as JSON. Each opens the same menu as the right-click, so the choice is arrow keys and Enter.");
+        Note("Letters only act in the grid — in the search box they are text. All shortcuts can be turned off in Settings ▸ Results viewer.");
         return stack;
     }
 

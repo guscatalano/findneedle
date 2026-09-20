@@ -262,6 +262,62 @@ namespace FindNeedleUX.UITests
             finally { try { File.Delete(log); } catch { } }
         }
 
+        /// <summary>
+        /// The row actions are reachable from the keyboard: with the grid focused, I opens Filter in,
+        /// O opens Filter out, F opens Follow and T opens Tag - the same menus the right-click offers.
+        /// Uses the real keyboard, so it runs on CI's own desktop.
+        /// </summary>
+        [TestMethod]
+        [Timeout(180000)]
+        public void RowActionKeys_OpenTheSameMenusAsTheRightClick()
+        {
+            var log = WriteLog(60);
+            try
+            {
+                using var s = Launch($"\"{log}\" --viewer=native");
+                var grid = UiTestHelpers.WaitForPopulatedGrid(s.Window, 45000);
+                Assert.IsNotNull(grid, "the log did not load.");
+                var desktop = s.Automation.GetDesktop();
+
+                // Select a row and put the focus on the grid (SetFocus, not a synthetic click).
+                var row = grid.FindFirstChild(cf => cf.ByControlType(ControlType.DataItem));
+                Assert.IsNotNull(row, "no rows");
+                row.Patterns.SelectionItem.Pattern.Select();
+                grid.Focus();
+                Thread.Sleep(500);
+
+                // I → the Filter in menu, listing the row's fields as predicates.
+                Keyboard.Type(VirtualKeyShort.KEY_I);
+                Assert.IsTrue(WaitUntil(() => desktop.FindFirstDescendant(cf => cf.ByName("Level ==", PropertyConditionFlags.MatchSubstring)) != null, 8000),
+                    "I should open Filter in for the selected row.");
+                Keyboard.Type(VirtualKeyShort.ESCAPE);
+                Thread.Sleep(500);
+
+                // O → the same fields, negated.
+                Keyboard.Type(VirtualKeyShort.KEY_O);
+                Assert.IsTrue(WaitUntil(() => desktop.FindFirstDescendant(cf => cf.ByName("Level !=", PropertyConditionFlags.MatchSubstring)) != null, 8000),
+                    "O should open Filter out for the selected row.");
+                Keyboard.Type(VirtualKeyShort.ESCAPE);
+                Thread.Sleep(500);
+
+                // T → the tag categories.
+                Keyboard.Type(VirtualKeyShort.KEY_T);
+                Assert.IsTrue(WaitUntil(() => desktop.FindFirstDescendant(cf => cf.ByControlType(ControlType.MenuItem).And(cf.ByName("Important"))) != null, 8000),
+                    "T should open the Tag menu for the selected row.");
+                Keyboard.Type(VirtualKeyShort.ESCAPE);
+                Thread.Sleep(500);
+
+                // And a letter in the search box is still just a letter.
+                FocusSearchBox(s.Window);
+                Keyboard.Type("i");
+                Thread.Sleep(800);
+                Assert.AreEqual("i", SearchText(s.Window), "letters typed in the search box are text, not row actions");
+                Assert.IsNull(desktop.FindFirstDescendant(cf => cf.ByName("Level ==", PropertyConditionFlags.MatchSubstring)),
+                    "no row-action menu should have opened from the search box");
+            }
+            finally { try { File.Delete(log); } catch { } }
+        }
+
         private static AutomationElement FindGoToBox(AutomationElement desktop)
         {
             // The flyout's TextBox has a long placeholder; the label above it reads "Go to time".
