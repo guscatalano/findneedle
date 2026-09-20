@@ -127,6 +127,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             _ = RestorePersistedTagsAsync();
             _ = AutoShowSourceColumnAsync();
+            UpdateTimeZoneHeader();
         });
     }
 
@@ -155,6 +156,23 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             FindPluginCore.Diagnostics.PerfLog.Log("viewer.source_column.auto_shown", ("sources", distinct));
         }
         catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"auto-show Source: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Say which zone the Time column is in, when the data knows. ETW rows are UTC and Event Log rows
+    /// are local, so "09:00" in two logs opened side by side can be an hour apart with nothing on
+    /// screen admitting it. The header carries the answer - "Time (UTC)" - and stays plain "Time" when
+    /// the rows carry no zone (a marker reading "as recorded" on every text log is just noise).
+    /// </summary>
+    private void UpdateTimeZoneHeader()
+    {
+        try
+        {
+            if (TimeGridColumn == null) return;
+            var label = FindNeedleUX.Services.TimeZoneLabel.For(ViewModel.CurrentPageRows().Select(r => r.LogTime));
+            TimeGridColumn.Header = FindNeedleUX.Services.TimeZoneLabel.Header(label);
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"time zone header: {ex.Message}"); }
     }
 
     /// <summary>Forget every tag on these sources (session + disk).</summary>
@@ -2808,6 +2826,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
         if (Show("Index"))       yield return ("Index",       line.Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (Show("Time"))        yield return ("Time",        line.Time);
+        // The row's own timestamp with its zone named: ETW is UTC, Event Log is local, a text log
+        // says nothing - and the grid renders all three identically.
+        if (Show("Time"))        yield return ("Time (zone)", FindNeedleUX.Services.TimeZoneLabel.Describe(line.LogTime));
         if (Show("Provider"))    yield return ("Provider",    line.Provider);
         if (Show("TaskName"))    yield return ("TaskName",    line.TaskName);
         if (Show("Message"))     yield return ("Message",     line.Message);

@@ -813,7 +813,7 @@
                               AutomationProperties.Name="Search results">
                 <ctWinUI:DataGrid.Columns>
                     <ctWinUI:DataGridTextColumn Header="Index"    Binding="{Binding Index}"    Width="70"  ElementStyle="{StaticResource GridCellText}"/>
-                    <ctWinUI:DataGridTextColumn Header="Time"     Binding="{Binding LogTime, Converter={StaticResource TimeFmt}}" Width="160" ElementStyle="{StaticResource GridCellText}"/>
+                    <ctWinUI:DataGridTextColumn x:Name="TimeGridColumn" Header="Time"     Binding="{Binding LogTime, Converter={StaticResource TimeFmt}}" Width="160" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="Provider" Binding="{Binding Provider}" Width="120" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="TaskName" Binding="{Binding TaskName}" Width="140" ElementStyle="{StaticResource GridCellText}"/>
                     <ctWinUI:DataGridTextColumn Header="Message"  Binding="{Binding Message}"  Width="800" ElementStyle="{StaticResource GridCellTextTip}"/>
