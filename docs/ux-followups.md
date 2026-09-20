@@ -102,9 +102,25 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done (hash) · `[-]`
 
 ## 7. Automation / accessibility hang
 
-- [ ] **Walking the automation tree over a loaded grid pegs the UI thread for minutes.** Affects
-      Narrator and any accessibility tool, not just test harnesses. Needs a virtualized automation
-      peer for the grid rows (or peers that don't realize every row). Scope as its own piece of work.
+- [~] **Walking the automation tree over a loaded grid pegs the UI thread.** Measured 2026-09-20 with
+      a FlaUI probe against the real app (12,000-row log):
+      - page size 100: `FindAllChildren` 105 nodes in **80 ms**, `FindAllDescendants` 363 nodes in
+        **80 ms**, reading all 363 names **103 ms**. No hang at all.
+      - page size 5000: `FindAllChildren` **does not return within 30 s** and the call fails.
+      So the cost is linear in the PAGE SIZE, not the log size: `DataGridAutomationPeer` publishes one
+      element per row on the page (it exposes no ItemContainer pattern - checked: Scroll, Table and
+      Selection are present, ItemContainer is absent), so a 5000-row page is 5000 peers plus their
+      cells. The viewer offers 50 / 100 / 250 / 500 / 1000 / 5000, so this is reachable in two clicks.
+      Done now: the 1000 and 5000 entries say what they cost a screen reader, and the combo itself
+      carries the general note - the choice stays, the surprise does not.
+      Still to do, and deliberately not attempted in passing:
+      - [ ] **A virtualized peer for the grid.** Subclass the toolkit DataGrid, override
+            OnCreateAutomationPeer, and return a peer whose GetChildrenCore exposes only realized rows
+            (or implements ItemContainerProvider properly). Two known traps: the implicit style keyed
+            on `TargetType="DataGrid"` will not apply to a subclass unless it sets
+            `DefaultStyleKey = typeof(DataGrid)`, and every UI test finds rows through this control -
+            so it needs the full smoke suite green before and after. This is the heart of the viewer;
+            it deserves its own pass, not a tail-end change.
 - [ ] **Switching the filter dock Left → Top at runtime breaks the UI Automation tree.** The screen is
       right, but UIA enumeration of the window stops at the first Time chip (63 nodes instead of ~340):
       the re-parented sections' cached peers still point at the old parent. Starting in Top mode is
