@@ -723,6 +723,11 @@ namespace FindPluginCore.Implementations.Storage
         /// Rows stay in the one main table, so paging/sort/count are unchanged. Same column-blanking
         /// decisions as the single build so search semantics are identical.
         /// </summary>
+        /// <summary>How many rows a shard indexes between progress callbacks. Small enough that the
+        /// indicator visibly moves on a multi-million-row build, large enough to be free. Settable so a
+        /// test can watch progress advance without indexing millions of rows.</summary>
+        public static int IndexProgressReportRows { get; set; } = 20_000;
+
         private void BuildShardedIndex(CancellationToken ct, Action<long, long> onProgress)
         {
             var start = Environment.TickCount64;
@@ -789,6 +794,12 @@ namespace FindPluginCore.Implementations.Storage
                         var prs = Add("@rs"); var psd = Add("@sd"); var plt = Add("@lt");
                         ins.Prepare();
                         long localN = 0;
+                        // Rows already folded into the shared counter. A shard commits once, at the end,
+                        // so reporting only there left the UI's "Building search index…" sitting on
+                        // "starting…" for the whole build (89 seconds on a 7.4M-row log) - which reads
+                        // as a hang. Report as we go instead, in chunks big enough that the callback
+                        // costs nothing next to the insert.
+                        long reportedN = 0;
                         using (var rd = read.ExecuteReader())
                             while (rd.Read())
                             {
@@ -802,10 +813,19 @@ namespace FindPluginCore.Implementations.Storage
                                 plt.Value = rd.IsDBNull(6) ? "" : rd.GetString(6);
                                 ins.ExecuteNonQuery();
                                 localN++;
+                                if (onProgress != null && localN - reportedN >= IndexProgressReportRows)
+                                {
+                                    var delta = localN - reportedN;
+                                    reportedN = localN;
+                                    onProgress(System.Threading.Interlocked.Add(ref indexed, delta), _filteredCount);
+                                }
                             }
                         tx.Commit();
-                        System.Threading.Interlocked.Add(ref indexed, localN);
-                        onProgress?.Invoke(System.Threading.Interlocked.Read(ref indexed), _filteredCount);
+                        var tail = localN - reportedN;
+                        var soFar = tail > 0
+                            ? System.Threading.Interlocked.Add(ref indexed, tail)
+                            : System.Threading.Interlocked.Read(ref indexed);
+                        onProgress?.Invoke(soFar, _filteredCount);
                     }
                 });
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Threading;
 using FindPluginCore.Implementations.Storage;
@@ -207,6 +208,45 @@ public class SearchIndexTests
         Assert.IsTrue(SqliteStorage.PredictIndexBuildMs(2_000_000) > SqliteStorage.PredictIndexBuildMs(1_000_000),
             "prediction must increase with row count");
         Assert.AreEqual(0, SqliteStorage.PredictIndexBuildMs(0));
+    }
+
+    /// <summary>
+    /// The sharded build must report progress WHILE it works, not once per shard at commit time. It
+    /// used to do the latter, which left the viewer's "Building search index…" indicator sitting on
+    /// "starting…" for the whole 89-second build of a 7.4M-row log - indistinguishable from a hang.
+    /// </summary>
+    [TestMethod]
+    public void ShardedBuild_ReportsProgressWhileItRuns()
+    {
+        var prevThreshold = SqliteStorage.FtsShardThreshold;
+        var prevReport = SqliteStorage.IndexProgressReportRows;
+        SqliteStorage.FtsShardThreshold = 50;   // force the sharded path
+        SqliteStorage.IndexProgressReportRows = 10; // report often enough to see it move on a small set
+        var src = NewSourceFile();
+        var dbPath = CachedStorage.GetCacheFilePath(src, ".db");
+        for (int k = 0; k < 8; k++) _dbPaths.Add(dbPath + $".fts{k}");
+        try
+        {
+            using var s = new SqliteStorage(src);
+            s.ClearTables();
+            var list = new List<ISearchResult>(400);
+            for (int i = 0; i < 400; i++) list.Add(new R($"row {i}", src: $"Prov{i % 3}", rs: $@"C:\l{i % 4}.log"));
+            s.AddFilteredBatch(list);
+
+            var reports = new System.Collections.Concurrent.ConcurrentBag<(long done, long total)>();
+            s.BuildSearchIndex(default, (done, total) => reports.Add((done, total)));
+
+            var all = reports.ToList();
+            Assert.IsTrue(all.Count > 8, $"progress should be reported as rows are indexed, not once per shard (got {all.Count} for 8 shards)");
+            Assert.IsTrue(all.All(r => r.total == 400), "every report carries the row total");
+            Assert.IsTrue(all.Any(r => r.done > 0 && r.done < 400), "at least one report lands mid-build, so the indicator moves");
+            Assert.AreEqual(400, all.Max(r => r.done), "the last report accounts for every row exactly once");
+        }
+        finally
+        {
+            SqliteStorage.FtsShardThreshold = prevThreshold;
+            SqliteStorage.IndexProgressReportRows = prevReport;
+        }
     }
 
     [TestMethod]

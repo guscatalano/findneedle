@@ -1893,9 +1893,15 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             {
                 int done = MiddleLayerService.IndexBuildIndexed, total = MiddleLayerService.IndexBuildTotal;
                 // Show row-count progress so it's clearly advancing (not stuck); search is slower meanwhile.
+                // Before the first progress callback lands, say how big the job is rather than
+                // "starting…" - on a multi-million-row log that first moment used to last a while, and
+                // a frozen "starting…" reads as a hung window.
+                int rows = total > 0 ? total : ViewModel.TotalCount;
                 ViewModel.IndexStatusText = total > 0
                     ? $"Building search index… {done:N0} / {total:N0} ({Math.Min(100, (int)(done * 100L / total))}%)"
-                    : "Building search index… starting…";
+                    : rows > 0
+                        ? $"Building search index over {rows:N0} rows…"
+                        : "Building search index…";
             }
             else
             {
@@ -3184,6 +3190,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
             e.Handled = true;
             return;
         }
+
     }
 
     // ----- Go to time (Ctrl+G) -----
