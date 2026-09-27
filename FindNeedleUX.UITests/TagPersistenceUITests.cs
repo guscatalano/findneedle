@@ -242,6 +242,65 @@ namespace FindNeedleUX.UITests
             }
         }
 
+        /// <summary>
+        /// A tag belongs to its log, not to whatever else is open. Tag a row in log A, then ADD log B
+        /// to the workspace: the tag is still there. This was broken by the first cut of the store,
+        /// which filed tags under the whole set of loaded locations, so the key changed the moment a
+        /// second source joined and the tags went quiet.
+        /// </summary>
+        [TestMethod]
+        [Timeout(300000)]
+        public void AddingASecondLog_KeepsTheFirstLogsTags()
+        {
+            var a = WriteLog(120);
+            var b = WriteLog(120);
+            var settings = Path.Combine(Path.GetTempPath(), $"fn_tagpersist_settings_{Guid.NewGuid():N}.json");
+            try
+            {
+                using (var s = LaunchWithLog(settings, a))
+                {
+                    var (id, message) = RowAt(s, 4);
+                    s.Mcp("tag_row", new { id, tag = "Important", text = "found it here" }).Dispose();
+                    Assert.AreEqual(1, TagCount(s, "Important"));
+
+                    // Add the second log to the same workspace and re-run: A's tag must come back.
+                    s.Mcp("add_folder", new { path = b }).Dispose();
+                    s.Mcp("run_search").Dispose();
+                    s.Mcp("wait_for_viewer", new { timeoutMs = 60000 }).Dispose();
+                    s.Mcp("wait_for_load", new { timeoutMs = 90000 }).Dispose();
+
+                    Assert.IsTrue(WaitUntil(() => TagCount(s, "Important") == 1, 20000),
+                        "adding a second log must not hide the first log's tags");
+                    using var rows = s.Mcp("filter_by_tag", new { tag = "Important" });
+                    Assert.AreEqual(message, rows.RootElement.GetProperty("rows")[0].GetProperty("message").GetString(),
+                        "and it is still on the same row");
+                }
+
+                // A fresh session with BOTH logs open finds it too.
+                using (var s = LaunchWithLog(settings, a))
+                {
+                    s.Mcp("add_folder", new { path = b }).Dispose();
+                    s.Mcp("run_search").Dispose();
+                    s.Mcp("wait_for_viewer", new { timeoutMs = 60000 }).Dispose();
+                    s.Mcp("wait_for_load", new { timeoutMs = 90000 }).Dispose();
+                    Assert.IsTrue(WaitUntil(() => TagCount(s, "Important") == 1, 20000),
+                        "the tag survives a restart with both logs loaded");
+                }
+            }
+            finally
+            {
+                TryDelete(a, b, settings);
+                TryDeleteDir(settings + ".row-tags");
+            }
+        }
+
+        private static bool WaitUntil(Func<bool> cond, int timeoutMs)
+        {
+            var deadline = DateTime.Now.AddMilliseconds(timeoutMs);
+            while (DateTime.Now < deadline) { try { if (cond()) return true; } catch { } Thread.Sleep(500); }
+            try { return cond(); } catch { return false; }
+        }
+
         private static void TryDelete(params string[] paths)
         {
             foreach (var p in paths) try { if (p != null && File.Exists(p)) File.Delete(p); } catch { }

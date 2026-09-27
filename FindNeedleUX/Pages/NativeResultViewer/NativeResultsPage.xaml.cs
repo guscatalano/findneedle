@@ -70,6 +70,10 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
 
     private List<string> _tagSources;
 
+    /// <summary>The source FILES the current result set came from, discovered once per settled load
+    /// (a zip is one location but many logs). Null until that pass has run.</summary>
+    private List<string> _tagFiles;
+
     /// <summary>
     /// The key the tag store files under: the WORKSPACE'S LOCATIONS (each location's name is its path
     /// for the file-backed kinds), not the distinct Source values of the rows. The row values would
@@ -101,6 +105,9 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         {
             var line = ViewModel.GetRecordByRowId(rowId);
             if (line != null) RowTagStore.Set(TagSources(), RowTagStore.TagFor(line, name, note));
+            // A row tagged before the settled-load pass ran still teaches the index its file.
+            if (line != null && !string.IsNullOrWhiteSpace(line.Source))
+                RowTagStore.RememberFiles(TagSources(), new[] { line.Source });
         }
         catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not save: {ex.Message}"); }
     }
@@ -112,7 +119,7 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         try
         {
             var line = ViewModel.GetRecordByRowId(rowId);
-            if (line != null) RowTagStore.Remove(TagSources(), RowTagStore.Fingerprint(line));
+            if (line != null) RowTagStore.Remove(TagSources(), RowTagStore.Fingerprint(line), line.Source);
         }
         catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not save: {ex.Message}"); }
         return removed;
@@ -125,10 +132,40 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         if (DispatcherQueue == null) return;
         DispatcherQueue.TryEnqueue(() =>
         {
-            _ = RestorePersistedTagsAsync();
-            _ = AutoShowSourceColumnAsync();
+            _ = OnLoadSettledAsync();
             UpdateTimeZoneHeader();
         });
+    }
+
+    /// <summary>
+    /// The work that can only be done once a load has genuinely settled, in one pass: find out which
+    /// FILES the rows actually came from (one GROUP BY, off the UI thread - a zip is one location but
+    /// eighteen logs), then use that answer twice. It decides whether the Source column has to show
+    /// itself, and it tells the tag store which files this set of locations produces so a reopen can
+    /// find their tags without querying again.
+    /// </summary>
+    private async System.Threading.Tasks.Task OnLoadSettledAsync()
+    {
+        List<string> files = null;
+        try
+        {
+            files = await System.Threading.Tasks.Task.Run(() =>
+            {
+                try { return ViewModel.GetSourceCounts().Keys.Where(k => !string.IsNullOrWhiteSpace(k)).ToList(); }
+                catch { return new List<string>(); }
+            });
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"settled load: {ex.Message}"); }
+
+        _tagFiles = files;
+        try
+        {
+            if (files is { Count: > 0 }) RowTagStore.RememberFiles(TagSources(), files);
+        }
+        catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"tags: could not index the files: {ex.Message}"); }
+
+        AutoShowSourceColumn(files?.Count ?? 0);
+        await RestorePersistedTagsAsync();
     }
 
     /// <summary>
@@ -137,23 +174,17 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// saved) and never applied over the user's own choice: once they have set Source themselves,
     /// that wins forever.
     /// </summary>
-    private async System.Threading.Tasks.Task AutoShowSourceColumnAsync()
+    private void AutoShowSourceColumn(int distinctFiles)
     {
         try
         {
             if (ResultsViewerSettings.HasExplicitColumnVisibility("Source")) return; // their call, not ours
             var col = ViewModel.Columns.FirstOrDefault(c => c.Name == "Source");
             if (col == null || col.IsVisible) return;
-            // How many distinct FILES the rows came from - a zip is one location but eighteen logs, so
-            // this has to come from the data. It is a GROUP BY: never on the UI thread.
-            int distinct = await System.Threading.Tasks.Task.Run(() =>
-            {
-                try { return ViewModel.GetSourceCounts().Count; } catch { return 0; }
-            });
-            if (!ResultsViewerSettings.ShouldAutoShowSourceColumn(distinct, userChose: false)) return;
+            if (!ResultsViewerSettings.ShouldAutoShowSourceColumn(distinctFiles, userChose: false)) return;
             col.IsVisible = true;
             ApplyAllColumnVisibility();
-            FindPluginCore.Diagnostics.PerfLog.Log("viewer.source_column.auto_shown", ("sources", distinct));
+            FindPluginCore.Diagnostics.PerfLog.Log("viewer.source_column.auto_shown", ("sources", distinctFiles));
         }
         catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"auto-show Source: {ex.Message}"); }
     }
@@ -196,14 +227,14 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
     /// </summary>
     private async System.Threading.Tasks.Task RestorePersistedTagsAsync()
     {
-        _tagSources = null; // a fresh load may be a different set of files
+        _tagSources = null; // a fresh load may be a different set of locations
         _rowTags.Clear();
         SeedUmlRowTags();   // derived from the last search's rules; re-applied, never persisted
         try
         {
             var sources = TagSources();
             if (sources.Count == 0) return;
-            var stored = RowTagStore.Load(sources);
+            var stored = RowTagStore.Load(sources, _tagFiles);
             if (stored.Count == 0) return;
 
             var found = await System.Threading.Tasks.Task.Run(() => MatchStoredTags(stored));
