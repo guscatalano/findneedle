@@ -251,16 +251,31 @@ rendered really weird" and "stuck loading the results". Three separate things, t
       once per shard at commit time, so the first number arrived about a minute in; it now reports
       every 20k rows from inside each shard, and names the row count until then.
 - [x] **A cache hit still rebuilds the whole FTS index.** Fixed 2026-09-27. The cause was not the
-      stamping: it was that an interrupted build kept nothing. All eight shards committed once, at
-      the very end, so closing the app during the 89-second build discarded every row they had
-      indexed and the next open started from zero. Each shard now commits every 250k rows and records
-      its position in the cache's meta table; a later build resumes from there (same shard count,
-      same Id range, shard file present - or the checkpoint is discarded and that shard rebuilds).
-      Cancelling commits the window in flight first. Two guards found while testing: a fresh shard
-      DROPs any table still in its file (deleting the file is best-effort and can fail while a handle
-      is open - appending would silently serve rows from a log no longer loaded), and the shard
-      connections set Pooling=False so that handle is not SQLite's own pool. A cache wipe clears the
-      checkpoints.
+      stamping: an interrupted build kept nothing. All eight shards committed once, at the very end,
+      so closing the app during the 89-second build discarded every row they had indexed. Each shard
+      now checkpoints as it goes - inside its own file, in the same transaction as the rows, so the
+      checkpoint can never disagree with the data - and a later build resumes from there.
+
+      Driving it end to end on the archive (kill the app mid-build, reopen) found five further
+      defects that the unit tests could not:
+      - a fresh shard appended to a STALE index file when the delete failed, because SQLite's
+        connection pool held the handle (Pooling=False, and a fresh shard now DROPs any table it
+        finds);
+      - a flat 250k checkpoint window did nothing for a log whose shards are smaller than that (the
+        window now scales to the shard, ~8 checkpoints each, 20k floor);
+      - the build died with "database is locked" against the live viewer, losing 246 seconds of work
+        (busy_timeout, and a failing shard now fails alone instead of taking the build with it);
+      - journal_mode=MEMORY left six of eight shards malformed after a kill - resumable in name only.
+        A disk rollback journal is crash-safe but doubled the build to 300s; WAL is both, and the
+        build is back to ~130s;
+      - a half-built shard set was attached as a COMPLETE index whenever stale meta still said
+        fts_built=1, which would have quietly dropped rows out of every search. The flag is cleared
+        when a build starts, and re-attaching asks each shard whether it finished.
+
+      Measured, killing the app 80s into a ~130s build on 7.4M rows: 5.9 GB of index work survives
+      and the reopen resumes all eight shards, finishing in 108s. A modest time saving - appending to
+      an existing FTS index is not free - but the work is no longer discarded and the result is
+      correct.
 
 Load times for the record (first open, cold): unzip + scan 11.5s, decode/ingest 115.6s, shard merge
 17.1s, viewer levels query 22.8s, first page 7.4s.
