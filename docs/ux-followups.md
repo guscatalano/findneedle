@@ -205,12 +205,12 @@ Alt+Left/Right and pivot pills) not adopted for now; the rest recorded as candid
       time order, each with its offset from the first, note, facts and message.
       Fixed on the way: the session map was never cleared between loads, so opening a different log
       left the old tags on whichever rows inherited those ids.
-      - [ ] **Known limitation: the key is the whole set of loaded locations.** Tag a row with log A
-            open, then ADD log B to the workspace, and the key changes from {A} to {A,B} - the tags
-            are still on disk but do not come back until A is opened alone again. Proposed fix: file
-            each tag under the FILE its row came from (the row already carries it) plus a small index
-            mapping a location set to the file keys it has produced, so a zip's inner files can be
-            found without a GROUP BY over the rows.
+      - [x] **Fixed 2026-09-27: tags are filed per source FILE, not per set of loaded locations.**
+            Adding a second log no longer hides the first log's tags, and a log carries its tags
+            between workspaces. An archive is one location but many logs, so the store keeps an index
+            from a location set to the file names it has produced; the viewer fills it from the
+            per-file counts it already computes off the UI thread for the Source column, so one
+            GROUP BY now serves the Source decision, the tag lookup and that index.
 - [ ] **Paging hides the timeline shape.** Page size 100 over 5M rows = 50k pages; "# go to" takes a
       page number; the histogram strip is decoration. Histogram click/drag → time predicate; go-to
       accepts `@12:34:56` and lands on the page containing that time. M.
@@ -250,13 +250,17 @@ rendered really weird" and "stuck loading the results". Three separate things, t
 - [x] **"Building search index... starting..." for 89 seconds.** The sharded FTS build reported progress
       once per shard at commit time, so the first number arrived about a minute in; it now reports
       every 20k rows from inside each shard, and names the row count until then.
-- [ ] **A cache hit still rebuilds the whole FTS index.** `cache.eval reuse=true fts_built=false` then
-      `search.build_index.ondemand elapsed_ms=89047`, and only then is the cache re-stamped. Every
-      reopen of a big log pays the full trigram build before text search is fast. The shards persist
-      beside the .db and re-attach when the cache was stamped after a build - so the gap is the FIRST
-      open writing its cache before the (deferred) index exists. Worth its own work: stamp the cache
-      only once the index is built, or write the index state when the deferred build finishes.
-      Measured: 89s on 7.4M rows, every single reopen.
+- [x] **A cache hit still rebuilds the whole FTS index.** Fixed 2026-09-27. The cause was not the
+      stamping: it was that an interrupted build kept nothing. All eight shards committed once, at
+      the very end, so closing the app during the 89-second build discarded every row they had
+      indexed and the next open started from zero. Each shard now commits every 250k rows and records
+      its position in the cache's meta table; a later build resumes from there (same shard count,
+      same Id range, shard file present - or the checkpoint is discarded and that shard rebuilds).
+      Cancelling commits the window in flight first. Two guards found while testing: a fresh shard
+      DROPs any table still in its file (deleting the file is best-effort and can fail while a handle
+      is open - appending would silently serve rows from a log no longer loaded), and the shard
+      connections set Pooling=False so that handle is not SQLite's own pool. A cache wipe clears the
+      checkpoints.
 
 Load times for the record (first open, cold): unzip + scan 11.5s, decode/ingest 115.6s, shard merge
 17.1s, viewer levels query 22.8s, first page 7.4s.
