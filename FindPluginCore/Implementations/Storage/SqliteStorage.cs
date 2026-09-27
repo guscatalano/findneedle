@@ -736,8 +736,14 @@ namespace FindPluginCore.Implementations.Storage
         /// </summary>
         public static int IndexShardCheckpointRows { get; set; } = 250_000;
 
-        /// <summary>The meta key recording how far shard <paramref name="k"/> has got.</summary>
-        private static string ShardProgressKey(int k) => $"fts_shard_progress_{k}";
+        /// <summary>
+        /// The checkpoint lives INSIDE its own shard file, written in the same transaction as the rows
+        /// it describes. Two reasons: it can never disagree with that shard's contents, and it costs
+        /// the main DB nothing - that connection runs journal_mode=MEMORY, where a write takes an
+        /// exclusive lock, so checkpointing there would mean eight workers writing to a file eight
+        /// readers are streaming rows out of.
+        /// </summary>
+        private const string ShardMetaTable = "_shard_progress";
 
         /// <summary>
         /// A shard's recorded progress: the plan it was built under (shard count and Id range, so a
@@ -765,55 +771,33 @@ namespace FindPluginCore.Implementations.Storage
                 => ShardCount == shardCount && Lo == lo && Hi == hi && Next >= lo && Next <= hi;
         }
 
+        /// <summary>Read shard k's checkpoint out of its own file. Null when there is none to trust.</summary>
         private ShardProgress? ReadShardProgress(int k)
         {
+            var path = ShardDbPath(k);
+            if (!System.IO.File.Exists(path)) return null;
             try
             {
-                lock (_sync)
-                {
-                    using var cmd = _connection.CreateCommand();
-                    cmd.CommandText = "SELECT Value FROM _meta WHERE Key = @k";
-                    cmd.Parameters.AddWithValue("@k", ShardProgressKey(k));
-                    var raw = cmd.ExecuteScalar() as string;
-                    if (raw != null && ShardProgress.TryParse(raw, out var p)) return p;
-                }
+                using var sc = new SqliteConnection($"Data Source={path};Mode=ReadOnly;Pooling=False");
+                sc.Open();
+                using var cmd = sc.CreateCommand();
+                cmd.CommandText = $"SELECT Value FROM {ShardMetaTable} WHERE Key = 'progress'";
+                var raw = cmd.ExecuteScalar() as string;
+                if (raw != null && ShardProgress.TryParse(raw, out var p)) return p;
             }
             catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"shard progress read failed: {ex.Message}"); }
             return null;
         }
 
-        private void WriteShardProgress(int k, ShardProgress p)
+        /// <summary>Record shard k's position, inside the transaction so it commits with the rows.</summary>
+        private static void WriteShardProgress(SqliteConnection sc, SqliteTransaction tx, ShardProgress p)
         {
-            try
-            {
-                lock (_sync)
-                {
-                    using var tx = _connection.BeginTransaction();
-                    WriteMetaKey(tx, ShardProgressKey(k), p.ToString());
-                    tx.Commit();
-                }
-            }
-            catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"shard progress write failed: {ex.Message}"); }
-        }
-
-        /// <summary>Forget every shard checkpoint - the index they describe is being discarded.</summary>
-        private void ClearShardProgress()
-        {
-            try
-            {
-                lock (_sync)
-                {
-                    using var tx = _connection.BeginTransaction();
-                    using (var cmd = _connection.CreateCommand())
-                    {
-                        cmd.Transaction = tx;
-                        cmd.CommandText = "DELETE FROM _meta WHERE Key LIKE 'fts_shard_progress_%'";
-                        cmd.ExecuteNonQuery();
-                    }
-                    tx.Commit();
-                }
-            }
-            catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"shard progress clear failed: {ex.Message}"); }
+            using var cmd = sc.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = $"INSERT INTO {ShardMetaTable}(Key, Value) VALUES('progress', @v) " +
+                              "ON CONFLICT(Key) DO UPDATE SET Value = excluded.Value";
+            cmd.Parameters.AddWithValue("@v", p.ToString());
+            cmd.ExecuteNonQuery();
         }
 
         private void BuildShardedIndex(CancellationToken ct, Action<long, long> onProgress)
@@ -902,9 +886,10 @@ namespace FindPluginCore.Implementations.Storage
                     bool resuming = resume[k].HasValue && resume[k].Value.Next > lo;
                     using (var cr = sc.CreateCommand())
                     {
-                        cr.CommandText = resuming
+                        cr.CommandText = (resuming
                             ? $"CREATE VIRTUAL TABLE IF NOT EXISTS fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');"
-                            : $"DROP TABLE IF EXISTS fts{k}; CREATE VIRTUAL TABLE fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');";
+                            : $"DROP TABLE IF EXISTS fts{k}; DROP TABLE IF EXISTS {ShardMetaTable}; CREATE VIRTUAL TABLE fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');")
+                            + $" CREATE TABLE IF NOT EXISTS {ShardMetaTable}(Key TEXT PRIMARY KEY, Value TEXT);";
                         cr.ExecuteNonQuery();
                     }
 
@@ -966,17 +951,18 @@ namespace FindPluginCore.Implementations.Storage
 
                             if (ct.IsCancellationRequested)
                             {
-                                // Keep what this window managed: commit it and record the checkpoint, so
-                                // the next run resumes here instead of starting the shard again.
+                                // Keep what this window managed: record the checkpoint and commit it
+                                // WITH those rows, so the next run resumes exactly here.
+                                WriteShardProgress(sc, tx, new ShardProgress(shardCount, lo, hi, lastIdInWindow + 1));
                                 tx.Commit();
                                 var kept = localN - reportedN;
                                 if (kept > 0) System.Threading.Interlocked.Add(ref indexed, kept);
-                                WriteShardProgress(k, new ShardProgress(shardCount, lo, hi, lastIdInWindow + 1));
                                 return;
                             }
 
-                            tx.Commit();
                             next = inWindow == 0 ? hi : lastIdInWindow + 1; // no rows in range: this shard is done
+                            WriteShardProgress(sc, tx, new ShardProgress(shardCount, lo, hi, next));
+                            tx.Commit();
                         }
 
                         var tail = localN - reportedN;
@@ -985,7 +971,6 @@ namespace FindPluginCore.Implementations.Storage
                             : System.Threading.Interlocked.Read(ref indexed);
                         reportedN = localN;
                         onProgress?.Invoke(soFar, _filteredCount);
-                        WriteShardProgress(k, new ShardProgress(shardCount, lo, hi, next));
                     }
                 });
 
@@ -1077,9 +1062,6 @@ namespace FindPluginCore.Implementations.Storage
         private void DetachAndDeleteShards()
         {
             DetachShards();
-            // The checkpoints describe an index that is being thrown away; keeping them would let a
-            // later build resume into shard files that no longer exist.
-            ClearShardProgress();
             for (int k = 0; k < MaxShards; k++)
             {
                 var p = ShardDbPath(k);
