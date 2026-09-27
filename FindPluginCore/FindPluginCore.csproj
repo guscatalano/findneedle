@@ -23,6 +23,7 @@
   <ItemGroup>
     <!-- WppSymbolResolver test seams (ResolversOverride, FindTracePdbOverride, …) are internal. -->
     <InternalsVisibleTo Include="FindNeedleUX.UnitTests" />
+    <InternalsVisibleTo Include="CoreTests" />
     <!-- The GUI's WPP Symbol Resolution page consumes internal helpers (SymbolPathText, …) — as it did
          before the provisioning core moved out of the FindNeedleUX assembly. -->
     <InternalsVisibleTo Include="FindNeedleUX" />

@@ -377,6 +377,66 @@ public class SearchIndexTests
         }
     }
 
+    /// <summary>
+    /// A half-built index must never be served as a complete one. fts_built=1 describes the last build
+    /// that FINISHED; if a rebuild starts after that and is interrupted, the shard files on disk are
+    /// partial while the flag still says built. Attaching those would quietly drop rows out of every
+    /// search - the worst kind of bug in a log search tool, because it looks like an answer.
+    /// </summary>
+    [TestMethod]
+    public void AnInterruptedRebuild_IsNeverServedAsACompleteIndex()
+    {
+        var prevThreshold = SqliteStorage.FtsShardThreshold;
+        var prevCheckpoint = SqliteStorage.IndexShardCheckpointRows;
+        SqliteStorage.FtsShardThreshold = 50;
+        SqliteStorage.IndexShardCheckpointRows = 5;
+        var src = NewSourceFile();
+        var dbPath = CachedStorage.GetCacheFilePath(src, ".db");
+        for (int k = 0; k < 8; k++) _dbPaths.Add(dbPath + $".fts{k}");
+        const int sver = SqliteStorage.CacheSchemaVersion;
+        try
+        {
+            // A complete build, stamped into the cache.
+            using (var s1 = new SqliteStorage(src))
+            {
+                s1.ClearTables();
+                var list = new List<ISearchResult>(600);
+                for (int i = 0; i < 600; i++) list.Add(new R(i % 5 == 0 ? $"needle row {i}" : $"hay row {i}"));
+                s1.AddFilteredBatch(list);
+                s1.BuildSearchIndex();
+                Assert.IsTrue(s1.IsSearchIndexBuilt);
+                s1.WriteCompletionMetadata(src, sver);
+            }
+
+            // A rebuild starts and is interrupted - the cache still carries the earlier fts_built=1.
+            using (var s2 = new SqliteStorage(src))
+            {
+                Assert.IsTrue(s2.EvaluateCacheReuse(src, sver));
+                var cts = new CancellationTokenSource();
+                s2.ForceRebuildSearchIndexForTests(cts.Token, (done, _) => { if (done >= 40) cts.Cancel(); });
+                Assert.IsFalse(s2.IsSearchIndexBuilt, "an interrupted rebuild does not claim an index");
+            }
+
+            // The next session must NOT treat those partial shards as a finished index.
+            using (var s3 = new SqliteStorage(src))
+            {
+                Assert.IsTrue(s3.EvaluateCacheReuse(src, sver), "the rows are still valid");
+                Assert.IsFalse(s3.IsSearchIndexBuilt, "a half-built shard set is not an index");
+
+                // And finishing it produces a correct one.
+                s3.BuildSearchIndex();
+                Assert.IsTrue(s3.IsSearchIndexBuilt);
+                Assert.AreEqual(120, SearchCount(s3, "needle"));
+                Assert.AreEqual(480, SearchCount(s3, "hay"));
+            }
+        }
+        finally
+        {
+            SqliteStorage.FtsShardThreshold = prevThreshold;
+            SqliteStorage.IndexShardCheckpointRows = prevCheckpoint;
+        }
+    }
+
     /// <summary>A wiped cache must not leave checkpoints behind that point at deleted shard files.</summary>
     [TestMethod]
     public void ClearingTheCache_ForgetsShardCheckpoints()

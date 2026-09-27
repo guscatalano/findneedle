@@ -604,6 +604,17 @@ namespace FindPluginCore.Implementations.Storage
         /// <paramref name="onProgress"/> receives (rowsIndexed, totalRows) after each batch.
         /// No-op when FTS isn't available (unsupported tokenizer, or disabled via FINDNEEDLE_DISABLE_FTS).
         /// </summary>
+        /// <summary>
+        /// Rebuild the index even though this instance believes one is already built - the situation a
+        /// reopened cache is in when its flag is stale. Test seam: production code reaches the same
+        /// path by way of a cache whose index was found wanting.
+        /// </summary>
+        internal void ForceRebuildSearchIndexForTests(CancellationToken cancellationToken, Action<long, long> onProgress = null)
+        {
+            _ftsIndexBuilt = false;
+            BuildSearchIndex(cancellationToken, onProgress);
+        }
+
         public void BuildSearchIndex(CancellationToken cancellationToken = default, Action<long, long> onProgress = null)
         {
             // FastBulkIngest defers the FilteredResults secondary indexes to here (one sorted bulk build
@@ -841,6 +852,9 @@ namespace FindPluginCore.Implementations.Storage
             long span = maxId - minId + 1;
             long per = (span + shardCount - 1) / shardCount;
             int checkpointRows = CheckpointRowsFor(_filteredCount / Math.Max(1, shardCount));
+            // From here the on-disk index is under construction: say so, so that a cache reopened after
+            // an interruption never trusts a flag left over from the build before this one.
+            MarkIndexNotBuiltInMeta();
 
             // Resume where a previous run stopped. A checkpoint counts only when its shard file is
             // still on disk AND it was written under this exact plan (same shard count, same Id
@@ -1068,6 +1082,24 @@ namespace FindPluginCore.Implementations.Storage
             }
         }
 
+        /// <summary>
+        /// Record in the cache that the index is not currently built. Called as a build starts, so an
+        /// interrupted one cannot leave fts_built=1 behind; the successful path re-stamps it.
+        /// </summary>
+        private void MarkIndexNotBuiltInMeta()
+        {
+            try
+            {
+                lock (_sync)
+                {
+                    using var tx = _connection.BeginTransaction();
+                    WriteMetaKey(tx, "fts_built", "0");
+                    tx.Commit();
+                }
+            }
+            catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"could not clear fts_built: {ex.Message}"); }
+        }
+
         /// <summary>Rows with an Id in [lo, next) — how much of a shard a checkpoint accounts for.</summary>
         private long CountRowsIn(long lo, long next)
         {
@@ -1140,6 +1172,20 @@ namespace FindPluginCore.Implementations.Storage
 
             for (int k = 0; k < shards; k++)
                 if (!System.IO.File.Exists(ShardDbPath(k))) { DetachAndDeleteShards(); return false; }
+            // fts_built=1 describes the last build that COMPLETED. If a rebuild started afterwards and
+            // was interrupted, the files on disk are a half-built index while the flag still says
+            // otherwise - and attaching those would quietly drop rows out of every search. Each shard
+            // records whether it finished, so ask the shards, not the flag.
+            for (int k = 0; k < shards; k++)
+            {
+                var progress = ReadShardProgress(k);
+                if (progress.HasValue && !progress.Value.IsDone)
+                {
+                    FindPluginCore.Diagnostics.PerfLog.Log("storage.fts.partial",
+                        ("shard", k.ToString()), ("next", progress.Value.Next), ("of", progress.Value.Hi));
+                    return false; // keep the files: the next build resumes from them
+                }
+            }
             try
             {
                 lock (_sync)
