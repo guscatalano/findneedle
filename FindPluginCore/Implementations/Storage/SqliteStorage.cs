@@ -729,12 +729,29 @@ namespace FindPluginCore.Implementations.Storage
         public static int IndexProgressReportRows { get; set; } = 20_000;
 
         /// <summary>
-        /// Rows a shard indexes per transaction. Each commit is a durable checkpoint: the shard file
-        /// holds those rows for good and the main DB records where to carry on from. Before this, a
-        /// shard committed once at the very end, so closing the app during an 89-second build on a
-        /// 7.4M-row log threw away every shard and the next open started from nothing.
+        /// The most rows a shard indexes per transaction. Each commit is a durable checkpoint: the
+        /// shard file keeps those rows and records where to carry on from. Before this, a shard
+        /// committed once at the very end, so closing the app during an 89-second build on a 7.4M-row
+        /// log threw away every shard and the next open started from nothing.
         /// </summary>
         public static int IndexShardCheckpointRows { get; set; } = 250_000;
+
+        /// <summary>
+        /// How often a shard of <paramref name="rowsPerShard"/> rows actually checkpoints. The cap
+        /// alone is not enough: a shard SMALLER than the cap would commit only at the very end, so an
+        /// 800k-row log (100k per shard against a 250k cap) would still lose everything to a kill. Aim
+        /// for a handful of checkpoints per shard whatever its size, with a floor so a tiny shard does
+        /// not pay for commits it will never need.
+        /// </summary>
+        public static int CheckpointRowsFor(long rowsPerShard)
+        {
+            const int minWindow = 20_000;
+            const int targetCheckpointsPerShard = 4;
+            if (rowsPerShard <= minWindow) return IndexShardCheckpointRows;
+            var window = rowsPerShard / targetCheckpointsPerShard;
+            if (window < minWindow) window = minWindow;
+            return (int)Math.Min(window, IndexShardCheckpointRows);
+        }
 
         /// <summary>
         /// The checkpoint lives INSIDE its own shard file, written in the same transaction as the rows
@@ -823,6 +840,7 @@ namespace FindPluginCore.Implementations.Storage
 
             long span = maxId - minId + 1;
             long per = (span + shardCount - 1) / shardCount;
+            int checkpointRows = CheckpointRowsFor(_filteredCount / Math.Max(1, shardCount));
 
             // Resume where a previous run stopped. A checkpoint counts only when its shard file is
             // still on disk AND it was written under this exact plan (same shard count, same Id
@@ -915,7 +933,7 @@ namespace FindPluginCore.Implementations.Storage
                                                   FROM FilteredResults WHERE Id >= @lo AND Id < @hi ORDER BY Id LIMIT @bs";
                             read.Parameters.AddWithValue("@lo", next);
                             read.Parameters.AddWithValue("@hi", windowEnd);
-                            read.Parameters.AddWithValue("@bs", IndexShardCheckpointRows);
+                            read.Parameters.AddWithValue("@bs", checkpointRows);
 
                             ins.Transaction = tx;
                             ins.CommandText = $"INSERT INTO fts{k}(rowid,Source,TaskName,Message,ResultSource,SearchableData,LogTime) VALUES(@r,@s,@t,@m,@rs,@sd,@lt)";

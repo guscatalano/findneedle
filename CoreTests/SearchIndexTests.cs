@@ -250,6 +250,23 @@ public class SearchIndexTests
     }
 
     /// <summary>
+    /// The checkpoint window has to adapt to the shard, not just sit at its cap: a shard smaller than
+    /// the cap would commit only at the very end, which is how an 800k-row log (100k per shard against
+    /// a 250k cap) still lost everything to a kill.
+    /// </summary>
+    [TestMethod]
+    public void CheckpointWindow_AdaptsToTheShardSize()
+    {
+        var cap = SqliteStorage.IndexShardCheckpointRows;
+        Assert.AreEqual(cap, SqliteStorage.CheckpointRowsFor(40_000_000 / 8), "a huge shard stays at the cap");
+        Assert.IsTrue(SqliteStorage.CheckpointRowsFor(100_000) < 100_000,
+            "a shard smaller than the cap must still checkpoint on the way through");
+        Assert.AreEqual(25_000, SqliteStorage.CheckpointRowsFor(100_000), "roughly four checkpoints per shard");
+        Assert.IsTrue(SqliteStorage.CheckpointRowsFor(30_000) >= 20_000, "with a floor, so a small shard is not all commits");
+        Assert.AreEqual(cap, SqliteStorage.CheckpointRowsFor(5_000), "and a tiny shard just commits once at the end");
+    }
+
+    /// <summary>
     /// A cancelled build keeps what it finished. Before this, all eight shards committed only at the
     /// very end, so closing the app during an 89-second build on a 7.4M-row log threw the lot away and
     /// the next open started from zero. Now each shard checkpoints as it goes and the next build
