@@ -880,6 +880,7 @@ namespace FindPluginCore.Implementations.Storage
 
             try
             {
+                var shardErrors = new System.Collections.Concurrent.ConcurrentBag<string>();
                 System.Threading.Tasks.Parallel.For(0, shardCount, k =>
                 {
                     if (ct.IsCancellationRequested) return;
@@ -888,13 +889,20 @@ namespace FindPluginCore.Implementations.Storage
                     long next = resume[k]?.Next ?? lo;
                     if (next >= hi) return;                  // this shard finished in an earlier run
                     var path = ShardDbPath(k);
+                    string stage = "start";
+                    try
+                    {
 
                     // Pooling=False: a pooled connection keeps the file handle alive after Dispose, so a
                     // later DeleteShardFile silently fails and the stale index lingers.
+                    // busy_timeout: this runs while the viewer is querying the same cache. Waiting a
+                    // few seconds for a lock is always better than losing a build that has already
+                    // spent a minute - without it, one busy moment fails the whole thing.
+                    stage = "open";
                     using var sc = new SqliteConnection($"Data Source={path};Pooling=False");
                     sc.Open();
                     using (var p = sc.CreateCommand())
-                    { p.CommandText = "PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-65536;"; p.ExecuteNonQuery(); }
+                    { p.CommandText = "PRAGMA busy_timeout=30000; PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-65536;"; p.ExecuteNonQuery(); }
                     // Contentless: stores the inverted index + rowid only (we fetch the row from the main
                     // table by Id). Same 6 columns as the single index so MATCH semantics match.
                     // A resumed shard KEEPS its table (that is the point); a fresh one drops any table
@@ -914,14 +922,17 @@ namespace FindPluginCore.Implementations.Storage
                     // Read this shard's range from a SEPARATE read-only connection to the main DB. A
                     // read-only connection doesn't take a write lock, so N workers read concurrently
                     // without contention — a read-write ATTACH from many workers hits "database is locked".
+                    stage = "open_source";
                     using var src = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly;Pooling=False");
                     src.Open();
+                    using (var sp = src.CreateCommand()) { sp.CommandText = "PRAGMA busy_timeout=30000;"; sp.ExecuteNonQuery(); }
 
                     long reportedN = 0, localN = 0;
                     // One transaction per checkpoint window: commit, record how far we got, carry on.
                     // A kill between the commit and the meta write only costs this window's rows again.
                     while (next < hi && !ct.IsCancellationRequested)
                     {
+                        stage = "window";
                         long windowEnd = hi;
                         long lastIdInWindow = next - 1;
                         using (var tx = sc.BeginTransaction())
@@ -943,6 +954,7 @@ namespace FindPluginCore.Implementations.Storage
                             ins.Prepare();
 
                             int inWindow = 0;
+                            stage = "read";
                             using (var rd = read.ExecuteReader())
                                 while (rd.Read())
                                 {
@@ -979,7 +991,9 @@ namespace FindPluginCore.Implementations.Storage
                             }
 
                             next = inWindow == 0 ? hi : lastIdInWindow + 1; // no rows in range: this shard is done
+                            stage = "checkpoint";
                             WriteShardProgress(sc, tx, new ShardProgress(shardCount, lo, hi, next));
+                            stage = "commit";
                             tx.Commit();
                         }
 
@@ -990,7 +1004,27 @@ namespace FindPluginCore.Implementations.Storage
                         reportedN = localN;
                         onProgress?.Invoke(soFar, _filteredCount);
                     }
+                    }
+                    catch (Exception shardEx)
+                    {
+                        // One shard failing is not the whole index failing: say which, and at what
+                        // stage, then let the others finish. The build below refuses to claim an
+                        // index when any shard is missing, so search falls back to LIKE as before -
+                        // but the work the other shards did is still on disk for the next attempt.
+                        shardErrors.Add($"shard{k}@{stage}: {shardEx.GetType().Name} {shardEx.Message}");
+                        FindPluginCore.Diagnostics.PerfLog.Log("storage.fts.shard_error",
+                            ("shard", k.ToString()), ("stage", stage), ("msg", shardEx.GetType().Name), ("detail", shardEx.Message));
+                    }
                 });
+                if (!shardErrors.IsEmpty)
+                {
+                    _ftsIndexBuilt = false;
+                    _ftsSharded = false;
+                    FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false),
+                        ("reason", "shard_build_failed"), ("failed_shards", shardErrors.Count),
+                        ("first", shardErrors.First()));
+                    return;
+                }
 
                 if (ct.IsCancellationRequested)
                 {

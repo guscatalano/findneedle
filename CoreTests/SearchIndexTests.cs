@@ -317,6 +317,66 @@ public class SearchIndexTests
         }
     }
 
+    /// <summary>
+    /// The real shape of a resume: a session indexes part of a log and EXITS (its storage disposed,
+    /// its connections gone), then a new session opens the same cache and carries on. This is what
+    /// happens when someone closes the app during a long build, and it is where the first cut fell
+    /// over with "database is locked".
+    /// </summary>
+    [TestMethod]
+    public void Resume_AcrossSessions_CompletesAndSearchesCorrectly()
+    {
+        var prevThreshold = SqliteStorage.FtsShardThreshold;
+        var prevCheckpoint = SqliteStorage.IndexShardCheckpointRows;
+        SqliteStorage.FtsShardThreshold = 50;
+        SqliteStorage.IndexShardCheckpointRows = 5;
+        var src = NewSourceFile();
+        var dbPath = CachedStorage.GetCacheFilePath(src, ".db");
+        for (int k = 0; k < 8; k++) _dbPaths.Add(dbPath + $".fts{k}");
+        const int sver = SqliteStorage.CacheSchemaVersion;
+        try
+        {
+            // Session one: ingest, start indexing, get interrupted, close.
+            using (var s1 = new SqliteStorage(src))
+            {
+                s1.ClearTables();
+                var list = new List<ISearchResult>(600);
+                for (int i = 0; i < 600; i++)
+                    list.Add(new R(i % 5 == 0 ? $"needle row {i}" : $"hay row {i}", src: $"Prov{i % 3}"));
+                s1.AddFilteredBatch(list);
+                s1.WriteCompletionMetadata(src, sver);
+                var cts = new CancellationTokenSource();
+                s1.BuildSearchIndex(cts.Token, (done, _) => { if (done >= 40) cts.Cancel(); });
+                Assert.IsFalse(s1.IsSearchIndexBuilt, "interrupted, so no index yet");
+            }
+
+            // Session two: same cache, finish the job.
+            using (var s2 = new SqliteStorage(src))
+            {
+                Assert.IsTrue(s2.EvaluateCacheReuse(src, sver), "the rows are still cached");
+                Assert.IsFalse(s2.IsSearchIndexBuilt, "the interrupted index is not claimed as built");
+                s2.BuildSearchIndex();
+                Assert.IsTrue(s2.IsSearchIndexBuilt, "the second session completes the index");
+                Assert.AreEqual(120, SearchCount(s2, "needle"), "every needle row is findable");
+                Assert.AreEqual(480, SearchCount(s2, "hay"), "and every hay row");
+                s2.WriteCompletionMetadata(src, sver);
+            }
+
+            // Session three: nothing left to build.
+            using (var s3 = new SqliteStorage(src))
+            {
+                Assert.IsTrue(s3.EvaluateCacheReuse(src, sver));
+                Assert.IsTrue(s3.IsSearchIndexBuilt, "a completed index is reused, not rebuilt");
+                Assert.AreEqual(120, SearchCount(s3, "needle"));
+            }
+        }
+        finally
+        {
+            SqliteStorage.FtsShardThreshold = prevThreshold;
+            SqliteStorage.IndexShardCheckpointRows = prevCheckpoint;
+        }
+    }
+
     /// <summary>A wiped cache must not leave checkpoints behind that point at deleted shard files.</summary>
     [TestMethod]
     public void ClearingTheCache_ForgetsShardCheckpoints()
