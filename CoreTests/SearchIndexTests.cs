@@ -249,6 +249,96 @@ public class SearchIndexTests
         }
     }
 
+    /// <summary>
+    /// A cancelled build keeps what it finished. Before this, all eight shards committed only at the
+    /// very end, so closing the app during an 89-second build on a 7.4M-row log threw the lot away and
+    /// the next open started from zero. Now each shard checkpoints as it goes and the next build
+    /// resumes - and, the part that actually matters, the resumed index finds every row.
+    /// </summary>
+    [TestMethod]
+    public void ShardedBuild_Cancelled_ResumesAndStillFindsEverything()
+    {
+        var prevThreshold = SqliteStorage.FtsShardThreshold;
+        var prevCheckpoint = SqliteStorage.IndexShardCheckpointRows;
+        SqliteStorage.FtsShardThreshold = 50;        // force the sharded path
+        SqliteStorage.IndexShardCheckpointRows = 5;  // checkpoint often so a cancel lands mid-shard
+        var src = NewSourceFile();
+        var dbPath = CachedStorage.GetCacheFilePath(src, ".db");
+        for (int k = 0; k < 8; k++) _dbPaths.Add(dbPath + $".fts{k}");
+        try
+        {
+            using var s = new SqliteStorage(src);
+            s.ClearTables();
+            var list = new List<ISearchResult>(600);
+            for (int i = 0; i < 600; i++)
+                list.Add(new R(i % 5 == 0 ? $"needle row {i}" : $"hay row {i}", src: $"Prov{i % 3}"));
+            s.AddFilteredBatch(list);
+
+            // Cancel partway: stop once some rows are in, mid-shard.
+            var cts = new CancellationTokenSource();
+            long seen = 0;
+            s.BuildSearchIndex(cts.Token, (done, _) => { seen = done; if (done >= 40) cts.Cancel(); });
+            Assert.IsFalse(s.IsSearchIndexBuilt, "a cancelled build must not claim to have an index");
+            Assert.IsTrue(seen > 0, "the cancelled build indexed something");
+            Assert.IsTrue(File.Exists(dbPath + ".fts0"), "the shard files it finished are kept, not deleted");
+
+            // Resume: the second build picks up the checkpoints and completes.
+            long firstReport = -1;
+            s.BuildSearchIndex(default, (done, _) => { if (firstReport < 0) firstReport = done; });
+            Assert.IsTrue(s.IsSearchIndexBuilt, "the resumed build completes the index");
+            Assert.IsTrue(firstReport > 0, $"the resumed build starts from the rows already indexed, not from 0 (first report: {firstReport})");
+
+            // The point of all of it: search is correct over the resumed index.
+            Assert.AreEqual(120, SearchCount(s, "needle"), "every needle row is findable after resuming");
+            Assert.AreEqual(480, SearchCount(s, "hay"), "and every hay row too - no rows dropped at the seam");
+            Assert.AreEqual(1, SearchCount(s, "needle row 355".Replace("355", "5")) > 0 ? 1 : 0, "a specific row still matches");
+        }
+        finally
+        {
+            SqliteStorage.FtsShardThreshold = prevThreshold;
+            SqliteStorage.IndexShardCheckpointRows = prevCheckpoint;
+        }
+    }
+
+    /// <summary>A wiped cache must not leave checkpoints behind that point at deleted shard files.</summary>
+    [TestMethod]
+    public void ClearingTheCache_ForgetsShardCheckpoints()
+    {
+        var prevThreshold = SqliteStorage.FtsShardThreshold;
+        var prevCheckpoint = SqliteStorage.IndexShardCheckpointRows;
+        SqliteStorage.FtsShardThreshold = 50;
+        SqliteStorage.IndexShardCheckpointRows = 5;
+        var src = NewSourceFile();
+        var dbPath = CachedStorage.GetCacheFilePath(src, ".db");
+        for (int k = 0; k < 8; k++) _dbPaths.Add(dbPath + $".fts{k}");
+        try
+        {
+            using var s = new SqliteStorage(src);
+            s.ClearTables();
+            var list = new List<ISearchResult>(300);
+            for (int i = 0; i < 300; i++) list.Add(new R($"alpha row {i}"));
+            s.AddFilteredBatch(list);
+            var cts = new CancellationTokenSource();
+            s.BuildSearchIndex(cts.Token, (done, _) => { if (done >= 20) cts.Cancel(); });
+
+            // Wipe and refill with different content: the stale checkpoints must not be trusted.
+            s.ClearTables();
+            var list2 = new List<ISearchResult>(300);
+            for (int i = 0; i < 300; i++) list2.Add(new R($"bravo row {i}"));
+            s.AddFilteredBatch(list2);
+            s.BuildSearchIndex();
+
+            Assert.IsTrue(s.IsSearchIndexBuilt);
+            Assert.AreEqual(300, SearchCount(s, "bravo"), "the rebuilt index covers the new rows");
+            Assert.AreEqual(0, SearchCount(s, "alpha"), "and none of the wiped ones");
+        }
+        finally
+        {
+            SqliteStorage.FtsShardThreshold = prevThreshold;
+            SqliteStorage.IndexShardCheckpointRows = prevCheckpoint;
+        }
+    }
+
     [TestMethod]
     public void Cache_ShardedFts_WarmReuses_AcrossReopen()
     {

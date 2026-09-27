@@ -728,6 +728,94 @@ namespace FindPluginCore.Implementations.Storage
         /// test can watch progress advance without indexing millions of rows.</summary>
         public static int IndexProgressReportRows { get; set; } = 20_000;
 
+        /// <summary>
+        /// Rows a shard indexes per transaction. Each commit is a durable checkpoint: the shard file
+        /// holds those rows for good and the main DB records where to carry on from. Before this, a
+        /// shard committed once at the very end, so closing the app during an 89-second build on a
+        /// 7.4M-row log threw away every shard and the next open started from nothing.
+        /// </summary>
+        public static int IndexShardCheckpointRows { get; set; } = 250_000;
+
+        /// <summary>The meta key recording how far shard <paramref name="k"/> has got.</summary>
+        private static string ShardProgressKey(int k) => $"fts_shard_progress_{k}";
+
+        /// <summary>
+        /// A shard's recorded progress: the plan it was built under (shard count and Id range, so a
+        /// checkpoint from a differently-shaped build is never trusted) and the first Id it has NOT
+        /// indexed yet. Done when Next has reached Hi.
+        /// </summary>
+        private readonly record struct ShardProgress(int ShardCount, long Lo, long Hi, long Next)
+        {
+            public bool IsDone => Next >= Hi;
+            public override string ToString() => $"{ShardCount}:{Lo}:{Hi}:{Next}";
+
+            public static bool TryParse(string s, out ShardProgress p)
+            {
+                p = default;
+                var parts = (s ?? "").Split(':');
+                if (parts.Length != 4) return false;
+                if (!int.TryParse(parts[0], out var sc) || !long.TryParse(parts[1], out var lo)
+                    || !long.TryParse(parts[2], out var hi) || !long.TryParse(parts[3], out var next)) return false;
+                p = new ShardProgress(sc, lo, hi, next);
+                return true;
+            }
+
+            /// <summary>Is this checkpoint usable for the plan we are about to run?</summary>
+            public bool Matches(int shardCount, long lo, long hi)
+                => ShardCount == shardCount && Lo == lo && Hi == hi && Next >= lo && Next <= hi;
+        }
+
+        private ShardProgress? ReadShardProgress(int k)
+        {
+            try
+            {
+                lock (_sync)
+                {
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = "SELECT Value FROM _meta WHERE Key = @k";
+                    cmd.Parameters.AddWithValue("@k", ShardProgressKey(k));
+                    var raw = cmd.ExecuteScalar() as string;
+                    if (raw != null && ShardProgress.TryParse(raw, out var p)) return p;
+                }
+            }
+            catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"shard progress read failed: {ex.Message}"); }
+            return null;
+        }
+
+        private void WriteShardProgress(int k, ShardProgress p)
+        {
+            try
+            {
+                lock (_sync)
+                {
+                    using var tx = _connection.BeginTransaction();
+                    WriteMetaKey(tx, ShardProgressKey(k), p.ToString());
+                    tx.Commit();
+                }
+            }
+            catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"shard progress write failed: {ex.Message}"); }
+        }
+
+        /// <summary>Forget every shard checkpoint - the index they describe is being discarded.</summary>
+        private void ClearShardProgress()
+        {
+            try
+            {
+                lock (_sync)
+                {
+                    using var tx = _connection.BeginTransaction();
+                    using (var cmd = _connection.CreateCommand())
+                    {
+                        cmd.Transaction = tx;
+                        cmd.CommandText = "DELETE FROM _meta WHERE Key LIKE 'fts_shard_progress_%'";
+                        cmd.ExecuteNonQuery();
+                    }
+                    tx.Commit();
+                }
+            }
+            catch (Exception ex) { FindNeedlePluginLib.Logger.Instance.Log($"shard progress clear failed: {ex.Message}"); }
+        }
+
         private void BuildShardedIndex(CancellationToken ct, Action<long, long> onProgress)
         {
             var start = Environment.TickCount64;
@@ -749,12 +837,45 @@ namespace FindPluginCore.Implementations.Storage
             string rsExpr = indexResultSource ? "ResultSource" : "''";
             string ltExpr = IndexLogTimeInFts ? "LogTime" : "''";
 
-            // Clear any prior shards (detach from the connection + delete the files) before rebuilding.
-            DetachAndDeleteShards();
-
             long span = maxId - minId + 1;
             long per = (span + shardCount - 1) / shardCount;
-            long indexed = 0;
+
+            // Resume where a previous run stopped. A checkpoint counts only when its shard file is
+            // still on disk AND it was written under this exact plan (same shard count, same Id
+            // range); anything else is discarded and that shard is built from scratch. Shards the
+            // connection still holds open are detached first so the files can be opened/deleted.
+            DetachShards();
+            var resume = new ShardProgress?[shardCount];
+            long alreadyIndexed = 0;
+            for (int k = 0; k < shardCount; k++)
+            {
+                long lo = minId + (long)k * per;
+                long hi = Math.Min(lo + per, maxId + 1);
+                var saved = ReadShardProgress(k);
+                bool usable = saved.HasValue && saved.Value.Matches(shardCount, lo, hi)
+                              && System.IO.File.Exists(ShardDbPath(k));
+                if (usable)
+                {
+                    resume[k] = saved;
+                    alreadyIndexed += CountRowsIn(lo, saved.Value.Next);
+                }
+                else
+                {
+                    resume[k] = null;
+                    DeleteShardFile(k);
+                }
+            }
+            // Shard files beyond this plan's count are leftovers from a differently-shaped build.
+            for (int k = shardCount; k < MaxShards; k++) DeleteShardFile(k);
+
+            long indexed = alreadyIndexed;
+            int resumedShards = 0;
+            for (int k = 0; k < shardCount; k++) if (resume[k] is { Next: > 0 } rp && rp.Next > rp.Lo) resumedShards++;
+            if (resumedShards > 0)
+                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts.resume", ("shards", resumedShards),
+                    ("of", shardCount), ("rows_already_indexed", alreadyIndexed));
+            onProgress?.Invoke(indexed, _filteredCount);
+
             try
             {
                 System.Threading.Tasks.Parallel.For(0, shardCount, k =>
@@ -762,82 +883,125 @@ namespace FindPluginCore.Implementations.Storage
                     if (ct.IsCancellationRequested) return;
                     long lo = minId + (long)k * per;
                     long hi = Math.Min(lo + per, maxId + 1); // [lo, hi)
+                    long next = resume[k]?.Next ?? lo;
+                    if (next >= hi) return;                  // this shard finished in an earlier run
                     var path = ShardDbPath(k);
-                    try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch (Exception) { /* best-effort file cleanup */ }
 
-                    using var sc = new SqliteConnection($"Data Source={path}");
+                    // Pooling=False: a pooled connection keeps the file handle alive after Dispose, so a
+                    // later DeleteShardFile silently fails and the stale index lingers.
+                    using var sc = new SqliteConnection($"Data Source={path};Pooling=False");
                     sc.Open();
                     using (var p = sc.CreateCommand())
                     { p.CommandText = "PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-65536;"; p.ExecuteNonQuery(); }
                     // Contentless: stores the inverted index + rowid only (we fetch the row from the main
                     // table by Id). Same 6 columns as the single index so MATCH semantics match.
+                    // A resumed shard KEEPS its table (that is the point); a fresh one drops any table
+                    // still in the file first. Deleting the file is best-effort - it can fail while
+                    // something holds a handle - and appending to a stale index would quietly return
+                    // rows from a log that is no longer loaded.
+                    bool resuming = resume[k].HasValue && resume[k].Value.Next > lo;
                     using (var cr = sc.CreateCommand())
-                    { cr.CommandText = $"CREATE VIRTUAL TABLE fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');"; cr.ExecuteNonQuery(); }
+                    {
+                        cr.CommandText = resuming
+                            ? $"CREATE VIRTUAL TABLE IF NOT EXISTS fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');"
+                            : $"DROP TABLE IF EXISTS fts{k}; CREATE VIRTUAL TABLE fts{k} USING fts5(Source,TaskName,Message,ResultSource,SearchableData,LogTime, content='', tokenize='trigram');";
+                        cr.ExecuteNonQuery();
+                    }
+
                     // Read this shard's range from a SEPARATE read-only connection to the main DB. A
                     // read-only connection doesn't take a write lock, so N workers read concurrently
                     // without contention — a read-write ATTACH from many workers hits "database is locked".
-                    using var src = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly");
+                    using var src = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly;Pooling=False");
                     src.Open();
-                    using var read = src.CreateCommand();
-                    read.CommandText = $@"SELECT Id, {srcExpr}, TaskName, Message, {rsExpr},
-                                          CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END, {ltExpr}
-                                          FROM FilteredResults WHERE Id >= @lo AND Id < @hi";
-                    read.Parameters.AddWithValue("@lo", lo);
-                    read.Parameters.AddWithValue("@hi", hi);
-                    using (var tx = sc.BeginTransaction())
-                    using (var ins = sc.CreateCommand())
+
+                    long reportedN = 0, localN = 0;
+                    // One transaction per checkpoint window: commit, record how far we got, carry on.
+                    // A kill between the commit and the meta write only costs this window's rows again.
+                    while (next < hi && !ct.IsCancellationRequested)
                     {
-                        ins.Transaction = tx;
-                        ins.CommandText = $"INSERT INTO fts{k}(rowid,Source,TaskName,Message,ResultSource,SearchableData,LogTime) VALUES(@r,@s,@t,@m,@rs,@sd,@lt)";
-                        SqliteParameter Add(string n2) { var p2 = ins.CreateParameter(); p2.ParameterName = n2; ins.Parameters.Add(p2); return p2; }
-                        var pr = Add("@r"); var psr = Add("@s"); var pt = Add("@t"); var pm = Add("@m");
-                        var prs = Add("@rs"); var psd = Add("@sd"); var plt = Add("@lt");
-                        ins.Prepare();
-                        long localN = 0;
-                        // Rows already folded into the shared counter. A shard commits once, at the end,
-                        // so reporting only there left the UI's "Building search index…" sitting on
-                        // "starting…" for the whole build (89 seconds on a 7.4M-row log) - which reads
-                        // as a hang. Report as we go instead, in chunks big enough that the callback
-                        // costs nothing next to the insert.
-                        long reportedN = 0;
-                        using (var rd = read.ExecuteReader())
-                            while (rd.Read())
-                            {
-                                if (ct.IsCancellationRequested) break;
-                                pr.Value = rd.GetInt64(0);
-                                psr.Value = rd.IsDBNull(1) ? "" : rd.GetString(1);
-                                pt.Value = rd.IsDBNull(2) ? "" : rd.GetString(2);
-                                pm.Value = rd.IsDBNull(3) ? "" : rd.GetString(3);
-                                prs.Value = rd.IsDBNull(4) ? "" : rd.GetString(4);
-                                psd.Value = rd.IsDBNull(5) ? "" : rd.GetString(5);
-                                plt.Value = rd.IsDBNull(6) ? "" : rd.GetString(6);
-                                ins.ExecuteNonQuery();
-                                localN++;
-                                if (onProgress != null && localN - reportedN >= IndexProgressReportRows)
+                        long windowEnd = hi;
+                        long lastIdInWindow = next - 1;
+                        using (var tx = sc.BeginTransaction())
+                        using (var ins = sc.CreateCommand())
+                        using (var read = src.CreateCommand())
+                        {
+                            read.CommandText = $@"SELECT Id, {srcExpr}, TaskName, Message, {rsExpr},
+                                                  CASE WHEN SearchableData = Message THEN '' ELSE SearchableData END, {ltExpr}
+                                                  FROM FilteredResults WHERE Id >= @lo AND Id < @hi ORDER BY Id LIMIT @bs";
+                            read.Parameters.AddWithValue("@lo", next);
+                            read.Parameters.AddWithValue("@hi", windowEnd);
+                            read.Parameters.AddWithValue("@bs", IndexShardCheckpointRows);
+
+                            ins.Transaction = tx;
+                            ins.CommandText = $"INSERT INTO fts{k}(rowid,Source,TaskName,Message,ResultSource,SearchableData,LogTime) VALUES(@r,@s,@t,@m,@rs,@sd,@lt)";
+                            SqliteParameter Add(string n2) { var p2 = ins.CreateParameter(); p2.ParameterName = n2; ins.Parameters.Add(p2); return p2; }
+                            var pr = Add("@r"); var psr = Add("@s"); var pt = Add("@t"); var pm = Add("@m");
+                            var prs = Add("@rs"); var psd = Add("@sd"); var plt = Add("@lt");
+                            ins.Prepare();
+
+                            int inWindow = 0;
+                            using (var rd = read.ExecuteReader())
+                                while (rd.Read())
                                 {
-                                    var delta = localN - reportedN;
-                                    reportedN = localN;
-                                    onProgress(System.Threading.Interlocked.Add(ref indexed, delta), _filteredCount);
+                                    if (ct.IsCancellationRequested) break;
+                                    var id = rd.GetInt64(0);
+                                    pr.Value = id;
+                                    psr.Value = rd.IsDBNull(1) ? "" : rd.GetString(1);
+                                    pt.Value = rd.IsDBNull(2) ? "" : rd.GetString(2);
+                                    pm.Value = rd.IsDBNull(3) ? "" : rd.GetString(3);
+                                    prs.Value = rd.IsDBNull(4) ? "" : rd.GetString(4);
+                                    psd.Value = rd.IsDBNull(5) ? "" : rd.GetString(5);
+                                    plt.Value = rd.IsDBNull(6) ? "" : rd.GetString(6);
+                                    ins.ExecuteNonQuery();
+                                    lastIdInWindow = id;
+                                    inWindow++;
+                                    localN++;
+                                    if (onProgress != null && localN - reportedN >= IndexProgressReportRows)
+                                    {
+                                        var delta = localN - reportedN;
+                                        reportedN = localN;
+                                        onProgress(System.Threading.Interlocked.Add(ref indexed, delta), _filteredCount);
+                                    }
                                 }
+
+                            if (ct.IsCancellationRequested)
+                            {
+                                // Keep what this window managed: commit it and record the checkpoint, so
+                                // the next run resumes here instead of starting the shard again.
+                                tx.Commit();
+                                var kept = localN - reportedN;
+                                if (kept > 0) System.Threading.Interlocked.Add(ref indexed, kept);
+                                WriteShardProgress(k, new ShardProgress(shardCount, lo, hi, lastIdInWindow + 1));
+                                return;
                             }
-                        tx.Commit();
+
+                            tx.Commit();
+                            next = inWindow == 0 ? hi : lastIdInWindow + 1; // no rows in range: this shard is done
+                        }
+
                         var tail = localN - reportedN;
                         var soFar = tail > 0
                             ? System.Threading.Interlocked.Add(ref indexed, tail)
                             : System.Threading.Interlocked.Read(ref indexed);
+                        reportedN = localN;
                         onProgress?.Invoke(soFar, _filteredCount);
+                        WriteShardProgress(k, new ShardProgress(shardCount, lo, hi, next));
                     }
                 });
 
                 if (ct.IsCancellationRequested)
                 {
-                    DetachAndDeleteShards();
+                    // Cancelled: the shard files and their checkpoints stay on disk. The index is not
+                    // usable yet (so search falls back to LIKE), but the next build resumes from here
+                    // instead of repeating the work.
                     _ftsIndexBuilt = false;
-                    FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false), ("reason", "cancelled"), ("sharded", true));
+                    _ftsSharded = false;
+                    FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", false), ("reason", "cancelled"),
+                        ("sharded", true), ("rows_indexed", System.Threading.Interlocked.Read(ref indexed)), ("resumable", true));
                     return;
                 }
 
-                // Attach the freshly-built shards to the query connection.
+                // Attach the shards (freshly built, resumed, or carried over) to the query connection.
                 lock (_sync)
                 {
                     for (int k = 0; k < shardCount; k++)
@@ -851,7 +1015,8 @@ namespace FindPluginCore.Implementations.Storage
                 _shardCount = shardCount;
                 _ftsIndexBuilt = true;
                 FindPluginCore.Diagnostics.PerfLog.Log("storage.fts", ("built", true),
-                    ("rebuild_ms", Environment.TickCount64 - start), ("sharded", true), ("shards", shardCount), ("rows", indexed));
+                    ("rebuild_ms", Environment.TickCount64 - start), ("sharded", true), ("shards", shardCount),
+                    ("rows", indexed), ("resumed_shards", resumedShards));
             }
             catch (Exception ex)
             {
@@ -864,6 +1029,32 @@ namespace FindPluginCore.Implementations.Storage
                     ("msg", real.GetType().Name), ("detail", real.Message));
                 System.Diagnostics.Debug.WriteLine($"[SqliteStorage] sharded FTS build failed; falls back to LIKE: {real.Message}");
             }
+        }
+
+        /// <summary>Rows with an Id in [lo, next) — how much of a shard a checkpoint accounts for.</summary>
+        private long CountRowsIn(long lo, long next)
+        {
+            if (next <= lo) return 0;
+            try
+            {
+                lock (_sync)
+                {
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = "SELECT COUNT(*) FROM FilteredResults WHERE Id >= @lo AND Id < @hi";
+                    cmd.Parameters.AddWithValue("@lo", lo);
+                    cmd.Parameters.AddWithValue("@hi", next);
+                    return Convert.ToInt64(cmd.ExecuteScalar() ?? 0L);
+                }
+            }
+            catch { return 0; }
+        }
+
+        private void DeleteShardFile(int k)
+        {
+            var p = ShardDbPath(k);
+            try { if (System.IO.File.Exists(p)) System.IO.File.Delete(p); } catch (Exception) { /* best-effort shard cleanup */ }
+            foreach (var s in new[] { "-wal", "-shm", "-journal" })
+                try { if (System.IO.File.Exists(p + s)) System.IO.File.Delete(p + s); } catch (Exception) { /* best-effort shard cleanup */ }
         }
 
         /// <summary>Detach any attached shard DBs from the query connection and delete the shard files.</summary>
@@ -886,6 +1077,9 @@ namespace FindPluginCore.Implementations.Storage
         private void DetachAndDeleteShards()
         {
             DetachShards();
+            // The checkpoints describe an index that is being thrown away; keeping them would let a
+            // later build resume into shard files that no longer exist.
+            ClearShardProgress();
             for (int k = 0; k < MaxShards; k++)
             {
                 var p = ShardDbPath(k);
