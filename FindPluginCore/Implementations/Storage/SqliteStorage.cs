@@ -757,7 +757,7 @@ namespace FindPluginCore.Implementations.Storage
         public static int CheckpointRowsFor(long rowsPerShard)
         {
             const int minWindow = 20_000;
-            const int targetCheckpointsPerShard = 4;
+            const int targetCheckpointsPerShard = 8; // commits are cheap in WAL; finer resume granularity
             if (rowsPerShard <= minWindow) return IndexShardCheckpointRows;
             var window = rowsPerShard / targetCheckpointsPerShard;
             if (window < minWindow) window = minWindow;
@@ -799,6 +799,34 @@ namespace FindPluginCore.Implementations.Storage
                 => ShardCount == shardCount && Lo == lo && Hi == hi && Next >= lo && Next <= hi;
         }
 
+        /// <summary>
+        /// Can shard k's file be opened and read at all? Deliberately cheap - opening it read-WRITE is
+        /// the part that matters, because that is what lets SQLite roll back the journal a killed app
+        /// left behind (a read-only open cannot, and would condemn every recoverable shard). A full
+        /// integrity check was tried and dropped: PRAGMA quick_check reads the whole file, which on a
+        /// 7.4M-row log is eight gigabytes scanned before a single row gets indexed. Corruption deeper
+        /// in the file surfaces when the build touches it, and a shard that fails mid-build is deleted
+        /// so the next attempt starts it clean - so nothing loops on a bad file.
+        /// </summary>
+        private bool ShardFileIsSound(int k)
+        {
+            var path = ShardDbPath(k);
+            try
+            {
+                using var sc = new SqliteConnection($"Data Source={path};Pooling=False");
+                sc.Open();
+                using var cmd = sc.CreateCommand();
+                cmd.CommandText = $"SELECT COUNT(*) FROM {ShardMetaTable};"; // touches the header + a page
+                cmd.ExecuteScalar();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                FindPluginCore.Diagnostics.PerfLog.Log("storage.fts.shard_unsound", ("shard", k.ToString()), ("msg", ex.GetType().Name));
+                return false;
+            }
+        }
+
         /// <summary>Read shard k's checkpoint out of its own file. Null when there is none to trust.</summary>
         private ShardProgress? ReadShardProgress(int k)
         {
@@ -806,7 +834,9 @@ namespace FindPluginCore.Implementations.Storage
             if (!System.IO.File.Exists(path)) return null;
             try
             {
-                using var sc = new SqliteConnection($"Data Source={path};Mode=ReadOnly;Pooling=False");
+                // Read-write, like the soundness check: a shard from a killed app needs its journal
+                // rolled back before anything in it can be read.
+                using var sc = new SqliteConnection($"Data Source={path};Pooling=False");
                 sc.Open();
                 using var cmd = sc.CreateCommand();
                 cmd.CommandText = $"SELECT Value FROM {ShardMetaTable} WHERE Key = 'progress'";
@@ -835,6 +865,7 @@ namespace FindPluginCore.Implementations.Storage
 
             bool indexSource, indexResultSource;
             long minId, maxId;
+            var setupStart = Environment.TickCount64;
             lock (_sync)
             {
                 indexSource = DistinctAtLeastTwo("Source");
@@ -848,6 +879,8 @@ namespace FindPluginCore.Implementations.Storage
             string srcExpr = indexSource ? "Source" : "''";
             string rsExpr = indexResultSource ? "ResultSource" : "''";
             string ltExpr = IndexLogTimeInFts ? "LogTime" : "''";
+            FindPluginCore.Diagnostics.PerfLog.Log("storage.fts.plan",
+                ("setup_ms", Environment.TickCount64 - setupStart), ("shards", shardCount), ("rows", _filteredCount));
 
             long span = maxId - minId + 1;
             long per = (span + shardCount - 1) / shardCount;
@@ -869,7 +902,8 @@ namespace FindPluginCore.Implementations.Storage
                 long hi = Math.Min(lo + per, maxId + 1);
                 var saved = ReadShardProgress(k);
                 bool usable = saved.HasValue && saved.Value.Matches(shardCount, lo, hi)
-                              && System.IO.File.Exists(ShardDbPath(k));
+                              && System.IO.File.Exists(ShardDbPath(k))
+                              && ShardFileIsSound(k);
                 if (usable)
                 {
                     resume[k] = saved;
@@ -912,11 +946,20 @@ namespace FindPluginCore.Implementations.Storage
                     // busy_timeout: this runs while the viewer is querying the same cache. Waiting a
                     // few seconds for a lock is always better than losing a build that has already
                     // spent a minute - without it, one busy moment fails the whole thing.
+                    //
+                    // WAL, unlike the journal_mode=MEMORY the rest of this file uses. A memory journal
+                    // cannot roll back a transaction the process never finished, so killing the app
+                    // mid-write left the shard "database disk image is malformed" - a resumable shard
+                    // whose file is corrupt is worse than none at all. A rollback journal on disk is
+                    // crash-safe but writes every page twice, which took the 7.4M-row build from ~120s
+                    // to ~300s. WAL is both: commits append, and a kill is recovered from the -wal file
+                    // on the next open. synchronous=OFF still skips the fsyncs - a process kill is
+                    // survived either way, and that is the case this is built for.
                     stage = "open";
                     using var sc = new SqliteConnection($"Data Source={path};Pooling=False");
                     sc.Open();
                     using (var p = sc.CreateCommand())
-                    { p.CommandText = "PRAGMA busy_timeout=30000; PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-65536;"; p.ExecuteNonQuery(); }
+                    { p.CommandText = "PRAGMA busy_timeout=30000; PRAGMA journal_mode=WAL; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA cache_size=-65536;"; p.ExecuteNonQuery(); }
                     // Contentless: stores the inverted index + rowid only (we fetch the row from the main
                     // table by Id). Same 6 columns as the single index so MATCH semantics match.
                     // A resumed shard KEEPS its table (that is the point); a fresh one drops any table
@@ -1009,6 +1052,8 @@ namespace FindPluginCore.Implementations.Storage
                             WriteShardProgress(sc, tx, new ShardProgress(shardCount, lo, hi, next));
                             stage = "commit";
                             tx.Commit();
+                            FindPluginCore.Diagnostics.PerfLog.Log("storage.fts.checkpoint",
+                                ("shard", k.ToString()), ("rows", localN), ("next", next), ("of", hi));
                         }
 
                         var tail = localN - reportedN;
@@ -1028,6 +1073,9 @@ namespace FindPluginCore.Implementations.Storage
                         shardErrors.Add($"shard{k}@{stage}: {shardEx.GetType().Name} {shardEx.Message}");
                         FindPluginCore.Diagnostics.PerfLog.Log("storage.fts.shard_error",
                             ("shard", k.ToString()), ("stage", stage), ("msg", shardEx.GetType().Name), ("detail", shardEx.Message));
+                        // Whatever went wrong, this shard's file is not to be trusted or resumed into:
+                        // drop it so the next attempt builds it from scratch instead of failing again.
+                        DeleteShardFile(k);
                     }
                 });
                 if (!shardErrors.IsEmpty)

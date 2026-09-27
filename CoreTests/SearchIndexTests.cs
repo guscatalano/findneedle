@@ -261,7 +261,7 @@ public class SearchIndexTests
         Assert.AreEqual(cap, SqliteStorage.CheckpointRowsFor(40_000_000 / 8), "a huge shard stays at the cap");
         Assert.IsTrue(SqliteStorage.CheckpointRowsFor(100_000) < 100_000,
             "a shard smaller than the cap must still checkpoint on the way through");
-        Assert.AreEqual(25_000, SqliteStorage.CheckpointRowsFor(100_000), "roughly four checkpoints per shard");
+        Assert.AreEqual(20_000, SqliteStorage.CheckpointRowsFor(100_000), "several checkpoints per shard, at the floor here");
         Assert.IsTrue(SqliteStorage.CheckpointRowsFor(30_000) >= 20_000, "with a floor, so a small shard is not all commits");
         Assert.AreEqual(cap, SqliteStorage.CheckpointRowsFor(5_000), "and a tiny shard just commits once at the end");
     }
