@@ -215,4 +215,49 @@
     <Warning Text="CLI apphost not found at $(_CliOutDir)findneedle.exe — the alias will NOT work."
              Condition="!Exists('$(_CliOutDir)findneedle.exe')" />
   </Target>
+
+  <!-- Package the plugin LOADER (FakeLoadPlugin.exe) the same way, and for a sharper reason: every
+       plugin's descriptors are produced by running it (PluginConfig.json names it), so without it
+       PluginManager loads nothing, no IFileExtensionProcessor registers, and EVERY file opens as
+       "No results - the source was empty". It reaches bin today only as a side effect of the CLI's
+       project reference, and `dotnet publish` emits a referenced Exe project's .dll but not its
+       apphost - so the published folder had no loader, and both the MSI (which harvests
+       $(PublishDir)**) and release.zip shipped an app that could not read a single log. Found by
+       installing 1.0.266 on a clean Windows 11 box. The MSIX was unaffected, which is why it went
+       unnoticed. -->
+  <Target Name="IncludeFakeLoaderInPackage" BeforeTargets="AssignTargetPaths;ComputeFilesToPublish"
+          DependsOnTargets="ResolveProjectReferences" Condition="'$(_FakeLoaderAdded)' != 'true'">
+    <PropertyGroup>
+      <!-- The target is hooked to two entry points and the project cross-targets a RID, so it can be
+           reached more than once; adding the same file twice is NETSDK1152, not a no-op. -->
+      <_FakeLoaderAdded>true</_FakeLoaderAdded>
+      <_LoaderOutDirPlatform>..\FakeLoadPlugin\bin\$(PlatformTarget)\$(Configuration)\net8.0-windows10.0.19041.0\win-x64\</_LoaderOutDirPlatform>
+      <_LoaderOutDirAnyCpu>..\FakeLoadPlugin\bin\$(Configuration)\net8.0-windows10.0.19041.0\win-x64\</_LoaderOutDirAnyCpu>
+      <_LoaderOutDir Condition="Exists('$(_LoaderOutDirPlatform)FakeLoadPlugin.exe')">$(_LoaderOutDirPlatform)</_LoaderOutDir>
+      <_LoaderOutDir Condition="'$(_LoaderOutDir)' == '' and Exists('$(_LoaderOutDirAnyCpu)FakeLoadPlugin.exe')">$(_LoaderOutDirAnyCpu)</_LoaderOutDir>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(_LoaderOutDir)' != ''">
+      <!-- ONLY the two files the transitive reference does not already bring: the apphost and its
+           deps.json. Adding the .dll or .runtimeconfig.json here as well collides with the copies
+           publish already has (NETSDK1152). -->
+      <Content Include="$(_LoaderOutDir)FakeLoadPlugin.exe" Condition="Exists('$(_LoaderOutDir)FakeLoadPlugin.exe')">
+        <Link>FakeLoadPlugin.exe</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <Content Include="$(_LoaderOutDir)FakeLoadPlugin.deps.json" Condition="Exists('$(_LoaderOutDir)FakeLoadPlugin.deps.json')">
+        <Link>FakeLoadPlugin.deps.json</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+    <Warning Text="Plugin loader not found under ..\FakeLoadPlugin\bin - this build will not read ANY log file type."
+             Condition="'$(_LoaderOutDir)' == ''" />
+  </Target>
+
+  <!-- A build can limp along without the loader; a published artifact must not. This is what people
+       download, and the failure it causes is silent at runtime, so fail here where it is obvious. -->
+  <Target Name="VerifyFakeLoaderWasPublished" AfterTargets="Publish">
+    <Error Condition="!Exists('$(PublishDir)FakeLoadPlugin.exe')"
+           Text="FakeLoadPlugin.exe is missing from the publish output ($(PublishDir)). Shipping this would produce an app that loads no plugins and reports &quot;No results&quot; for every file. See IncludeFakeLoaderInPackage." />
+  </Target>
+
 </Project>
