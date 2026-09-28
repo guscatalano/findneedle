@@ -156,45 +156,12 @@ namespace FindNeedleUX.UITests
             Assert.IsNotNull(listView, "RuleSectionsListView should exist in the UI");
         }
 
-        /// <summary>
-        /// Test that Apply button exists and is visible
-        /// NOTE: Ignored because SearchRulesPage does not implement Apply/Cancel buttons.
-        /// The page is a view-only configuration browser without submission functionality.
-        /// </summary>
-        [TestMethod]
-        [Ignore("SearchRulesPage does not have Apply button - page is view-only")]
-        public void ApplyButton_Exists()
-        {
-            // Arrange & Act
-            var applyButton = FindElementByName("ApplyButton");
-
-            // Assert
-            Assert.IsNotNull(applyButton, "ApplyButton should exist");
-            if (applyButton != null)
-            {
-                Assert.IsTrue(applyButton.IsEnabled, "ApplyButton should be enabled");
-            }
-        }
-
-        /// <summary>
-        /// Test that Cancel button exists and is visible
-        /// NOTE: Ignored because SearchRulesPage does not implement Apply/Cancel buttons.
-        /// The page is a view-only configuration browser without submission functionality.
-        /// </summary>
-        [TestMethod]
-        [Ignore("SearchRulesPage does not have Cancel button - page is view-only")]
-        public void CancelButton_Exists()
-        {
-            // Arrange & Act - Cancel button doesn't have x:Name, find by Content text
-            var cancelButton = _mainWindow?.FindFirstDescendant(cf => cf.ByName("Cancel"));
-
-            // Assert
-            Assert.IsNotNull(cancelButton, "Cancel button should exist");
-            if (cancelButton != null)
-            {
-                Assert.IsTrue(cancelButton.IsEnabled, "Cancel button should be enabled");
-            }
-        }
+        // Deleted: ApplyButton_Exists and CancelButton_Exists. They asserted that this page has Apply
+        // and Cancel buttons, which it never had - it is a view-only configuration browser - so both
+        // were [Ignore]d from the start and could only ever fail if run. Two permanently yellow lines
+        // in every run teach people to skim past "N skipped", which is the number that should mean
+        // something. If the absence of a submit affordance is ever worth pinning, the honest test is
+        // one asserting there is none.
 
         /// <summary>
         /// Test that page elements are properly initialized
