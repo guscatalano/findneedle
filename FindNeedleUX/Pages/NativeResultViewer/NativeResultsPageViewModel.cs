@@ -1528,6 +1528,21 @@ public class NativeResultsPageViewModel : INotifyPropertyChanged
         catch { return new List<LogLine>(); }
     }
 
+    /// <summary>
+    /// How many file-type parsers the plugin subsystem actually produced. Zero means the app cannot
+    /// read ANY file, whatever the user opens - the difference between "your log is empty" and "this
+    /// build is broken", which the empty state has to tell apart.
+    /// </summary>
+    public int ExtensionProcessorCount
+    {
+        get
+        {
+            try { return findneedle.PluginSubsystem.PluginManager.GetSingleton()
+                            .GetAllPluginsInstancesOfAType<FindNeedlePluginLib.IFileExtensionProcessor>().Count; }
+            catch { return 0; }
+        }
+    }
+
     /// <summary>A read-only snapshot of the rows currently shown on the active page.</summary>
     public IReadOnlyList<LogLine> CurrentPageRows() => Results;
 

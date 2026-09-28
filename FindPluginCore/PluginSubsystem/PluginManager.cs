@@ -246,6 +246,7 @@ public class PluginManager
 
     public void LoadAllPlugins(bool loadIntoAssembly = true)
     {
+        PluginLoadReport.Reset();
         FindNeedlePluginLib.Logger.Instance.Log($"Starting to load plugins. Config entries: {(config?.Entries.Count ?? 0)}");
         try
         {
@@ -344,11 +345,16 @@ public class PluginManager
 
                         InMemoryPluginModule loadedPluginModule = new(pluginModuleDescriptor.Path, this, loadIntoAssembly);
                         loadedPluginsModules.Add(loadedPluginModule);
+                        PluginLoadReport.RecordLoaded();
                         FindNeedlePluginLib.Logger.Instance.Log($"Loaded plugin module: {pluginModuleDescriptor.Path}");
                     }
                     catch (Exception ex)
                     {
                         FindNeedlePluginLib.Logger.Instance.Log($"WARNING: Failed to load plugin module {pluginModuleDescriptor.Path}: {ex.Message}");
+                        // Remember it as well as logging it: a plugin that fails to load means file types
+                        // the app silently cannot read, and the viewer has to be able to say so instead of
+                        // reporting an empty search.
+                        PluginLoadReport.RecordFailure(System.IO.Path.GetFileName(pluginModuleDescriptor.Path), ex.Message);
                         // Continue loading other plugins
                     }
                 }

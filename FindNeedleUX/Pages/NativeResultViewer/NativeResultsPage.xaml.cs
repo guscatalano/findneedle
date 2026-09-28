@@ -1270,11 +1270,24 @@ public sealed partial class NativeResultsPage : Page, FindNeedleUX.Services.Mcp.
         }
         else
         {
-            EmptyOverlayTitle.Text = "No results";
+            // Before blaming the log: did the app actually have anything to read it WITH? A build that
+            // failed to load its plugins registers no file-type processors and finds nothing in every
+            // file - which is not an empty source, and must not be reported as one. (This shipped: the
+            // MSI and release.zip had no plugin loader, and every log opened as "no rows".)
+            var pluginTrouble = findneedle.PluginSubsystem.PluginLoadReport.HeadlineFor(ViewModel.ExtensionProcessorCount);
             var warn = MiddleLayerService.GetDecodeWarning();
-            EmptyOverlayText.Text = warn?.headline is { Length: > 0 } h
-                ? h + " — nothing was decoded from this source."
-                : "This search returned no rows — the source was empty, or nothing matched/decoded.";
+            if (pluginTrouble is { Length: > 0 } p)
+            {
+                EmptyOverlayTitle.Text = "No log parsers loaded";
+                EmptyOverlayText.Text = p + ". Nothing can be read until that is fixed - see Diagnostics for the details.";
+            }
+            else
+            {
+                EmptyOverlayTitle.Text = "No results";
+                EmptyOverlayText.Text = warn?.headline is { Length: > 0 } h
+                    ? h + " — nothing was decoded from this source."
+                    : "This search returned no rows — the source was empty, or nothing matched/decoded.";
+            }
         }
         EmptyOverlay.Visibility = Visibility.Visible;
     }
