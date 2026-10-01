@@ -1,0 +1,75 @@
+# A disposable Windows box that can run FindNeedle's FlaUI UI tests.
+#
+# Why this exists: those tests synthesise real keyboard input, so they cannot run on a machine
+# someone is using - the keystrokes land in their work. A sandbox has its own desktop, so the whole
+# suite runs there, including the typing tests that otherwise only ever run in CI.
+#
+# Apply it to a fleet sandbox with the controller's apply_groundhog tool, pointed at this file's
+# raw URL; everything large is then PULLED by the agent from GitHub, which sandbox guests can
+# reach. Validate with `groundhog-agent plan` before handing it to anyone.
+version: 1
+agent: ">=0.13.0"          # github: sources, strip:, machine-scope env
+
+apps:
+  # The test host. dotnet test needs the SDK, not just the runtime.
+  - id: Microsoft.DotNet.SDK.8
+    timeout: 20m
+
+files:
+  # The app UNDER TEST is the shipped artifact, not a local build: if the release is broken, the
+  # suite should say so.
+  #
+  # prerelease: true is required, not optional. Every FindNeedle release is published with
+  # prerelease: true, and GitHub's own .../releases/latest/download/... ignores prereleases and
+  # returns 404 for this repo.
+  - from: github:guscatalano/findneedle@latest/release.zip
+    prerelease: true
+    to: C:\fn\app
+    extract: true
+  # The source tree, for the test project only - and at the SAME release, because every @latest in
+  # one file resolves to one release. A test project from master against a tagged app is how you
+  # get failures that belong to neither.
+  - from: github:guscatalano/findneedle@latest/source
+    prerelease: true
+    to: C:\fn\src
+    extract: true
+    strip: 1               # drop the findneedle-<tag>\ top folder
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  # The suite reads this to decide which executable to drive. Machine scope so a service or
+  # another account finds it - but see the note in the runbook: a command runner that was already
+  # running when this was set does NOT inherit it, so the test command sets it inline too.
+  FINDNEEDLE_UITEST_APP:
+    value: C:\fn\app\FindNeedleUX.exe
+    scope: machine
+
+run:
+  # nuget.config names a Visual Studio local source; without the folder, restore fails NU1301
+  - New-Item -ItemType Directory -Force "${env:ProgramFiles(x86)}\Microsoft SDKs\NuGetPackages" | Out-Null
+
+  # build the WinUI app, with the packaging and PRI tooling off (there is no Visual Studio here)
+  - command: >-
+      dotnet build C:\fn\src\FindNeedleUX\FindNeedleUX.csproj
+      -c Debug -p:Platform=x64
+      -p:EnableMsixTooling=false -p:GenerateAppxPackageOnBuild=false -p:AppxPackageSigningEnabled=false
+      -p:EnableCoreMrtTooling=false -p:AppxGeneratePriEnabled=false -p:AppxGeneratePrisForPortableLibrariesEnabled=false
+    timeout: 30m
+
+  # build the test project itself; its references are already built above
+  - command: >-
+      dotnet build C:\fn\src\FindNeedleUX.UITests\FindNeedleUX.UITests.csproj
+      -c Debug -p:Platform=x64 -p:BuildProjectReferences=false
+      -p:EnableMsixTooling=false -p:GenerateAppxPackageOnBuild=false -p:AppxPackageSigningEnabled=false
+      -p:EnableCoreMrtTooling=false -p:AppxGeneratePriEnabled=false -p:AppxGeneratePrisForPortableLibrariesEnabled=false
+    timeout: 20m
+
+verify:
+  # The rig is only usable if all of these hold, and each has actually been wrong.
+  - file: C:\fn\app\FindNeedleUX.exe
+  # The plugin loader: 1.0.266 shipped without it, and every log then opened as "No results".
+  - file: C:\fn\app\FakeLoadPlugin.exe
+  - file: C:\fn\src\FindNeedleUX.UITests\bin\x64\Debug\net8.0-windows10.0.19041.0\FindNeedleUX.UITests.dll
+  # No leftover instance: the second-open tests go Inconclusive when one is running, because it
+  # would receive the activation they are trying to observe.
+  - command: if ((Get-Process FindNeedleUX -ErrorAction SilentlyContinue).Count -gt 0) { exit 1 }
