@@ -8,7 +8,13 @@
 # raw URL; everything large is then PULLED by the agent from GitHub, which sandbox guests can
 # reach. Validate with `groundhog-agent plan` before handing it to anyone.
 version: 1
-agent: ">=0.13.0"          # github: sources, strip:, machine-scope env
+agent: ">=0.13.1"          # github: sources, strip:, machine-scope env, groundhog:time-sync
+
+# A fresh clone's clock was 7h slow (2026-10-01), which the agent warns about because TLS and
+# every test timestamp depend on it. The layer's own run step lands before the builds but after
+# the downloads above - `extends` accumulates, it does not reorder sections - so a clock bad
+# enough to break TLS would still have to be fixed in the template.
+extends: groundhog:time-sync
 
 apps:
   # The test host. dotnet test needs the SDK, not just the runtime.
@@ -48,9 +54,16 @@ run:
   # nuget.config names a Visual Studio local source; without the folder, restore fails NU1301
   - New-Item -ItemType Directory -Force "${env:ProgramFiles(x86)}\Microsoft SDKs\NuGetPackages" | Out-Null
 
+  # dotnet is called by full path on purpose. winget installs the SDK in step 2 of THIS run, and
+  # the agent process - which spawns every run step - started before that, so it never sees the
+  # machine PATH the installer wrote. Plain `dotnet build` fails with
+  # "The term 'dotnet' is not recognized". The same holds for any command runner that was already
+  # running when the apply happened; see the runbook.
+
   # build the WinUI app, with the packaging and PRI tooling off (there is no Visual Studio here)
   - command: >-
-      dotnet build C:\fn\src\FindNeedleUX\FindNeedleUX.csproj
+      & "$env:ProgramFiles\dotnet\dotnet.exe"
+      build C:\fn\src\FindNeedleUX\FindNeedleUX.csproj
       -c Debug -p:Platform=x64
       -p:EnableMsixTooling=false -p:GenerateAppxPackageOnBuild=false -p:AppxPackageSigningEnabled=false
       -p:EnableCoreMrtTooling=false -p:AppxGeneratePriEnabled=false -p:AppxGeneratePrisForPortableLibrariesEnabled=false
@@ -58,7 +71,8 @@ run:
 
   # build the test project itself; its references are already built above
   - command: >-
-      dotnet build C:\fn\src\FindNeedleUX.UITests\FindNeedleUX.UITests.csproj
+      & "$env:ProgramFiles\dotnet\dotnet.exe"
+      build C:\fn\src\FindNeedleUX.UITests\FindNeedleUX.UITests.csproj
       -c Debug -p:Platform=x64 -p:BuildProjectReferences=false
       -p:EnableMsixTooling=false -p:GenerateAppxPackageOnBuild=false -p:AppxPackageSigningEnabled=false
       -p:EnableCoreMrtTooling=false -p:AppxGeneratePriEnabled=false -p:AppxGeneratePrisForPortableLibrariesEnabled=false
