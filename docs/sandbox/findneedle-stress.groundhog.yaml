@@ -36,13 +36,14 @@ run:
   # The event log. The script defaults to large-gen.evtx; the stress case looks for large-app.evtx,
   # so name it. Writing events needs admin, which the agent has.
   #
-  # The count is set from measurement, not taste: 60,000 events produced a 1.1 MB file, and the case
-  # this feeds is described as "a 21 MB event log" - a megabyte is not a load test. Events write at
-  # roughly 10,000/s here, so 1.2M is about two minutes for ~22 MB.
+  # The count is set from measurement: records run about 435 bytes each, so 60,000 gives 23.1 MB -
+  # the case this feeds is described as "a 21 MB event log". (60,000 USED to give 1.1 MB, and so did
+  # 1,200,000, because the log wrapped at its 512 KB default while the script reported the full count.
+  # Fixed in make-large-evtx.ps1, which now proves the applied size and reports events retained.)
   - command: >-
       powershell -ExecutionPolicy Bypass -File C:\fn\src\tools\make-large-evtx.ps1
-      -Count 1200000 -Out C:\fn\src\LargeSamples\large-app.evtx
-    timeout: 60m
+      -Count 60000 -Out C:\fn\src\LargeSamples\large-app.evtx
+    timeout: 30m
 
   # The generators are tagged SkipCI as well as Fixtures, so name the category explicitly rather than
   # relying on the default filter.
