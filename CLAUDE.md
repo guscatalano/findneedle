@@ -160,6 +160,35 @@ launches/waits for the app when it isn't up. `docs/MCP_DESIGN.md` has the detail
 **Cache schema.** Any change to the SQLite row layout must bump `SqliteStorage.CacheSchemaVersion` *and*
 extend `EnsureColumns`, or cached searches from an older build deserialize into the wrong columns.
 
+## Sandbox test lanes
+
+Three [Groundhog](https://github.com/guscatalano/Groundhog) files under `docs/sandbox/` turn a
+disposable Windows VM into a test rig. Apply one with the sandbox controller's `apply_groundhog`
+tool pointed at the file's raw GitHub URL, then poll `groundhog_status`. Validate any edit with
+`groundhog-agent plan <file>` first - but note that `plan` only proves the file loads: the first
+real apply of the UI-test rig failed on something `plan` cannot see (a tool installed by `apps:` in
+the same run is not on `PATH` for the later `run` steps, because the agent process predates the
+installer's PATH write, so `dotnet` is called by full path).
+
+- **`findneedle-uitest.groundhog.yaml`** - .NET SDK, the shipped `release.zip` and the matching
+  source at the same release tag, both built. Run the suite separately; it is not a health check.
+  The app under test is the SHIPPED artifact, not the local build, so a broken release fails here.
+- **`findneedle-install-smoke.groundhog.yaml`** - the question the one above cannot answer, because
+  it installs an SDK: does the shipped MSI work on a machine with no developer tooling? It installs
+  per-machine, checks the ProgID/shortcut registration, asserts `dotnet` is ABSENT so the lane cannot
+  drift, and proves behaviour by running the CLI that ships inside the package. Verified to catch the
+  real thing: against 1.0.266 (which shipped without `FakeLoadPlugin.exe`) `msiexec` returns 0 and the
+  lane fails; against 1.0.267+ it passes.
+- **`findneedle-stress.groundhog.yaml`** - runs the fixture generators that already live in
+  `ETWPluginTests` (`TestCategory=Fixtures`) plus `tools/make-large-evtx.ps1`, so five of the six
+  `LargeLoadStressUITests` cases stop reporting Inconclusive. The sixth needs a classic-WPP capture
+  nothing in the repo generates.
+
+Driving a sandbox: `deskhand_run_command` with `async: true` returns a `jobId` and
+`deskhand_shell_result` polls it - a suite takes minutes and the control plane times out around 120 s.
+Environment variables set by an apply do NOT reach a command runner that was already running, so the
+test command sets `$env:FINDNEEDLE_UITEST_APP` itself.
+
 ## Release mechanics
 
 Pushing to `master` runs `.github/workflows/dotnet-desktop.yml`, which auto-tags the next patch version
