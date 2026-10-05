@@ -16,7 +16,7 @@ apps:
   # `github:` has no wildcard, so @latest cannot name the asset. Bump both the tag and the filename
   # together. prerelease: true is required - every release here is a prerelease.
   - id: FindNeedle
-    url: github:guscatalano/findneedle@1.0.267/FindNeedle-1.0.267.0.msi
+    url: github:guscatalano/findneedle@1.0.268/FindNeedle-1.0.268.0.msi
     prerelease: true
     # The package is Scope="perUserOrMachine", so a silent install picks per-user unless told
     # otherwise and lands in %LocalAppData%\Programs\FindNeedle. Pin it: a per-machine install is
@@ -69,10 +69,7 @@ verify:
   # "no rows decoded", which a person reads as "the log is empty".
   #
   # Notes on the invocation. The empty string on the left is not decoration: the CLI asks "please enter
-  # to search" and with no stdin at all it exits WITHOUT searching, returning 0. And the bare path is
-  # the positional form; `location_path=<file>` parsed nothing up to and including 1.0.267
-  # (FolderLocation.Clone dropped the extension processors). Once a build past that fix is pinned
-  # above, add the keyed form here too - it is the same invariant by the other route.
+  # to search" and with no stdin at all it exits WITHOUT searching, returning 0.
   - command: >-
       $csv = 'C:\fn-smoke\out.csv';
       Remove-Item $csv -Force -ErrorAction SilentlyContinue;
@@ -81,4 +78,18 @@ verify:
       $rows = (Get-Content $csv).Count - 1;
       Write-Host "parsed $rows rows";
       if ($rows -lt 5) { Write-Host 'the installed build did not parse the log - no file-type processor registered?'; exit 1 }
+    within: 3m
+
+  # The same invariant by the other route. `location_path=<file>` parsed nothing up to and including
+  # 1.0.267 - FolderLocation.Clone dropped the extension processors, so the keyed form silently
+  # searched an empty set while the positional form worked. Both forms are checked now so a
+  # regression in either is caught here, in the shipped package.
+  - command: >-
+      $csv = 'C:\fn-smoke\out-keyed.csv';
+      Remove-Item $csv -Force -ErrorAction SilentlyContinue;
+      $null = '' | & 'C:\Program Files\FindNeedle\findneedle.exe' 'location_path=C:\fn-smoke\sample.log' '--out=csv' "--out-file=$csv" 2>&1;
+      if (-not (Test-Path $csv)) { Write-Host 'the keyed form produced no output file'; exit 1 };
+      $rows = (Get-Content $csv).Count - 1;
+      Write-Host "keyed form parsed $rows rows";
+      if ($rows -lt 5) { Write-Host 'location_path= parsed nothing - FolderLocation.Clone regression?'; exit 1 }
     within: 3m
