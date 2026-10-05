@@ -1,0 +1,83 @@
+# Does the SHIPPED INSTALLER work on a Windows machine that has never had a developer tool on it?
+#
+# This is a different question from "do the UI tests pass" (that is findneedle-uitest.groundhog.yaml,
+# which installs the .NET SDK and therefore cannot answer this one). 1.0.266 shipped an MSI and a
+# release.zip that could not open any log file, because FakeLoadPlugin.exe was missing from the
+# publish output - and every developer build was fine. This lane exists to make that loud.
+#
+# Deliberately minimal: no SDK, no source, no test host. The assertions are made with the CLI that
+# ships INSIDE the package, so a clean box can prove the plugin subsystem really loads and parses.
+version: 1
+agent: ">=0.13.1"
+extends: groundhog:time-sync
+
+apps:
+  # Pinned by hand, unavoidably: release assets are version-stamped (FindNeedle-1.0.267.0.msi) and
+  # `github:` has no wildcard, so @latest cannot name the asset. Bump both the tag and the filename
+  # together. prerelease: true is required - every release here is a prerelease.
+  - id: FindNeedle
+    url: github:guscatalano/findneedle@1.0.267/FindNeedle-1.0.267.0.msi
+    prerelease: true
+    # The package is Scope="perUserOrMachine", so a silent install picks per-user unless told
+    # otherwise and lands in %LocalAppData%\Programs\FindNeedle. Pin it: a per-machine install is
+    # what the verify paths below assume, and what a deployment would do.
+    args: ALLUSERS=1
+    timeout: 20m
+
+files:
+  # A log to parse, written inline: a clean box has no way to generate one.
+  - to: C:\fn-smoke\sample.log
+    content: |
+      2026-10-04 09:00:01.000 INFO  Widget 1 processed in 11 ms
+      2026-10-04 09:00:02.000 INFO  Widget 2 processed in 12 ms
+      2026-10-04 09:00:03.000 WARN  Widget 3 slow: 180 ms
+      2026-10-04 09:00:04.000 INFO  Widget 4 processed in 14 ms
+      2026-10-04 09:05:00.000 ERROR Widget 42 failed: NEEDLE_MARKER timeout
+
+verify:
+  # ---- the package landed where a per-machine install should put it ----
+  - file: C:\Program Files\FindNeedle\FindNeedleUX.exe
+  # The plugin loader. Its absence is the whole reason this lane exists.
+  - file: C:\Program Files\FindNeedle\FakeLoadPlugin.exe
+  # The CLI, which the functional check below drives.
+  - file: C:\Program Files\FindNeedle\findneedle.exe
+  - file: C:\Program Files\FindNeedle\PluginConfig.json
+  - file: C:\ProgramData\Microsoft\Windows\Start Menu\Programs\FindNeedle.lnk
+
+  # ---- this box must stay clean, or the lane stops testing what it claims ----
+  # If a .NET SDK or runtime ever appears here, the "self-contained" claim is no longer under test.
+  - command: >-
+      if (Get-Command dotnet -ErrorAction SilentlyContinue) { exit 1 };
+      if (Test-Path "$env:ProgramFiles\dotnet\dotnet.exe") { exit 1 }
+
+  # ---- the shell integration the installer promises ----
+  # The ProgID Explorer invokes for "Open with -> FindNeedle" must point at the installed exe. The
+  # installer deliberately does NOT take the default handler, so this registration IS the contract.
+  - command: >-
+      $c = (Get-ItemProperty 'Registry::HKEY_CLASSES_ROOT\FindNeedle.LogFile\shell\open\command' -Name '(default)'
+      -ErrorAction SilentlyContinue).'(default)';
+      if (-not $c) { Write-Host 'ProgID FindNeedle.LogFile is not registered'; exit 1 };
+      if ($c -notlike '*\FindNeedle\FindNeedleUX.exe*') { Write-Host "command points elsewhere: $c"; exit 1 }
+  - command: >-
+      if (-not (Get-ItemProperty 'Registry::HKEY_CLASSES_ROOT\.log\OpenWithProgids' -Name 'FindNeedle.LogFile'
+      -ErrorAction SilentlyContinue)) { exit 1 }
+
+  # ---- THE functional check: the installed product actually parses a log ----
+  # Everything above is presence. This is behaviour, and it is what 1.0.266 would have failed: with no
+  # IFileExtensionProcessor registered the search returns zero rows and the tool still exits saying
+  # "no rows decoded", which a person reads as "the log is empty".
+  #
+  # Notes on the invocation. The empty string on the left is not decoration: the CLI asks "please enter
+  # to search" and with no stdin at all it exits WITHOUT searching, returning 0. And the bare path is
+  # the positional form; `location_path=<file>` parsed nothing up to and including 1.0.267
+  # (FolderLocation.Clone dropped the extension processors). Once a build past that fix is pinned
+  # above, add the keyed form here too - it is the same invariant by the other route.
+  - command: >-
+      $csv = 'C:\fn-smoke\out.csv';
+      Remove-Item $csv -Force -ErrorAction SilentlyContinue;
+      $null = '' | & 'C:\Program Files\FindNeedle\findneedle.exe' 'C:\fn-smoke\sample.log' '--out=csv' "--out-file=$csv" 2>&1;
+      if (-not (Test-Path $csv)) { Write-Host 'the CLI produced no output file at all'; exit 1 };
+      $rows = (Get-Content $csv).Count - 1;
+      Write-Host "parsed $rows rows";
+      if ($rows -lt 5) { Write-Host 'the installed build did not parse the log - no file-type processor registered?'; exit 1 }
+    within: 3m
