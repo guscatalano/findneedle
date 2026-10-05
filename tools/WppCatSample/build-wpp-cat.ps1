@@ -107,7 +107,7 @@ if (Test-Path $etl) { Remove-Item $etl -Force }
 & $tracelog -stop $session 2>$null | Out-Null   # clean up a stale session if any
 # Large buffers (1 MB x up to 320) to keep up with a high-rate producer and minimize ETW drops.
 & $tracelog -start $session -guid "#$Guid" -f $etl -flags 0x7FFFFFFF -level 5 -b 1024 -min 64 -max 320
-if ($LASTEXITCODE -ne 0) { throw "tracelog -start failed ($LASTEXITCODE) — are you elevated?" }
+if ($LASTEXITCODE -ne 0) { throw "tracelog -start failed ($LASTEXITCODE) - are you elevated?" }
 try {
     & $exe $Count
 } finally {
@@ -126,7 +126,7 @@ if (Test-Path $fmtOut) {
     Write-Host '   first formatted lines:'
     $lines | ForEach-Object { Write-Host "     $_" }
 } else {
-    Write-Warning 'tracefmt produced no output file — check the TMF / GUID.'
+    Write-Warning 'tracefmt produced no output file - check the TMF / GUID.'
 }
 
 Write-Host ''

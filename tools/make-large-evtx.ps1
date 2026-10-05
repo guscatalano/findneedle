@@ -1,5 +1,5 @@
 # Generates a large .evtx fixture by writing synthetic events to a temporary custom event log and
-# exporting it. Requires an elevated (Administrator) shell — creating an event log/source needs it.
+# exporting it. Requires an elevated (Administrator) shell - creating an event log/source needs it.
 #
 #   pwsh -File tools\make-large-evtx.ps1 -Count 250000
 #
@@ -15,12 +15,12 @@ param(
 $ErrorActionPreference = "Stop"
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltinRole]::Administrator)
-if (-not $admin) { Write-Error "Run this elevated (Administrator) — New-EventLog requires admin."; exit 1 }
+if (-not $admin) { Write-Error "Run this elevated (Administrator) - New-EventLog requires admin."; exit 1 }
 
 if (-not [System.Diagnostics.EventLog]::SourceExists($Source)) {
     New-EventLog -LogName $LogName -Source $Source
 }
-# Hold everything we write (don't roll over) — ~1 GB is plenty for a few million small events.
+# Hold everything we write (don't roll over) - ~1 GB is plenty for a few million small events.
 Limit-EventLog -LogName $LogName -MaximumSize 1073741824 -OverflowAction OverwriteAsNeeded
 
 $log = New-Object System.Diagnostics.EventLog($LogName)
@@ -31,7 +31,7 @@ $types = @(
     [System.Diagnostics.EventLogEntryType]::Warning,
     [System.Diagnostics.EventLogEntryType]::Error)
 
-Write-Host "Writing $Count events to '$LogName'…"
+Write-Host "Writing $Count events to '$LogName'..."
 for ($i = 1; $i -le $Count; $i++) {
     $log.WriteEntry("Synthetic event #$i  payload=$($rand.Next())  guid=$([guid]::NewGuid())",
                     $types[$rand.Next(3)], ($i % 1000))
