@@ -42,7 +42,8 @@ verify:
   # The CLI, which the functional check below drives.
   - file: C:\Program Files\FindNeedle\findneedle.exe
   - file: C:\Program Files\FindNeedle\PluginConfig.json
-  - file: C:\ProgramData\Microsoft\Windows\Start Menu\Programs\FindNeedle.lnk
+  # Per-machine, and in its own folder: ProgramMenuFolder\FindNeedle\FindNeedle.lnk.
+  - file: C:\ProgramData\Microsoft\Windows\Start Menu\Programs\FindNeedle\FindNeedle.lnk
 
   # ---- this box must stay clean, or the lane stops testing what it claims ----
   # If a .NET SDK or runtime ever appears here, the "self-contained" claim is no longer under test.

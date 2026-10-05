@@ -1,0 +1,57 @@
+# Generate the big fixtures, then run the stress cases against them.
+#
+# Why this is a lane at all: LargeLoadStressUITests has six cases that watch the app's window all the
+# way through a load and fail it for freezing longer than 2500 ms. Five of them need files in
+# LargeSamples\, which is gitignored - so on every machine but the author's they report Inconclusive,
+# forever. An Inconclusive test is a test nobody is running. The generators already live in the repo
+# (ETWPluginTests, TestCategory=Fixtures); nothing automated has ever run them.
+#
+# This needs the UI-test rig applied FIRST (findneedle-uitest.groundhog.yaml) - it brings the SDK and
+# the source tree. Apply this on top of that box.
+#
+# Budget: generating a 5M-event ETL and a 7.4M-row archive is tens of minutes, and the six stress
+# cases allow 20 minutes each. This is an unattended-VM job, which is the point of running it here.
+version: 1
+agent: ">=0.13.1"
+
+run:
+  # ETW capture needs admin, which the agent has (it runs from the template's elevated logon task).
+  # Platform=x64 matters: ETWPluginTests is x64-only and a plain build produces AnyCPU output.
+  - command: >-
+      & "$env:ProgramFiles\dotnet\dotnet.exe"
+      build C:\fn\src\ETWPluginTests\ETWPluginTests.csproj -c Debug -p:Platform=x64
+      -p:EnableMsixTooling=false -p:GenerateAppxPackageOnBuild=false -p:AppxPackageSigningEnabled=false
+      -p:EnableCoreMrtTooling=false -p:AppxGeneratePriEnabled=false -p:AppxGeneratePrisForPortableLibrariesEnabled=false
+    timeout: 30m
+
+  # The 21 MB event log. The script defaults to large-gen.evtx; the stress case looks for
+  # large-app.evtx, so name it. Writing events needs admin, which the agent has.
+  - command: >-
+      powershell -ExecutionPolicy Bypass -File C:\fn\src\tools\make-large-evtx.ps1
+      -Count 60000 -Out C:\fn\src\LargeSamples\large-app.evtx
+    timeout: 40m
+
+  # The generators are tagged SkipCI as well as Fixtures, so name the category explicitly rather than
+  # relying on the default filter.
+  - command: >-
+      & "$env:ProgramFiles\dotnet\dotnet.exe"
+      test C:\fn\src\ETWPluginTests\ETWPluginTests.csproj -c Debug -p:Platform=x64 --no-build
+      --filter "TestCategory=Fixtures"
+      --logger "trx;LogFileName=fixtures.trx" --results-directory C:\fn\results
+    timeout: 90m
+
+verify:
+  # The fixtures this box can actually produce. A missing one means that stress case goes Inconclusive
+  # again, which is the failure mode this lane exists to prevent - so it is an error here, not a shrug.
+  #
+  # cats-wpp.etl is deliberately NOT in this list: nothing in the repo generates it. It is a
+  # hand-captured classic-WPP trace, and classic WPP needs tracewpp/the WDK to build an emitter, which
+  # is not on this box. So WppEtl_LoadsWithoutFreezing stays Inconclusive here and the other five cases
+  # become real. If that case matters, capture one with the prebuilt tools\WppEmitter\build\WppEmitter.exe
+  # under logman and drop it in as cats-wpp.etl.
+  - command: >-
+      $missing = @('large-5M.etl','large-app.evtx','mixed-filter-fixture.zip') |
+      Where-Object { -not (Test-Path (Join-Path 'C:\fn\src\LargeSamples' $_)) };
+      if ($missing) { Write-Host "missing fixtures: $($missing -join ', ')"; exit 1 };
+      Get-ChildItem C:\fn\src\LargeSamples | ForEach-Object { Write-Host ("{0}  {1:N0} bytes" -f $_.Name, $_.Length) }
+    within: 2m
