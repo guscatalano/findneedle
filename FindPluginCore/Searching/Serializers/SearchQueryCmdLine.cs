@@ -167,6 +167,13 @@ public class SearchQueryCmdLine
 
                 //Only use parserObj going forward
                 var parserObj = (ICommandLineParser)instance;
+                // The registered parser is a PROTOTYPE and never goes into the query - this fresh instance
+                // does. So anything the prototype was handed at registration time (see
+                // GetCommandLineParsers, which gives FolderLocation the plugin manager's
+                // IFileExtensionProcessor list) is lost unless Clone copies it. A parser whose only state
+                // comes from its command-line argument can keep nothing - that is correct for the two
+                // EventLog locations, and was NOT correct for FolderLocation, whose clone then matched no
+                // file extension and silently searched nothing.
                 parserObj.Clone(parser.Value); //needed to copy settings
 
                 var cmdKeyword = argument.key;

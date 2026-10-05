@@ -144,17 +144,37 @@ namespace FindNeedleUX.UITests
             return grid;
         }
 
+        /// <summary>
+        /// The pager formats counts with the CURRENT culture's group separator: "1,000" on a US box,
+        /// "1.000" on a German one, "1 000" (narrow no-break space) on a French one. A parser that only
+        /// knows about commas reads "1.000" as 1 - which is exactly how this suite failed on a machine
+        /// set to de-DE while passing on the same machine minutes earlier in en-US. So match digits plus
+        /// any plausible separator, then keep only the digits.
+        /// </summary>
+        internal const string CountToken = @"\d[\d.,   ']*";
+
+        /// <summary>Reads a culture-formatted whole number out of a pager token. -1 if there is none.</summary>
+        internal static long CountFrom(string token)
+        {
+            var digits = new System.Text.StringBuilder();
+            foreach (var c in token ?? "") if (char.IsDigit(c)) digits.Append(c);
+            return digits.Length > 0
+                && long.TryParse(digits.ToString(), System.Globalization.NumberStyles.None,
+                                 System.Globalization.CultureInfo.InvariantCulture, out var v)
+                ? v : -1;
+        }
+
         public static (long start, long end, string raw) ReadPager(AutomationElement window)
         {
             var raw = FindAllSkippingGrid(window, ControlType.Text)
                          .Select(SafeName)
                          .FirstOrDefault(n => n.Contains("Page ") && n.Contains(" of ")) ?? "";
-            var m = Regex.Match(raw, @"([\d,]+)\s*[–-]\s*([\d,]+)");
+            var m = Regex.Match(raw, "(" + CountToken + @")\s*[–-]\s*(" + CountToken + ")");
             long s = -1, e = -1;
             if (m.Success)
             {
-                long.TryParse(m.Groups[1].Value.Replace(",", ""), out s);
-                long.TryParse(m.Groups[2].Value.Replace(",", ""), out e);
+                s = CountFrom(m.Groups[1].Value);
+                e = CountFrom(m.Groups[2].Value);
             }
             return (s, e, raw);
         }

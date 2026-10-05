@@ -127,22 +127,24 @@ namespace FindNeedleUX.UITests
 
             int page = -1, pages = -1, total = -1;
             long start = -1, end = -1;
-            var pm = Regex.Match(raw, @"Page\s+([\d,]+)\s+of\s+([\d,]+)");
+            // Counts carry the current culture's group separator - see UiTestHelpers.CountToken.
+            var N = UiTestHelpers.CountToken;
+            var pm = Regex.Match(raw, @"Page\s+(" + N + @")\s+of\s+(" + N + ")");
             if (pm.Success)
             {
-                int.TryParse(pm.Groups[1].Value.Replace(",", ""), out page);
-                int.TryParse(pm.Groups[2].Value.Replace(",", ""), out pages);
+                page = (int)UiTestHelpers.CountFrom(pm.Groups[1].Value);
+                pages = (int)UiTestHelpers.CountFrom(pm.Groups[2].Value);
             }
-            var rm = Regex.Match(raw, @"([\d,]+)\s*[–-]\s*([\d,]+)");
+            var rm = Regex.Match(raw, "(" + N + @")\s*[–-]\s*(" + N + ")");
             if (rm.Success)
             {
-                long.TryParse(rm.Groups[1].Value.Replace(",", ""), out start);
-                long.TryParse(rm.Groups[2].Value.Replace(",", ""), out end);
+                start = UiTestHelpers.CountFrom(rm.Groups[1].Value);
+                end = UiTestHelpers.CountFrom(rm.Groups[2].Value);
             }
             // The row total is the LAST "of N" (the first is the page count).
-            var tms = Regex.Matches(raw, @"of\s+([\d,]+)");
+            var tms = Regex.Matches(raw, @"of\s+(" + N + ")");
             if (tms.Count > 0)
-                int.TryParse(tms[tms.Count - 1].Groups[1].Value.Replace(",", ""), out total);
+                total = (int)UiTestHelpers.CountFrom(tms[tms.Count - 1].Groups[1].Value);
             // A single-row result renders "0" total pages edge cases as-is; callers match on total.
             return new Pager(page, pages, start, end, total, raw);
         }
