@@ -10,6 +10,8 @@ using FindNeedleCoreUtils;
 using FindNeedlePluginLib;
 using FindNeedlePluginLib.TestClasses;
 using FindPluginCore.Searching;
+using TestProcessorPlugin;
+using System.IO;
 
 namespace CoreTests;
 
@@ -34,6 +36,48 @@ public class SearchQueryCmdLineParserTests
     public void TestSetup()
     {
         PluginManager.ResetSingleton();
+    }
+
+    /// <summary>
+    /// A keyed `location_path=<file>` argument must produce a location that can actually PARSE the file.
+    ///
+    /// ParseFromCommandLine never adds the registered parser itself: it creates a fresh instance and calls
+    /// Clone(prototype) on it. FolderLocation.Clone used to keep nothing, so the location that went into the
+    /// query had no extension processors and matched no file - every keyed CLI search returned 0 rows and
+    /// exit 2 ("no rows decoded"), which reads as "your log is empty" rather than "nothing parsed it". The
+    /// positional form (a bare path) sets the list itself and worked, which is why this survived: found by
+    /// running the shipped 1.0.267 CLI on a clean machine.
+    /// </summary>
+    [TestMethod]
+    public void LocationFromKeyedArgument_CanStillParseTheFile()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "FN_cmdline_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "sample.txt");   // SampleFileExtensionProcessor registers .txt
+        File.WriteAllText(file, "hello");
+        try
+        {
+            // The prototype is what GetCommandLineParsers builds: one location carrying the plugin
+            // manager's processor list.
+            var prototype = new FolderLocation();
+            prototype.SetExtensionProcessorList(new List<IFileExtensionProcessor> { new SampleFileExtensionProcessor() });
+
+            var registration = new CommandLineRegistration() { handlerType = CommandLineHandlerType.Location, key = "path" };
+            var parsers = new Dictionary<CommandLineRegistration, ICommandLineParser> { { registration, prototype } };
+
+            var input = new List<CommandLineArgument> { new() { key = "location_path", value = file } };
+            var q = SearchQueryCmdLine.ParseFromCommandLine(input, new PluginManager(), parsers);
+
+            Assert.AreEqual(1, q.Locations.Count, "the keyed argument should add exactly one location");
+            var loc = (FolderLocation)q.Locations.First();
+            Assert.AreNotSame(prototype, loc, "the query gets a clone, not the registered prototype");
+
+            loc.LoadInMemory();
+            // SampleFileExtensionProcessor yields 2 results per handled .txt file. Zero here means the
+            // clone lost its processors.
+            Assert.AreEqual(2, loc.Search().Count, "the cloned location parsed nothing - Clone dropped the extension processors");
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
     [TestMethod]

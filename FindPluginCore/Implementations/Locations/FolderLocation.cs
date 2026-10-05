@@ -17,8 +17,24 @@ public class FolderLocation : ISearchLocation, ICommandLineParser, IReportProgre
 {
     public void Clone(ICommandLineParser parser)
     {
-        //Keep nothing
         Logger.Instance.Log($"FolderLocation.Clone called for parser type: {parser?.GetType().Name}");
+
+        // The path deliberately does NOT carry over - it comes from the command-line argument being
+        // parsed. The extension-processor list must, because it is a setting, not state: the command-line
+        // parser builds ONE prototype location holding the plugin manager's IFileExtensionProcessor list
+        // (SearchQueryCmdLine.GetCommandLineParsers) and then clones a fresh instance per argument. A clone
+        // with no processors parses nothing, so every `location_path=<file>` search returned 0 rows and
+        // exit 2 - "no rows decoded", indistinguishable from an empty log - while the positional form,
+        // which sets the list itself, returned rows. Reproduced on the shipped 1.0.267 CLI.
+        if (parser is FolderLocation source)
+        {
+            List<IFileExtensionProcessor> templates;
+            lock (source._knownProcessorsLock) { templates = new(source.templateProcessors); }
+            if (templates.Count > 0)
+            {
+                SetExtensionProcessorList(templates);
+            }
+        }
     }
     public SearchProgressSink? sink;
     public SearchStatistics? stats;
