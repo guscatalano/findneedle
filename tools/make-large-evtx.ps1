@@ -38,8 +38,18 @@ for ($i = 1; $i -le $Count; $i++) {
     if ($i % 10000 -eq 0) { Write-Host "  $i / $Count" }
 }
 
+# wevtutil will not create the target folder, and it reports the miss as
+# "The system cannot find the path specified" with a zero exit code from PowerShell's point of
+# view - so create the folder, then check the file really appeared.
+$dir = Split-Path -Parent $Out
+if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force $dir | Out-Null }
+
 if (Test-Path $Out) { Remove-Item $Out -Force }
 wevtutil epl $LogName $Out
 Remove-EventLog -LogName $LogName
+if (-not (Test-Path $Out)) {
+    Write-Error "wevtutil did not write $Out - the export failed (its own message is above)."
+    exit 1
+}
 $mb = [math]::Round((Get-Item $Out).Length / 1MB, 1)
 Write-Host "Wrote $Out ($mb MB, $Count events)"
