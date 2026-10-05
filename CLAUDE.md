@@ -167,7 +167,8 @@ Pushing to `master` runs `.github/workflows/dotnet-desktop.yml`, which auto-tags
 `v1.0.N` tag: only `v*.*.*` tags run the `publish-store` job. Three traps: a tag pointing at a `[skip ci]`
 commit triggers nothing (tag the real commit); **`[skip ci]` on the HEAD commit of a push suppresses
 the entire push**, so a real fix followed by a docs commit marked `[skip ci]` never builds at all
-(push the skip-ci commits first, or make the last commit a real one); and the `msstore` publish step
+(push the skip-ci commits first, or make the last commit a real one) - and note the marker is
+matched **anywhere in the message**, so a commit that merely mentions it in its subject skips too; and the `msstore` publish step
 fails transiently often enough that re-running the job is the normal fix, not a signal something is wrong. `ui-smoke.yml` is a
 separate job, and it gates too.
 
