@@ -6,6 +6,15 @@
 # forever. An Inconclusive test is a test nobody is running. The generators already live in the repo
 # (ETWPluginTests, TestCategory=Fixtures); nothing automated has ever run them.
 #
+# What this box CAN produce, measured 2026-10-05: large-5M.etl (923 MB), cats-5M.etl (1.06 GB),
+# multi-provider-sample.etl (1.19 GB), large-5M.log (239 MB) and large-app.evtx. What it CANNOT:
+# mixed-filter-fixture.zip and the 50M multi-provider set both go Inconclusive with "WppEmitter.exe
+# not found", because tools/WppEmitter/build/ is gitignored - the emitter is a 666 KB binary built
+# with the WDK + MSVC and is not in the repo, so a clean clone never has it. cats-wpp.etl has no
+# generator at all. So three of the six stress cases run here (the self-generating text log, the 5M
+# ETL, the event log) and three need that emitter: build it on the box with the WDK, copy it in, or
+# track it.
+#
 # This needs the UI-test rig applied FIRST (findneedle-uitest.groundhog.yaml) - it brings the SDK and
 # the source tree. Apply this on top of that box.
 #
@@ -24,12 +33,16 @@ run:
       -p:EnableCoreMrtTooling=false -p:AppxGeneratePriEnabled=false -p:AppxGeneratePrisForPortableLibrariesEnabled=false
     timeout: 30m
 
-  # The 21 MB event log. The script defaults to large-gen.evtx; the stress case looks for
-  # large-app.evtx, so name it. Writing events needs admin, which the agent has.
+  # The event log. The script defaults to large-gen.evtx; the stress case looks for large-app.evtx,
+  # so name it. Writing events needs admin, which the agent has.
+  #
+  # The count is set from measurement, not taste: 60,000 events produced a 1.1 MB file, and the case
+  # this feeds is described as "a 21 MB event log" - a megabyte is not a load test. Events write at
+  # roughly 10,000/s here, so 1.2M is about two minutes for ~22 MB.
   - command: >-
       powershell -ExecutionPolicy Bypass -File C:\fn\src\tools\make-large-evtx.ps1
-      -Count 60000 -Out C:\fn\src\LargeSamples\large-app.evtx
-    timeout: 40m
+      -Count 1200000 -Out C:\fn\src\LargeSamples\large-app.evtx
+    timeout: 60m
 
   # The generators are tagged SkipCI as well as Fixtures, so name the category explicitly rather than
   # relying on the default filter.
@@ -44,13 +57,11 @@ verify:
   # The fixtures this box can actually produce. A missing one means that stress case goes Inconclusive
   # again, which is the failure mode this lane exists to prevent - so it is an error here, not a shrug.
   #
-  # cats-wpp.etl is deliberately NOT in this list: nothing in the repo generates it. It is a
-  # hand-captured classic-WPP trace, and classic WPP needs tracewpp/the WDK to build an emitter, which
-  # is not on this box. So WppEtl_LoadsWithoutFreezing stays Inconclusive here and the other five cases
-  # become real. If that case matters, capture one with the prebuilt tools\WppEmitter\build\WppEmitter.exe
-  # under logman and drop it in as cats-wpp.etl.
+  # Only the two this box can make. mixed-filter-fixture.zip and cats-wpp.etl are NOT listed: see the
+  # header - both need the WDK-built WppEmitter.exe that is gitignored, so asserting them here would
+  # fail the rig for a reason the rig cannot fix.
   - command: >-
-      $missing = @('large-5M.etl','large-app.evtx','mixed-filter-fixture.zip') |
+      $missing = @('large-5M.etl','large-app.evtx') |
       Where-Object { -not (Test-Path (Join-Path 'C:\fn\src\LargeSamples' $_)) };
       if ($missing) { Write-Host "missing fixtures: $($missing -join ', ')"; exit 1 };
       Get-ChildItem C:\fn\src\LargeSamples | ForEach-Object { Write-Host ("{0}  {1:N0} bytes" -f $_.Name, $_.Length) }
