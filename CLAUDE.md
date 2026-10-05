@@ -164,9 +164,11 @@ extend `EnsureColumns`, or cached searches from an older build deserialize into 
 
 Pushing to `master` runs `.github/workflows/dotnet-desktop.yml`, which auto-tags the next patch version
 (`1.0.N`) and commits the `Package.appxmanifest` version bump with `[skip ci]`. A **Store release** is a
-`v1.0.N` tag: only `v*.*.*` tags run the `publish-store` job. Two traps: a tag pointing at a `[skip ci]`
-commit triggers nothing (tag the real commit), and the `msstore` publish step fails transiently often
-enough that re-running the job is the normal fix, not a signal something is wrong. `ui-smoke.yml` is a
+`v1.0.N` tag: only `v*.*.*` tags run the `publish-store` job. Three traps: a tag pointing at a `[skip ci]`
+commit triggers nothing (tag the real commit); **`[skip ci]` on the HEAD commit of a push suppresses
+the entire push**, so a real fix followed by a docs commit marked `[skip ci]` never builds at all
+(push the skip-ci commits first, or make the last commit a real one); and the `msstore` publish step
+fails transiently often enough that re-running the job is the normal fix, not a signal something is wrong. `ui-smoke.yml` is a
 separate job, and it gates too.
 
 ## Conventions worth knowing
