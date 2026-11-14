@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -193,6 +193,42 @@ public sealed class McpServer : IDisposable
             try { McpActivityLog.Record(client, method, tool, detail); } catch { /* best-effort activity logging */ }
         }
 
+        // tools/call is the only method that touches the live viewer. Everything else is answered from
+        // static data by HandleWithoutViewer, which the stdio bridge calls directly - see
+        // MethodNeedsViewer for why that matters.
+        if (MethodNeedsViewer(method))
+            return await HandleToolCallAsync(id, msg).ConfigureAwait(false);
+
+        return HandleWithoutViewer(msg);
+    }
+
+    /// <summary>
+    /// Does this JSON-RPC method need the running viewer? Only <c>tools/call</c> does. The handshake
+    /// (<c>initialize</c>, <c>notifications/*</c>, <c>ping</c>) and <c>tools/list</c> are pure
+    /// functions of <see cref="McpTools.All"/>, and any other method gets "method not found" whether
+    /// the app is up or not.
+    ///
+    /// <see cref="McpStdioBridge"/> gates on this. Until it did, the bridge made sure the app was
+    /// running before forwarding ANY line - so a client's opening <c>initialize</c> started the whole
+    /// WinUI app, and a FindNeedle window appeared every time any MCP client connected, in any
+    /// directory, for no reason the person at the keyboard could see.
+    /// </summary>
+    public static bool MethodNeedsViewer(string method) => method == "tools/call";
+
+    /// <summary>
+    /// Answers every method except <c>tools/call</c>. Both the HTTP server and the stdio bridge call
+    /// this, so the two can never disagree about the protocol version or the tool list. Returns the
+    /// response object, or null for a notification (and for a malformed message carrying no id).
+    /// </summary>
+    public static object HandleWithoutViewer(JsonElement msg)
+    {
+        bool hasId = msg.TryGetProperty("id", out var idEl);
+        object id = hasId ? JsonElementToId(idEl) : null;
+        string method = msg.TryGetProperty("method", out var mEl) ? mEl.GetString() : null;
+
+        if (string.IsNullOrEmpty(method))
+            return hasId ? Error(id, -32600, "Invalid request: missing method") : null;
+
         // Notifications (no id) get no response.
         switch (method)
         {
@@ -226,7 +262,8 @@ public sealed class McpServer : IDisposable
             }
 
             case "tools/call":
-                return await HandleToolCallAsync(id, msg).ConfigureAwait(false);
+                throw new InvalidOperationException(
+                    "tools/call needs the viewer - route it through HandleMessageAsync, not HandleWithoutViewer.");
 
             default:
                 return hasId ? Error(id, -32601, $"Method not found: {method}") : null;

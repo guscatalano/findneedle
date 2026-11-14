@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -14,11 +14,16 @@ namespace FindNeedleUX.Services.Mcp;
 ///
 /// MCP clients treat a server as a process they own, so pointing one at the app's HTTP port fails
 /// every time the app is not running. Instead the client runs <c>FindNeedleUX.exe --mcp-stdio</c>.
-/// This process never shows a window: it reads newline-delimited JSON-RPC from stdin, makes sure the
-/// real app is up (launching it if not - single-instancing means a launch while it runs just hands off
-/// and exits), forwards each message to the app's loopback HTTP endpoint, and writes the reply to
-/// stdout. If the app cannot be reached, requests get a JSON-RPC error that says so, rather than the
-/// client seeing a dead connection.
+/// This process reads newline-delimited JSON-RPC from stdin, forwards each message to the app's
+/// loopback HTTP endpoint, and writes the reply to stdout. If the app cannot be reached, requests get
+/// a JSON-RPC error that says so, rather than the client seeing a dead connection.
+///
+/// It starts the app ONLY for a message that needs it - in practice a <c>tools/call</c>; see
+/// <see cref="McpServer.MethodNeedsViewer"/>. The bridge process shows no window of its own, but
+/// starting the app of course does, so the handshake must not start it: this bridge used to ensure
+/// the app was running before forwarding any line at all, which meant a FindNeedle window opened
+/// every time any MCP client connected - including every Claude Code session, in any directory.
+/// Single-instancing means a launch while the app already runs just hands off and exits.
 ///
 /// Framing follows the MCP stdio transport: one JSON object per line, UTF-8, nothing else on stdout.
 /// </summary>
@@ -84,16 +89,32 @@ public static class McpStdioBridge
         {
             JsonElement? id = null;
             bool isRequest;
+            bool answeredHere = false;
+            string? localReply = null;
             try
             {
                 using var doc = JsonDocument.Parse(line);
                 isRequest = doc.RootElement.TryGetProperty("id", out var idEl);
                 if (isRequest) id = idEl.Clone();
+
+                // Answer anything that does not need the viewer right here, WITHOUT starting the app.
+                // This is the whole difference between "a client connected" and "a window appeared":
+                // every MCP client opens with initialize + tools/list, and those used to reach
+                // EnsureAppRunning below.
+                var method = doc.RootElement.TryGetProperty("method", out var mEl) ? mEl.GetString() : null;
+                if (!McpServer.MethodNeedsViewer(method))
+                {
+                    var local = McpServer.HandleWithoutViewer(doc.RootElement);
+                    localReply = local == null ? null : JsonSerializer.Serialize(local);
+                    answeredHere = true;
+                }
             }
             catch (JsonException)
             {
                 return ErrorReply(null, -32700, "Parse error: the line was not valid JSON");
             }
+
+            if (answeredHere) return localReply;
 
             if (!await EnsureAppRunning().ConfigureAwait(false))
                 return isRequest
